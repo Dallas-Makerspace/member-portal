@@ -80,14 +80,18 @@ jobs:
         run: ./gradlew :${{ inputs.component }}:shadowJar -x detekt
 
       - name: Run Tests
-        run: ./gradlew :${{ inputs.component }}:test -x detekt
+        run: ./gradlew test -x detekt
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ inputs.component }}
-          path: ${{ inputs.component }}/build/test-results/
+          path: |
+            common-models/build/test-results/
+            service/build/test-results/
+            ui/build/test-results/
+            e2e/build/test-results/
           retention-days: 30
 
       - name: Log in to Container registry
