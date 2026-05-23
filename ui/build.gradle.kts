@@ -5,7 +5,6 @@ val daggerVersion: String by project
 val logbackVersion: String by project
 val kotlinxVersion = "1.6.0"
 val kotlinTestUnit = "2.2.20"
-val seleniumVersion = "4.19.1"
 
 repositories { mavenCentral() }
 
@@ -51,7 +50,6 @@ dependencies {
   testImplementation("io.ktor", "ktor-serialization-kotlinx-json", ktorVersion)
   testImplementation("io.ktor", "ktor-server-test-host", ktorVersion)
   testImplementation("org.jetbrains.kotlin", "kotlin-test-junit", kotlinTestUnit)
-  testImplementation("org.seleniumhq.selenium", "selenium-java", seleniumVersion)
 }
 
 plugins {
