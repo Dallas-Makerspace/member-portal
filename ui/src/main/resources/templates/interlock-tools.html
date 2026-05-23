@@ -26,10 +26,14 @@
     </div>
 
     <div th:each="group : ${toolsByCommittee}" class="mb-5">
-        <h4 class="mb-3">
-            <a th:href="'/committees/' + ${group.committeeSlug}" class="text-decoration-none"
-               th:text="${group.committeeName} + ' Committee'"></a>
-        </h4>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">
+                <a th:href="'/committees/' + ${group.committeeSlug}" class="text-decoration-none"
+                   th:text="${group.committeeName} + ' Committee'"></a>
+            </h4>
+            <a th:href="'/interlock-tools?committee=' + ${group.committeeSlug} + '&view=reports'"
+               class="btn btn-sm btn-outline-secondary">View Reports</a>
+        </div>
         <div class="card shadow-sm">
             <table class="table table-hover mb-0">
                 <thead class="table-light">
@@ -50,8 +54,12 @@
                     </td>
                     <td th:text="${tool.timeoutSeconds} + 's'"></td>
                     <td class="text-end">
-                        <a th:href="'/interlock-tools?tool=' + ${tool.interlockTag}"
-                           class="btn btn-sm btn-outline-primary">View Usage</a>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a th:href="'/interlock-tools?tool=' + ${tool.interlockTag}"
+                               class="btn btn-outline-primary">View Usage</a>
+                            <a th:href="'/interlock-tools?tool=' + ${tool.interlockTag} + '&view=reports'"
+                               class="btn btn-outline-secondary">View Reports</a>
+                        </div>
                     </td>
                 </tr>
                 </tbody>
