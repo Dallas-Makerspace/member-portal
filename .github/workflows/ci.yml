@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: eclipse-temurin:21-jdk-jammy
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests
+        run: ./gradlew test -x :e2e:test
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: |
+            common-models/build/test-results/
+            service/build/test-results/
+            ui/build/test-results/
+          retention-days: 30
+
+  e2e-tests:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright/java:v1.60.0-noble
+      options: --ipc=host
+
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: example
+          MARIADB_DATABASE: member_profile
+          MARIADB_USER: member-profile-user
+          MARIADB_PASSWORD: dummy-password-for-dev
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_URL: jdbc:mariadb://mariadb:3306/member_profile
+      DB_USER: member-profile-user
+      DB_PASSWORD: dummy-password-for-dev
+      DB_MASTER_URL: jdbc:mariadb://mariadb:3306/member_profile
+      DB_MASTER_USER: member-profile-user
+      DB_MASTER_PASSWORD: dummy-password-for-dev
+      DEV_MODE: true
+      ENV_DEV_MODE: true
+      E2E_BASE_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Initialize database
+        run: |
+          apt-get update
+          apt-get install -y curl mariadb-client
+          mariadb -h mariadb -P 3306 -u "$DB_MASTER_USER" -p"$DB_MASTER_PASSWORD" member_profile \
+            < service/docs/sql/create.sql
+
+      - name: Build service and UI
+        run: ./gradlew :service:classes :ui:classes --no-daemon
+
+      - name: Start service and UI
+        run: |
+          ./gradlew runAll --no-daemon > /tmp/runall.log 2>&1 &
+          echo $! > /tmp/runall.pid
+          sleep 15
+          if ! kill -0 "$(cat /tmp/runall.pid)" 2>/dev/null; then
+            echo "runAll exited before apps could start"
+            tail -200 /tmp/runall.log
+            exit 1
+          fi
+
+      - name: Wait for service and UI
+        run: |
+          for attempt in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:8081/health/ready >/dev/null \
+              && curl -sf http://127.0.0.1:8000/readyz >/dev/null; then
+              echo "Apps ready after attempt ${attempt}"
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/runall.pid)" 2>/dev/null; then
+              echo "runAll exited while waiting for apps"
+              tail -200 /tmp/runall.log
+              exit 1
+            fi
+            echo "Waiting for service (:8081) and UI (:8000)... (${attempt}/90)"
+            sleep 5
+          done
+          echo "=== runAll log (last 200 lines) ==="
+          tail -200 /tmp/runall.log
+          exit 1
+
+      - name: Run Playwright e2e tests
+        run: ./gradlew :e2e:test
+
+      - name: Stop service and UI
+        if: always()
+        run: |
+          if [ -f /tmp/runall.pid ]; then
+            kill "$(cat /tmp/runall.pid)" 2>/dev/null || true
+          fi
+          pkill -f 'GradleWrapperMain.*:service:run' || true
+          pkill -f 'GradleWrapperMain.*:ui:run' || true
+          pkill -f 'org.dallasmakerspace.Application' || true
+          pkill -f 'MemberProfileUiApplication' || true
+
+      - name: Upload e2e test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: e2e/build/test-results/
+          retention-days: 30
+
+      - name: Upload runAll log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runall-log
+          path: /tmp/runall.log
+          retention-days: 7
