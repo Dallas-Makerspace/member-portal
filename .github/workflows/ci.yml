@@ -5,6 +5,11 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
 jobs:
   unit-tests:
     name: Unit tests
@@ -19,6 +24,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          add-job-summary: never
 
       - name: Run unit tests
         run: ./gradlew test -x :e2e:test
@@ -33,6 +40,21 @@ jobs:
             service/build/test-results/
             ui/build/test-results/
           retention-days: 30
+
+  publish-unit-test-results:
+    name: Publish unit test results
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: always()
+    steps:
+      - name: Publish unit test results
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          artifact: unit-test-results
+          name: Unit tests
+          path: '**/TEST-*.xml'
+          reporter: java-junit
 
   e2e-tests:
     name: E2E tests
@@ -83,6 +105,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          add-job-summary: never
 
       - name: Initialize database
         run: |
@@ -154,3 +178,18 @@ jobs:
           name: runall-log
           path: /tmp/runall.log
           retention-days: 7
+
+  publish-e2e-test-results:
+    name: Publish e2e test results
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: always()
+    steps:
+      - name: Publish e2e test results
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          artifact: e2e-test-results
+          name: E2E tests
+          path: '**/TEST-*.xml'
+          reporter: java-junit
