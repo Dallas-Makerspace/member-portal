@@ -127,16 +127,20 @@ constructor(
             DataField(name = "Sessions", type = DataType.NUMBER, label = "Sessions"),
         )
 
-    val metadata =
-        mapOf(
-            "Committee" to c.name,
-            "Days" to "$days",
-            "Tools" to "${tools.size}",
-            "Total sessions" to "${sessions.size}",
-            "Generated at" to
-                DateTimeFormatter.ISO_DATE_TIME.format(
-                    Instant.now().atZone(ZoneId.of("America/Chicago"))),
-        )
+    val metadata = buildMap {
+      put("Committee", c.name)
+      put("Days", "$days")
+      put("Tools", "${tools.size}")
+      put("Total sessions", "${sessions.size}")
+      put(
+          "Generated at",
+          DateTimeFormatter.ISO_DATE_TIME.format(
+              Instant.now().atZone(ZoneId.of("America/Chicago"))))
+      events
+          .buildKibanaDiscoverUrl(
+              events.kibanaQueryAuthorizedSwipes(tools.map { it.interlockTag }), days)
+          ?.let { put("Kibana", it) }
+    }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
   }

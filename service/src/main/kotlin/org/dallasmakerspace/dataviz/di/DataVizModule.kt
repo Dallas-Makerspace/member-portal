@@ -15,6 +15,7 @@ import org.dallasmakerspace.dataviz.reports.calendar.TopOrganizers
 import org.dallasmakerspace.dataviz.reports.groups.GroupHistoryReport
 import org.dallasmakerspace.dataviz.reports.interlock.DeniedAccessReport
 import org.dallasmakerspace.dataviz.reports.interlock.InterlockUsageReport
+import org.dallasmakerspace.dataviz.reports.interlock.ToolActivityReport
 import org.dallasmakerspace.dataviz.reports.interlock.ToolInactivityReport
 import org.dallasmakerspace.dataviz.reports.interlock.TopToolsReport
 import org.dallasmakerspace.dataviz.reports.interlock.TopUsersReport
@@ -51,6 +52,7 @@ class DataVizModule {
       badgeSwipesReport: BadgeSwipesReport,
       interlockUsageReport: InterlockUsageReport,
       deniedAccessReport: DeniedAccessReport,
+      toolActivityReport: ToolActivityReport,
       toolInactivityReport: ToolInactivityReport,
       topToolsReport: TopToolsReport,
       topUsersReport: TopUsersReport,
@@ -78,6 +80,7 @@ class DataVizModule {
         badgeSwipesReport,
         interlockUsageReport,
         deniedAccessReport,
+        toolActivityReport,
         toolInactivityReport,
         topToolsReport,
         topUsersReport,

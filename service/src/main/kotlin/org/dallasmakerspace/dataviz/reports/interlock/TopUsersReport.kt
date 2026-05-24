@@ -126,15 +126,18 @@ constructor(
             DataField(name = "Total Hours", type = DataType.STRING, label = "Total Hours"),
         )
 
-    val metadata =
-        mapOf(
-            "Tool" to tool,
-            "Days" to "$days",
-            "Unique users" to "${stats.size}",
-            "Generated at" to
-                DateTimeFormatter.ISO_DATE_TIME.format(
-                    Instant.now().atZone(ZoneId.of("America/Chicago"))),
-        )
+    val metadata = buildMap {
+      put("Tool", tool)
+      put("Days", "$days")
+      put("Unique users", "${stats.size}")
+      put(
+          "Generated at",
+          DateTimeFormatter.ISO_DATE_TIME.format(
+              Instant.now().atZone(ZoneId.of("America/Chicago"))))
+      events.buildKibanaDiscoverUrl(events.kibanaQueryAuthorizedSwipes(listOf(tool)), days)?.let {
+        put("Kibana", it)
+      }
+    }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
   }

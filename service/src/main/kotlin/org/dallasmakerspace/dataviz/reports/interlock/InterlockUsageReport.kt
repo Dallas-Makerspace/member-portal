@@ -141,17 +141,20 @@ constructor(
     val totalTimeTaken = System.currentTimeMillis() - totalStartTime
     val timeTakenInSec = String.format(Locale.US, "%.3f", totalTimeTaken / 1000f)
 
-    val metadata =
-        mapOf(
-            "Generated at" to
-                DateTimeFormatter.ISO_DATE_TIME.format(
-                    Instant.now().atZone(java.time.ZoneId.of("America/Chicago"))),
-            "Time taken" to "$timeTakenInSec sec",
-            "ES query time" to "${esTimeTaken}ms",
-            "Member lookup time" to "${memberLookupTimeTaken}ms",
-            "Total sessions" to "${sessions.size}",
-            "Tool" to interlockTag,
-        )
+    val metadata = buildMap {
+      put(
+          "Generated at",
+          DateTimeFormatter.ISO_DATE_TIME.format(
+              Instant.now().atZone(java.time.ZoneId.of("America/Chicago"))))
+      put("Time taken", "$timeTakenInSec sec")
+      put("ES query time", "${esTimeTaken}ms")
+      put("Member lookup time", "${memberLookupTimeTaken}ms")
+      put("Total sessions", "${sessions.size}")
+      put("Tool", interlockTag)
+      events
+          .buildKibanaDiscoverUrl(events.kibanaQueryForTags(listOf(interlockTag)), days)
+          ?.let { put("Kibana", it) }
+    }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
   }

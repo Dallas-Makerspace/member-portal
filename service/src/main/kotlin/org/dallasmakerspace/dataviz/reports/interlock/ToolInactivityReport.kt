@@ -128,15 +128,21 @@ constructor(
             DataField(name = "Status", type = DataType.BADGE, label = "Status"),
         )
 
-    val metadata =
-        mapOf(
-            "Committee" to c.name,
-            "Tools" to "${tools.size}",
-            "Silent threshold (days)" to "$silentDays",
-            "Generated at" to
-                DateTimeFormatter.ISO_DATE_TIME.format(
-                    Instant.now().atZone(ZoneId.of("America/Chicago"))),
-        )
+    val metadata = buildMap {
+      put("Committee", c.name)
+      put("Tools", "${tools.size}")
+      put("Silent threshold (days)", "$silentDays")
+      put(
+          "Generated at",
+          DateTimeFormatter.ISO_DATE_TIME.format(
+              Instant.now().atZone(ZoneId.of("America/Chicago"))))
+      events
+          .buildKibanaDiscoverUrl(
+              events.kibanaQueryForTags(tools.map { it.interlockTag }),
+              Interlocks.DEFAULT_REPORT_DAYS,
+          )
+          ?.let { put("Kibana", it) }
+    }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
   }

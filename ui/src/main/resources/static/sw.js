@@ -1,7 +1,7 @@
 // Service Worker for Dallas Makerspace Member Portal
 // Version: 1.0.0
 
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const STATIC_CACHE = `dms-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dms-dynamic-${CACHE_VERSION}`;
 const MAX_CACHE_AGE_DAYS = 7;

@@ -498,12 +498,22 @@ class DmsTableBase extends LitElement {
             visibleRows = rowsToUse.slice(startIdx, endIdx);
         }
 
+        const renderMetadataValue = (key, value) => {
+            if (key === 'SQL Query') {
+                return html`<pre>${value}</pre>`;
+            }
+            if (typeof value === 'string' && /^https?:\/\//.test(value)) {
+                return html`<a href="${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+            }
+            return value;
+        };
+
         return html`
             <tbody>
                 ${visibleRows.map(([key, value]) => html`
                     <tr>
                         <td>${key}</td>
-                        <td>${key === 'SQL Query' ? html`<pre>${value}</pre>` : value}</td>
+                        <td>${renderMetadataValue(key, value)}</td>
                     </tr>
                 `)}
             </tbody>

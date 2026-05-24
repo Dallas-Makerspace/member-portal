@@ -145,15 +145,18 @@ constructor(
     dataFields.add(DataField(name = "Member", type = DataType.MEMBER, label = "Member"))
     dataFields.add(DataField(name = "Badge", type = DataType.STRING, label = "Badge"))
 
-    val metadata =
-        scopeMetadata +
-            mapOf(
-                "Days" to "$days",
-                "Total denied" to "${denied.size}",
-                "Generated at" to
-                    DateTimeFormatter.ISO_DATE_TIME.format(
-                        Instant.now().atZone(ZoneId.of("America/Chicago"))),
-            )
+    val metadata = buildMap {
+      putAll(scopeMetadata)
+      put("Days", "$days")
+      put("Total denied", "${denied.size}")
+      put(
+          "Generated at",
+          DateTimeFormatter.ISO_DATE_TIME.format(
+              Instant.now().atZone(ZoneId.of("America/Chicago"))))
+      events.buildKibanaDiscoverUrl(events.kibanaQueryDeniedSwipes(tags), days)?.let {
+        put("Kibana", it)
+      }
+    }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
   }

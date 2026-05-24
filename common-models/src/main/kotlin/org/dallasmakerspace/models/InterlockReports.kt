@@ -55,6 +55,13 @@ object CommitteeReports {
             renderAs = "table",
         ),
         InterlockReport(
+            slug = "tool-activity",
+            name = "Tool Activity (last ${Interlocks.DEFAULT_REPORT_DAYS} days)",
+            description = "Distinct members per tool per day — one line per tool.",
+            dataVizName = "interlock-tool-activity",
+            renderAs = "line",
+        ),
+        InterlockReport(
             slug = "tool-inactivity",
             name = "Tool Inactivity / Gaps",
             description = "Last-used timestamp per tool; flags silent tools.",

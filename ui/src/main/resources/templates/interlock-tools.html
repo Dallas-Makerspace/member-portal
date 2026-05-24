@@ -39,26 +39,32 @@
                 <thead class="table-light">
                 <tr>
                     <th>Tool</th>
-                    <th>Prerequisite Group</th>
-                    <th>Timeout</th>
+                    <th class="d-none d-md-table-cell">Prerequisite Group</th>
+                    <th class="d-none d-md-table-cell">Timeout</th>
                     <th></th>
                 </tr>
                 </thead>
                 <tbody>
                 <tr th:each="tool : ${group.tools}">
-                    <td th:text="${tool.name}"></td>
                     <td>
+                        <div th:text="${tool.name}"></div>
+                        <div class="d-md-none mt-1" th:if="${tool.prerequisiteGroup != null}">
+                            <dms-group-pill th:attr="name=${tool.prerequisiteGroup},slug=${tool.prerequisiteGroupSlug}">
+                            </dms-group-pill>
+                        </div>
+                    </td>
+                    <td class="d-none d-md-table-cell">
                         <dms-group-pill th:if="${tool.prerequisiteGroup != null}"
                                         th:attr="name=${tool.prerequisiteGroup},slug=${tool.prerequisiteGroupSlug}">
                         </dms-group-pill>
                     </td>
-                    <td th:text="${tool.timeoutSeconds} + 's'"></td>
+                    <td class="d-none d-md-table-cell" th:text="${tool.timeoutSeconds} + 's'"></td>
                     <td class="text-end">
-                        <div class="btn-group btn-group-sm" role="group">
+                        <div class="d-grid d-sm-inline-flex gap-1" role="group">
                             <a th:href="'/interlock-tools?tool=' + ${tool.interlockTag}"
-                               class="btn btn-outline-primary">View Usage</a>
+                               class="btn btn-sm btn-outline-primary text-nowrap">View Usage</a>
                             <a th:href="'/interlock-tools?tool=' + ${tool.interlockTag} + '&view=reports'"
-                               class="btn btn-outline-secondary">View Reports</a>
+                               class="btn btn-sm btn-outline-secondary text-nowrap">View Reports</a>
                         </div>
                     </td>
                 </tr>

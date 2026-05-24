@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
+import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.logging.ElasticsearchClientManager
 
 private const val RESCAN_DEBOUNCE_SECONDS = 30L
@@ -37,7 +38,44 @@ class InterlockEventsService
 @Inject
 constructor(
     private val activeDirectoryService: IActiveDirectoryService,
+    private val appConfig: AppConfig,
 ) {
+
+  // ---------------------------------------------------------------------------
+  // Kibana Discover URL builder
+  // ---------------------------------------------------------------------------
+
+  /** Builds a KQL host filter for the given interlock tags. */
+  fun kibanaQueryForTags(tags: List<String>): String =
+      when {
+        tags.isEmpty() -> ""
+        tags.size == 1 -> "host.keyword : \"${tags.first()}\""
+        else -> "host.keyword : (" + tags.joinToString(" or ") { "\"$it\"" } + ")"
+      }
+
+  /** Host filter + authorized user-swipe events (matches `'authorized': True` in the message). */
+  fun kibanaQueryAuthorizedSwipes(tags: List<String>): String =
+      kibanaQueryForTags(tags) + " and message : \"authorized\" and message : \"True\""
+
+  /** Host filter + denied user-swipe events (matches `'authorized': False` in the message). */
+  fun kibanaQueryDeniedSwipes(tags: List<String>): String =
+      kibanaQueryForTags(tags) + " and message : \"authorized\" and message : \"False\""
+
+  /**
+   * Builds a Kibana Discover URL for the given KQL query and time window. Returns null if
+   * `app.kibana.base-url` is not configured.
+   */
+  fun buildKibanaDiscoverUrl(kql: String, days: Int): String? {
+    val baseUrl = appConfig.getStringProperty("app.kibana.base-url", "").trimEnd('/')
+    if (baseUrl.isBlank()) return null
+    val space = appConfig.getStringProperty("app.kibana.space", "").ifBlank { "default" }
+    val dataView = appConfig.getStringProperty("app.kibana.data-view", "").ifBlank { "logs-*" }
+    // Selective encoding: leave RISON syntax chars intact; escape only space and double-quote.
+    val encodedKql = kql.replace(" ", "%20").replace("\"", "%22")
+    return "$baseUrl/s/$space/app/discover#/" +
+        "?_g=(time:(from:now-${days}d,to:now))" +
+        "&_a=(index:'$dataView',query:(language:kuery,query:'$encodedKql'))"
+  }
 
   // ---------------------------------------------------------------------------
   // ES fetch — multi-host
