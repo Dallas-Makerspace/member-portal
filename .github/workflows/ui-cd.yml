@@ -2,17 +2,37 @@ name: UI CD
 
 # Deploys the member profile UI to production
 # Includes: Gradle caching, Trivy security scanning, basic health checks
+# Triggered after CI passes to ensure e2e tests have run before deploying
 
 on:
-  push:
-    branches: [ "master" ]
-    paths:
-      - 'ui/**'
-      - '.github/workflows/ui-cd.yml'
-      - '.github/workflows/common-cd.yml'
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [master]
 
 jobs:
+  check-changes:
+    name: Check for relevant changes
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - id: check
+        run: |
+          if git diff --name-only HEAD^ HEAD | grep -qE '^(ui/|\.github/workflows/(ui-cd|common-cd)\.yml)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
+    needs: check-changes
+    if: needs.check-changes.outputs.changed == 'true'
     uses: ./.github/workflows/common-cd.yml
     with:
       component: ui
