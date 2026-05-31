@@ -32,7 +32,7 @@
         <sleepTime>250</sleepTime> <!-- optional (in ms, default 250) -->
         <rawJsonMessage>false</rawJsonMessage> <!-- optional (default false) -->
         <includeMdc>false</includeMdc> <!-- optional (default false) -->
-        <maxMessageSize>100</maxMessageSize> <!-- optional (default -1 -->
+        <maxMessageSize>32768</maxMessageSize> <!-- optional (default -1) -->
         <authentication
                 class="org.dallasmakerspace.server.common.logging.ElasticsearchAuth"/> <!-- optional -->
         <objectSerialization>true</objectSerialization> <!-- optional (default false) -->
