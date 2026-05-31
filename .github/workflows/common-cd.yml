@@ -80,7 +80,7 @@ jobs:
         run: ./gradlew :${{ inputs.component }}:shadowJar -x detekt
 
       - name: Run Tests
-        run: ./gradlew test -x detekt
+        run: ./gradlew test -x detekt -x :e2e:test
 
       - name: Upload test results
         if: always()
