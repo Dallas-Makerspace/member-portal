@@ -153,14 +153,24 @@ class DmsRelativeDate extends LitElement {
     }
 
     /**
+     * Returns true when the raw timestamp string contains a seconds component
+     * (i.e. matches HH:MM:SS). Date-only strings and minute-only strings return false,
+     * so we never display a misleading ":00" for inputs that don't carry seconds.
+     */
+    _hasSeconds() {
+        if (!this.timestamp) return false;
+        return /\d{2}:\d{2}:\d{2}/.test(this.timestamp.trim());
+    }
+
+    /**
      * Format the full human-readable timestamp in Chicago timezone
-     * e.g., "December 31, 2025 at 11:30 PM"
+     * e.g., "December 31, 2025 at 11:30 PM" or "… at 11:30:45 PM" when seconds are present
      */
     _formatFullTimestamp() {
         const eventDate = this._parseTimestamp();
         if (!eventDate) return 'Invalid date';
 
-        const formatter = new Intl.DateTimeFormat('en-US', {
+        const options = {
             timeZone: 'America/Chicago',
             weekday: 'long',
             year: 'numeric',
@@ -169,9 +179,12 @@ class DmsRelativeDate extends LitElement {
             hour: 'numeric',
             minute: '2-digit',
             hour12: true
-        });
+        };
+        if (this._hasSeconds()) {
+            options.second = '2-digit';
+        }
 
-        return formatter.format(eventDate);
+        return new Intl.DateTimeFormat('en-US', options).format(eventDate);
     }
 
 
