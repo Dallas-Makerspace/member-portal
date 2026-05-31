@@ -238,6 +238,48 @@ function printDMSItBanner() {
     console.log("%cWe're always looking for IT volunteers to help with the infrastructure, networking and more.", 'color: green');
 }
 
+/**
+ * Copy text to the clipboard and show brief "copied" feedback on the triggering button.
+ * The button should contain a <span class="material-symbols-outlined"> icon.
+ * @param {string} text - The text to copy
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function copyUsernameToClipboard(text, btn) {
+    const writeText = (t) => {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(t);
+        }
+        // Fallback for non-secure contexts
+        return new Promise((resolve, reject) => {
+            const ta = document.createElement('textarea');
+            ta.value = t;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy') ? resolve() : reject(); }
+            catch (e) { reject(e); }
+            finally { document.body.removeChild(ta); }
+        });
+    };
+
+    writeText(text).then(() => {
+        const icon = btn.querySelector('.material-symbols-outlined');
+        if (!icon) return;
+        const original = icon.textContent;
+        icon.textContent = 'check';
+        btn.classList.add('text-success');
+        btn.setAttribute('title', 'Copied!');
+        setTimeout(() => {
+            icon.textContent = original;
+            btn.classList.remove('text-success');
+            btn.setAttribute('title', btn.dataset.copyTitle || 'Copy');
+        }, 1500);
+    }).catch((err) => {
+        console.error('Error copying to clipboard:', err);
+    });
+}
+
 function hideToast() {
     const toastLive = document.getElementById('liveToast');
     if (toastLive) {

@@ -226,14 +226,26 @@
 
                         <div th:if="${discourse_username}" class="d-flex align-items-center mb-3">
                             <img class="card-item-icon" alt="" src="../static/images/discourse.svg"/>
-                            <span>Send message on <a target=_blank""
+                            <span>Send message on <a target="_blank"
                                                      th:href="|https://talk.dallasmakerspace.org/new-message?username=${discourse_username}&title=Hey%20👋|">Talk</a></span>
+                            <button type="button" class="btn btn-link p-0 ms-2 text-muted"
+                                    title="Copy Talk username" data-copy-title="Copy Talk username"
+                                    th:attr="onclick=|copyUsernameToClipboard('${discourse_username}', this)|"
+                                    style="line-height:1;">
+                                <span class="material-symbols-outlined" style="font-size:18px;">content_copy</span>
+                            </button>
                         </div>
 
                         <div th:if="${discord_userid}" class="d-flex align-items-center mb-3">
                             <img class="card-item-icon" alt="" src="../static/images/discord.svg"/>
                             <span>Send message on <a target="_blank"
                                                      th:href="|https://discord.com/users/${discord_userid}|">Discord</a></span>
+                            <button th:if="${discord_username}" type="button" class="btn btn-link p-0 ms-2 text-muted"
+                                    title="Copy Discord username" data-copy-title="Copy Discord username"
+                                    th:attr="onclick=|copyUsernameToClipboard('${discord_username}', this)|"
+                                    style="line-height:1;">
+                                <span class="material-symbols-outlined" style="font-size:18px;">content_copy</span>
+                            </button>
                         </div>
 
                         <!--<div class="d-flex align-items-center mb-3">
