@@ -49,7 +49,7 @@
         independence: {
             name: 'independence',
             characters: ['⭐', '🎇', '✨', '🎉'],
-            images: ['/static/img/us-flag.svg'],
+            images: ['/static/img/us-flag.svg', '/static/img/america250.svg'],
             hashOverride: '#fireworks',
             elementCount: 5,
             containerClass: 'falling-effect-container',
@@ -186,16 +186,33 @@
             const images = config.images || [];
             const totalItems = characters.length + images.length;
 
-            for (let i = 0; i < config.elementCount; i++) {
-                let element;
-                const itemIndex = Math.floor(Math.random() * totalItems);
+            // Seed one of each image to guarantee all images appear, then fill randomly
+            const pool = images.map(src => ({ type: 'img', src }));
+            const remaining = Math.max(0, config.elementCount - pool.length);
+            for (let i = 0; i < remaining; i++) {
+                const idx = Math.floor(Math.random() * totalItems);
+                if (idx < characters.length) {
+                    pool.push({ type: 'char', char: characters[idx] });
+                } else {
+                    pool.push({ type: 'img', src: images[idx - characters.length] });
+                }
+            }
+            // Fisher-Yates shuffle so seeded images don't always appear first
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
 
-                if (itemIndex < characters.length) {
+            for (let i = 0; i < pool.length; i++) {
+                let element;
+                const item = pool[i];
+
+                if (item.type === 'char') {
                     element = document.createElement('span');
-                    element.textContent = characters[itemIndex];
+                    element.textContent = item.char;
                 } else {
                     element = document.createElement('img');
-                    element.src = images[itemIndex - characters.length];
+                    element.src = item.src;
                     element.alt = '';
                 }
 
