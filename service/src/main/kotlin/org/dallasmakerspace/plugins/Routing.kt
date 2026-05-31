@@ -60,7 +60,7 @@ fun Application.configureRouting() {
   install(Resources)
   install(StatusPages) {
     exception { call: ApplicationCall, cause: Exception ->
-      log.error("Failed to process request", cause)
+      log.error("Failed to process request: ${call.request.httpMethod.value} ${call.request.path()}", cause)
       call.respond(
           HttpStatusCode.InternalServerError,
           ApiResponse(Status.ERROR, cause.localizedMessage, null),
