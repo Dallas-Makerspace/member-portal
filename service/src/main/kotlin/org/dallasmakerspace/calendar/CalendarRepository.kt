@@ -325,7 +325,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
       val eventStart = row["event_start_cst"]?.toString() ?: ""
       val status = row["status"]?.toString() ?: ""
       val organizerUsername = row["ad_username"]?.toString()
-      val fulfillsPrerequisiteGroup = row["fulfills_prerequisite_group"]?.toString()
+      val fulfillsPrerequisiteGroup = row["ad_group"]?.toString()
 
       EventSummary(
           id = id,
@@ -405,8 +405,8 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
       val name = row["name"]?.toString() ?: ""
       val eventStart = row["event_start_cst"]?.toString() ?: ""
       val status = row["status"]?.toString() ?: ""
-      val organizerUsername = row["organizer_username"]?.toString()
-      val fulfillsPrerequisiteGroup = row["fulfills_prerequisite_group"]?.toString()
+      val organizerUsername = row["ad_username"]?.toString()
+      val fulfillsPrerequisiteGroup = row["ad_group"]?.toString()
 
       EventSummary(
           id = id,
