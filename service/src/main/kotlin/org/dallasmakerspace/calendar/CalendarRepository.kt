@@ -286,11 +286,21 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
       SELECT e.id, e.name,
              CONVERT_TZ(e.event_start, '+00:00', 'America/Chicago') AS event_start_cst,
              e.status,
-             c.ad_username AS organizer_username
+             c.ad_username AS organizer_username,
+             p.ad_group AS fulfills_prerequisite_group
       FROM `dms-calendar`.events e
       JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
+      LEFT JOIN `dms-calendar`.prerequisites p ON e.fulfills_prerequisite_id = p.id
       WHERE e.event_start >= NOW()
+        AND e.status = 'approved'
         AND c.ad_username IN ($organizerList)
+        AND (
+          (e.free_spaces = 0 AND e.paid_spaces = 0)
+          OR (SELECT COUNT(*) FROM `dms-calendar`.registrations r
+                WHERE r.event_id = e.id
+                  AND r.status NOT IN ('cancelled', 'rejected'))
+             < (e.free_spaces + e.paid_spaces)
+        )
       ORDER BY e.event_start ASC
       LIMIT $limit
     """
@@ -315,6 +325,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
       val eventStart = row["event_start_cst"]?.toString() ?: ""
       val status = row["status"]?.toString() ?: ""
       val organizerUsername = row["ad_username"]?.toString()
+      val fulfillsPrerequisiteGroup = row["fulfills_prerequisite_group"]?.toString()
 
       EventSummary(
           id = id,
@@ -322,6 +333,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
           eventStart = eventStart,
           status = status,
           organizerUsername = organizerUsername,
+          fulfillsPrerequisiteGroup = fulfillsPrerequisiteGroup,
       )
     } ?: emptyList()
   }
@@ -333,6 +345,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
    * @param limit The maximum number of events to return (default 5).
    * @return A list of [EventSummary] objects for upcoming matching events.
    */
+  @Suppress("LongMethod") // SQL query is inherently verbose due to status/capacity/prereq clauses
   suspend fun getUpcomingEventsByKeywords(
       keywords: List<String>,
       limit: Int = 5,
@@ -354,11 +367,21 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
       SELECT e.id, e.name,
              CONVERT_TZ(e.event_start, '+00:00', 'America/Chicago') AS event_start_cst,
              e.status,
-             c.ad_username AS organizer_username
+             c.ad_username AS organizer_username,
+             p.ad_group AS fulfills_prerequisite_group
       FROM `dms-calendar`.events e
       LEFT JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
+      LEFT JOIN `dms-calendar`.prerequisites p ON e.fulfills_prerequisite_id = p.id
       WHERE e.event_start >= NOW()
+        AND e.status = 'approved'
         AND ($orClause)
+        AND (
+          (e.free_spaces = 0 AND e.paid_spaces = 0)
+          OR (SELECT COUNT(*) FROM `dms-calendar`.registrations r
+                WHERE r.event_id = e.id
+                  AND r.status NOT IN ('cancelled', 'rejected'))
+             < (e.free_spaces + e.paid_spaces)
+        )
       ORDER BY e.event_start ASC
       LIMIT $limit
     """
@@ -383,6 +406,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
       val eventStart = row["event_start_cst"]?.toString() ?: ""
       val status = row["status"]?.toString() ?: ""
       val organizerUsername = row["organizer_username"]?.toString()
+      val fulfillsPrerequisiteGroup = row["fulfills_prerequisite_group"]?.toString()
 
       EventSummary(
           id = id,
@@ -390,6 +414,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
           eventStart = eventStart,
           status = status,
           organizerUsername = organizerUsername,
+          fulfillsPrerequisiteGroup = fulfillsPrerequisiteGroup,
       )
     } ?: emptyList()
   }
@@ -493,4 +518,5 @@ data class EventSummary(
     val status: String,
     val organizerUsername: String? = null,
     val eventStartUtcMs: Long? = null,
+    val fulfillsPrerequisiteGroup: String? = null,
 )

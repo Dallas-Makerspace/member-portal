@@ -8,5 +8,6 @@ data class EventSummary(
     val name: String,
     val eventStart: String,
     val status: String,
-    val organizerUsername: String? = null
+    val organizerUsername: String? = null,
+    val fulfillsPrerequisiteGroup: String? = null,
 )

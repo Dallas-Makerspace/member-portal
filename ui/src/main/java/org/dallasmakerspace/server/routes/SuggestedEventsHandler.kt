@@ -57,6 +57,28 @@ constructor(
 
       // ── Compute fresh ────────────────────────────────────────────────────
 
+      // Resolve the target member's AD group names (normalized: trim leading '/', lowercase)
+      // used to de-prioritize events that fulfill a prerequisite the member already satisfies.
+      val targetGroups: Set<String> =
+          if (targetUsername == sessionUsername) {
+            ((userInfo["groups"] as? List<*>) ?: emptyList<Any>())
+                .filterIsInstance<String>()
+                .map { it.trimStart('/').lowercase() }
+                .toSet()
+          } else {
+            // Infra ?username= inspection: fetch the inspected member's groups so
+            // de-prioritization reflects them, not the infra user.
+            try {
+              memberService.getMember(targetUsername, session.sessionId)
+                  .groups
+                  .map { it.name.lowercase() }
+                  .toSet()
+            } catch (e: Exception) {
+              log.debug("Could not fetch groups for de-prioritization: $targetUsername")
+              emptySet()
+            }
+          }
+
       // Fetch attendance history signals in parallel
       val namesDeferred = async {
         memberService.getAttendedEventNames(targetUsername, session.sessionId)
@@ -78,7 +100,14 @@ constructor(
         }
 
         val events = memberService.getUpcomingEventsByKeywords(FALLBACK_KEYWORDS, session.sessionId)
-        val finalEvents = events.take(4)
+        val finalEvents =
+            events
+                .sortedWith(
+                    compareBy(
+                        { if (alreadySatisfies(it, targetGroups)) 1 else 0 },
+                        { it.eventStart }))
+                .take(4)
+        val deprioritizedCount = finalEvents.count { alreadySatisfies(it, targetGroups) }
         val organizerMembers = fetchOrganizerProfiles(finalEvents, session.sessionId)
         val response =
             buildResponse(
@@ -91,6 +120,7 @@ constructor(
                         "organizers" to emptyList<String>(),
                         "keywords" to emptyList<String>(),
                         "fallbackUsed" to true,
+                        "deprioritized" to deprioritizedCount,
                         "reason" to
                             "No attendance history — showing default woodshop/ceramics events",
                         "cached" to false,
@@ -142,7 +172,14 @@ constructor(
                   true)
           else Pair(merged, false)
 
-      val eventsForResponse = finalEvents.sortedBy { it.eventStart }.take(4)
+      val eventsForResponse =
+          finalEvents
+              .sortedWith(
+                  compareBy(
+                      { if (alreadySatisfies(it, targetGroups)) 1 else 0 },
+                      { it.eventStart }))
+              .take(4)
+      val deprioritizedCount = eventsForResponse.count { alreadySatisfies(it, targetGroups) }
       val organizerMembers = fetchOrganizerProfiles(eventsForResponse, session.sessionId)
 
       val response =
@@ -156,6 +193,7 @@ constructor(
                       "organizers" to topOrganizers,
                       "keywords" to keywords,
                       "fallbackUsed" to fallbackUsed,
+                      "deprioritized" to deprioritizedCount,
                       "organizerEventCount" to organizerEvents.size,
                       "keywordEventCount" to keywordEvents.size,
                       "reason" to
@@ -171,6 +209,16 @@ constructor(
       log.warn("Failed to get suggested events", e)
       call.respond(emptyResponse())
     }
+  }
+
+  /**
+   * Returns true when [event] fulfills a prerequisite whose AD group is already held by the member
+   * with the given [groups] set (normalized: no leading slash, lowercase). Used to de-prioritize
+   * events the member has no reason to attend for the first time.
+   */
+  private fun alreadySatisfies(event: EventSummary, groups: Set<String>): Boolean {
+    val prereqGroup = event.fulfillsPrerequisiteGroup ?: return false
+    return prereqGroup.lowercase() in groups
   }
 
   /**

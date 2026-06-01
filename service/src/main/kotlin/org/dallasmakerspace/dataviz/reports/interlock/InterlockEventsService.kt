@@ -14,6 +14,7 @@ import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.logging.ElasticsearchClientManager
+import org.dallasmakerspace.di.DaggerAppComponent
 
 private const val RESCAN_DEBOUNCE_SECONDS = 30L
 private const val ES_INDEX = "not-john-index"
@@ -123,8 +124,7 @@ constructor(
           EsEvent(host = host, timestamp = timestamp, message = message)
         }
       } catch (e: Exception) {
-        ElasticsearchClientManager.log.warn(
-            "InterlockEventsService: ES query failed: ${e.message}")
+        ElasticsearchClientManager.log.warn("InterlockEventsService: ES query failed: ${e.message}")
         emptyList()
       }
     }
@@ -135,9 +135,9 @@ constructor(
   // ---------------------------------------------------------------------------
 
   fun reconstructSessions(events: List<EsEvent>): List<SessionInfo> =
-      events.groupBy { it.host }.flatMap { (host, hostEvents) ->
-        reconstructForHost(host, hostEvents)
-      }
+      events
+          .groupBy { it.host }
+          .flatMap { (host, hostEvents) -> reconstructForHost(host, hostEvents) }
 
   @Suppress("TooGenericExceptionCaught", "NestedBlockDepth", "ComplexMethod", "LongMethod")
   private fun reconstructForHost(host: String, events: List<EsEvent>): List<SessionInfo> {
@@ -155,8 +155,7 @@ constructor(
             // Short gaps (< 30s) are re-scan noise from the same user trying again.
             val elapsedSeconds =
                 try {
-                  Instant.parse(doc.timestamp).epochSecond -
-                      Instant.parse(it.startTime).epochSecond
+                  Instant.parse(doc.timestamp).epochSecond - Instant.parse(it.startTime).epochSecond
                 } catch (e: Exception) {
                   Long.MAX_VALUE
                 }
@@ -238,15 +237,14 @@ constructor(
               .aggregations("by_host") { aggBuilder ->
                 aggBuilder
                     .terms { t -> t.field("host.keyword").size(interlockTags.size) }
-                    .aggregations("last_seen") { sub ->
-                      sub.max { m -> m.field("@timestamp") }
-                    }
+                    .aggregations("last_seen") { sub -> sub.max { m -> m.field("@timestamp") } }
               }
               .build()
 
       try {
         val response = client.search(request, Map::class.java)
-        val byHostAgg = response.aggregations()["by_host"]?.sterms() ?: return@withContext emptyResult
+        val byHostAgg =
+            response.aggregations()["by_host"]?.sterms() ?: return@withContext emptyResult
         val result = emptyResult.toMutableMap()
         for (bucket in byHostAgg.buckets().array()) {
           val key = bucket.key().stringValue()
@@ -259,7 +257,8 @@ constructor(
         result
       } catch (e: Exception) {
         ElasticsearchClientManager.log.warn(
-            "InterlockEventsService: last-event aggregation failed: ${e.message}")
+            "InterlockEventsService: last-event aggregation failed: ${e.message}"
+        )
         emptyMap()
       }
     }
@@ -286,7 +285,8 @@ constructor(
             .toMap()
       } catch (e: Exception) {
         ElasticsearchClientManager.log.warn(
-            "InterlockEventsService: AD badge lookup failed: ${e.message}")
+            "InterlockEventsService: AD badge lookup failed: ${e.message}"
+        )
         emptyMap()
       }
     }
@@ -317,6 +317,9 @@ constructor(
   // ---------------------------------------------------------------------------
 
   fun maskBadge(badge: String): String {
+    val appConfig = DaggerAppComponent.create().getAppConfig()
+    val isDevelopment = appConfig.requireBooleanProperty("ktor.development")
+    if (isDevelopment) return badge // no masking in development mode
     if (badge.length <= MIN_BADGE_LEN_FOR_PARTIAL_MASK) return "*".repeat(badge.length)
     return badge.take(2) + "*".repeat(badge.length - 4) + badge.takeLast(2)
   }

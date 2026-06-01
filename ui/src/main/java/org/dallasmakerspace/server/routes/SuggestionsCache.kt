@@ -19,8 +19,10 @@ import java.util.concurrent.ConcurrentHashMap
  */
 internal object SuggestionsCache {
 
-  private val USER_TTL: Duration = Duration.ofMinutes(30)
-  private val DEFAULT_TTL: Duration = Duration.ofHours(2)
+  // Shorter TTLs so that changes in event status (e.g. cancelled) and capacity (full events)
+  // are reflected quickly — an event can fill up or be cancelled at any time.
+  private val USER_TTL: Duration = Duration.ofMinutes(5)
+  private val DEFAULT_TTL: Duration = Duration.ofMinutes(15)
   private const val MAX_USER_ENTRIES = 500
 
   private data class Entry(val data: Map<String, Any>, val expiresAt: Instant)

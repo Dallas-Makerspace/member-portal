@@ -523,6 +523,7 @@ constructor(
             eventStart = event["eventStart"] as String,
             status = event["status"] as String,
             organizerUsername = event["organizerUsername"] as? String,
+            fulfillsPrerequisiteGroup = event["fulfillsPrerequisiteGroup"] as? String,
         )
       }
     } catch (ex: Exception) {
@@ -569,6 +570,7 @@ constructor(
             eventStart = event["eventStart"] as String,
             status = event["status"] as String,
             organizerUsername = event["organizerUsername"] as? String,
+            fulfillsPrerequisiteGroup = event["fulfillsPrerequisiteGroup"] as? String,
         )
       }
     } catch (ex: Exception) {
