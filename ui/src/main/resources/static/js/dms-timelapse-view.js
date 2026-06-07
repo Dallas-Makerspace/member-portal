@@ -64,6 +64,53 @@ const TimelapsePoller = (() => {
   };
 })();
 
+// Module-level frame cache shared across all component instances on the page.
+// frames are keyed by UUID; the rolling window means old frames will eventually
+// stop being requested, so the cache is left unbounded.
+const FrameCache = (() => {
+  const MAX_CONCURRENT = 4;
+  const cache = new Map();   // id → src string
+  const queue = [];          // pending frame objects waiting to be loaded
+  let active = 0;            // number of in-flight prefetch loads
+
+  function _next() {
+    while (active < MAX_CONCURRENT && queue.length) {
+      const frame = queue.shift();
+      if (cache.has(frame.id)) { _next(); return; }
+      active++;
+      const img = new Image();
+      img.onload = () => {
+        cache.set(frame.id, img.src);
+        active--;
+        _next();
+      };
+      img.onerror = () => {
+        active--;
+        _next();
+      };
+      img.src = '/cameras-api/frame/' + encodeURIComponent(frame.id);
+    }
+  }
+
+  return {
+    // Queue frame objects for background loading (skips already-cached ids).
+    prefetch(frames) {
+      for (const f of frames) {
+        if (!cache.has(f.id)) queue.push(f);
+      }
+      _next();
+    },
+    // Manually store a src string (called from preload.onload / scrubImg.onload).
+    store(id, src) {
+      cache.set(id, src);
+    },
+    // Returns the cached src string, or undefined on a cache miss.
+    get(id) {
+      return cache.get(id);
+    },
+  };
+})();
+
 class DmsTimelapseView extends HTMLElement {
   static get observedAttributes() {
     return ['stream', 'buffer-secs', 'interval', 'variant'];
@@ -88,6 +135,7 @@ class DmsTimelapseView extends HTMLElement {
     this._lastLiveFrameSrc = null;
     this._scrubFrameId = null;
     this._abortController = null;
+    this._scrubImg = null;
   }
 
   connectedCallback() { if (!this._rendered) this._render(); }
@@ -114,6 +162,12 @@ class DmsTimelapseView extends HTMLElement {
     // Preserve this._connected across re-renders so the badge doesn't flash
     // incorrectly until the next authoritative poll arrives.
 
+    if (this._scrubImg) {
+      this._scrubImg.onload = null;
+      this._scrubImg.onerror = null;
+      this._scrubImg.src = '';
+      this._scrubImg = null;
+    }
     if (this._abortController) {
       this._abortController.abort();
       this._abortController = null;
@@ -301,6 +355,8 @@ class DmsTimelapseView extends HTMLElement {
       if (!frames || !frames.length) return;
       this._buffer = frames;
       updateTicks(frames);
+      // Prefetch the 12 most recent frames into FrameCache so scrubbing is instant.
+      FrameCache.prefetch(frames.slice(-12));
 
       const latest = frames[frames.length - 1];
       if (latest.id === this._lastFrameId) return;
@@ -313,6 +369,8 @@ class DmsTimelapseView extends HTMLElement {
         // Reject out-of-order frames that arrived after a newer one already displayed.
         if (incomingTs < this._lastFrameTimestamp) return;
         this._lastFrameTimestamp = incomingTs;
+        // Store the live-loaded frame into the cache so scrubbing to it is instant.
+        FrameCache.store(latest.id, preload.src);
         if (this._scrubbing) return;
         this._lastLiveFrameSrc = preload.src;
         mainImg.src = preload.src;
@@ -352,9 +410,30 @@ class DmsTimelapseView extends HTMLElement {
           if (best.id === this._scrubFrameId) return;
           this._scrubFrameId = best.id;
           this._scrubbing = true;
-          mainImg.src = `/cameras-api/frame/${encodeURIComponent(best.id)}`;
           // Use the matched frame's actual server timestamp, not a synthetic approximation.
           tsEl.textContent = new Date(best.timestamp).toLocaleTimeString();
+          const cachedSrc = FrameCache.get(best.id);
+          if (cachedSrc) {
+            // Cache hit — zero network requests, instant display.
+            mainImg.src = cachedSrc;
+          } else {
+            // Cache miss — cancel previous in-flight scrub load, start a new one.
+            if (this._scrubImg) {
+              this._scrubImg.onload = null;
+              this._scrubImg.onerror = null;
+              this._scrubImg.src = '';
+            }
+            this._scrubImg = new Image();
+            const capturedId = best.id;
+            this._scrubImg.onload = () => {
+              FrameCache.store(capturedId, this._scrubImg.src);
+              if (this._generation !== myGen) return;
+              if (!this._scrubbing || this._scrubFrameId !== capturedId) return;
+              mainImg.src = this._scrubImg.src;
+            };
+            this._scrubImg.onerror = () => { this._scrubImg = null; };
+            this._scrubImg.src = '/cameras-api/frame/' + encodeURIComponent(best.id);
+          }
         }
       });
     };
