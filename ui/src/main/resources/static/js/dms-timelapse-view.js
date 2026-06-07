@@ -65,27 +65,41 @@ const TimelapsePoller = (() => {
 })();
 
 // Module-level frame cache shared across all component instances on the page.
-// Supports memory-aware stride, newest-first background loading, and
-// interpolation between loaded frames for zero-request scrubbing.
+// Stores blob URLs so scrubbing and re-display never trigger network requests.
+// Pauses background fetching when the tab is hidden; resumes on visibility.
 const FrameCache = (() => {
   const MEMORY_BUDGET_BYTES = 50 * 1024 * 1024;  // 50 MB
   const MAX_CONCURRENT = 6;
-  const cache = new Map();     // frameId → src string
+  const cache = new Map();     // frameId → blob URL string
   const queued = new Set();    // frameIds currently in queue (not yet loaded)
   const queue = [];            // ordered array of frameIds to load (newest first)
-  let active = 0;              // in-flight load count
+  let active = 0;              // in-flight fetch count
   const registry = new Map();  // streamId → frames[] (latest timelapse snapshot)
+  let paused = document.visibilityState === 'hidden';
+
+  document.addEventListener('visibilitychange', () => {
+    paused = document.visibilityState === 'hidden';
+    if (!paused) _flush();
+  });
+
+  function _notify(id) {
+    document.dispatchEvent(new CustomEvent('framecache-loaded', { detail: id }));
+  }
 
   function _flush() {
+    if (paused) return;
     while (active < MAX_CONCURRENT && queue.length) {
       const id = queue.shift();
       queued.delete(id);
       if (cache.has(id)) continue;
       active++;
-      const img = new Image();
-      img.onload = () => { cache.set(id, img.src); active--; _flush(); };
-      img.onerror = () => { active--; _flush(); };
-      img.src = '/cameras-api/frame/' + encodeURIComponent(id);
+      fetch('/cameras-api/frame/' + encodeURIComponent(id))
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+        .then(blob => {
+          if (!cache.has(id)) { cache.set(id, URL.createObjectURL(blob)); _notify(id); }
+          active--; _flush();
+        })
+        .catch(() => { active--; _flush(); });
     }
   }
 
@@ -124,9 +138,11 @@ const FrameCache = (() => {
       _flush();
     },
 
-    // Manually store a src string (called from preload.onload).
-    store(id, src) {
-      cache.set(id, src);
+    // Store a blob URL acquired by the live-frame fetch path.
+    store(id, blobUrl) {
+      if (cache.has(id)) return;
+      cache.set(id, blobUrl);
+      _notify(id);
     },
 
     // Returns the cached src string, or undefined on a cache miss.
@@ -203,6 +219,7 @@ class DmsTimelapseView extends HTMLElement {
     this._lastLiveFrameSrc = null;
     this._scrubFrameId = null;
     this._abortController = null;
+    this._cacheListener = null;
   }
 
   connectedCallback() { if (!this._rendered) this._render(); }
@@ -242,6 +259,10 @@ class DmsTimelapseView extends HTMLElement {
       document.removeEventListener('cameras-timelapse-update', this._timelapseListener);
       this._timelapseListener = null;
       TimelapsePoller.unsubscribe();
+    }
+    if (this._cacheListener) {
+      document.removeEventListener('framecache-loaded', this._cacheListener);
+      this._cacheListener = null;
     }
     if (this._mouseupListener) {
       document.removeEventListener('mouseup', this._mouseupListener);
@@ -318,7 +339,8 @@ class DmsTimelapseView extends HTMLElement {
         }
         .timeline.visible { display: block; }
         .ticks { position: absolute; inset: 0; }
-        .ticks span { position: absolute; top: 0; bottom: 0; width: 1px; background: #4af; opacity: .7; }
+        .ticks span { position: absolute; top: 0; bottom: 0; width: 1px; background: #888; opacity: .7; }
+        .ticks span.loaded { background: #4af; }
         .cursor { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #fff; pointer-events: none; }
         .btn-fs {
           position: absolute; top: 6px; right: 8px;
@@ -342,7 +364,6 @@ class DmsTimelapseView extends HTMLElement {
       <div class="frame-wrap">
         <img class="main" style="display:none" alt="live feed"/>
         <img class="blend" style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:contain; opacity:0;" alt=""/>
-        <img class="preload" style="display:none" alt=""/>
         <div class="spinner"><span>⏳</span><span>Loading…</span></div>
         <div class="ts"></div>
         <div class="badge"><div class="dot"></div><span class="badge-label">LIVE</span></div>
@@ -363,7 +384,6 @@ class DmsTimelapseView extends HTMLElement {
 
     const mainImg    = this._root.querySelector('img.main');
     const blendImg   = this._root.querySelector('img.blend');
-    const preload    = this._root.querySelector('img.preload');
     const spinner    = this._root.querySelector('.spinner');
     const badge      = this._root.querySelector('.badge');
     const badgeLabel = this._root.querySelector('.badge-label');
@@ -407,6 +427,8 @@ class DmsTimelapseView extends HTMLElement {
         if (pos < 0 || pos > 1) continue;
         const tick = document.createElement('span');
         tick.style.left = (pos * 100).toFixed(2) + '%';
+        tick.dataset.fid = f.id;
+        if (FrameCache.get(f.id)) tick.classList.add('loaded');
         ticksEl.appendChild(tick);
       }
     };
@@ -430,17 +452,14 @@ class DmsTimelapseView extends HTMLElement {
       this._lastFrameId = latest.id;
 
       const incomingTs = new Date(latest.timestamp).getTime();
-      const src = `/cameras-api/frame/${encodeURIComponent(latest.id)}`;
-      preload.onload = () => {
+
+      const _showFrame = (blobUrl) => {
         if (this._generation !== myGen) return;
-        // Reject out-of-order frames that arrived after a newer one already displayed.
         if (incomingTs < this._lastFrameTimestamp) return;
         this._lastFrameTimestamp = incomingTs;
-        // Store the live-loaded frame into the cache so scrubbing to it is instant.
-        FrameCache.store(latest.id, preload.src);
         if (this._scrubbing) return;
-        this._lastLiveFrameSrc = preload.src;
-        mainImg.src = preload.src;
+        this._lastLiveFrameSrc = blobUrl;
+        mainImg.src = blobUrl;
         mainImg.style.display = '';
         spinner.classList.add('hidden');
         badge.classList.add('visible');
@@ -448,11 +467,31 @@ class DmsTimelapseView extends HTMLElement {
         timeline.classList.add('visible');
         fsBtn.classList.add('visible');
       };
-      preload.onerror = () => {};
-      preload.src = src;
+
+      // Use cached blob URL if background prefetch already has this frame.
+      const cached = FrameCache.get(latest.id);
+      if (cached) {
+        _showFrame(cached);
+      } else {
+        fetch(`/cameras-api/frame/${encodeURIComponent(latest.id)}`)
+          .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+          .then(blob => {
+            const blobUrl = URL.createObjectURL(blob);
+            FrameCache.store(latest.id, blobUrl);
+            _showFrame(blobUrl);
+          })
+          .catch(() => {});
+      }
     };
     document.addEventListener('cameras-timelapse-update', this._timelapseListener);
     TimelapsePoller.subscribe();
+
+    // Turn a tick blue the moment its frame blob lands in the cache.
+    this._cacheListener = (e) => {
+      const tick = ticksEl.querySelector(`[data-fid="${CSS.escape(e.detail)}"]`);
+      if (tick) tick.classList.add('loaded');
+    };
+    document.addEventListener('framecache-loaded', this._cacheListener);
 
     // Scrub interactions
     let scrubRafId = null;
