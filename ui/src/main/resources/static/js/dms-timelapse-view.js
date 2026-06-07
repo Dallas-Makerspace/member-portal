@@ -291,7 +291,7 @@ class DmsTimelapseView extends HTMLElement {
 
   // ── Live mode ─────────────────────────────────────────────────────────────
 
-  _renderLive(stream) {
+  _renderLive(stream, seedFrames = null) {
     const myGen = ++this._generation;
 
     this._root.innerHTML = `
@@ -432,6 +432,43 @@ class DmsTimelapseView extends HTMLElement {
         ticksEl.appendChild(tick);
       }
     };
+
+    // When expanding from thumbnail, seed frames are already known — display the
+    // latest frame immediately without waiting for the next TimelapsePoller tick.
+    if (seedFrames && seedFrames.length) {
+      const seedLatest = seedFrames[seedFrames.length - 1];
+      this._buffer = seedFrames;
+      this._lastFrameId = seedLatest.id;
+      this._lastFrameTimestamp = new Date(seedLatest.timestamp).getTime();
+      updateTicks(seedFrames);
+      FrameCache.enqueueStream(stream, seedFrames);
+
+      const _showSeed = (blobUrl) => {
+        if (this._generation !== myGen) return;
+        this._lastLiveFrameSrc = blobUrl;
+        mainImg.src = blobUrl;
+        mainImg.style.display = '';
+        spinner.classList.add('hidden');
+        badge.classList.add('visible');
+        tsEl.classList.add('visible');
+        timeline.classList.add('visible');
+        fsBtn.classList.add('visible');
+      };
+
+      const seedCached = FrameCache.get(seedLatest.id);
+      if (seedCached) {
+        _showSeed(seedCached);
+      } else {
+        fetch(`/cameras-api/frame/${encodeURIComponent(seedLatest.id)}`)
+          .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+          .then(blob => {
+            const blobUrl = URL.createObjectURL(blob);
+            FrameCache.store(seedLatest.id, blobUrl);
+            _showSeed(blobUrl);
+          })
+          .catch(() => {});
+      }
+    }
 
     // Subscribe to the shared timelapse poller for frame updates.
     this._timelapseListener = (e) => {
@@ -697,6 +734,7 @@ class DmsTimelapseView extends HTMLElement {
       TimelapsePoller.subscribe();
     });
 
+    let seedFrames = null;
     try {
       const [streams, framesByStream] = await Promise.all([
         Promise.race([streamsReady, abortPromise]),
@@ -713,6 +751,7 @@ class DmsTimelapseView extends HTMLElement {
       }
 
       const frames = framesByStream.get(stream);
+      seedFrames = frames || null;
       if (frames && frames.length) {
         const latest = frames[frames.length - 1];
         thumbImg.onload = () => {
@@ -740,7 +779,7 @@ class DmsTimelapseView extends HTMLElement {
       if (this._generation !== myGen) return;
       this._teardown();
       this._rendered = true;
-      this._renderLive(stream);
+      this._renderLive(stream, seedFrames);
       this.requestFullscreen().catch(() => {});
     });
   }
