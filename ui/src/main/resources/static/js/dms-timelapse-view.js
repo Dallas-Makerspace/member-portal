@@ -65,50 +65,116 @@ const TimelapsePoller = (() => {
 })();
 
 // Module-level frame cache shared across all component instances on the page.
-// frames are keyed by UUID; the rolling window means old frames will eventually
-// stop being requested, so the cache is left unbounded.
+// Supports memory-aware stride, newest-first background loading, and
+// interpolation between loaded frames for zero-request scrubbing.
 const FrameCache = (() => {
-  const MAX_CONCURRENT = 4;
-  const cache = new Map();   // id → src string
-  const queue = [];          // pending frame objects waiting to be loaded
-  const queued = new Set();  // ids currently in queue (prevents duplicate entries)
-  let active = 0;            // number of in-flight prefetch loads
+  const MEMORY_BUDGET_BYTES = 50 * 1024 * 1024;  // 50 MB
+  const MAX_CONCURRENT = 6;
+  const cache = new Map();     // frameId → src string
+  const queued = new Set();    // frameIds currently in queue (not yet loaded)
+  const queue = [];            // ordered array of frameIds to load (newest first)
+  let active = 0;              // in-flight load count
+  const registry = new Map();  // streamId → frames[] (latest timelapse snapshot)
 
-  function _next() {
+  function _flush() {
     while (active < MAX_CONCURRENT && queue.length) {
-      const frame = queue.shift();
-      queued.delete(frame.id);
-      if (cache.has(frame.id)) continue;
+      const id = queue.shift();
+      queued.delete(id);
+      if (cache.has(id)) continue;
       active++;
       const img = new Image();
-      img.onload = () => {
-        cache.set(frame.id, img.src);
-        active--;
-        _next();
-      };
-      img.onerror = () => {
-        active--;
-        _next();
-      };
-      img.src = '/cameras-api/frame/' + encodeURIComponent(frame.id);
+      img.onload = () => { cache.set(id, img.src); active--; _flush(); };
+      img.onerror = () => { active--; _flush(); };
+      img.src = '/cameras-api/frame/' + encodeURIComponent(id);
     }
   }
 
   return {
-    // Queue frame objects for background loading (skips already-cached/queued ids).
-    prefetch(frames) {
-      for (const f of frames) {
-        if (!cache.has(f.id) && !queued.has(f.id)) { queue.push(f); queued.add(f.id); }
+    // Register (or update) a stream's full frame list and enqueue uncached frames
+    // for background loading, newest first, respecting the global memory budget.
+    enqueueStream(streamId, frames) {
+      // 1. Update registry (empty array clears a stream that went offline)
+      registry.set(streamId, frames);
+
+      // 2. Recalculate global stride based on uncached bytes across ALL streams
+      let totalBytes = 0;
+      for (const streamFrames of registry.values()) {
+        for (const f of streamFrames) {
+          if (!cache.has(f.id)) {
+            totalBytes += (f.size_bytes || 100000);
+          }
+        }
       }
-      _next();
+      const stride = Math.max(1, Math.ceil(totalBytes / MEMORY_BUDGET_BYTES));
+
+      // 3. Build load list for THIS stream only, newest first.
+      // Iterate reversed (newest first); push appends in that order so _flush's
+      // shift() dequeues newest frames first.
+      const reversed = frames.slice().reverse();
+      for (let i = 0; i < reversed.length; i++) {
+        const f = reversed[i];
+        if (i % stride !== 0) continue;
+        if (cache.has(f.id)) continue;
+        if (queued.has(f.id)) continue;
+        queue.push(f.id);
+        queued.add(f.id);
+      }
+
+      // 4. Start loading
+      _flush();
     },
-    // Manually store a src string (called from preload.onload / scrubImg.onload).
+
+    // Manually store a src string (called from preload.onload).
     store(id, src) {
       cache.set(id, src);
     },
+
     // Returns the cached src string, or undefined on a cache miss.
     get(id) {
       return cache.get(id);
+    },
+
+    // Find the nearest loaded frames around targetId for interpolated display.
+    // frames: the full frames array for this stream (sorted oldest→newest).
+    // Returns { exactSrc, prevSrc, nextSrc, alpha }.
+    getNearestPair(frames, targetId) {
+      const targetIndex = frames.findIndex(f => f.id === targetId);
+      if (targetIndex === -1) {
+        return { exactSrc: undefined, prevSrc: undefined, nextSrc: undefined, alpha: 0 };
+      }
+
+      // Walk backwards to find the nearest loaded frame at or before target
+      let prevFrame = null;
+      for (let i = targetIndex; i >= 0; i--) {
+        if (cache.has(frames[i].id)) { prevFrame = frames[i]; break; }
+      }
+
+      // Walk forwards to find the nearest loaded frame after target
+      let nextFrame = null;
+      for (let i = targetIndex + 1; i < frames.length; i++) {
+        if (cache.has(frames[i].id)) { nextFrame = frames[i]; break; }
+      }
+
+      const exactSrc = cache.get(targetId);
+      let prevSrc = prevFrame ? cache.get(prevFrame.id) : undefined;
+      let nextSrc = nextFrame ? cache.get(nextFrame.id) : undefined;
+      let alpha = 0;
+
+      if (prevFrame && nextFrame) {
+        const tPrev   = new Date(prevFrame.timestamp).getTime();
+        const tNext   = new Date(nextFrame.timestamp).getTime();
+        const tTarget = new Date(frames[targetIndex].timestamp).getTime();
+        const raw = (tNext > tPrev) ? (tTarget - tPrev) / (tNext - tPrev) : 0;
+        alpha = Math.max(0, Math.min(1, raw));
+      } else if (!prevFrame && nextFrame) {
+        // Only a frame after the target — show it at full opacity with no blend
+        prevSrc = nextSrc;
+        nextSrc = undefined;
+        alpha = 0;
+      }
+      // If only prevFrame: alpha stays 0, nextSrc stays undefined
+
+      return { exactSrc, prevSrc, nextSrc, alpha };
     },
   };
 })();
@@ -137,7 +203,6 @@ class DmsTimelapseView extends HTMLElement {
     this._lastLiveFrameSrc = null;
     this._scrubFrameId = null;
     this._abortController = null;
-    this._scrubImg = null;
   }
 
   connectedCallback() { if (!this._rendered) this._render(); }
@@ -164,11 +229,6 @@ class DmsTimelapseView extends HTMLElement {
     // Preserve this._connected across re-renders so the badge doesn't flash
     // incorrectly until the next authoritative poll arrives.
 
-    if (this._scrubImg) {
-      this._scrubImg.onload = null;
-      this._scrubImg.onerror = null;
-      this._scrubImg = null;
-    }
     if (this._abortController) {
       this._abortController.abort();
       this._abortController = null;
@@ -281,6 +341,7 @@ class DmsTimelapseView extends HTMLElement {
       </style>
       <div class="frame-wrap">
         <img class="main" style="display:none" alt="live feed"/>
+        <img class="blend" style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:contain; opacity:0;" alt=""/>
         <img class="preload" style="display:none" alt=""/>
         <div class="spinner"><span>⏳</span><span>Loading…</span></div>
         <div class="ts"></div>
@@ -301,6 +362,7 @@ class DmsTimelapseView extends HTMLElement {
     `;
 
     const mainImg    = this._root.querySelector('img.main');
+    const blendImg   = this._root.querySelector('img.blend');
     const preload    = this._root.querySelector('img.preload');
     const spinner    = this._root.querySelector('.spinner');
     const badge      = this._root.querySelector('.badge');
@@ -353,11 +415,15 @@ class DmsTimelapseView extends HTMLElement {
     this._timelapseListener = (e) => {
       if (this._generation !== myGen) return;
       const frames = e.detail.get(stream);
-      if (!frames || !frames.length) return;
+      if (!frames || !frames.length) {
+        // Update registry with empty list so offline streams don't inflate stride.
+        FrameCache.enqueueStream(stream, []);
+        return;
+      }
       this._buffer = frames;
       updateTicks(frames);
-      // Prefetch the 12 most recent frames into FrameCache so scrubbing is instant.
-      FrameCache.prefetch(frames.slice(-12));
+      // Enqueue ALL frames for background loading (newest first, memory-aware stride).
+      FrameCache.enqueueStream(stream, frames);
 
       const latest = frames[frames.length - 1];
       if (latest.id === this._lastFrameId) return;
@@ -413,31 +479,21 @@ class DmsTimelapseView extends HTMLElement {
           this._scrubbing = true;
           // Use the matched frame's actual server timestamp, not a synthetic approximation.
           tsEl.textContent = new Date(best.timestamp).toLocaleTimeString();
-          const cachedSrc = FrameCache.get(best.id);
-          if (cachedSrc) {
-            // Cache hit — zero network requests, instant display.
-            mainImg.src = cachedSrc;
+
+          // Zero-request scrubbing: read only from FrameCache, blend between neighbours.
+          const { exactSrc, prevSrc, nextSrc, alpha } = FrameCache.getNearestPair(this._buffer, best.id);
+          const displaySrc = exactSrc || prevSrc;
+          if (displaySrc) {
+            mainImg.src = displaySrc;
+            mainImg.style.display = '';
+          }
+          if (nextSrc && alpha > 0 && !exactSrc) {
+            blendImg.src = nextSrc;
+            blendImg.style.opacity = alpha;
+            blendImg.style.display = '';
           } else {
-            // Cache miss — abandon previous in-flight scrub load, start a new one.
-            // Don't set src='' on the old img: that triggers a spurious fetch to the page URL.
-            if (this._scrubImg) {
-              this._scrubImg.onload = null;
-              this._scrubImg.onerror = null;
-              this._scrubImg = null;
-            }
-            const capturedId = best.id;
-            const img = new Image();
-            this._scrubImg = img;
-            img.onload = () => {
-              // Close over img (not this._scrubImg) so the correct src is stored even
-              // if this._scrubImg was replaced before this load completed.
-              FrameCache.store(capturedId, img.src);
-              if (this._generation !== myGen) return;
-              if (!this._scrubbing || this._scrubFrameId !== capturedId) return;
-              mainImg.src = img.src;
-            };
-            img.onerror = () => { if (this._scrubImg === img) this._scrubImg = null; };
-            img.src = '/cameras-api/frame/' + encodeURIComponent(best.id);
+            blendImg.style.opacity = 0;
+            blendImg.style.display = 'none';
           }
         }
       });
@@ -450,7 +506,13 @@ class DmsTimelapseView extends HTMLElement {
       cursor.style.display = 'none';
       if (this._lastLiveFrameSrc) {
         mainImg.src = this._lastLiveFrameSrc;
+      } else {
+        // No live frame loaded yet — restore loading state rather than freezing on scrub frame.
+        mainImg.style.display = 'none';
+        spinner.classList.remove('hidden');
       }
+      blendImg.style.opacity = 0;
+      blendImg.style.display = 'none';
       tsEl.textContent = new Date().toLocaleTimeString();
     };
 
@@ -644,6 +706,5 @@ class DmsTimelapseView extends HTMLElement {
     });
   }
 }
-
 
 customElements.define('dms-timelapse-view', DmsTimelapseView);
