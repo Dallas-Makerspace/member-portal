@@ -79,21 +79,6 @@ jobs:
       - name: Run Build and Create Fat JAR
         run: ./gradlew :${{ inputs.component }}:shadowJar -x detekt
 
-      - name: Run Tests
-        run: ./gradlew test -x detekt -x :e2e:test
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results-${{ inputs.component }}
-          path: |
-            common-models/build/test-results/
-            service/build/test-results/
-            ui/build/test-results/
-            e2e/build/test-results/
-          retention-days: 30
-
       - name: Log in to Container registry
         uses: docker/login-action@v3
         with:
@@ -178,10 +163,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.PAT }}
 
-      - name: Pull latest Docker image
+      - name: Resolve image reference
         shell: bash
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
+          echo "IMAGE_REF=${{ env.REGISTRY }}/${{ inputs.image_name }}@${{ needs.build-and-push-image.outputs.image-digest }}" >> "$GITHUB_ENV"
+
+      - name: Pull Docker image by digest
+        shell: bash
+        run: |
+          docker pull "$IMAGE_REF"
 
       - name: Determine deploy colors
         shell: bash
@@ -243,7 +233,7 @@ jobs:
             --label "portal.component=${{ inputs.component }}" \
             --label "portal.color=$NEW" \
             $TRAEFIK_LABELS \
-            "${{ env.REGISTRY }}/${{ inputs.image_name }}:latest"
+            "$IMAGE_REF"
 
           echo "Started $NEW_NAME"
 

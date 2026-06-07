@@ -27,6 +27,7 @@ constructor(
         if (isBinaryPath(path)) {
           chronoRingClient.proxyBinary(fullPath, call)
         } else {
+          // Covers /timelapse (combined), /streams, /streams/{id}/timelapse, and any other JSON endpoints.
           chronoRingClient.proxyJson(fullPath, call)
         }
       }

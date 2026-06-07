@@ -29,6 +29,7 @@ constructor(
       HttpClient(CIO) {
         engine {
           endpoint {
+            keepAliveTime = 0 // zoneminder closes idle connections; disable reuse to avoid EOF
             requestTimeout = REQUEST_TIMEOUT_MS
             connectTimeout = CONNECT_TIMEOUT_MS
             connectAttempts = 2

@@ -4,30 +4,63 @@
  * Attributes:
  *   stream      — chrono-ring stream ID (required)
  *   buffer-secs — rolling buffer duration in seconds (default 60)
- *   interval    — live poll interval in ms (default 1500)
+ *   interval    — live poll interval in ms (default 1500); no longer drives fetch frequency
  *   variant     — "thumbnail" for minimalist single-frame view; absent = live mode
  *
  * URLs are routed through the member-portal proxy at /cameras-api/...
  */
 
-// Polls /cameras-api/streams once every 5s while at least one live component
-// is active, dispatching 'cameras-streams-update' on document each time.
+// Polls /cameras-api/streams once every 5s while at least one component is subscribed.
 const StreamsPoller = (() => {
   let timer = null;
   let count = 0;
+  let polling = false;
 
   async function poll() {
+    if (polling) return;
+    polling = true;
     try {
       const res = await fetch('/cameras-api/streams');
       if (!res.ok) return;
       const streams = await res.json();
       document.dispatchEvent(new CustomEvent('cameras-streams-update', { detail: streams }));
     } catch (_) {}
+    finally { polling = false; }
   }
 
   return {
     subscribe()   { if (++count === 1) { poll(); timer = setInterval(poll, 5000); } },
-    unsubscribe() { if (--count === 0) { clearInterval(timer); timer = null; } },
+    unsubscribe() { if (--count <= 0) { count = 0; clearInterval(timer); timer = null; } },
+  };
+})();
+
+// Polls /cameras-api/timelapse once every 10s while at least one component is subscribed.
+// Groups frames by stream_id and dispatches 'cameras-timelapse-update' with a Map as detail.
+const TimelapsePoller = (() => {
+  let timer = null;
+  let count = 0;
+  let polling = false;
+
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    try {
+      const res = await fetch('/cameras-api/timelapse');
+      if (!res.ok) return;
+      const frames = await res.json();
+      const byStream = new Map();
+      for (const f of frames) {
+        if (!byStream.has(f.stream_id)) byStream.set(f.stream_id, []);
+        byStream.get(f.stream_id).push(f);
+      }
+      document.dispatchEvent(new CustomEvent('cameras-timelapse-update', { detail: byStream }));
+    } catch (_) {}
+    finally { polling = false; }
+  }
+
+  return {
+    subscribe()   { if (++count === 1) { poll(); timer = setInterval(poll, 10000); } },
+    unsubscribe() { if (--count <= 0) { count = 0; clearInterval(timer); timer = null; } },
   };
 })();
 
@@ -39,31 +72,69 @@ class DmsTimelapseView extends HTMLElement {
   constructor() {
     super();
     this._root = this.attachShadow({ mode: 'open' });
-    this._timer = null;
     this._clockTimer = null;
     this._streamsListener = null;
+    this._timelapseListener = null;
+    this._mouseupListener = null;
+    this._visibilityListener = null;
     this._buffer = [];
     this._scrubbing = false;
-    this._connected = true;
+    this._connected = false;
     this._onFsChange = null;
     this._rendered = false;
+    this._generation = 0;
+    this._lastFrameId = null;
+    this._lastFrameTimestamp = 0;
+    this._lastLiveFrameSrc = null;
+    this._scrubFrameId = null;
+    this._abortController = null;
   }
 
   connectedCallback() { if (!this._rendered) this._render(); }
   disconnectedCallback() { this._teardown(); }
-  attributeChangedCallback() { this._teardown(); this._render(); }
+
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (!this._rendered) return;
+    if (name === 'buffer-secs' || name === 'interval') return;
+    if (oldValue === newValue) return;
+    this._teardown();
+    this._render();
+  }
 
   _teardown() {
-    clearInterval(this._timer);
+    this._generation++;
     clearInterval(this._clockTimer);
-    this._timer = null;
     this._clockTimer = null;
     this._scrubbing = false;
     this._rendered = false;
+    this._lastFrameId = null;
+    this._lastFrameTimestamp = 0;
+    this._lastLiveFrameSrc = null;
+    this._scrubFrameId = null;
+    // Preserve this._connected across re-renders so the badge doesn't flash
+    // incorrectly until the next authoritative poll arrives.
+
+    if (this._abortController) {
+      this._abortController.abort();
+      this._abortController = null;
+    }
     if (this._streamsListener) {
       document.removeEventListener('cameras-streams-update', this._streamsListener);
       this._streamsListener = null;
       StreamsPoller.unsubscribe();
+    }
+    if (this._timelapseListener) {
+      document.removeEventListener('cameras-timelapse-update', this._timelapseListener);
+      this._timelapseListener = null;
+      TimelapsePoller.unsubscribe();
+    }
+    if (this._mouseupListener) {
+      document.removeEventListener('mouseup', this._mouseupListener);
+      this._mouseupListener = null;
+    }
+    if (this._visibilityListener) {
+      document.removeEventListener('visibilitychange', this._visibilityListener);
+      this._visibilityListener = null;
     }
     if (this._onFsChange) {
       this.removeEventListener('fullscreenchange', this._onFsChange);
@@ -85,6 +156,8 @@ class DmsTimelapseView extends HTMLElement {
   // ── Live mode ─────────────────────────────────────────────────────────────
 
   _renderLive(stream) {
+    const myGen = ++this._generation;
+
     this._root.innerHTML = `
       <style>
         :host { display: block; background: #000; }
@@ -221,70 +294,106 @@ class DmsTimelapseView extends HTMLElement {
       }
     };
 
-    const poll = async () => {
-      try {
-        const res = await fetch(`/cameras-api/streams/${encodeURIComponent(stream)}/timelapse`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const frames = await res.json();
-        if (!frames || !frames.length) return;
-        this._buffer = frames;
-        updateTicks(frames);
+    // Subscribe to the shared timelapse poller for frame updates.
+    this._timelapseListener = (e) => {
+      if (this._generation !== myGen) return;
+      const frames = e.detail.get(stream);
+      if (!frames || !frames.length) return;
+      this._buffer = frames;
+      updateTicks(frames);
 
-        const latest = frames[frames.length - 1];
-        const src = `/cameras-api/frame/${encodeURIComponent(latest.id)}`;
+      const latest = frames[frames.length - 1];
+      if (latest.id === this._lastFrameId) return;
+      this._lastFrameId = latest.id;
 
-        preload.onload = () => {
-          if (this._scrubbing) return;
-          mainImg.src = preload.src;
-          mainImg.style.display = '';
-          spinner.classList.add('hidden');
-          badge.classList.add('visible');
-          tsEl.classList.add('visible');
-          timeline.classList.add('visible');
-          fsBtn.classList.add('visible');
-        };
-        preload.onerror = () => {};
-        preload.src = src;
-      } catch (e) {
-        if (!spinner.classList.contains('hidden')) {
-          spinner.innerHTML = `<span class="error">Error: ${escHtml(e.message)}</span>`;
-        }
-      }
+      const incomingTs = new Date(latest.timestamp).getTime();
+      const src = `/cameras-api/frame/${encodeURIComponent(latest.id)}`;
+      preload.onload = () => {
+        if (this._generation !== myGen) return;
+        // Reject out-of-order frames that arrived after a newer one already displayed.
+        if (incomingTs < this._lastFrameTimestamp) return;
+        this._lastFrameTimestamp = incomingTs;
+        if (this._scrubbing) return;
+        this._lastLiveFrameSrc = preload.src;
+        mainImg.src = preload.src;
+        mainImg.style.display = '';
+        spinner.classList.add('hidden');
+        badge.classList.add('visible');
+        tsEl.classList.add('visible');
+        timeline.classList.add('visible');
+        fsBtn.classList.add('visible');
+      };
+      preload.onerror = () => {};
+      preload.src = src;
     };
+    document.addEventListener('cameras-timelapse-update', this._timelapseListener);
+    TimelapsePoller.subscribe();
 
     // Scrub interactions
+    let scrubRafId = null;
+
     const onScrub = (clientX) => {
       if (!this._buffer.length) return;
-      const rect = timeline.getBoundingClientRect();
-      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      cursor.style.left = (x * 100) + '%';
-      cursor.style.display = '';
-      const targetMs = (Date.now() - bufferMs()) + x * bufferMs();
-      let best = null, bestDiff = Infinity;
-      for (const f of this._buffer) {
-        const diff = Math.abs(new Date(f.timestamp).getTime() - targetMs);
-        if (diff < bestDiff) { bestDiff = diff; best = f; }
-      }
-      if (best) {
-        this._scrubbing = true;
-        mainImg.src = `/cameras-api/frame/${encodeURIComponent(best.id)}`;
-        tsEl.textContent = new Date(targetMs).toLocaleTimeString();
-      }
+      if (scrubRafId) return;
+      scrubRafId = requestAnimationFrame(() => {
+        scrubRafId = null;
+        if (this._generation !== myGen) return;
+        const rect = timeline.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        cursor.style.left = (x * 100) + '%';
+        cursor.style.display = '';
+        const targetMs = (Date.now() - bufferMs()) + x * bufferMs();
+        let best = null, bestDiff = Infinity;
+        for (const f of this._buffer) {
+          const diff = Math.abs(new Date(f.timestamp).getTime() - targetMs);
+          if (diff < bestDiff) { bestDiff = diff; best = f; }
+        }
+        if (best) {
+          if (best.id === this._scrubFrameId) return;
+          this._scrubFrameId = best.id;
+          this._scrubbing = true;
+          mainImg.src = `/cameras-api/frame/${encodeURIComponent(best.id)}`;
+          // Use the matched frame's actual server timestamp, not a synthetic approximation.
+          tsEl.textContent = new Date(best.timestamp).toLocaleTimeString();
+        }
+      });
     };
 
     const onRelease = () => {
+      if (!this._scrubbing) return;
       this._scrubbing = false;
+      this._scrubFrameId = null;
       cursor.style.display = 'none';
+      if (this._lastLiveFrameSrc) {
+        mainImg.src = this._lastLiveFrameSrc;
+      }
+      tsEl.textContent = new Date().toLocaleTimeString();
     };
 
-    timeline.addEventListener('mousemove', e => onScrub(e.clientX));
-    timeline.addEventListener('mouseleave', onRelease);
+    timeline.addEventListener('pointermove', e => onScrub(e.clientX));
+    timeline.addEventListener('pointerdown', e => {
+      timeline.setPointerCapture(e.pointerId);
+      onScrub(e.clientX);
+    });
+    timeline.addEventListener('pointerup',     () => onRelease());
+    timeline.addEventListener('pointercancel', () => onRelease());
+
+    // Store document-level listeners so _teardown() can remove them.
+    this._mouseupListener = () => onRelease();
+    document.addEventListener('mouseup', this._mouseupListener);
+
+    this._visibilityListener = () => {
+      if (document.visibilityState === 'hidden') onRelease();
+    };
+    document.addEventListener('visibilitychange', this._visibilityListener);
+
     timeline.addEventListener('touchstart', e => { e.preventDefault(); onScrub(e.touches[0].clientX); }, { passive: false });
     timeline.addEventListener('touchmove',  e => { e.preventDefault(); onScrub(e.touches[0].clientX); }, { passive: false });
-    timeline.addEventListener('touchend', onRelease);
+    timeline.addEventListener('touchend', () => onRelease());
 
-    // Wall-clock timer: advance timestamp every second unless scrubbing or offline
+    // Wall-clock timer: advance timestamp every second unless scrubbing or offline.
     this._clockTimer = setInterval(() => {
+      if (this._generation !== myGen) return;
       if (this._scrubbing) return;
       if (this._connected === false) return;
       if (tsEl.classList.contains('visible')) {
@@ -292,8 +401,9 @@ class DmsTimelapseView extends HTMLElement {
       }
     }, 1000);
 
-    // Subscribe to the shared streams poller for connected-state updates
+    // Subscribe to the shared streams poller for connected-state updates.
     this._streamsListener = (e) => {
+      if (this._generation !== myGen) return;
       const entry = e.detail.find(s => s.id === stream);
       if (!entry) return;
       this._connected = entry.connected;
@@ -303,15 +413,16 @@ class DmsTimelapseView extends HTMLElement {
     };
     document.addEventListener('cameras-streams-update', this._streamsListener);
     StreamsPoller.subscribe();
-
-    poll();
-    const intervalMs = parseInt(this.getAttribute('interval') || '1500', 10);
-    this._timer = setInterval(poll, intervalMs);
   }
 
   // ── Thumbnail mode ────────────────────────────────────────────────────────
 
   async _renderThumbnail(stream) {
+    this._rendered = true;
+    const myGen = ++this._generation;
+    this._abortController = new AbortController();
+    const signal = this._abortController.signal;
+
     this._root.innerHTML = `
       <style>
         :host { display: block; background: #000; }
@@ -362,45 +473,86 @@ class DmsTimelapseView extends HTMLElement {
     const statusDot = this._root.querySelector('.status-dot');
     const expandBtn = this._root.querySelector('.btn-expand');
 
-    // Check connected state
-    try {
-      const res = await fetch('/cameras-api/streams');
-      if (res.ok) {
-        const streams = await res.json();
-        const entry = streams.find(s => s.id === stream);
-        if (entry) {
-          this._connected = entry.connected;
-          statusDot.classList.toggle('offline', !entry.connected);
-          statusDot.classList.add('visible');
-        }
-      }
-    } catch (_) {}
+    // Wrap the abort signal in a rejection promise for racing.
+    const abortPromise = new Promise((_, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    });
 
-    // Load latest frame
+    // One-shot streams listener — stored in this._streamsListener so _teardown()
+    // can remove it and call StreamsPoller.unsubscribe() if abort fires first.
+    let streamsSettled = false;
+    const streamsReady = new Promise((resolve) => {
+      const handler = (e) => {
+        if (streamsSettled) return;
+        streamsSettled = true;
+        document.removeEventListener('cameras-streams-update', handler);
+        this._streamsListener = null;
+        StreamsPoller.unsubscribe();
+        resolve(e.detail);
+      };
+      this._streamsListener = handler;
+      document.addEventListener('cameras-streams-update', this._streamsListener);
+      StreamsPoller.subscribe();
+    });
+
+    // One-shot timelapse listener — stored in this._timelapseListener so _teardown()
+    // can remove it and call TimelapsePoller.unsubscribe() if abort fires first.
+    let timelapseSettled = false;
+    const timelapseReady = new Promise((resolve) => {
+      const handler = (e) => {
+        if (timelapseSettled) return;
+        timelapseSettled = true;
+        document.removeEventListener('cameras-timelapse-update', handler);
+        this._timelapseListener = null;
+        TimelapsePoller.unsubscribe();
+        resolve(e.detail);
+      };
+      this._timelapseListener = handler;
+      document.addEventListener('cameras-timelapse-update', this._timelapseListener);
+      TimelapsePoller.subscribe();
+    });
+
     try {
-      const res = await fetch(`/cameras-api/streams/${encodeURIComponent(stream)}/timelapse`);
-      if (res.ok) {
-        const frames = await res.json();
-        if (frames && frames.length) {
-          const latest = frames[frames.length - 1];
-          thumbImg.onload = () => {
-            thumbImg.style.display = '';
-            spinner.classList.add('hidden');
-            expandBtn.classList.add('visible');
-          };
-          thumbImg.onerror = () => {
-            spinner.innerHTML = '<span style="color:#f55">No image</span>';
-          };
-          thumbImg.src = `/cameras-api/frame/${encodeURIComponent(latest.id)}`;
-        } else {
-          spinner.innerHTML = '<span>No frames</span>';
-        }
+      const [streams, framesByStream] = await Promise.all([
+        Promise.race([streamsReady, abortPromise]),
+        Promise.race([timelapseReady, abortPromise]),
+      ]);
+
+      if (this._generation !== myGen) return;
+
+      const entry = streams.find(s => s.id === stream);
+      if (entry) {
+        this._connected = entry.connected;
+        statusDot.classList.toggle('offline', !entry.connected);
+        statusDot.classList.add('visible');
       }
-    } catch (_) {
+
+      const frames = framesByStream.get(stream);
+      if (frames && frames.length) {
+        const latest = frames[frames.length - 1];
+        thumbImg.onload = () => {
+          if (this._generation !== myGen) return;
+          thumbImg.style.display = '';
+          spinner.classList.add('hidden');
+          expandBtn.classList.add('visible');
+        };
+        thumbImg.onerror = () => {
+          if (this._generation !== myGen) return;
+          spinner.innerHTML = '<span style="color:#f55">No image</span>';
+        };
+        thumbImg.src = `/cameras-api/frame/${encodeURIComponent(latest.id)}`;
+      } else {
+        spinner.innerHTML = '<span>No frames</span>';
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      if (this._generation !== myGen) return;
       spinner.innerHTML = '<span style="color:#f55">Error</span>';
     }
 
+    // Guard against a stale click from a detached button disrupting the current render.
     expandBtn.addEventListener('click', () => {
+      if (this._generation !== myGen) return;
       this._teardown();
       this._rendered = true;
       this._renderLive(stream);
