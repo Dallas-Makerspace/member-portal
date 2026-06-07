@@ -71,12 +71,14 @@ const FrameCache = (() => {
   const MAX_CONCURRENT = 4;
   const cache = new Map();   // id → src string
   const queue = [];          // pending frame objects waiting to be loaded
+  const queued = new Set();  // ids currently in queue (prevents duplicate entries)
   let active = 0;            // number of in-flight prefetch loads
 
   function _next() {
     while (active < MAX_CONCURRENT && queue.length) {
       const frame = queue.shift();
-      if (cache.has(frame.id)) { _next(); return; }
+      queued.delete(frame.id);
+      if (cache.has(frame.id)) continue;
       active++;
       const img = new Image();
       img.onload = () => {
@@ -93,10 +95,10 @@ const FrameCache = (() => {
   }
 
   return {
-    // Queue frame objects for background loading (skips already-cached ids).
+    // Queue frame objects for background loading (skips already-cached/queued ids).
     prefetch(frames) {
       for (const f of frames) {
-        if (!cache.has(f.id)) queue.push(f);
+        if (!cache.has(f.id) && !queued.has(f.id)) { queue.push(f); queued.add(f.id); }
       }
       _next();
     },
@@ -165,7 +167,6 @@ class DmsTimelapseView extends HTMLElement {
     if (this._scrubImg) {
       this._scrubImg.onload = null;
       this._scrubImg.onerror = null;
-      this._scrubImg.src = '';
       this._scrubImg = null;
     }
     if (this._abortController) {
@@ -417,22 +418,26 @@ class DmsTimelapseView extends HTMLElement {
             // Cache hit — zero network requests, instant display.
             mainImg.src = cachedSrc;
           } else {
-            // Cache miss — cancel previous in-flight scrub load, start a new one.
+            // Cache miss — abandon previous in-flight scrub load, start a new one.
+            // Don't set src='' on the old img: that triggers a spurious fetch to the page URL.
             if (this._scrubImg) {
               this._scrubImg.onload = null;
               this._scrubImg.onerror = null;
-              this._scrubImg.src = '';
+              this._scrubImg = null;
             }
-            this._scrubImg = new Image();
             const capturedId = best.id;
-            this._scrubImg.onload = () => {
-              FrameCache.store(capturedId, this._scrubImg.src);
+            const img = new Image();
+            this._scrubImg = img;
+            img.onload = () => {
+              // Close over img (not this._scrubImg) so the correct src is stored even
+              // if this._scrubImg was replaced before this load completed.
+              FrameCache.store(capturedId, img.src);
               if (this._generation !== myGen) return;
               if (!this._scrubbing || this._scrubFrameId !== capturedId) return;
-              mainImg.src = this._scrubImg.src;
+              mainImg.src = img.src;
             };
-            this._scrubImg.onerror = () => { this._scrubImg = null; };
-            this._scrubImg.src = '/cameras-api/frame/' + encodeURIComponent(best.id);
+            img.onerror = () => { if (this._scrubImg === img) this._scrubImg = null; };
+            img.src = '/cameras-api/frame/' + encodeURIComponent(best.id);
           }
         }
       });
@@ -640,9 +645,5 @@ class DmsTimelapseView extends HTMLElement {
   }
 }
 
-function escHtml(str) {
-  return String(str).replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
 
 customElements.define('dms-timelapse-view', DmsTimelapseView);
