@@ -217,7 +217,8 @@
 
                         <div class="d-flex align-items-center mb-3">
                             <span class="material-symbols-outlined card-item-icon">update</span>
-                            <span th:if="${enabled}">Total time at DMS: <span th:text="${membership_duration}"></span></span>
+                            <span th:if="${enabled}">Total time at DMS: <span
+                                    th:text="${membership_duration}"></span></span>
                             <span th:unless="${enabled}">Total time at DMS:
                                 <span id="membershipDurationAsync"
                                       th:attr="data-username=${preferred_username}">…</span>
@@ -300,7 +301,8 @@
                                     <span>Badge: <span class="ph-mask" th:text="${badge_number_ad}"></span></span>
                                 </div>
 
-                                <div th:if="${badge_needs_fix and authz.can('MANAGE_MEMBERS')}" class="d-flex align-items-center mb-3">
+                                <div th:if="${badge_needs_fix and authz.can('MANAGE_MEMBERS')}"
+                                     class="d-flex align-items-center mb-3">
                                     <button class="btn btn-sm btn-warning" id="fixBadgeBtn"
                                             th:attr="data-username=${preferred_username},data-padded=${badge_padded}">
                                         <span class="material-symbols-outlined"
@@ -314,7 +316,8 @@
                 </div>
             </div>
             <!-- Debug info card -->
-            <div class="card shadow-sm overflow-hidden mt-4" style="margin: auto;" th:if="${authz.can('MANAGE_MEMBERS')}">
+            <div class="card shadow-sm overflow-hidden mt-4" style="margin: auto;"
+                 th:if="${authz.can('MANAGE_MEMBERS')}">
                 <div class="card-body pt-0">
                     <div class="d-flex align-items-center mt-4" style="cursor:pointer;"
                          data-bs-toggle="collapse" data-bs-target="#debugInfoContent"
@@ -892,6 +895,22 @@
                 }
                 if (data.badge_number_ad) {
                     html += `<div class="d-flex align-items-center mb-2"><span>Badge <span style="font-family:monospace">(AD)</span>: <span class="ph-mask">${data.badge_number_ad}</span></span></div>`;
+                }
+
+                if (data.recent_badge_swipes) {
+                    html += '<hr class="my-3"><h6 class="text-muted mb-3">Recent Badge Swipes:</h6>';
+                    if (data.recent_badge_swipes.length > 0) {
+                        html += '<ul class="list-unstyled ms-3 mt-2">';
+                        for (const swipe of data.recent_badge_swipes) {
+                            const grantedSpan = swipe.granted
+                                ? '<span class="text-success fw-bold">granted</span>'
+                                : '<span class="text-danger fw-bold">denied</span>';
+                            html += `<li class="mb-1"><span class="material-symbols-outlined text-muted" style="font-size:16px;vertical-align:middle;">badge</span> ${escapeHtml(swipe.swipe_time)} <br/> ${escapeHtml(swipe.door_name)} (${grantedSpan})</li>`;
+                        }
+                        html += '</ul>';
+                    } else {
+                        html += '<span class="text-muted small">No recent badge swipes.</span>';
+                    }
                 }
 
                 container.innerHTML = html;

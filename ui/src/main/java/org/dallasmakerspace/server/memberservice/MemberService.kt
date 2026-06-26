@@ -261,4 +261,11 @@ constructor(
   ): org.dallasmakerspace.models.MemberDebugInfo? {
     return memberServiceClient.getDebugInfo(username, sessionId)
   }
+
+  suspend fun getRecentBadgeSwipes(
+      username: String,
+      sessionId: String?,
+  ): List<org.dallasmakerspace.models.BadgeSwipeInfo> {
+    return memberServiceClient.getRecentBadgeSwipes(username, sessionId)
+  }
 }

@@ -243,6 +243,17 @@ fun Application.configureRouting() {
               ))
         }
 
+        /** Recent badge swipes for a member - infra only */
+        get<Members.DMSMember.BadgeSwipes> { request ->
+          val swipes = memberService.getRecentBadgeSwipes(request.parent.username)
+          call.respond(
+              ApiResponse(
+                  Status.SUCCESS,
+                  "Recent badge swipes for ${request.parent.username}",
+                  swipes,
+              ))
+        }
+
         /** Scanner status — focused endpoint for bin QR scanner * */
         get<Members.DMSMember.ScannerStatus> { request ->
           val actorUsername = call.request.headers["X-Actor-Username"]

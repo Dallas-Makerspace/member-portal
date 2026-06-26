@@ -40,6 +40,10 @@ constructor(
         if (canManageMembers)
             async { memberService.getDebugInfo(requestedUsername, session.sessionId) }
         else null
+    val swipesDeferred =
+        if (canManageMembers)
+            async { memberService.getRecentBadgeSwipes(requestedUsername, session.sessionId) }
+        else null
     val badgeMMDeferred = async {
       memberService.getBadgeFromMakerManager(requestedUsername, session.sessionId)
     }
@@ -71,6 +75,12 @@ constructor(
                 )
               }
         }
+      }
+
+      val swipes = swipesDeferred?.await()
+      if (swipes != null) {
+        result["recent_badge_swipes"] =
+            swipes.map { mapOf("swipe_time" to it.swipeTime, "door_name" to it.doorName, "granted" to it.granted) }
       }
 
       val badgeMM = badgeMMDeferred.await()

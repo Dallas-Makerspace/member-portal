@@ -676,6 +676,29 @@ constructor(
     }
   }
 
+  suspend fun getRecentBadgeSwipes(
+      username: String,
+      sessionId: String?,
+  ): List<org.dallasmakerspace.models.BadgeSwipeInfo> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/members/$username/badge-swipes", apiHeaders)
+      @Suppress("UNCHECKED_CAST")
+      val dataList = result["data"] as? List<*> ?: return emptyList()
+      dataList.mapNotNull { item ->
+        val entry = item as? Map<*, *> ?: return@mapNotNull null
+        org.dallasmakerspace.models.BadgeSwipeInfo(
+            swipeTime = entry["swipeTime"] as? String ?: return@mapNotNull null,
+            doorName = entry["doorName"] as? String ?: "Unknown",
+            granted = entry["granted"] as? Boolean ?: false,
+        )
+      }
+    } catch (ex: Exception) {
+      log.warn("Failed to get recent badge swipes for $username", ex)
+      emptyList()
+    }
+  }
+
   suspend fun getConfigValue(key: String, sessionId: String?): String? {
     return try {
       val apiHeaders = getApiHeaders(sessionId)

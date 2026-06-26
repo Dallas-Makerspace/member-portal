@@ -115,6 +115,47 @@ class DoorEventsRepository @Inject constructor() {
   }
 
   /**
+   * Returns the last [limit] badge swipes for the given username, newest first.
+   *
+   * @param username MakerManager username (must be alphanumeric/dash/underscore)
+   * @param limit Maximum number of swipes to return (default 5)
+   */
+  suspend fun getRecentSwipesForUser(
+      username: String,
+      limit: Int = 5,
+  ): List<org.dallasmakerspace.models.BadgeSwipeInfo> {
+    require(username.matches(Regex("^[a-zA-Z0-9_-]+$"))) { "Invalid username" }
+    val sql =
+        """
+        SELECT
+            DATE_FORMAT(CONVERT_TZ(e.date, 'UTC', 'America/Chicago'), '%a, %b %e, %Y at %l:%i %p') AS swipe_time,
+            s.name AS door_name,
+            e.granted AS granted
+        FROM `AccessControl`.events e
+        LEFT JOIN `AccessControl`.slots s ON e.controllerId = s.controllerId AND e.slotNumber = s.slotNumber
+        LEFT JOIN `dms-makermanager`.users u ON e.userId = u.id
+        WHERE u.username = '$username'
+        ORDER BY e.date DESC
+        LIMIT $limit
+        """
+            .trimIndent()
+    return suspendTransaction {
+      val result = mutableListOf<org.dallasmakerspace.models.BadgeSwipeInfo>()
+      exec(sql) { rs ->
+        while (rs.next()) {
+          result.add(
+              org.dallasmakerspace.models.BadgeSwipeInfo(
+                  swipeTime = rs.getString("swipe_time") ?: "",
+                  doorName = rs.getString("door_name") ?: "Unknown",
+                  granted = rs.getInt("granted") == 1,
+              ))
+        }
+      }
+      result
+    }
+  }
+
+  /**
    * Insert multiple door events in a batch operation Uses INSERT IGNORE to skip duplicate events
    * based on the unique constraint
    *

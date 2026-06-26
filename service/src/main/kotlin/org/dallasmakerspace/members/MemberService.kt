@@ -19,6 +19,7 @@ import org.dallasmakerspace.db.master.IMakerManagerDataService
 import org.dallasmakerspace.db.master.IWhmcsDataService
 import org.dallasmakerspace.discourse.DiscourseAvatarService
 import org.dallasmakerspace.discourse.DiscourseService
+import org.dallasmakerspace.doorcontroller.DoorEventsRepository
 import org.dallasmakerspace.models.ActivityLogEvent
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
@@ -39,6 +40,7 @@ constructor(
     private val activeDirectoryService: IActiveDirectoryService,
     private val voterRegistrationManager: VoterRegistrationManager,
     private val groupHistoryRepository: IGroupHistoryRepository,
+    private val doorEventsRepository: DoorEventsRepository,
 ) {
   private val log = loggerFactory.create(javaClass)
 
@@ -1060,6 +1062,15 @@ constructor(
             else null,
         timeline = whmcsStatus.timeline,
     )
+  }
+
+  suspend fun getRecentBadgeSwipes(username: String): List<org.dallasmakerspace.models.BadgeSwipeInfo> {
+    return try {
+      doorEventsRepository.getRecentSwipesForUser(username)
+    } catch (e: Exception) {
+      log.error("Failed to get recent badge swipes for $username", e)
+      emptyList()
+    }
   }
 }
 
