@@ -295,6 +295,67 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
     }
   }
 
+  override suspend fun getTopicPostsByIds(topicId: Int, postIds: List<Int>): DiscourseTopicDetails {
+    val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")
+    val postIdsParam = postIds.joinToString("&") { "post_ids[]=$it" }
+    val url = "$DISCOURSE_BASE_URL/t/$topicId/posts.json?$postIdsParam"
+    try {
+      val response =
+          getClient().use {
+            it.request(url) {
+              method = HttpMethod.Get
+              header("Api-Key", apiKey)
+              header("Api-Username", "system")
+            }
+          }
+      when (response.status) {
+        HttpStatusCode.OK -> {
+          log.debug("Successfully fetched specific posts for topic: $topicId, postIds: $postIds")
+          return json.decodeFromString<DiscourseTopicDetails>(response.bodyAsText())
+        }
+        else ->
+            throw DiscourseApiException(
+                "Failed to fetch posts by ID for topic $topicId: ${response.status} - ${response.bodyAsText()}")
+      }
+    } catch (e: IOException) {
+      throw DiscourseApiException("Failed to fetch posts by ID for topic $topicId", e)
+    } catch (e: kotlinx.serialization.SerializationException) {
+      throw DiscourseApiException("Failed to parse posts-by-ID response for topic $topicId", e)
+    }
+  }
+
+  override suspend fun getUserActions(
+      username: String,
+      filter: Int,
+      offset: Int
+  ): DiscourseUserActionsResponse {
+    val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")
+    val url = "$DISCOURSE_BASE_URL/user_actions.json?username=$username&filter=$filter&offset=$offset"
+    try {
+      val response =
+          getClient().use {
+            it.request(url) {
+              method = HttpMethod.Get
+              header("Api-Key", apiKey)
+              header("Api-Username", "system")
+            }
+          }
+      when (response.status) {
+        HttpStatusCode.OK -> {
+          log.debug("Successfully fetched user actions for $username (filter=$filter, offset=$offset)")
+          return json.decodeFromString<DiscourseUserActionsResponse>(response.bodyAsText())
+        }
+        else ->
+            throw DiscourseApiException(
+                "Failed to fetch user actions for $username: ${response.status} - ${response.bodyAsText()}")
+      }
+    } catch (e: IOException) {
+      throw DiscourseApiException("Failed to fetch user actions for $username", e)
+    } catch (e: kotlinx.serialization.SerializationException) {
+      throw DiscourseApiException("Failed to parse user actions response for $username", e)
+    }
+  }
+
   override suspend fun searchTopics(query: String, categoryId: Int?): DiscourseSearchResponse {
     val baseUrl = DISCOURSE_BASE_URL
     val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")

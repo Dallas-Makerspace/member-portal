@@ -283,7 +283,7 @@ fun Application.configureRouting() {
                       HttpStatusCode.BadRequest,
                       ApiResponse(Status.ERROR, "Username is required", null),
                   )
-          val projects = featuredProjectsService.getFeaturedProjectsForMember(username)
+          val projects = featuredProjectsService.getFeaturedProjectsForMemberLive(username)
           call.respond(ApiResponse(Status.SUCCESS, "Featured projects: ${projects.size}", projects))
         }
       }

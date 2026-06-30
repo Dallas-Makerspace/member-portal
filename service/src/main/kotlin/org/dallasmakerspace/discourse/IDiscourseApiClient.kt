@@ -54,4 +54,8 @@ interface IDiscourseApiClient {
   ): DiscourseCategoryResponse
 
   suspend fun getTopicPosts(topicId: Int): DiscourseTopicDetails
+
+  suspend fun getTopicPostsByIds(topicId: Int, postIds: List<Int>): DiscourseTopicDetails
+
+  suspend fun getUserActions(username: String, filter: Int, offset: Int = 0): DiscourseUserActionsResponse
 }

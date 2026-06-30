@@ -26,6 +26,24 @@ data class DiscourseTopicSearchResult(
     @SerialName("category_id") val categoryId: Int? = null
 )
 
+/** Represents a single user action (e.g. a reply) from GET /user_actions.json. */
+@Serializable
+data class DiscourseUserAction(
+    @SerialName("action_type") val actionType: Int = 0,
+    @SerialName("topic_id") val topicId: Int = 0,
+    @SerialName("post_id") val postId: Int = 0,
+    @SerialName("post_number") val postNumber: Int = 0,
+    @SerialName("category_id") val categoryId: Int? = null,
+    @SerialName("title") val title: String = "",
+    @SerialName("slug") val slug: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class DiscourseUserActionsResponse(
+    @SerialName("user_actions") val userActions: List<DiscourseUserAction> = emptyList()
+)
+
 /** Represents the search response from Discourse GET /search.json endpoint. */
 @Serializable
 data class DiscourseSearchResponse(
@@ -91,11 +109,13 @@ data class DiscourseTopicPost(
 
 @Serializable
 data class DiscoursePostStream(
-    @SerialName("posts") val posts: List<DiscourseTopicPost> = emptyList()
+    @SerialName("posts") val posts: List<DiscourseTopicPost> = emptyList(),
+    @SerialName("stream") val stream: List<Int> = emptyList(),
 )
 
 @Serializable
 data class DiscourseTopicDetails(
     @SerialName("post_stream") val postStream: DiscoursePostStream = DiscoursePostStream(),
-    @SerialName("slug") val slug: String = ""
+    @SerialName("slug") val slug: String = "",
+    @SerialName("title") val title: String = ""
 )

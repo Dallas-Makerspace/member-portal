@@ -83,4 +83,18 @@ class DiscourseApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
     log.info("Mocked fetching topic posts for topic: $topicId")
     return DiscourseTopicDetails()
   }
+
+  override suspend fun getTopicPostsByIds(topicId: Int, postIds: List<Int>): DiscourseTopicDetails {
+    log.info("Mocked fetching posts by IDs for topic: $topicId, postIds: $postIds")
+    return DiscourseTopicDetails()
+  }
+
+  override suspend fun getUserActions(
+      username: String,
+      filter: Int,
+      offset: Int
+  ): DiscourseUserActionsResponse {
+    log.info("Mocked fetching user actions for $username (filter=$filter, offset=$offset)")
+    return DiscourseUserActionsResponse()
+  }
 }
