@@ -27,6 +27,7 @@ private const val TOPIC_FETCH_DELAY_MS = 500L
 private const val DISCOURSE_REPLY_ACTION = 5
 private const val USER_ACTIONS_PAGE_SIZE = 30
 private const val USER_ACTIONS_MAX_PAGES = 5
+private const val GLOBAL_POST_IDS_CHUNK_SIZE = 50
 
 @Singleton
 class FeaturedProjectsService
@@ -360,14 +361,58 @@ constructor(
 
       log.debug("Found ${matchingTopics.size} Show and Tell topics in past 2 years")
 
-      // Fetch topic post streams sequentially with a delay to avoid Discourse 429 rate limiting
+      // Fetch topic post streams sequentially with a delay to avoid Discourse 429 rate limiting.
+      // After the initial fetch (which Discourse caps at ~20 posts), paginate the remaining post
+      // IDs from the stream array in chunks to retrieve the full thread.
       val topicDetails = buildList {
         for ((index, topic) in matchingTopics.withIndex()) {
           if (index > 0) delay(TOPIC_FETCH_DELAY_MS)
-          runCatching { discourseApiClient.getTopicPosts(topic.id) }
-              .onFailure { log.warn("Failed to fetch posts for topic ${topic.id}", it) }
-              .getOrNull()
-              ?.let { details -> add(topic to details) }
+          val initialDetails =
+              runCatching { discourseApiClient.getTopicPosts(topic.id) }
+                  .onFailure { log.warn("Failed to fetch posts for topic ${topic.id}", it) }
+                  .getOrNull() ?: continue
+
+          val fetchedIds = initialDetails.postStream.posts.map { it.id }.toSet()
+          val remainingIds = initialDetails.postStream.stream.filter { it !in fetchedIds }
+
+          if (remainingIds.isEmpty()) {
+            add(topic to initialDetails)
+            continue
+          }
+
+          val extraPosts = mutableListOf<DiscourseTopicPost>()
+          for (chunk in remainingIds.chunked(GLOBAL_POST_IDS_CHUNK_SIZE)) {
+            delay(TOPIC_FETCH_DELAY_MS)
+            runCatching { discourseApiClient.getTopicPostsByIds(topic.id, chunk) }
+                .onFailure { e ->
+                  val msg = e.message ?: ""
+                  val waitSecondsMatch = Regex(""""wait_seconds"\s*:\s*(\d+)""").find(msg)
+                  if (msg.contains("429") && waitSecondsMatch != null) {
+                    val waitMs =
+                        (waitSecondsMatch.groupValues[1].toLongOrNull() ?: 30L) * 1000L + 2_000L
+                    log.warn(
+                        "Rate limited fetching posts for topic ${topic.id} — waiting ${waitMs}ms"
+                    )
+                    delay(waitMs)
+                  } else {
+                    log.warn(
+                        "Failed to fetch post chunk for topic ${topic.id}: ${chunk.size} IDs", e
+                    )
+                  }
+                }
+                .getOrNull()
+                ?.let { extraPosts.addAll(it.postStream.posts) }
+          }
+
+          add(
+              topic to
+                  initialDetails.copy(
+                      postStream =
+                          initialDetails.postStream.copy(
+                              posts = initialDetails.postStream.posts + extraPosts
+                          )
+                  )
+          )
         }
       }
 
