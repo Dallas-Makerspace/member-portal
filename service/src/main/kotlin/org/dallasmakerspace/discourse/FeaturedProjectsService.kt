@@ -136,6 +136,9 @@ constructor(
       val twoYearsAgo = Clock.System.now().minus(topicLookbackDays.days)
       var offset = 0
       var page = 0
+      // Tracks whether any API call failed, so a transient failure isn't mistaken for a
+      // confirmed "this member has no show-and-tell posts" result and cached as such below.
+      var hadFetchFailure = false
       outer@ while (page < USER_ACTIONS_MAX_PAGES) {
         if (page > 0) delay(TOPIC_FETCH_DELAY_MS)
         val actionsResponse =
@@ -144,7 +147,11 @@ constructor(
                 "getUserActions(offset=$offset)",
             ) {
               discourseApiClient.getUserActions(discourseUsername, DISCOURSE_REPLY_ACTION, offset)
-            } ?: break
+            }
+        if (actionsResponse == null) {
+          hadFetchFailure = true
+          break
+        }
 
         val actions = actionsResponse.userActions
         if (actions.isEmpty()) break
@@ -167,7 +174,14 @@ constructor(
       )
 
       if (showAndTellActions.isEmpty()) {
-        memberLiveCache[dmsUsername] = Clock.System.now() to emptyList()
+        if (hadFetchFailure) {
+          log.warn(
+              "[live/$dmsUsername] Not caching empty result — a fetch failure occurred while " +
+                  "checking for show-and-tell posts, will retry on next request"
+          )
+        } else {
+          memberLiveCache[dmsUsername] = Clock.System.now() to emptyList()
+        }
         return
       }
 
@@ -189,7 +203,11 @@ constructor(
         val topicPosts =
             fetchWithRateLimitBackoff(dmsUsername, "getTopicPostsByIds($topicId)") {
               discourseApiClient.getTopicPostsByIds(topicId, postIds)
-            } ?: continue
+            }
+        if (topicPosts == null) {
+          hadFetchFailure = true
+          continue
+        }
 
         for (post in topicPosts.postStream.posts) {
           val imageUrl = extractLargeImageUrl(post.cooked)
@@ -222,6 +240,13 @@ constructor(
       }
 
       log.debug("[live/$dmsUsername] Refresh complete: ${projects.size} project(s) found")
+      if (projects.isEmpty() && hadFetchFailure) {
+        log.warn(
+            "[live/$dmsUsername] Not caching empty result — all post fetches failed, will retry " +
+                "on next request"
+        )
+        return
+      }
       val sorted = projects.sortedByDescending {
         runCatching { Instant.parse(it.createdAt) }.getOrNull()
       }
