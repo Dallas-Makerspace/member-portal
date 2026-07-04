@@ -6,6 +6,8 @@
     'use strict';
 
     const TRACK_ENDPOINT = '/api/track';
+    // Short links have their own server-side click tracking (short_link_clicks table), so
+    // '/go/*' is excluded here to avoid a redundant, less-detailed tracking path.
     const EXCLUDED_PATHS = ['/go/'];
 
     /**

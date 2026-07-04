@@ -3,6 +3,7 @@ package org.dallasmakerspace.server.routes
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
+import io.ktor.server.thymeleaf.*
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
@@ -22,8 +23,23 @@ class ShortLinkRedirectHandler(
 
     when (val result = memberServiceClient.resolveShortLink(path, session.sessionId, username)) {
       is ShortLinkResult.Redirect -> {
-        log.info("Redirecting to: ${result.location}")
-        call.respondRedirect(result.location, permanent = false)
+        val dmsEmail = username?.let { "$it@dallasmakerspace.org" }
+        val googleDestination = googleDocsDestinationOrNull(result.location, dmsEmail)
+        if (googleDestination != null) {
+          log.info("Showing Google Doc interstitial for: ${result.location}")
+          call.respond(
+              ThymeleafContent(
+                  "google-doc-interstitial",
+                  mapOf(
+                      "destinationUrl" to googleDestination,
+                      "dmsEmail" to dmsEmail,
+                  ),
+              )
+          )
+        } else {
+          log.info("Redirecting to: ${result.location}")
+          call.respondRedirect(result.location, permanent = false)
+        }
       }
       is ShortLinkResult.NotFound -> {
         log.warn("Short link not found: $path")
