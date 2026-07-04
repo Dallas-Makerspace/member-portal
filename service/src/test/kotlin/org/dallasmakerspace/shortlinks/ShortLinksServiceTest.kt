@@ -470,4 +470,29 @@ class ShortLinksServiceTest {
     verify(mockRepository).recordClick(any())
     Unit
   }
+
+  @Test
+  fun `resolveRedirect should not record click when recordClick is false`() = runBlocking {
+    val mockLink =
+        ShortLink(
+            id = 1,
+            namespaceId = null,
+            slug = "previewed",
+            redirectType = RedirectType.BASIC,
+            destinationUrl = "https://example.com",
+            description = null,
+            creatorId = 1,
+            updatedBy = null,
+            isActive = true,
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now())
+
+    whenever(mockRepository.getShortLinkBySlug(null, "previewed")).thenReturn(mockLink)
+
+    val result = service.resolveRedirect("previewed", recordClick = false)
+
+    assertTrue(result is RedirectResult.Success)
+    verify(mockRepository, org.mockito.kotlin.never()).recordClick(any())
+    Unit
+  }
 }

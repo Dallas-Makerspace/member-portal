@@ -204,7 +204,11 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
 
   // === REDIRECT RESOLUTION ===
 
-  suspend fun resolveRedirect(path: String, memberId: Int? = null): RedirectResult {
+  suspend fun resolveRedirect(
+      path: String,
+      memberId: Int? = null,
+      recordClick: Boolean = true
+  ): RedirectResult {
     log.debug("Resolving redirect for path: $path")
 
     // Parse path: "alias/slug" or "slug"
@@ -229,22 +233,26 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
             ?: return RedirectResult.NotFound("Short link not found: $path")
 
     // Record click (async, don't wait - we'll do this in a try-catch to not block redirect)
-    try {
-      repository.recordClick(
-          ShortLinkClick(
-              id = -1,
-              shortLinkId = link.id,
-              memberId = memberId,
-              resolvedPath = path,
-              variableValues = null,
-              clickedAt = Clock.System.now(),
-              ipAddress = null, // Will be set from ApplicationCall in route handler
-              userAgent = null, // Will be set from ApplicationCall in route handler
-              referrer = null // Will be set from ApplicationCall in route handler
-              ))
-    } catch (e: Exception) {
-      log.error("Failed to record click for link ${link.id}", e)
-      // Don't fail the redirect
+    // Skipped for preview-bot requests (Discord/Discourse unfurls) so their re-crawls don't
+    // inflate the click count shown in the admin UI.
+    if (recordClick) {
+      try {
+        repository.recordClick(
+            ShortLinkClick(
+                id = -1,
+                shortLinkId = link.id,
+                memberId = memberId,
+                resolvedPath = path,
+                variableValues = null,
+                clickedAt = Clock.System.now(),
+                ipAddress = null, // Will be set from ApplicationCall in route handler
+                userAgent = null, // Will be set from ApplicationCall in route handler
+                referrer = null // Will be set from ApplicationCall in route handler
+                ))
+      } catch (e: Exception) {
+        log.error("Failed to record click for link ${link.id}", e)
+        // Don't fail the redirect
+      }
     }
 
     return RedirectResult.Success(link.destinationUrl, link.description)

@@ -981,8 +981,12 @@ fun Application.configureRouting() {
       val username = call.request.headers["X-Username"]
       val updaterProfileId =
           username?.let { suspendTransaction { ProfileDAO.findById(it)?.idColumn?.value } }
+      val isPreview = call.request.queryParameters["preview"] == "true"
 
-      when (val result = shortLinksService.resolveRedirect(path, updaterProfileId)) {
+      when (
+          val result =
+              shortLinksService.resolveRedirect(
+                  path, updaterProfileId, recordClick = !isPreview)) {
         is RedirectResult.Success -> {
           result.description?.let {
             call.response.headers.append(

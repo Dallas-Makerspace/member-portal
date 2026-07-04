@@ -118,7 +118,10 @@ class ShortLinkRedirectHandler(
   private suspend fun handleBotPreview(call: ApplicationCall, path: String) {
     log.info("Serving link preview to bot for: $path")
 
-    when (val result = memberServiceClient.resolveShortLink(path, sessionId = null, username = null)) {
+    when (
+        val result =
+            memberServiceClient.resolveShortLink(
+                path, sessionId = null, username = null, isPreview = true)) {
       is ShortLinkResult.Redirect -> {
         val baseUrl = appConfig.requireStringProperty("app.base-url")
         call.respond(

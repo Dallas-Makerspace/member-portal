@@ -758,11 +758,13 @@ constructor(
       path: String,
       sessionId: String?,
       username: String?,
+      isPreview: Boolean = false,
   ): ShortLinkResult {
     val client = HttpClient(CIO) { followRedirects = false }
     val apiHeaders = getApiHeaders(sessionId, username)
+    val url = if (isPreview) "$baseUrl/go/$path?preview=true" else "$baseUrl/go/$path"
     return try {
-      val response = client.get("$baseUrl/go/$path") { headers { appendAll(apiHeaders) } }
+      val response = client.get(url) { headers { appendAll(apiHeaders) } }
       when (response.status) {
         HttpStatusCode.Found,
         HttpStatusCode.MovedPermanently,

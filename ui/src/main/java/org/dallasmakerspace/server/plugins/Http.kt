@@ -60,13 +60,7 @@ fun Application.configureHttp() {
     }
   }
   install(ContentNegotiation) {
-    gson {
-      setPrettyPrinting()
-      // Without this, Gson decodes every JSON number in a Map<String, Any?> as Double, so whole
-      // numbers (e.g. namespaceId: 1) come back as 1.0 and break strict Int deserialization when
-      // BackendApiHandler forwards the map on to the backend service.
-      setObjectToNumberStrategy(com.google.gson.ToNumberPolicy.LONG_OR_DOUBLE)
-    }
+    gson { setPrettyPrinting() }
   }
 }
 
