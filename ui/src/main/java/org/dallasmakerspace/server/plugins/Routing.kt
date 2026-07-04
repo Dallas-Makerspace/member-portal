@@ -101,9 +101,6 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.UNREGISTER_VOTING.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
-      get(RouteFactory.Paths.SHORT_LINK_REDIRECT.path) {
-        RouteFactory.getHandler(call)?.handleBase(call)
-      }
       get(RouteFactory.Paths.COMMITTEES.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.COMMITTEE_DETAIL.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
@@ -145,6 +142,15 @@ fun Application.configureRouting() {
       post(RouteFactory.Paths.CAMERAS_API.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.PERSONAL_BIN_SCANNER.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.SCANNER_STATUS_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+    }
+
+    // Short link redirect - auth is optional at the Ktor level so unauthenticated bot traffic
+    // (Discord/Discourse link-preview crawlers) can be served an OG-tag preview instead of being
+    // bounced to login; ShortLinkRedirectHandler itself enforces login for non-bot requests.
+    authenticate("auth_session", optional = true) {
+      get(RouteFactory.Paths.SHORT_LINK_REDIRECT.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
     }

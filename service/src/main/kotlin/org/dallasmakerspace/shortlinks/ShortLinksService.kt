@@ -137,6 +137,8 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
     // Check for duplicate
     val existing = repository.getShortLinkBySlug(namespaceId, finalSlug)
     if (existing != null) {
+      log.warn(
+          "Short link creation failed: slug '$finalSlug' already exists in namespace $namespaceId (existing link id=${existing.id})")
       return Result.failure(Exception("Slug '$finalSlug' already exists in this namespace"))
     }
 
@@ -245,24 +247,36 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
       // Don't fail the redirect
     }
 
-    return RedirectResult.Success(link.destinationUrl)
+    return RedirectResult.Success(link.destinationUrl, link.description)
   }
 
   // === VALIDATION ===
 
   private suspend fun validateAlias(alias: String): Exception? {
     // Length check
-    if (alias.length < 2 || alias.length > 10) {
-      return Exception("Alias must be 2-10 characters")
+    if (alias.length < 2 || alias.length > 20) {
+      log.warn("Alias validation failed for '$alias': must be 2-20 characters (was ${alias.length})")
+      return Exception("Alias must be 2-20 characters")
     }
 
-    // Format check: lowercase letters only
-    if (!alias.matches(Regex("^[a-z]+$"))) {
-      return Exception("Alias must contain only lowercase letters")
+    // Format check: lowercase letters, numbers, hyphens
+    if (!alias.matches(Regex("^[a-z0-9-]+$"))) {
+      val invalidChars = alias.filterNot { it in 'a'..'z' || it in '0'..'9' || it == '-' }.toSet()
+      log.warn(
+          "Alias validation failed for '$alias': contains characters other than lowercase letters, " +
+              "numbers, and hyphens (invalid chars: $invalidChars)")
+      return Exception("Alias must contain only lowercase letters, numbers, and hyphens")
+    }
+
+    // Cannot start or end with hyphen
+    if (alias.startsWith("-") || alias.endsWith("-")) {
+      log.warn("Alias validation failed for '$alias': cannot start or end with hyphen")
+      return Exception("Alias cannot start or end with hyphen")
     }
 
     // Reserved check
     if (repository.isAliasReserved(alias)) {
+      log.warn("Alias validation failed for '$alias': alias is reserved")
       return Exception("Alias '$alias' is reserved")
     }
 
@@ -272,16 +286,22 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
   private fun validateSlug(slug: String): Exception? {
     // Length check
     if (slug.isEmpty() || slug.length > 50) {
+      log.warn("Slug validation failed for '$slug': must be 1-50 characters (was ${slug.length})")
       return Exception("Slug must be 1-50 characters")
     }
 
     // Format check: lowercase letters, numbers, hyphens
     if (!slug.matches(Regex("^[a-z0-9-]+$"))) {
+      val invalidChars = slug.filterNot { it in 'a'..'z' || it in '0'..'9' || it == '-' }.toSet()
+      log.warn(
+          "Slug validation failed for '$slug': contains characters other than lowercase letters, " +
+              "numbers, and hyphens (invalid chars: $invalidChars)")
       return Exception("Slug must contain only lowercase letters, numbers, and hyphens")
     }
 
     // Cannot start or end with hyphen
     if (slug.startsWith("-") || slug.endsWith("-")) {
+      log.warn("Slug validation failed for '$slug': cannot start or end with hyphen")
       return Exception("Slug cannot start or end with hyphen")
     }
 
@@ -291,11 +311,13 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
   private fun validateUrl(url: String): Exception? {
     // Length check
     if (url.length > 2048) {
+      log.warn("URL validation failed: too long (${url.length} chars, max 2048)")
       return Exception("URL too long (max 2048 characters)")
     }
 
     // Must be HTTP/HTTPS
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      log.warn("URL validation failed for '$url': must start with http:// or https://")
       return Exception("URL must start with http:// or https://")
     }
 
@@ -303,6 +325,7 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
     try {
       java.net.URL(url)
     } catch (e: Exception) {
+      log.warn("URL validation failed for '$url': ${e.message}")
       return Exception("Invalid URL format: ${e.message}")
     }
 
@@ -342,7 +365,7 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
 }
 
 sealed class RedirectResult {
-  data class Success(val destinationUrl: String) : RedirectResult()
+  data class Success(val destinationUrl: String, val description: String?) : RedirectResult()
 
   data class NotFound(val message: String) : RedirectResult()
 }

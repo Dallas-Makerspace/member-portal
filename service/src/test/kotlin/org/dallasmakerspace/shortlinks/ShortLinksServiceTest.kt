@@ -42,12 +42,12 @@ class ShortLinksServiceTest {
             ownerType = NamespaceOwnerType.COMMITTEE,
             ownerGroupId = null,
             description = null,
-            primaryAlias = "a", // Too short - must be 2-10 chars
+            primaryAlias = "a", // Too short - must be 2-20 chars
             additionalAliases = emptyList(),
             createdBy = 1)
 
     assertTrue(result.isFailure)
-    assertTrue(result.exceptionOrNull()?.message?.contains("2-10") == true)
+    assertTrue(result.exceptionOrNull()?.message?.contains("2-20") == true)
   }
 
   @Test
@@ -58,12 +58,12 @@ class ShortLinksServiceTest {
             ownerType = NamespaceOwnerType.COMMITTEE,
             ownerGroupId = null,
             description = null,
-            primaryAlias = "abcdefghijk", // Too long - must be 2-10 chars
+            primaryAlias = "abcdefghijklmnopqrstu", // Too long - must be 2-20 chars
             additionalAliases = emptyList(),
             createdBy = 1)
 
     assertTrue(result.isFailure)
-    assertTrue(result.exceptionOrNull()?.message?.contains("2-10") == true)
+    assertTrue(result.exceptionOrNull()?.message?.contains("2-20") == true)
   }
 
   @Test
@@ -139,6 +139,62 @@ class ShortLinksServiceTest {
     verify(mockRepository).createNamespace(any())
     verify(mockRepository).createAlias(1, "ws", true)
     Unit
+  }
+
+  @Test
+  fun `createNamespace should succeed with hyphenated alias`() = runBlocking {
+    val mockNamespace =
+        Namespace(
+            id = 1,
+            name = "Software",
+            ownerType = NamespaceOwnerType.SYSTEM,
+            ownerGroupId = null,
+            description = null,
+            isActive = true,
+            createdAt = Clock.System.now(),
+            createdBy = 1)
+
+    whenever(mockRepository.isAliasReserved(any())).thenReturn(false)
+    whenever(mockRepository.createNamespace(any())).thenReturn(mockNamespace)
+    whenever(mockRepository.createAlias(any(), any(), any()))
+        .thenReturn(
+            NamespaceAlias(
+                id = 1,
+                namespaceId = 1,
+                alias = "sw",
+                isPrimary = true,
+                createdAt = Clock.System.now()))
+
+    val result =
+        service.createNamespace(
+            name = "Software",
+            ownerType = NamespaceOwnerType.SYSTEM,
+            ownerGroupId = null,
+            description = null,
+            primaryAlias = "sw",
+            additionalAliases = listOf("software", "software-sig"),
+            createdBy = 1)
+
+    assertTrue(result.isSuccess)
+    verify(mockRepository).createAlias(1, "software", false)
+    verify(mockRepository).createAlias(1, "software-sig", false)
+    Unit
+  }
+
+  @Test
+  fun `createNamespace should fail when alias starts or ends with hyphen`() = runBlocking {
+    val result =
+        service.createNamespace(
+            name = "Test Namespace",
+            ownerType = NamespaceOwnerType.COMMITTEE,
+            ownerGroupId = null,
+            description = null,
+            primaryAlias = "-sw",
+            additionalAliases = emptyList(),
+            createdBy = 1)
+
+    assertTrue(result.isFailure)
+    assertTrue(result.exceptionOrNull()?.message?.contains("hyphen") == true)
   }
 
   // === SHORT LINK TESTS ===
@@ -364,6 +420,30 @@ class ShortLinksServiceTest {
     verify(mockRepository).resolveAlias("ws")
     verify(mockRepository).getShortLinkBySlug(5, "safety")
     Unit
+  }
+
+  @Test
+  fun `resolveRedirect should include description in Success result`() = runBlocking {
+    val mockLink =
+        ShortLink(
+            id = 1,
+            namespaceId = null,
+            slug = "example",
+            redirectType = RedirectType.BASIC,
+            destinationUrl = "https://example.com",
+            description = "An example link",
+            creatorId = 1,
+            updatedBy = null,
+            isActive = true,
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now())
+
+    whenever(mockRepository.getShortLinkBySlug(null, "example")).thenReturn(mockLink)
+
+    val result = service.resolveRedirect("example")
+
+    assertTrue(result is RedirectResult.Success)
+    assertEquals("An example link", (result as RedirectResult.Success).description)
   }
 
   @Test

@@ -221,8 +221,10 @@ class RoutesModule {
   fun providesShortLinkRedirectHandler(
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
-      memberServiceClient: MemberServiceClient
-  ): IRouteHandler = ShortLinkRedirectHandler(loggerFactory, userInfoProvider, memberServiceClient)
+      memberServiceClient: MemberServiceClient,
+      appConfig: AppConfig
+  ): IRouteHandler =
+      ShortLinkRedirectHandler(loggerFactory, userInfoProvider, memberServiceClient, appConfig)
 
   @IntoMap
   @Provides

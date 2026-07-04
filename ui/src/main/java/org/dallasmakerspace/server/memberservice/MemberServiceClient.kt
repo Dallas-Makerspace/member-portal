@@ -27,7 +27,7 @@ import org.dallasmakerspace.server.models.dmsMemberFromMap
 import org.dallasmakerspace.server.models.dmsMemberToMap
 
 sealed class ShortLinkResult {
-  data class Redirect(val location: String) : ShortLinkResult()
+  data class Redirect(val location: String, val description: String?) : ShortLinkResult()
 
   data object NotFound : ShortLinkResult()
 
@@ -769,7 +769,11 @@ constructor(
         HttpStatusCode.TemporaryRedirect -> {
           val location = response.headers[HttpHeaders.Location]
           if (location != null) {
-            ShortLinkResult.Redirect(location)
+            val description =
+                response.headers["X-Short-Link-Description"]?.let {
+                  java.net.URLDecoder.decode(it, "UTF-8")
+                }
+            ShortLinkResult.Redirect(location, description)
           } else {
             log.error("Redirect response missing Location header for path: $path")
             ShortLinkResult.Error("Redirect location not found")

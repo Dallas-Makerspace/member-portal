@@ -984,6 +984,12 @@ fun Application.configureRouting() {
 
       when (val result = shortLinksService.resolveRedirect(path, updaterProfileId)) {
         is RedirectResult.Success -> {
+          result.description?.let {
+            call.response.headers.append(
+                "X-Short-Link-Description",
+                java.net.URLEncoder.encode(it, "UTF-8"),
+            )
+          }
           call.respondRedirect(result.destinationUrl, permanent = false)
         }
         is RedirectResult.NotFound -> {

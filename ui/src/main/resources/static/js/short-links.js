@@ -320,12 +320,19 @@
      * Handle namespace change in link modal
      */
     function handleNamespaceChange() {
-        // MVP: Always root-level, slug always visible and optional
+        const namespaceSelect = document.getElementById('linkNamespace');
         const slugField = document.getElementById('slugField');
         const linkSlug = document.getElementById('linkSlug');
 
-        slugField.style.display = 'block';
-        linkSlug.required = false;
+        if (namespaceSelect.value) {
+            // Namespace selected - slug required
+            slugField.style.display = 'block';
+            linkSlug.required = true;
+        } else {
+            // Root level - slug optional (auto-generated)
+            slugField.style.display = 'block';
+            linkSlug.required = false;
+        }
 
         updateLinkPreview();
     }
@@ -334,14 +341,21 @@
      * Update link preview
      */
     function updateLinkPreview() {
+        const namespaceSelect = document.getElementById('linkNamespace');
         const linkSlug = document.getElementById('linkSlug');
         const previewPath = document.getElementById('previewPath');
 
         if (!previewPath) return;
 
-        // MVP: Always root-level, no namespace
-        const slug = linkSlug.value || '[auto-generated]';
-        previewPath.textContent = slug;
+        const namespace = namespaces.find(ns => ns.id == namespaceSelect.value);
+        const slug = linkSlug.value || (namespace ? '...' : '[auto-generated]');
+
+        if (namespace) {
+            const primaryAlias = namespace.aliases.find(a => a.isPrimary)?.alias || namespace.aliases[0]?.alias;
+            previewPath.textContent = `${primaryAlias}/${slug}`;
+        } else {
+            previewPath.textContent = slug;
+        }
     }
 
     /**
@@ -398,7 +412,7 @@
      */
     async function handleCreateOrUpdateLink() {
         const linkId = document.getElementById('linkId').value;
-        const namespaceId = null; // MVP: Always use root-level (null namespace)
+        const namespaceId = document.getElementById('linkNamespace').value || null;
         const slug = document.getElementById('linkSlug').value || null;
         const destinationUrl = document.getElementById('linkDestination').value;
         const description = document.getElementById('linkDescription').value || null;
