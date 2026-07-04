@@ -146,9 +146,15 @@
     /*]]>*/
 </script>
 <script>
+    let namespaces = [];
+
     // Load and display popular short links
     async function loadPopularLinks() {
         try {
+            const namespacesResponse = await fetch('/backend-api/short-links/namespaces');
+            const namespacesResult = await namespacesResponse.json();
+            namespaces = (namespacesResult.status === 'SUCCESS' && namespacesResult.data) || [];
+
             const response = await fetch('/backend-api/short-links/links/popular?limit=20');
             const result = await response.json();
 
@@ -268,13 +274,9 @@
     }
 
     function formatPath(link) {
-        if (link.namespaceId) {
-            // Assuming we have the namespace path available, use namespace alias + slug
-            // Since we don't have the alias in this response, just show the slug
-            // In a real scenario, you'd fetch the alias or have it included in the response
-            return link.slug;
-        }
-        return link.slug;
+        const namespace = namespaces.find(ns => ns.id === link.namespaceId);
+        const primaryAlias = namespace?.aliases.find(a => a.isPrimary)?.alias || namespace?.aliases[0]?.alias;
+        return namespace && primaryAlias ? `${primaryAlias}/${link.slug}` : link.slug;
     }
 
     function copyToClipboard(text, event) {

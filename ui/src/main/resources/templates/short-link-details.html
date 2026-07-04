@@ -161,9 +161,15 @@
     /*]]>*/
 
     let linkData = null;
+    let namespaces = [];
 
     async function loadLinkDetails() {
         try {
+            // Load namespaces so we can resolve the link's namespace alias, if any
+            const namespacesResponse = await fetch('/backend-api/short-links/namespaces');
+            const namespacesResult = await namespacesResponse.json();
+            namespaces = (namespacesResult.status === 'SUCCESS' && namespacesResult.data) || [];
+
             // Load link details
             const response = await fetch(`/backend-api/short-links/links/${linkId}`);
             const result = await response.json();
@@ -197,8 +203,11 @@
         document.getElementById('linkTitle').textContent = link.slug;
         document.getElementById('linkDescription').textContent = link.description || 'No description';
 
-        // Short URL
-        const shortUrl = `dallas.ms/${link.slug}`;
+        // Short URL - prefix with the namespace's primary alias, if the link belongs to one
+        const namespace = namespaces.find(ns => ns.id === link.namespaceId);
+        const primaryAlias = namespace?.aliases.find(a => a.isPrimary)?.alias || namespace?.aliases[0]?.alias;
+        const path = namespace && primaryAlias ? `${primaryAlias}/${link.slug}` : link.slug;
+        const shortUrl = `dallas.ms/${path}`;
         document.getElementById('shortUrl').textContent = shortUrl;
 
         // Update copy button tracking label
