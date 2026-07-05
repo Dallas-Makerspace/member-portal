@@ -169,12 +169,19 @@ class MakerManagerDataRepository @Inject constructor() {
    */
   suspend fun getAllUsers(): List<MakerManagerUserInfo> {
     return suspendTransaction {
+      // Join at most one badge per user (users can have multiple badge rows, e.g. an old
+      // active badge plus a newer unassigned one) — prefer active status, then highest number
       val query =
           """
         SELECT u.id as makermanager_id, u.first_name, u.last_name, u.username, u.email, u.whmcs_user_id, u.ad_active,
         u.whmcs_real_user_id, REGEXP_REPLACE(u.phone, '[^0-9]+', '') as phone, b.number as badge_number
         FROM `dms-makermanager`.users u
-        LEFT JOIN `dms-makermanager`.badges b ON u.id = b.user_id
+        LEFT JOIN `dms-makermanager`.badges b ON b.id = (
+          SELECT b2.id FROM `dms-makermanager`.badges b2
+          WHERE b2.user_id = u.id
+          ORDER BY (b2.status = 'active') DESC, b2.`number` DESC
+          LIMIT 1
+        )
         ORDER BY u.ad_active DESC, b.`number` DESC
       """
               .trimIndent()
