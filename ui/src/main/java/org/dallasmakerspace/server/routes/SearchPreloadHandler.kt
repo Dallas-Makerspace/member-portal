@@ -9,6 +9,7 @@ import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
+import org.dallasmakerspace.server.models.SearchPreloadResponse
 import org.dallasmakerspace.server.models.slug
 
 class SearchPreloadHandler
@@ -28,16 +29,20 @@ constructor(
     val cacheKey = "searchPreload"
     val currentTime = System.currentTimeMillis()
 
-    val cachedData = cache[cacheKey]
-    if (cachedData != null && currentTime - cachedData.first < cacheDuration) {
-      log.debug("Returning cached data")
-      call.respond(cachedData.second)
-      return
-    }
-
     val jsonMap: MutableMap<String, Any> = mutableMapOf()
     try {
-      val preloadResponse = memberService.getSearchPreload(session.sessionId)
+      // Only the backend fetch is cached (shared across users). The response is projected
+      // per request below because sensitive fields depend on the requester's permissions.
+      val cachedData = cache[cacheKey]
+      val preloadResponse =
+          if (cachedData != null && currentTime - cachedData.first < cacheDuration) {
+            log.debug("Using cached preload data")
+            cachedData.second
+          } else {
+            memberService.getSearchPreload(session.sessionId).also {
+              cache[cacheKey] = Pair(currentTime, it)
+            }
+          }
 
       // Process members
       val memberData =
@@ -87,7 +92,6 @@ constructor(
       jsonMap["status"] = "SUCCESS"
       jsonMap["data"] = combinedData
 
-      cache[cacheKey] = Pair(currentTime, jsonMap)
       call.respond(jsonMap)
     } catch (e: Exception) {
       jsonMap["status"] = "ERROR"
@@ -97,7 +101,7 @@ constructor(
   }
 
   companion object {
-    private val cache = ConcurrentHashMap<String, Pair<Long, Map<String, Any>>>()
+    private val cache = ConcurrentHashMap<String, Pair<Long, SearchPreloadResponse>>()
     private val cacheDuration = TimeUnit.MINUTES.toMillis(5)
   }
 }
