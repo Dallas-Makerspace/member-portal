@@ -7,7 +7,9 @@ import kotlinx.serialization.json.buildJsonObject
 import org.dallasmakerspace.activedirectory.IActiveDirectoryClient
 import org.dallasmakerspace.dataviz.DataVizReport
 import org.dallasmakerspace.db.master.GenericRepository
+import org.dallasmakerspace.db.master.IMakerManagerDataService
 import org.dallasmakerspace.db.master.IWhmcsDataService
+import org.dallasmakerspace.db.master.TimelineEntryType
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
@@ -21,6 +23,7 @@ constructor(
     private val memberService: MemberService,
     private val genericRepository: GenericRepository,
     private val whmcsDataService: IWhmcsDataService,
+    private val makerManagerDataService: IMakerManagerDataService,
 ) : DataVizReport() {
   override fun getName(): String {
     return "lapsed-members-active-ad"
@@ -56,26 +59,23 @@ constructor(
     // Batch fetch member profiles
     val members = memberService.getMembersByUsernameList(usernames)
 
-    // Extract WHMCS IDs from members' account info
-    val whmcsIds =
-        members.values
-            .mapNotNull { member ->
-              val accountInfo = member.accountInfo
-              if (accountInfo != null) {
-                val account =
-                    if (accountInfo.isPrimaryAccount) accountInfo.primaryAccount
-                    else accountInfo.addonAccounts.find { it.username == member.username }
-                account?.whmcsId
-              } else {
-                null
-              }
+    // Resolve WHMCS IDs via MakerManager directly — getMembersByUsernameList does not
+    // populate DMSMember.accountInfo (only the single-member fetch does)
+    val relatedAccounts = makerManagerDataService.getAccountInfoMap(usernames)
+    val whmcsIdByUsername =
+        relatedAccounts
+            .mapNotNull { (username, accountInfo) ->
+              val account =
+                  if (accountInfo.isPrimaryAccount) accountInfo.primaryAccount
+                  else accountInfo.addonAccounts.find { it.username == username }
+              account?.whmcsId?.let { username to it }
             }
-            .distinct()
+            .toMap()
 
     // Batch query WHMCS account status (only if we have IDs to query)
     val whmcsAccountStatuses =
-        if (whmcsIds.isNotEmpty()) {
-          whmcsDataService.getAccountInfoMap(whmcsIds)
+        if (whmcsIdByUsername.isNotEmpty()) {
+          whmcsDataService.getAccountInfoMap(whmcsIdByUsername.values.distinct())
         } else {
           emptyMap()
         }
@@ -89,23 +89,12 @@ constructor(
           val mmAdActive = mmAdActiveStatus[username] ?: false
           val member = members[username]
 
-          // Determine WHMCS active status
-          val accountInfo = member?.accountInfo
-          val whmcsId =
-              if (accountInfo != null) {
-                val account =
-                    if (accountInfo.isPrimaryAccount) accountInfo.primaryAccount
-                    else accountInfo.addonAccounts.find { it.username == username }
-                account?.whmcsId
-              } else {
-                null
-              }
+          // Currently active in WHMCS: last timeline entry is an ongoing ACTIVE period —
+          // same definition as the profile debug info (MemberService.computeWhmcsStatus)
           val whmcsActive =
-              if (whmcsId != null) {
-                whmcsAccountStatuses[whmcsId]?.wasActiveInRange ?: false
-              } else {
-                false
-              }
+              whmcsIdByUsername[username]
+                  ?.let { whmcsId -> whmcsAccountStatuses[whmcsId]?.timeline?.lastOrNull() }
+                  ?.let { it.type == TimelineEntryType.ACTIVE && it.endDate == null } ?: false
 
           val avatarUrl =
               member
