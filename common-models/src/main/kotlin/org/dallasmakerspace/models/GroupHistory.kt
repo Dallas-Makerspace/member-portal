@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Represents the type of action performed on a group membership. Maps to Active Directory event
- * IDs: 4728/4732 for member added, 4729/4733 for member removed.
+ * IDs: 4728/4732/4756 for member added, 4729/4733/4757 for member removed.
  */
 @Serializable
 enum class ActionType(val value: Int) {
@@ -13,20 +13,24 @@ enum class ActionType(val value: Int) {
   REMOVE_USER(1);
 
   companion object {
-    fun fromValue(value: Int): ActionType = entries.find { it.value == value } ?: ADD_USER
+    fun fromValue(value: Int): ActionType =
+        entries.find { it.value == value }
+            ?: throw IllegalArgumentException("Unknown ActionType value: $value")
 
     /**
-     * Maps Active Directory event IDs to ActionType. Event IDs: 4728 = member added to global
-     * security group, 4729 = member removed from global security group, 4732 = member added to
-     * local security group, 4733 = member removed from local security group
+     * Maps Active Directory event IDs to ActionType, covering all three security group scopes:
+     * global (4728 added / 4729 removed), domain-local (4732 added / 4733 removed), and universal
+     * (4756 added / 4757 removed). Throws on unrecognized event IDs rather than guessing.
      */
     fun fromEventId(eventId: String): ActionType =
         when (eventId) {
           "4728",
-          "4732" -> ADD_USER
+          "4732",
+          "4756" -> ADD_USER
           "4729",
-          "4733" -> REMOVE_USER
-          else -> ADD_USER
+          "4733",
+          "4757" -> REMOVE_USER
+          else -> throw IllegalArgumentException("Unknown group membership event ID: $eventId")
         }
   }
 }
