@@ -25,6 +25,12 @@ private const val MIN_BADGE_LEN_FOR_PARTIAL_MASK = 4
 
 data class EsEvent(val host: String, val timestamp: String, val message: String)
 
+// Older KeyMaster shell-script senders prefixed the message with "YYYY-MM-DD HH:MM:SS ";
+// the Kibana module sender does not. Strip it only when present so both formats work.
+private val LEADING_TIMESTAMP_PREFIX = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} """)
+
+fun stripLeadingTimestamp(message: String): String = message.replaceFirst(LEADING_TIMESTAMP_PREFIX, "")
+
 data class SessionInfo(
     val host: String,
     val startTime: String,
@@ -145,8 +151,7 @@ constructor(
     var current: SessionInfo? = null
 
     for (doc in events) {
-      // Messages are prefixed "YYYY-MM-DD HH:MM:SS <content>" — strip both date and time tokens.
-      val msg = doc.message.substringAfter(" ").substringAfter(" ").ifBlank { continue }
+      val msg = stripLeadingTimestamp(doc.message).ifBlank { continue }
 
       when {
         msg.startsWith("User:") -> {

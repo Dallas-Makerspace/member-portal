@@ -87,7 +87,7 @@ constructor(
 
     val denied =
         raw.mapNotNull { ev ->
-          val msg = ev.message.substringAfter(" ").substringAfter(" ")
+          val msg = stripLeadingTimestamp(ev.message)
           if (!(msg.startsWith("User:") && msg.contains("'authorized': False"))) return@mapNotNull null
           val badge =
               Regex("'id': '(\\d+)'").find(msg)?.groupValues?.get(1) ?: return@mapNotNull null
