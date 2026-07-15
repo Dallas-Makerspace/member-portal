@@ -103,7 +103,7 @@ object CabinetReports {
               slug = "denied-access",
               name = "Denied Access Attempts (last ${Interlocks.DEFAULT_REPORT_DAYS} days)",
               description = "Unauthorized swipes — member, time, badge.",
-              dataVizName = "interlock-denied-access",
+              dataVizName = "interlock-cabinet-denied-access",
               renderAs = "table",
           ),
       )
