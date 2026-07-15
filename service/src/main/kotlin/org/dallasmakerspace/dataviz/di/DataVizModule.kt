@@ -13,10 +13,14 @@ import org.dallasmakerspace.dataviz.reports.calendar.GroupCalendarReport
 import org.dallasmakerspace.dataviz.reports.calendar.TopAttendees
 import org.dallasmakerspace.dataviz.reports.calendar.TopOrganizers
 import org.dallasmakerspace.dataviz.reports.groups.GroupHistoryReport
+import org.dallasmakerspace.dataviz.reports.interlock.CabinetActivityReport
+import org.dallasmakerspace.dataviz.reports.interlock.CabinetDeniedAccessReport
+import org.dallasmakerspace.dataviz.reports.interlock.CabinetInactivityReport
 import org.dallasmakerspace.dataviz.reports.interlock.DeniedAccessReport
 import org.dallasmakerspace.dataviz.reports.interlock.InterlockUsageReport
 import org.dallasmakerspace.dataviz.reports.interlock.ToolActivityReport
 import org.dallasmakerspace.dataviz.reports.interlock.ToolInactivityReport
+import org.dallasmakerspace.dataviz.reports.interlock.TopCabinetsReport
 import org.dallasmakerspace.dataviz.reports.interlock.TopToolsReport
 import org.dallasmakerspace.dataviz.reports.interlock.TopUsersReport
 import org.dallasmakerspace.dataviz.reports.interlock.UsageHeatmapReport
@@ -57,6 +61,10 @@ class DataVizModule {
       topToolsReport: TopToolsReport,
       topUsersReport: TopUsersReport,
       usageHeatmapReport: UsageHeatmapReport,
+      topCabinetsReport: TopCabinetsReport,
+      cabinetActivityReport: CabinetActivityReport,
+      cabinetInactivityReport: CabinetInactivityReport,
+      cabinetDeniedAccessReport: CabinetDeniedAccessReport,
       badgeValidationReport: BadgeValidationReport,
       badgeValidationAdReport: BadgeValidationAdReport,
       badgeValidationMergedReport: BadgeValidationMergedReport,
@@ -85,6 +93,10 @@ class DataVizModule {
         topToolsReport,
         topUsersReport,
         usageHeatmapReport,
+        topCabinetsReport,
+        cabinetActivityReport,
+        cabinetInactivityReport,
+        cabinetDeniedAccessReport,
         badgeValidationReport,
         badgeValidationAdReport,
         badgeValidationMergedReport,

@@ -29,13 +29,17 @@ constructor(
   override suspend fun getData(params: Map<String, List<String>>): DataVizResponse {
     val totalStartTime = System.currentTimeMillis()
 
+    val toolParam = params["tool"]?.firstOrNull()
+    val cabinetParam = params["cabinet"]?.firstOrNull()
     val interlockTag =
-        params["tool"]?.firstOrNull()
+        toolParam
+            ?: cabinetParam
             ?: return DataVizResponse(
                 data = emptyList(),
                 dataFields = emptyList(),
                 metadata = mapOf("error" to "Missing required parameter: tool"),
             )
+    val scopeLabel = if (cabinetParam != null) "Cabinet" else "Tool"
 
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: 14
 
@@ -111,6 +115,10 @@ constructor(
                 put("variant", JsonPrimitive("primary"))
                 put("text", JsonPrimitive("BADGE OUT"))
               }
+              session.shutdownType == "LOCKED" -> {
+                put("variant", JsonPrimitive("secondary"))
+                put("text", JsonPrimitive("LOCKED"))
+              }
               else -> {
                 put("variant", JsonPrimitive("light"))
                 put("text", JsonPrimitive("RUNNING"))
@@ -125,7 +133,7 @@ constructor(
                       "Member" to memberJson,
                       "Auth" to authJson,
                       "Duration" to JsonPrimitive(duration),
-                      "Shutdown" to shutdownJson,
+                      "End Reason" to shutdownJson,
                   ))
         }
 
@@ -135,7 +143,7 @@ constructor(
             DataField(name = "Member", type = DataType.MEMBER, label = "Member"),
             DataField(name = "Auth", type = DataType.BADGE, label = "Auth"),
             DataField(name = "Duration", type = DataType.STRING, label = "Duration"),
-            DataField(name = "Shutdown", type = DataType.BADGE, label = "Shutdown"),
+            DataField(name = "End Reason", type = DataType.BADGE, label = "End Reason"),
         )
 
     val totalTimeTaken = System.currentTimeMillis() - totalStartTime
@@ -150,7 +158,7 @@ constructor(
       put("ES query time", "${esTimeTaken}ms")
       put("Member lookup time", "${memberLookupTimeTaken}ms")
       put("Total sessions", "${sessions.size}")
-      put("Tool", interlockTag)
+      put(scopeLabel, interlockTag)
       events
           .buildKibanaDiscoverUrl(events.kibanaQueryForTags(listOf(interlockTag)), days)
           ?.let { put("Kibana", it) }

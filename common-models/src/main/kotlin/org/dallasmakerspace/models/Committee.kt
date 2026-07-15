@@ -136,7 +136,7 @@ object Committees {
               isActive = true,
           ),
           Committee(
-              id = 11,
+              id = 19,
               name = "Metal Shop",
               chairGroupName = "Metal Shop Committee Chair",
               description =
@@ -194,7 +194,7 @@ object Committees {
               isActive = true,
           ),
           Committee(
-              id = 16,
+              id = 20,
               name = "MotorSports",
               chairGroupName = "MotorSports Committee Chair",
               description =
@@ -203,19 +203,19 @@ object Committees {
               isActive = true,
           ),
           Committee(
-              id = 16,
+              id = 21,
               name = "Logistics",
               chairGroupName = "Logistics Committee Chair",
               isActive = true,
           ),
           Committee(
-              id = 16,
+              id = 22,
               name = "Infrastructure",
               chairGroupName = "Infrastructure Committee Chair",
               isActive = true,
           ),
           Committee(
-              id = 16,
+              id = 23,
               name = "Financial",
               chairGroupName = "Financial Committee Chair",
               isActive = true,

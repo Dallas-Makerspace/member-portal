@@ -16,6 +16,7 @@ import org.dallasmakerspace.server.remoteaccess.RemoteAccessHandler
 import org.dallasmakerspace.server.routes.ActionTrackingHandler
 import org.dallasmakerspace.server.routes.AskAiHandler
 import org.dallasmakerspace.server.routes.BackendApiHandler
+import org.dallasmakerspace.server.routes.CabinetsHandler
 import org.dallasmakerspace.server.routes.CamerasApiHandler
 import org.dallasmakerspace.server.routes.CamerasHandler
 import org.dallasmakerspace.server.routes.ScannerHandler
@@ -251,6 +252,14 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
   ): IRouteHandler = InterlockToolsHandler(loggerFactory, userInfoProvider)
+
+  @IntoMap
+  @Provides
+  @StringKey("/interlock-cabinets")
+  fun providesCabinetsHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+  ): IRouteHandler = CabinetsHandler(loggerFactory, userInfoProvider)
 
   @IntoMap
   @Provides

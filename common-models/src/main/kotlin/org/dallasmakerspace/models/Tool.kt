@@ -35,7 +35,6 @@ object Tools {
 
   fun findBySlug(slug: String): Tool? = ALL.find { it.interlockTag == slug }
 
-  fun byCommittee(): Map<Committee, List<Tool>> = ALL.groupBy {
-    Committees.findById(it.committeeId)!!
-  }
+  fun byCommittee(): Map<Committee, List<Tool>> =
+      ALL.groupBy { Committees.findById(it.committeeId)!! }
 }

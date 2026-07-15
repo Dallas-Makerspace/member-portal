@@ -198,6 +198,14 @@ constructor(
             current = null
           }
         }
+        msg.contains("Cabinet state changed to LOCKED") -> {
+          current?.let {
+            it.shutdownType = "LOCKED"
+            it.shutdownTime = doc.timestamp
+            sessions.add(it)
+            current = null
+          }
+        }
       }
     }
     current?.let { sessions.add(it) } // emit still-running session

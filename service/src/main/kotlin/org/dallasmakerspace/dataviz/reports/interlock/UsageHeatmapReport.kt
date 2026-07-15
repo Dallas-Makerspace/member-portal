@@ -26,13 +26,17 @@ constructor(
 
   @Suppress("TooGenericExceptionCaught", "MagicNumber")
   override suspend fun getData(params: Map<String, List<String>>): DataVizResponse {
+    val toolParam = params["tool"]?.firstOrNull()
+    val cabinetParam = params["cabinet"]?.firstOrNull()
     val tool =
-        params["tool"]?.firstOrNull()
+        toolParam
+            ?: cabinetParam
             ?: return DataVizResponse(
                 data = emptyList(),
                 dataFields = emptyList(),
                 metadata = mapOf("error" to "Missing required parameter: tool"),
             )
+    val scopeLabel = if (cabinetParam != null) "Cabinet" else "Tool"
 
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_REPORT_DAYS
     val aggregateBy = params["aggregateBy"]?.firstOrNull() ?: "hour"
@@ -48,7 +52,7 @@ constructor(
         }
 
     val metadata = buildMap {
-      put("Tool", tool)
+      put(scopeLabel, tool)
       put("Days", "$days")
       put("Aggregate", aggregateBy)
       put("Total sessions", "${sessions.size}")
