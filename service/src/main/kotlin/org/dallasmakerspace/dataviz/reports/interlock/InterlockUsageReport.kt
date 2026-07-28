@@ -4,6 +4,8 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -42,7 +44,11 @@ constructor(
     val scopeLabel = if (cabinetParam != null) "Cabinet" else "Tool"
 
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: 14
-    val isInfra = params["isInfra"]?.firstOrNull().toBoolean()
+    val actorUsername = params["actorUsername"]?.firstOrNull()
+    val isInfra =
+        actorUsername?.let {
+          withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) }
+        } ?: false
 
     // Step 1 — ES query
     val esStartTime = System.currentTimeMillis()

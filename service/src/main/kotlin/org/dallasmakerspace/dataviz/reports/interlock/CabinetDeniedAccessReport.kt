@@ -4,6 +4,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -49,7 +51,11 @@ constructor(
     }
 
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_REPORT_DAYS
-    val isInfra = params["isInfra"]?.firstOrNull().toBoolean()
+    val actorUsername = params["actorUsername"]?.firstOrNull()
+    val isInfra =
+        actorUsername?.let {
+          withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) }
+        } ?: false
 
     val isCommitteeScope: Boolean
     val tags: List<String>
