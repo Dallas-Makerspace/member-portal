@@ -569,7 +569,9 @@ fun Application.configureRouting() {
                 .associateWith { paramName ->
                   call.request.queryParameters.getAll(paramName) ?: emptyList()
                 }
-        val respone = dataVizRouter.route(method, params)
+        val actorUsername = call.request.headers["X-Username"]
+        val isInfra = actorUsername?.let { memberService.isUserInInfraGroup(it) } ?: false
+        val respone = dataVizRouter.route(method, params + ("isInfra" to listOf(isInfra.toString())))
         call.respond(ApiResponse(Status.SUCCESS, "Backend API $method", respone))
       }
 

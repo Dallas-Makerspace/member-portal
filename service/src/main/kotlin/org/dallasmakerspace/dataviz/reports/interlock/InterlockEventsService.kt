@@ -329,7 +329,8 @@ constructor(
   // Badge masking
   // ---------------------------------------------------------------------------
 
-  fun maskBadge(badge: String): String {
+  fun maskBadge(badge: String, unmask: Boolean = false): String {
+    if (unmask) return badge // Infrastructure members can see full badge numbers
     val appConfig = DaggerAppComponent.create().getAppConfig()
     val isDevelopment = appConfig.requireBooleanProperty("ktor.development")
     if (isDevelopment) return badge // no masking in development mode

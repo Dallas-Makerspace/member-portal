@@ -161,8 +161,8 @@ constructor(
     return memberServiceClient.getFeatureFlag(key, sessionId)
   }
 
-  suspend fun callBackendApi(path: String, sessionId: String?) =
-      memberServiceClient.callBackendApi(path, sessionId)
+  suspend fun callBackendApi(path: String, sessionId: String?, username: String? = null) =
+      memberServiceClient.callBackendApi(path, sessionId, username)
 
   suspend fun callBackendApiPost(path: String, sessionId: String?, username: String?, body: Any) =
       memberServiceClient.callBackendApiPost(path, sessionId, username, body)

@@ -237,9 +237,13 @@ constructor(
    * Call the backend API with the given path, sessionId, and username. This is just a proxy for the
    * backend API, it will just pass the parameters through and return the response as a String.
    */
-  suspend fun callBackendApi(path: String, sessionId: String?): Map<String, Any> {
+  suspend fun callBackendApi(
+      path: String,
+      sessionId: String?,
+      username: String? = null,
+  ): Map<String, Any> {
     try {
-      val apiHeaders = getApiHeaders(sessionId)
+      val apiHeaders = getApiHeaders(sessionId, username)
       var result: Map<String, Any>
       withTimeout(120_000L) { result = dmsHttpClient.get("$baseUrl/$path", apiHeaders) }
       return result

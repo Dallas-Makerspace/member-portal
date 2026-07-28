@@ -42,6 +42,7 @@ constructor(
     val scopeLabel = if (cabinetParam != null) "Cabinet" else "Tool"
 
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: 14
+    val isInfra = params["isInfra"]?.firstOrNull().toBoolean()
 
     // Step 1 — ES query
     val esStartTime = System.currentTimeMillis()
@@ -86,7 +87,7 @@ constructor(
                   put("avatarUrl", JsonPrimitive(events.getAvatarUrl(member?.discourseAvatarUrl)))
                 }
               } else {
-                JsonPrimitive("Badge: ${events.maskBadge(session.badge)}")
+                JsonPrimitive("Badge: ${events.maskBadge(session.badge, isInfra)}")
               }
 
           val authJson = buildJsonObject {

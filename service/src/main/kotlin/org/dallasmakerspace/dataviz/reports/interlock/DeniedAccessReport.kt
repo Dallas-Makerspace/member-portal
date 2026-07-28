@@ -49,6 +49,7 @@ constructor(
     }
 
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_REPORT_DAYS
+    val isInfra = params["isInfra"]?.firstOrNull().toBoolean()
 
     val isCommitteeScope: Boolean
     val tags: List<String>
@@ -123,7 +124,7 @@ constructor(
                   put("avatarUrl", JsonPrimitive(events.getAvatarUrl(member?.discourseAvatarUrl)))
                 }
               } else {
-                JsonPrimitive("Badge: ${events.maskBadge(badge)}")
+                JsonPrimitive("Badge: ${events.maskBadge(badge, isInfra)}")
               }
 
           val values = mutableMapOf<String, JsonElement>("Time" to JsonPrimitive(timestamp))
@@ -132,7 +133,7 @@ constructor(
             values["Tool"] = JsonPrimitive(toolName)
           }
           values["Member"] = memberJson
-          values["Badge"] = JsonPrimitive(events.maskBadge(badge))
+          values["Badge"] = JsonPrimitive(events.maskBadge(badge, isInfra))
 
           DataItem(values = values)
         }

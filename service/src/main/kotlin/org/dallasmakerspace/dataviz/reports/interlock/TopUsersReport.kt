@@ -41,6 +41,7 @@ constructor(
     val scopeLabel = if (cabinetParam != null) "Cabinet" else "Tool"
 
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_REPORT_DAYS
+    val isInfra = params["isInfra"]?.firstOrNull().toBoolean()
 
     val raw = events.fetchEvents(listOf(tool), days)
     val sessions = events.reconstructSessions(raw).filter { it.authorized }
@@ -105,7 +106,7 @@ constructor(
                   put("avatarUrl", JsonPrimitive(events.getAvatarUrl(member?.discourseAvatarUrl)))
                 }
               } else {
-                JsonPrimitive("Badge: ${events.maskBadge(stat.badge)}")
+                JsonPrimitive("Badge: ${events.maskBadge(stat.badge, isInfra)}")
               }
 
           val hours = stat.totalSeconds / 3600

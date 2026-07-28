@@ -34,7 +34,7 @@ class BackendApiHandler(
 
     val result =
         when (call.request.httpMethod) {
-          HttpMethod.Get -> memberService.callBackendApi(fullPath, session.sessionId)
+          HttpMethod.Get -> memberService.callBackendApi(fullPath, session.sessionId, username)
           HttpMethod.Post -> {
             val body = receiveJsonBody(call)
             memberService.callBackendApiPost(fullPath, session.sessionId, username, body)
