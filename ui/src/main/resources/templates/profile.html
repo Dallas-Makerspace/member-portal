@@ -56,6 +56,9 @@
             border-radius: 50%;
             overflow: hidden;
         }
+        .account-icon.is-linked img {
+            filter: grayscale(100%);
+        }
         .account-item {
             display: flex;
             align-items: center;
@@ -449,7 +452,8 @@
                     <h4 class="card-title mt-3 mb-4 dms-card-title">Linked Accounts</h4>
                     <div class="accounts-container">
                         <div class="account-item">
-                            <div class="account-icon bg-light">
+                            <div class="account-icon bg-light"
+                                 th:classappend="${discourse_username == null ? '' : 'is-linked'}">
                                 <img src="../static/images/discourse.svg" alt="Talk icon" class="w-100">
                             </div>
                             <div class="account-details">
@@ -473,7 +477,8 @@
                         <hr class="account-divider my-2">
 
                         <div class="account-item">
-                            <div class="account-icon bg-light">
+                            <div class="account-icon bg-light"
+                                 th:classappend="${discord_userid == null ? '' : 'is-linked'}">
                                 <img src="../static/images/discord.svg" alt="Discord icon" class="w-100">
                             </div>
                             <div class="account-details">
@@ -493,7 +498,8 @@
                         <hr class="account-divider my-2">
 
                         <div class="account-item">
-                            <div class="account-icon bg-light">
+                            <div class="account-icon bg-light"
+                                 th:classappend="${linkedin_username == null ? '' : 'is-linked'}">
                                 <img src="../static/images/linkedin.svg" alt="LinkedIn icon" class="w-100">
                             </div>
                             <div class="account-details">
