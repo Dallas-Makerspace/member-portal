@@ -2,6 +2,12 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <body>
 <header class="top-nav" th:fragment="header">
+    <div id="settings-banner" class="settings-banner d-none" role="alert">
+        <div class="container">
+            <span>Let other members know how to reach you.</span>
+            <a id="settings-banner-link" href="#" class="btn btn-sm btn-primary">Set preference</a>
+        </div>
+    </div>
     <nav class="navbar navbar-expand-lg custom-navbar">
         <div class="container">
             <a class="navbar-brand" href="/">DMS Member Portal</a>
@@ -181,6 +187,29 @@
     <script type="module" src="/static/js/dms-search-v6.js"></script>
     <!-- Action tracking script -->
     <script src="/static/js/action-tracker.js" defer></script>
+    <!-- Communication preference banner -->
+    <script>
+        (function() {
+            'use strict';
+            const banner = document.getElementById('settings-banner');
+            const link = document.getElementById('settings-banner-link');
+            if (!banner || !link) return;
+
+            // Never show the banner on the settings page itself.
+            const isSettingsPage = /^\/profile\/@[\w-]+\/settings\/?$/.test(window.location.pathname);
+
+            fetch('/api/settings-banner')
+                .then(function(response) { return response.ok ? response.json() : null; })
+                .then(function(data) {
+                    if (isSettingsPage) return;
+                    if (data && data.showBanner && data.settingsUrl) {
+                        link.href = data.settingsUrl;
+                        banner.classList.remove('d-none');
+                    }
+                })
+                .catch(function() { /* silent: banner is non-critical */ });
+        })();
+    </script>
     <script>
         function toggleMobileSearch() {
             const overlay = document.querySelector('.navbar-search-mobile');

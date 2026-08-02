@@ -39,6 +39,24 @@ constructor(
     return memberServiceClient.getMember(username, sessionId)
   }
 
+  suspend fun getMemberSettings(username: String, sessionId: String?): Map<String, String> {
+    return memberServiceClient.getMemberSettings(username, sessionId)
+  }
+
+  suspend fun getMemberSettingsHistory(username: String, sessionId: String?): List<Map<String, String?>> {
+    return memberServiceClient.getMemberSettingsHistory(username, sessionId)
+  }
+
+  suspend fun updateMemberSettings(
+      username: String,
+      actorUsername: String?,
+      communicationPreference: String?,
+      sessionId: String?,
+  ) {
+    memberServiceClient.updateMemberSettings(
+        username, actorUsername, communicationPreference, sessionId)
+  }
+
   suspend fun unlinkDiscourseAccount(username: String, sessionId: String?) {
     // Get member object
     val member = memberServiceClient.getMember(username, sessionId)

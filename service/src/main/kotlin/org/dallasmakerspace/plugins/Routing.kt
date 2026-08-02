@@ -38,6 +38,7 @@ import org.dallasmakerspace.discourse.FeaturedProjectsService
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
 import org.dallasmakerspace.members.MemberService
+import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.suspendTransaction
 import org.dallasmakerspace.models.AskAiFeedbackRequest
@@ -117,6 +118,9 @@ fun Application.configureRouting() {
       DaggerAppComponent.create().getShortLinksService()
     }
     val askAiService: AskAiService by lazy { DaggerAppComponent.create().getAskAiService() }
+    val memberSettingsService: MemberSettingsService by lazy {
+      DaggerAppComponent.create().getMemberSettingsService()
+    }
 
     get("/") {
       call.respondText(
@@ -355,6 +359,41 @@ fun Application.configureRouting() {
                   Status.SUCCESS,
                   "Badge fixed: $badgeFromMM → $paddedBadge",
                   mapOf("old_badge" to badgeFromMM, "new_badge" to paddedBadge)))
+        }
+
+        get("/members/{username}/settings") {
+          val username =
+              call.parameters["username"]
+                  ?: return@get call.respond(
+                      HttpStatusCode.BadRequest,
+                      ApiResponse(Status.ERROR, "Username is required", null))
+          val settings = memberSettingsService.getSettings(username)
+          call.respond(ApiResponse(Status.SUCCESS, "Member settings for $username", settings))
+        }
+
+        get("/members/{username}/settings/history") {
+          val username =
+              call.parameters["username"]
+                  ?: return@get call.respond(
+                      HttpStatusCode.BadRequest,
+                      ApiResponse(Status.ERROR, "Username is required", null))
+          val history = memberSettingsService.getSettingsHistory(username)
+          call.respond(
+              ApiResponse(Status.SUCCESS, "Member settings history for $username", history))
+        }
+
+        patch("/members/{username}/settings") {
+          val username =
+              call.parameters["username"]
+                  ?: return@patch call.respond(
+                      HttpStatusCode.BadRequest,
+                      ApiResponse(Status.ERROR, "Username is required", null))
+          val actorUsername = call.request.headers["X-Actor-Username"]
+          val updates = call.receive<Map<String, String?>>()
+          memberSettingsService.updateSettings(username, updates, actorUsername)
+          val settings = memberSettingsService.getSettings(username)
+          call.respond(
+              ApiResponse(Status.SUCCESS, "Member settings updated for $username", settings))
         }
       }
 

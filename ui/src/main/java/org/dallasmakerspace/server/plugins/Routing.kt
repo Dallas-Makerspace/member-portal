@@ -101,6 +101,12 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.UNREGISTER_VOTING.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.PROFILE_SETTINGS.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      post(RouteFactory.Paths.PROFILE_SETTINGS.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.COMMITTEES.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.COMMITTEE_DETAIL.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
@@ -113,6 +119,9 @@ fun Application.configureRouting() {
       }
       post(RouteFactory.Paths.ACTION_TRACK.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.SUGGESTED_EVENTS.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.SETTINGS_BANNER.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
       get(RouteFactory.Paths.ASK_AI.path) { RouteFactory.getHandler(call)?.handleBase(call) }

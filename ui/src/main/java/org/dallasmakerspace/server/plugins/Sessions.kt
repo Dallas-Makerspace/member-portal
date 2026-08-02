@@ -62,6 +62,8 @@ data class UserSession(
     var isDiscordLinkSuccess: Boolean = false,
     var isLinkedInLinkSuccess: Boolean = false,
     var isVoterRegistrationSuccess: Boolean = false,
+    var isSettingsUpdateSuccess: Boolean = false,
+    var pendingCommunicationPreference: String? = null,
     var sessionId: String? = null,
     var userId: String? = null,
 ) : Principal

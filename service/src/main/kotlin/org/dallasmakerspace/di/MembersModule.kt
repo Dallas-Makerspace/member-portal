@@ -10,8 +10,12 @@ import org.dallasmakerspace.members.GroupHistoryRepository
 import org.dallasmakerspace.members.GroupHistoryRepositoryMock
 import org.dallasmakerspace.members.IGroupHistoryRepository
 import org.dallasmakerspace.members.IMemberRepository
+import org.dallasmakerspace.members.IMemberSettingsRepository
 import org.dallasmakerspace.members.MemberRepository
 import org.dallasmakerspace.members.MemberRepositoryMock
+import org.dallasmakerspace.members.MemberSettingsRepository
+import org.dallasmakerspace.members.MemberSettingsRepositoryMock
+import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.observers.DiscourseMemberStatusObserver
 import org.dallasmakerspace.members.observers.IMemberPropChangeObserver
 
@@ -35,6 +39,23 @@ abstract class MembersModule {
     @Provides
     fun provideGroupHistoryRepository(appConfig: AppConfig): IGroupHistoryRepository =
         if (useMockServices(appConfig)) GroupHistoryRepositoryMock() else GroupHistoryRepository()
+
+    @Provides
+    fun provideMemberSettingsRepository(
+        appConfig: AppConfig,
+        loggerFactory: LoggerFactory,
+    ): IMemberSettingsRepository =
+        if (useMockServices(appConfig)) {
+          MemberSettingsRepositoryMock()
+        } else {
+          MemberSettingsRepository(loggerFactory)
+        }
+
+    @Provides
+    fun provideMemberSettingsService(
+        repository: IMemberSettingsRepository,
+        loggerFactory: LoggerFactory,
+    ): MemberSettingsService = MemberSettingsService(repository, loggerFactory)
 
     private fun useMockServices(appConfig: AppConfig) =
         appConfig.requireBooleanProperty("ktor.development") &&

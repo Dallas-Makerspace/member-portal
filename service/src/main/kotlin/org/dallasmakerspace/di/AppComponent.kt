@@ -24,6 +24,7 @@ import org.dallasmakerspace.doorcontroller.DoorControllerService
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
 import org.dallasmakerspace.members.MemberService
+import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.remoteaccess.RemoteAccessService
 import org.dallasmakerspace.shortlinks.ShortLinksService
 import org.dallasmakerspace.smartwaiver.SmartwaiverModule
@@ -93,4 +94,6 @@ interface AppComponent {
   fun getConfigOverrideService(): ConfigOverrideService
 
   fun getRemoteAccessService(): RemoteAccessService
+
+  fun getMemberSettingsService(): MemberSettingsService
 }

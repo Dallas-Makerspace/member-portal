@@ -10,6 +10,7 @@ import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.memberservice.MemberSettingsHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessConnectHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessDisconnectHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessHandler
@@ -21,6 +22,7 @@ import org.dallasmakerspace.server.routes.CamerasApiHandler
 import org.dallasmakerspace.server.routes.CamerasHandler
 import org.dallasmakerspace.server.routes.ScannerHandler
 import org.dallasmakerspace.server.routes.ScannerStatusApiHandler
+import org.dallasmakerspace.server.routes.SettingsBannerHandler
 import org.dallasmakerspace.server.routes.CommitteeDetailHandler
 import org.dallasmakerspace.server.routes.CommitteesHandler
 import org.dallasmakerspace.server.routes.ConfigAdminHandler
@@ -188,6 +190,15 @@ class RoutesModule {
 
   @IntoMap
   @Provides
+  @StringKey("/profile/@{preferred_username}/settings")
+  fun providesMemberSettingsHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberService: MemberService,
+  ): IRouteHandler = MemberSettingsHandler(loggerFactory, userInfoProvider, memberService)
+
+  @IntoMap
+  @Provides
   @StringKey("/short-links")
   fun providesShortLinksHandler(
       loggerFactory: LoggerFactory,
@@ -267,6 +278,15 @@ class RoutesModule {
   fun providesActionTrackingHandler(
       loggerFactory: LoggerFactory,
   ): IRouteHandler = ActionTrackingHandler(loggerFactory)
+
+  @IntoMap
+  @Provides
+  @StringKey("/api/settings-banner")
+  fun providesSettingsBannerHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberService: MemberService,
+  ): IRouteHandler = SettingsBannerHandler(loggerFactory, userInfoProvider, memberService)
 
   @IntoMap
   @Provides

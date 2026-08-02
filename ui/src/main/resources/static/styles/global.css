@@ -321,3 +321,23 @@ div.error-details > p { color: #c1c1c1; }
     0%, 100% { background-color: #e0e0e0; }
     50%       { background-color: #ececec; }
 }
+
+/* Communication preference banner */
+.settings-banner {
+    background-color: #fff3cd;
+    border-bottom: 1px solid #ffecb5;
+    padding: 8px 0;
+    font-size: 14px;
+}
+.settings-banner .container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    text-align: center;
+}
+.settings-banner .btn {
+    padding: 2px 14px;
+    font-size: 13px;
+}

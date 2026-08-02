@@ -72,6 +72,40 @@ constructor(
     dmsHttpClient.patch("$baseUrl/members/$username/update", apiHeaders, userMap)
   }
 
+  suspend fun getMemberSettings(username: String, sessionId: String?): Map<String, String> {
+    val apiHeaders = getApiHeaders(sessionId)
+    val settingsMap = dmsHttpClient.get("$baseUrl/members/$username/settings", apiHeaders)
+    val data =
+        settingsMap["data"] as Map<*, *>?
+            ?: return emptyMap()
+    return data.mapKeys { it.key.toString() }.mapValues { it.value?.toString() ?: "" }
+  }
+
+  suspend fun getMemberSettingsHistory(username: String, sessionId: String?): List<Map<String, String?>> {
+    val apiHeaders = getApiHeaders(sessionId)
+    val historyMap = dmsHttpClient.get("$baseUrl/members/$username/settings/history", apiHeaders)
+    val data = historyMap["data"] as List<*>? ?: return emptyList()
+    return data.mapNotNull { entry ->
+      (entry as? Map<*, *>)?.mapKeys { it.key.toString() }?.mapValues { it.value?.toString() }
+    }
+  }
+
+  suspend fun updateMemberSettings(
+      username: String,
+      actorUsername: String?,
+      communicationPreference: String?,
+      sessionId: String?,
+  ) {
+    val baseHeaders = getApiHeaders(sessionId)
+    val apiHeaders =
+        StringValues.build {
+          baseHeaders.forEach { key, values -> values.forEach { value -> append(key, value) } }
+          actorUsername?.let { append("X-Actor-Username", it) }
+        }
+    val body = mapOf("communication_preference" to (communicationPreference ?: ""))
+    dmsHttpClient.patch("$baseUrl/members/$username/settings", apiHeaders, body)
+  }
+
   private fun getApiHeaders(sessionId: String?, username: String? = null) =
       StringValues.build {
         sessionId?.apply { append("X-Request-Id", sessionId) }

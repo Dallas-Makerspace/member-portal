@@ -249,6 +249,38 @@
                             </button>
                         </div>
 
+                        <div th:if="${is_self or authz.can('MANAGE_MEMBERS')}"
+                             class="d-flex align-items-center mb-3">
+                            <span class="material-symbols-outlined card-item-icon">contact_mail</span>
+                            <span>Contact preference:
+                                <a th:href="'/profile/@' + ${preferred_username} + '/settings'">
+                                    <th:block th:if="${communication_preference == 'EMAIL'}">Email</th:block>
+                                    <th:block th:if="${communication_preference == 'DISCOURSE'}">Talk</th:block>
+                                    <th:block th:if="${communication_preference == 'DISCORD'}">Discord</th:block>
+                                    <th:block th:if="${communication_preference == 'SMS'}">Text/SMS</th:block>
+                                    <th:block th:if="${communication_preference == ''}">Not set</th:block>
+                                </a>
+                            </span>
+                        </div>
+
+                        <div th:if="${communication_preference == 'EMAIL' and personal_email}"
+                             class="d-flex align-items-center mb-3">
+                            <span class="material-symbols-outlined card-item-icon">mail</span>
+                            <span>Send email:
+                                <a th:href="|mailto:${personal_email}|"><span class="ph-mask"
+                                                                              th:text="${personal_email}"></span></a>
+                            </span>
+                        </div>
+
+                        <div th:if="${communication_preference == 'SMS' and phone_number}"
+                             class="d-flex align-items-center mb-3">
+                            <span class="material-symbols-outlined card-item-icon">sms</span>
+                            <span>Send Text/SMS:
+                                <a th:href="|sms:${phone_number}|"><span class="ph-mask"
+                                                                         th:text="${phone_number}"></span></a>
+                            </span>
+                        </div>
+
                         <!--<div class="d-flex align-items-center mb-3">
                             <span class="material-symbols-outlined card-item-icon">mail</span>
                             <span>Send email:
@@ -936,8 +968,8 @@
         fetch('/profile/@' + username + '/total-active-time')
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(data) {
-                el.textContent = (data && data.total_active_duration) ? data.total_active_duration : 'Unknown';
-            })
+            el.textContent = (data && data.total_active_duration) ? data.total_active_duration : 'Unknown';
+        })
             .catch(function() { el.textContent = 'Unknown'; });
     })();
 </script>

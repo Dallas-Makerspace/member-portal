@@ -9,12 +9,14 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.format
 import kotlinx.datetime.format.byUnicodePattern
 import kotlinx.datetime.toJavaInstant
+import org.dallasmakerspace.models.CommunicationPreference
 import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
@@ -68,6 +70,15 @@ constructor(
     val electionsUrlDeferred = async {
       memberServiceClient.getConfigValue("voting.elections-url", session.sessionId)
     }
+    val settingsDeferred: Deferred<Map<String, String>> =
+        async {
+          try {
+            memberService.getMemberSettings(requestedUsername, session.sessionId)
+          } catch (e: Exception) {
+            log.warn("Failed to fetch settings for member: $requestedUsername", e)
+            emptyMap()
+          }
+        }
 
     // Await critical result; events still running concurrently
     val requestedMember = memberDeferred.await()
@@ -120,10 +131,18 @@ constructor(
         .firstOrNull { group -> group.name == voterRegistrationManager.getVotingMembersGroupName() }
         ?.apply { jsonMap["is_voting_member"] = "true" }
     jsonMap["is_self"] = isSelf.toString()
-    if (isSelfOrAdmin) {
+    val communicationPreference = settingsDeferred.await().get("communication_preference") ?: ""
+    jsonMap["communication_preference"] = communicationPreference
+    if (isSelfOrAdmin || communicationPreference == CommunicationPreference.EMAIL.name) {
       requestedMember.personalEmail?.apply { jsonMap["personal_email"] = this as Any }
+    }
+    if (isSelfOrAdmin || communicationPreference == CommunicationPreference.SMS.name) {
       requestedMember.phoneNumber?.apply { jsonMap["phone_number"] = this as Any }
     }
+    jsonMap["communication_preferences"] =
+        CommunicationPreference.entries.map { pref ->
+          mapOf("value" to pref.name, "label" to pref.label)
+        } as Any
     jsonMap["authz"] = authz
     jsonMap["is_voter_registration_test_mode_enabled"] =
         VoterRegistrationManager.IS_VOTER_REGISTRATION_TEST_MODE_ENABLED
@@ -194,6 +213,10 @@ constructor(
           "Setting toast message for ${requestedMember.username} successful voter registration")
       call.sessions.set(session.copy(isVoterRegistrationSuccess = false))
       jsonMap["toast_message"] = "Successfully registered to vote. May take few min to take effect."
+    } else if (session.isSettingsUpdateSuccess) {
+      log.info("Setting toast message for ${requestedMember.username} successful settings update")
+      call.sessions.set(session.copy(isSettingsUpdateSuccess = false))
+      jsonMap["toast_message"] = "Communication preference updated."
     }
   }
 

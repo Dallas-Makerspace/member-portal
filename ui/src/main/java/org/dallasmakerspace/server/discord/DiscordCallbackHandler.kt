@@ -95,11 +95,29 @@ constructor(
         discordUserInfo.avatarUrl,
         session.sessionId)
 
+    val redirectPath = applyPendingPreferenceIfAny(session, username)
+
     // Set success flag in session
     session.isDiscordLinkSuccess = true
     call.sessions.set(session)
 
-    // Redirect back to profile page
-    call.respondRedirect("/profile/@$username", permanent = false)
+    // Redirect back to the settings page when a preference was pending, otherwise the profile
+    call.respondRedirect(redirectPath, permanent = false)
+  }
+
+  /**
+   * If the user started the link from the settings page with a pending preference, applies it now
+   * that the account is linked and returns the redirect path to the settings page; otherwise
+   * returns the profile path.
+   */
+  private suspend fun applyPendingPreferenceIfAny(session: UserSession, username: String): String {
+    val pendingPreference = session.pendingCommunicationPreference
+    session.pendingCommunicationPreference = null
+    if (pendingPreference == "DISCORD") {
+      memberService.updateMemberSettings(username, username, "DISCORD", session.sessionId)
+      session.isSettingsUpdateSuccess = true
+      return "/profile/@$username/settings"
+    }
+    return "/profile/@$username"
   }
 }

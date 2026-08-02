@@ -281,4 +281,25 @@ CREATE TABLE `ask_ai_feedback` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Feedback table for tracking member ratings of Ask DMS AI answers';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+--
+-- Table structure for table `member_settings`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `member_settings` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id is auto increment primary key.',
+  `profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the member profile this setting belongs to',
+  `setting_key` varchar(100) NOT NULL COMMENT 'The key identifying the setting',
+  `setting_value` longtext DEFAULT NULL COMMENT 'The serialized value of the setting; NULL records a cleared setting',
+  `updated_by` int(10) unsigned DEFAULT NULL COMMENT 'The id of the member who made the change',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() COMMENT 'The timestamp when this setting was last updated',
+  PRIMARY KEY (`id`),
+  KEY `member_settings_profile_id_IDX` (`profile_id`) USING BTREE,
+  KEY `member_settings_updated_by_IDX` (`updated_by`) USING BTREE,
+  CONSTRAINT `member_settings_profile_FK` FOREIGN KEY (`profile_id`) REFERENCES `profile` (`id`),
+  CONSTRAINT `member_settings_updated_by_FK` FOREIGN KEY (`updated_by`) REFERENCES `profile` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Per-member settings and preferences (append-only audit trail)';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 -- Dump completed on 2025-12-31 21:13:59
