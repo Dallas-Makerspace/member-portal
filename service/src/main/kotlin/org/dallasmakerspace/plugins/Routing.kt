@@ -25,6 +25,7 @@ import org.dallasmakerspace.auth.authorize
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.routing.configRoutes
+import org.dallasmakerspace.config.routing.featureFlagRoutes
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.cron.DoorSwipesCronJob
 import org.dallasmakerspace.cron.DoorSwipesCronJobParams
@@ -1046,7 +1047,11 @@ fun Application.configureRouting() {
     val profileSubscriptionService by lazy {
       DaggerAppComponent.create().getProfileSubscriptionService()
     }
-    profileSubscriptionRoutes(profileSubscriptionService)
+    val featureFlagService by lazy { DaggerAppComponent.create().getFeatureFlagService() }
+    profileSubscriptionRoutes(profileSubscriptionService, featureFlagService)
+
+    /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */
+    featureFlagRoutes(featureFlagService)
 
     // The notifications webhook is protected by a shared secret token; calendar-event and other
     // externally-sourced webhooks stay public here the same way smartwaiver/groups-audit do - this

@@ -17,6 +17,8 @@ import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.apiKey
+import org.dallasmakerspace.config.ConfigRegistry
+import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.plugins.ApiResponse
@@ -29,10 +31,16 @@ import org.mockito.kotlin.whenever
 class ProfileSubscriptionRoutesTest {
 
   private lateinit var mockService: ProfileSubscriptionService
+  private lateinit var mockFeatureFlagService: FeatureFlagService
 
   @Before
   fun setUp() {
     mockService = mock()
+    mockFeatureFlagService = mock()
+    runBlocking {
+      whenever(mockFeatureFlagService.isEnabledForUsername(ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
+          .thenReturn(true)
+    }
   }
 
   private fun appConfig(): AppConfig {
@@ -50,7 +58,7 @@ class ProfileSubscriptionRoutesTest {
       install(Authentication) {
         apiKey(appConfig(), ApiKeyAuthProvider.X_API_KEY) { validate { null } }
       }
-      routing { profileSubscriptionRoutes(mockService) }
+      routing { profileSubscriptionRoutes(mockService, mockFeatureFlagService) }
     }
     client = createClient {
       install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
@@ -109,6 +117,50 @@ class ProfileSubscriptionRoutesTest {
     assertEquals(HttpStatusCode.BadRequest, response.status)
     Unit
   }
+
+  @Test
+  fun `post follow should reject when the follow feature is disabled for the actor`() =
+      testApplication {
+        configureApp()
+        runBlocking {
+          whenever(
+                  mockFeatureFlagService.isEnabledForUsername(
+                      ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
+              .thenReturn(false)
+        }
+
+        val response =
+            client.post("/members/jane/follow") {
+              header("X-Api-Key", "test-key")
+              header("X-Api-Client", "test-client")
+              header("X-Username", "jdoe")
+            }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        Unit
+      }
+
+  @Test
+  fun `delete follow should reject when the follow feature is disabled for the actor`() =
+      testApplication {
+        configureApp()
+        runBlocking {
+          whenever(
+                  mockFeatureFlagService.isEnabledForUsername(
+                      ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
+              .thenReturn(false)
+        }
+
+        val response =
+            client.delete("/members/jane/follow") {
+              header("X-Api-Key", "test-key")
+              header("X-Api-Client", "test-client")
+              header("X-Username", "jdoe")
+            }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        Unit
+      }
 
   @Test
   fun `post follow should require authentication`() = testApplication {

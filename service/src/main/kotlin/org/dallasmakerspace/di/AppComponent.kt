@@ -7,6 +7,7 @@ import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.askai.di.AskAiModule
 import org.dallasmakerspace.calendar.CalendarService
 import org.dallasmakerspace.config.ConfigOverrideService
+import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.config.di.ConfigModule
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.DBMasterConnection
@@ -98,6 +99,8 @@ interface AppComponent {
   fun getFeaturedProjectsService(): FeaturedProjectsService
 
   fun getConfigOverrideService(): ConfigOverrideService
+
+  fun getFeatureFlagService(): FeatureFlagService
 
   fun getRemoteAccessService(): RemoteAccessService
 

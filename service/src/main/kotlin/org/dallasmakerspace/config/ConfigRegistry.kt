@@ -79,11 +79,14 @@ object ConfigRegistry {
       ConfigKey(
           key = "notifications.enabled",
           description =
-              "Master switch for sending member notifications; when false the worker skips " +
-                  "sending and notifications wait in the queue until it is re-enabled",
+              "Master switch for sending member notifications; when disabled the worker skips " +
+                  "sending and notifications wait in the queue until it is re-enabled. Stored as " +
+                  "a FeatureFlagType for consistency with other flags, but only the global " +
+                  "'enabled' bit is checked here - there's no per-recipient username to allowlist " +
+                  "against at this call site",
           category = "Notifications",
-          defaultValue = true,
-          type = ConfigValueType.BooleanType,
+          defaultValue = FeatureFlagValue(enabled = true),
+          type = ConfigValueType.FeatureFlagType,
       )
 
   val NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP =
@@ -93,8 +96,20 @@ object ConfigRegistry {
               "Max immediate notifications a member receives per day; beyond this they degrade " +
                   "to the daily digest (0 = unlimited)",
           category = "Notifications",
-          defaultValue = 50,
+          defaultValue = 5,
           type = ConfigValueType.IntType,
+      )
+
+  val FOLLOW_FEATURE_ENABLED =
+      ConfigKey(
+          key = "notifications.follow-feature-enabled",
+          description =
+              "Gates the follow/unfollow-a-member feature (profile button, following/followers " +
+                  "list, and event-announcement notifications); can be piloted for specific " +
+                  "usernames or AD groups before a full rollout",
+          category = "Notifications",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
       )
 
   val ALL: List<ConfigKey<*>> =
@@ -109,5 +124,6 @@ object ConfigRegistry {
           WAIVER_REPORT_ALLOWED_USERNAMES,
           NOTIFICATIONS_ENABLED,
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,
+          FOLLOW_FEATURE_ENABLED,
       )
 }

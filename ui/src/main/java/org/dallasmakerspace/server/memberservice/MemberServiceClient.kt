@@ -788,6 +788,22 @@ constructor(
     }
   }
 
+  /**
+   * Whether the [key] feature flag is on for [username] (global toggle or per-user/per-group
+   * pilot). Fails closed (returns false) on any error, since this gates optional UI, not something
+   * required for the page to render correctly.
+   */
+  suspend fun isFeatureEnabled(key: String, username: String, sessionId: String?): Boolean {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/feature-flags/$key?username=$username", apiHeaders)
+      (result["data"] as? Map<*, *>)?.get("enabled") as? Boolean ?: false
+    } catch (ex: Exception) {
+      log.warn("Failed to check feature flag '$key' for $username", ex)
+      false
+    }
+  }
+
   suspend fun getConfigValue(key: String, sessionId: String?): String? {
     return try {
       val apiHeaders = getApiHeaders(sessionId)

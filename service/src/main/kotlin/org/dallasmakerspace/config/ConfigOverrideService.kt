@@ -185,6 +185,8 @@ constructor(
       is ConfigValueType.IntType -> (value as Int).toString()
       is ConfigValueType.BooleanType -> (value as Boolean).toString()
       is ConfigValueType.DateType -> (value as LocalDate).toString()
+      is ConfigValueType.FeatureFlagType ->
+          json.encodeToString(FeatureFlagValue.serializer(), value as FeatureFlagValue)
       is ConfigValueType.ComplexType<*> -> {
         val serializer = (type as ConfigValueType.ComplexType<T>).serializer
         json.encodeToString(serializer, value)
@@ -199,11 +201,30 @@ constructor(
       is ConfigValueType.IntType -> raw.toInt() as T
       is ConfigValueType.BooleanType -> raw.toBoolean() as T
       is ConfigValueType.DateType -> LocalDate.parse(raw) as T
+      is ConfigValueType.FeatureFlagType ->
+          json.decodeFromString(FeatureFlagValue.serializer(), raw) as T
       is ConfigValueType.ComplexType<*> -> {
         val serializer = (type as ConfigValueType.ComplexType<T>).serializer
         json.decodeFromString(serializer, raw)
       }
     }
+  }
+
+  /**
+   * Whether a feature-flagged behavior is enabled for [username] - true if the flag is globally
+   * enabled, [username] is explicitly allow-listed, or [username] belongs to one of the
+   * allow-listed groups (checked even when the flag is globally disabled, so a feature can be
+   * piloted before a full rollout).
+   */
+  suspend fun isFeatureEnabledFor(
+      configKey: ConfigKey<FeatureFlagValue>,
+      username: String,
+      groupNames: Collection<String>,
+  ): Boolean {
+    val flag = get(configKey)
+    return flag.enabled ||
+        username in flag.enabledUsernames ||
+        groupNames.any { it in flag.enabledGroupNames }
   }
 
   private fun formatTimestamp(dao: ConfigOverrideDAO): String {

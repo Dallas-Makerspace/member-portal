@@ -43,6 +43,7 @@ constructor(
     private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
     private val EVENT_INPUT_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     private val EVENT_OUTPUT_FORMATTER = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy 'at' h:mm a")
+    private const val FOLLOW_FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
   }
 
   override suspend fun handleAuthenticated(call: ApplicationCall) = coroutineScope {
@@ -83,6 +84,11 @@ constructor(
     }
     val followersDeferred = async {
       memberServiceClient.getFollowers(requestedUsername, session.sessionId)
+    }
+    val followFeatureEnabledDeferred = async {
+      currentUsername?.let {
+        memberServiceClient.isFeatureEnabled(FOLLOW_FEATURE_FLAG_KEY, it, session.sessionId)
+      } ?: false
     }
 
     // Await critical result; events still running concurrently
@@ -186,14 +192,18 @@ constructor(
       jsonMap["events_organized"] = formattedEvents
     }
 
-    val following = followingDeferred.await()
-    val followers = followersDeferred.await()
-    jsonMap["following"] = following
-    jsonMap["followers"] = followers
-    jsonMap["following_count"] = following.size
-    jsonMap["followers_count"] = followers.size
-    if (!isSelf) {
-      jsonMap["is_following"] = (currentUsername in followers).toString()
+    val followFeatureEnabled = followFeatureEnabledDeferred.await()
+    jsonMap["follow_feature_enabled"] = followFeatureEnabled
+    if (followFeatureEnabled) {
+      val following = followingDeferred.await()
+      val followers = followersDeferred.await()
+      jsonMap["following"] = following
+      jsonMap["followers"] = followers
+      jsonMap["following_count"] = following.size
+      jsonMap["followers_count"] = followers.size
+      if (!isSelf) {
+        jsonMap["is_following"] = (currentUsername in followers).toString()
+      }
     }
 
     setToastMessage(call, jsonMap, requestedMember, session)

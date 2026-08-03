@@ -9,6 +9,7 @@ import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
+import org.dallasmakerspace.config.FeatureFlagValue
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.channels.Notifier
@@ -72,7 +73,7 @@ class DigestProcessorTest {
     whenever(mockLoggerFactory.create(any<Class<*>>())).thenReturn(mockLogger)
     runBlocking {
       whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
-          .thenReturn(true)
+          .thenReturn(FeatureFlagValue(enabled = true))
     }
 
     processor =
@@ -89,7 +90,7 @@ class DigestProcessorTest {
   fun `processDigests should do nothing when notifications disabled in site config`() =
       runBlocking {
         whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
-            .thenReturn(false)
+            .thenReturn(FeatureFlagValue(enabled = false))
 
         val summary = processor.processDigests()
 

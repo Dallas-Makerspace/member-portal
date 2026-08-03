@@ -247,6 +247,22 @@
                         <input class="form-check-input" type="checkbox" role="switch" id="editBooleanToggle">
                         <label class="form-check-label" for="editBooleanToggle" id="editBooleanLabel">Disabled</label>
                     </div>
+                    <div id="editFeatureFlagWrapper" style="display:none;">
+                        <div class="form-check form-switch mt-2 mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="editFlagEnabledToggle">
+                            <label class="form-check-label" for="editFlagEnabledToggle" id="editFlagEnabledLabel">Disabled for everyone</label>
+                        </div>
+                        <label for="editFlagUsernames" class="form-label small text-muted mb-1">
+                            Allow-listed usernames
+                            <span class="d-block">Comma-separated; these members get the feature even while it's disabled above.</span>
+                        </label>
+                        <input type="text" class="form-control mb-3" id="editFlagUsernames" placeholder="e.g. jdoe, asmith" autocomplete="off">
+                        <label for="editFlagGroups" class="form-label small text-muted mb-1">
+                            Allow-listed AD groups
+                            <span class="d-block">Comma-separated group CNs; members of these groups get the feature even while it's disabled above.</span>
+                        </label>
+                        <input type="text" class="form-control" id="editFlagGroups" placeholder="e.g. Board, Infrastructure" autocomplete="off">
+                    </div>
                     <div class="form-text text-warning" id="editSensitiveHint" style="display:none;">
                         <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">visibility_off</span>
                         This is a sensitive value. The current value is not displayed.
@@ -405,6 +421,33 @@
         filterText.addEventListener('input', applyFilter);
         statusSelect.addEventListener('change', applyFilter);
 
+        // ---- FeatureFlagType helpers ----
+        function parseFeatureFlag(raw) {
+            var flag = { enabled: false, enabledUsernames: [], enabledGroupNames: [] };
+            if (!raw) return flag;
+            try {
+                var parsed = JSON.parse(raw);
+                flag.enabled = !!parsed.enabled;
+                flag.enabledUsernames = Array.isArray(parsed.enabledUsernames) ? parsed.enabledUsernames : [];
+                flag.enabledGroupNames = Array.isArray(parsed.enabledGroupNames) ? parsed.enabledGroupNames : [];
+            } catch (e) {
+                // Not valid JSON (e.g. blank default) — fall back to all-disabled.
+            }
+            return flag;
+        }
+
+        function describeFeatureFlag(raw) {
+            var flag = parseFeatureFlag(raw);
+            var parts = [flag.enabled ? 'Enabled for everyone' : 'Disabled for everyone'];
+            if (flag.enabledUsernames.length) parts.push('usernames: ' + flag.enabledUsernames.join(', '));
+            if (flag.enabledGroupNames.length) parts.push('groups: ' + flag.enabledGroupNames.join(', '));
+            return parts.join(' · ');
+        }
+
+        function splitList(value) {
+            return value.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+        }
+
         // ---- Edit modal ----
         var editModal = document.getElementById('editConfigModal');
         editModal.addEventListener('show.bs.modal', function (event) {
@@ -431,15 +474,24 @@
                 descEl.style.display = 'none';
             }
 
-            document.getElementById('editDefaultValue').textContent = defaultValue || '(empty)';
+            document.getElementById('editDefaultValue').textContent =
+                currentType === 'FeatureFlagType' ? describeFeatureFlag(defaultValue) : (defaultValue || '(empty)');
 
             var newValueInput = document.getElementById('editNewValue');
             var boolToggleWrapper = document.getElementById('editBooleanToggleWrapper');
             var boolToggle = document.getElementById('editBooleanToggle');
             var boolLabel = document.getElementById('editBooleanLabel');
+            var flagWrapper = document.getElementById('editFeatureFlagWrapper');
+            var flagEnabledToggle = document.getElementById('editFlagEnabledToggle');
+            var flagEnabledLabel = document.getElementById('editFlagEnabledLabel');
+            var flagUsernames = document.getElementById('editFlagUsernames');
+            var flagGroups = document.getElementById('editFlagGroups');
+
+            newValueInput.style.display = 'none';
+            boolToggleWrapper.style.display = 'none';
+            flagWrapper.style.display = 'none';
 
             if (currentType === 'BooleanType') {
-                newValueInput.style.display = 'none';
                 boolToggleWrapper.style.display = 'block';
                 var isTrue = currentValue === 'true';
                 boolToggle.checked = isTrue;
@@ -447,9 +499,18 @@
                 boolToggle.onchange = function () {
                     boolLabel.textContent = boolToggle.checked ? 'Enabled' : 'Disabled';
                 };
+            } else if (currentType === 'FeatureFlagType') {
+                flagWrapper.style.display = 'block';
+                var flag = parseFeatureFlag(currentValue);
+                flagEnabledToggle.checked = flag.enabled;
+                flagEnabledLabel.textContent = flag.enabled ? 'Enabled for everyone' : 'Disabled for everyone';
+                flagEnabledToggle.onchange = function () {
+                    flagEnabledLabel.textContent = flagEnabledToggle.checked ? 'Enabled for everyone' : 'Disabled for everyone';
+                };
+                flagUsernames.value = flag.enabledUsernames.join(', ');
+                flagGroups.value = flag.enabledGroupNames.join(', ');
             } else {
                 newValueInput.style.display = '';
-                boolToggleWrapper.style.display = 'none';
                 newValueInput.value = currentIsSensitive ? '' : currentValue;
                 newValueInput.type = 'text';
                 newValueInput.placeholder = currentIsSensitive ? 'Enter new value (current hidden)' : '';
@@ -470,9 +531,18 @@
         });
 
         document.getElementById('saveConfigBtn').addEventListener('click', function () {
-            var newValue = currentType === 'BooleanType'
-                ? (document.getElementById('editBooleanToggle').checked ? 'true' : 'false')
-                : document.getElementById('editNewValue').value.trim();
+            var newValue;
+            if (currentType === 'BooleanType') {
+                newValue = document.getElementById('editBooleanToggle').checked ? 'true' : 'false';
+            } else if (currentType === 'FeatureFlagType') {
+                newValue = JSON.stringify({
+                    enabled: document.getElementById('editFlagEnabledToggle').checked,
+                    enabledUsernames: splitList(document.getElementById('editFlagUsernames').value),
+                    enabledGroupNames: splitList(document.getElementById('editFlagGroups').value)
+                });
+            } else {
+                newValue = document.getElementById('editNewValue').value.trim();
+            }
             var reason = document.getElementById('editReason').value.trim();
             var alertEl = document.getElementById('editConfigAlert');
 

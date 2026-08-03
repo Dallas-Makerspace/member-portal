@@ -55,7 +55,7 @@ constructor(
    * rows remain in IN_DIGEST until it is re-enabled.
    */
   suspend fun processDigests(): String {
-    if (!configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED)) {
+    if (!configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED).enabled) {
       log.info("Digest processor paused: site config notifications.enabled=false")
       return "processed=0\npaused=true"
     }

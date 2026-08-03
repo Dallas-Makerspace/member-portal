@@ -11,6 +11,8 @@ import io.ktor.server.routing.post
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.authorize
+import org.dallasmakerspace.config.ConfigRegistry
+import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.plugins.ApiResponse
 import org.dallasmakerspace.plugins.Status
@@ -20,13 +22,26 @@ import org.dallasmakerspace.plugins.Status
  * (the member being followed / whose lists are being read); the acting member (follower) comes from
  * the `X-Username` header set by the UI for the logged-in user - matching the convention used by
  * other self-service member routes in `Routing.kt` (e.g. `/members/{username}/settings`).
+ *
+ * The follow/unfollow writes are gated behind [ConfigRegistry.FOLLOW_FEATURE_ENABLED] for the
+ * acting member as defense-in-depth - the UI already hides the feature when disabled, but this
+ * stops a direct API call from bypassing that.
  */
-fun Route.profileSubscriptionRoutes(service: ProfileSubscriptionService) {
+fun Route.profileSubscriptionRoutes(
+    service: ProfileSubscriptionService,
+    featureFlagService: FeatureFlagService,
+) {
   authenticate(ApiKeyAuthProvider.X_API_KEY) {
     authorize(Permission.MANAGE_MEMBERS) {
       post("/members/{username}/follow") {
         val target = call.parameters["username"] ?: return@post call.respondBadRequest()
         val actor = call.actorUsername() ?: return@post call.respondMissingActor()
+        if (!featureFlagService.isEnabledForUsername(
+            ConfigRegistry.FOLLOW_FEATURE_ENABLED, actor)) {
+          return@post call.respond(
+              HttpStatusCode.Forbidden,
+              ApiResponse(Status.ERROR, "Follow feature is not enabled for $actor", null))
+        }
         try {
           service.follow(actor, target)
           call.respond(ApiResponse(Status.SUCCESS, "$actor now follows $target", null))
@@ -45,6 +60,12 @@ fun Route.profileSubscriptionRoutes(service: ProfileSubscriptionService) {
       delete("/members/{username}/follow") {
         val target = call.parameters["username"] ?: return@delete call.respondBadRequest()
         val actor = call.actorUsername() ?: return@delete call.respondMissingActor()
+        if (!featureFlagService.isEnabledForUsername(
+            ConfigRegistry.FOLLOW_FEATURE_ENABLED, actor)) {
+          return@delete call.respond(
+              HttpStatusCode.Forbidden,
+              ApiResponse(Status.ERROR, "Follow feature is not enabled for $actor", null))
+        }
         service.unfollow(actor, target)
         call.respond(ApiResponse(Status.SUCCESS, "$actor unfollowed $target", null))
       }

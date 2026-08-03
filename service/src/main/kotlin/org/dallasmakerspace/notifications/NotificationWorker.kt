@@ -54,7 +54,7 @@ constructor(
    * to the next digest instead of being sent.
    */
   suspend fun processPending(): String {
-    if (!configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED)) {
+    if (!configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED).enabled) {
       log.info("Notification worker paused: site config notifications.enabled=false")
       return "processed=0\npaused=true"
     }
