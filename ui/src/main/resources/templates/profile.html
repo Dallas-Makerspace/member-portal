@@ -78,14 +78,18 @@
         .account-name {
             margin-bottom: 0;
             font-weight: 500;
+            color: #333;
         }
         .account-link {
             text-decoration: none;
         }
         .unlink {
             font-size: 14px;
-            color: #0d6efd;
+            color: #333;
             display: block;
+        }
+        .unlink.link-cta {
+            color: #0d6efd;
         }
         .accounts-container {
             display: flex;
@@ -486,13 +490,13 @@
                                        th:href="|https://talk.dallasmakerspace.org/u/${discourse_username}/summary|"
                                        target="_blank"
                                        class="account-link">
-                                        <p class="account-name text-primary" th:text="|${discourse_username}|"></p>
+                                        <p class="account-name" th:text="|${discourse_username}|"></p>
                                     </a>
                                     <span th:unless="${discourse_username}">Not Linked</span>
                                 </div>
                                 <a href="/unlink-discourse" th:if="${discourse_username}" class="unlink">Unlink
                                     Account</a>
-                                <a href="/link-discourse" th:unless="${discourse_username}" class="unlink">Link
+                                <a href="/link-discourse" th:unless="${discourse_username}" class="unlink link-cta">Link
                                     Account</a>
                             </div>
                         </div>
@@ -507,13 +511,13 @@
                             <div class="account-details">
                                 <div class="d-flex align-items-center">
                                     <p class="account-platform me-2">Discord:</p>
-                                    <span th:if="${discord_username}" class="account-name text-primary"
+                                    <span th:if="${discord_username}" class="account-name"
                                           th:text="|${discord_username}|"></span>
                                     <span th:unless="${discord_userid}">Not Linked</span>
                                 </div>
                                 <a href="/unlink-discord" th:if="${discord_userid}" class="unlink">Unlink
                                     Account</a>
-                                <a href="/link-discord" th:unless="${discord_userid}" class="unlink">Link
+                                <a href="/link-discord" th:unless="${discord_userid}" class="unlink link-cta">Link
                                     Account</a>
                             </div>
                         </div>
@@ -532,14 +536,14 @@
                                        th:href="|https://www.linkedin.com/in/${linkedin_username}|"
                                        target="_blank" rel="noopener"
                                        class="account-link">
-                                        <span class="account-name text-primary"
+                                        <span class="account-name"
                                               th:text="${linkedin_username}"></span>
                                     </a>
                                     <span th:unless="${linkedin_username}">Not Linked</span>
                                 </div>
                                 <a href="/unlink-linkedin" th:if="${linkedin_username}" class="unlink">Unlink
                                     Account</a>
-                                <a href="#" th:unless="${linkedin_username}" class="unlink"
+                                <a href="#" th:unless="${linkedin_username}" class="unlink link-cta"
                                    data-bs-toggle="modal" data-bs-target="#linkLinkedInModal">Link
                                     Account</a>
                             </div>
@@ -705,7 +709,7 @@
             <!-- Following & Followers card -->
             <div class="dms-card shadow-sm mt-4" th:if="${follow_feature_enabled}">
                 <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Following &amp; Followers</h4>
+                    <h4 class="card-title mt-3 mb-4 dms-card-title">Follows</h4>
 
                     <div th:if="${!following and !followers}">
                         <span th:if="${is_self}">You aren't following anyone, and no one's following you yet. Follow an organizer to get notified when they post a new event.</span>
