@@ -70,15 +70,20 @@ constructor(
     val electionsUrlDeferred = async {
       memberServiceClient.getConfigValue("voting.elections-url", session.sessionId)
     }
-    val settingsDeferred: Deferred<Map<String, String>> =
-        async {
-          try {
-            memberService.getMemberSettings(requestedUsername, session.sessionId)
-          } catch (e: Exception) {
-            log.warn("Failed to fetch settings for member: $requestedUsername", e)
-            emptyMap()
-          }
-        }
+    val settingsDeferred: Deferred<Map<String, String>> = async {
+      try {
+        memberService.getMemberSettings(requestedUsername, session.sessionId)
+      } catch (e: Exception) {
+        log.warn("Failed to fetch settings for member: $requestedUsername", e)
+        emptyMap()
+      }
+    }
+    val followingDeferred = async {
+      memberServiceClient.getFollowing(requestedUsername, session.sessionId)
+    }
+    val followersDeferred = async {
+      memberServiceClient.getFollowers(requestedUsername, session.sessionId)
+    }
 
     // Await critical result; events still running concurrently
     val requestedMember = memberDeferred.await()
@@ -179,6 +184,16 @@ constructor(
             )
           }
       jsonMap["events_organized"] = formattedEvents
+    }
+
+    val following = followingDeferred.await()
+    val followers = followersDeferred.await()
+    jsonMap["following"] = following
+    jsonMap["followers"] = followers
+    jsonMap["following_count"] = following.size
+    jsonMap["followers_count"] = followers.size
+    if (!isSelf) {
+      jsonMap["is_following"] = (currentUsername in followers).toString()
     }
 
     setToastMessage(call, jsonMap, requestedMember, session)
