@@ -25,9 +25,9 @@ private val EVENT_START_FORMATTER = DateTimeFormatter.ofPattern("EEE MMM d h:mm 
 /**
  * Webhook handler for "an organizer posted a new calendar event." Fans out an EVENT_ANNOUNCEMENT
  * notification to every member following the organizer - the piece that connects the follow feature
- * to real notifications. This service is only reachable inside the network, so the real auth
- * boundary for the calendar system (an external caller) is the UI's public-facing proxy handler,
- * not this endpoint directly - see CalendarEventWebhookHandler in the ui module.
+ * to real notifications. The calendar system is internal-only, so it calls this endpoint directly
+ * (no UI proxy needed, unlike genuinely external callers such as SparkPost) - same as the existing
+ * groups-audit webhook.
  */
 class CalendarEventWebhook
 @Inject

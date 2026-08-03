@@ -183,10 +183,6 @@ fun Application.configureRouting() {
       RouteFactory.getHandler(call)?.handleBase(call)
     }
 
-    post(RouteFactory.Paths.CALENDAR_EVENT_WEBHOOK.path) {
-      RouteFactory.getHandler(call)?.handleBase(call)
-    }
-
     // PWA routes - no authentication required
     get(RouteFactory.Paths.MANIFEST.path) { RouteFactory.getHandler(call)?.handleBase(call) }
     get(RouteFactory.Paths.OFFLINE.path) { RouteFactory.getHandler(call)?.handleBase(call) }
