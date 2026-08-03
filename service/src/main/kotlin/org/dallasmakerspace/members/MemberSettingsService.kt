@@ -44,8 +44,7 @@ constructor(
         repository.getHistory(profileId).filter { record ->
           MemberSettingsRegistry.findByKey(record.key) != null
         }
-    val usernames =
-        repository.getUsernames(records.mapNotNull { it.updatedByProfileId }.toSet())
+    val usernames = repository.getUsernames(records.mapNotNull { it.updatedByProfileId }.toSet())
     return records.map { record ->
       mapOf(
           "setting_key" to record.key,
@@ -69,7 +68,11 @@ constructor(
    * @param actorUsername The username of the member making the change, used to record who updated
    *   the settings. May be null if the change was not performed by a member.
    */
-  suspend fun updateSettings(username: String, updates: Map<String, String?>, actorUsername: String?) {
+  suspend fun updateSettings(
+      username: String,
+      updates: Map<String, String?>,
+      actorUsername: String?
+  ) {
     val profileId =
         repository.getProfileId(username)
             ?: throw IllegalArgumentException("Unknown member: $username")

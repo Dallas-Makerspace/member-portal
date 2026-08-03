@@ -263,7 +263,8 @@ constructor(loggerFactory: LoggerFactory, private val repository: ShortLinksRepo
   private suspend fun validateAlias(alias: String): Exception? {
     // Length check
     if (alias.length < 2 || alias.length > 20) {
-      log.warn("Alias validation failed for '$alias': must be 2-20 characters (was ${alias.length})")
+      log.warn(
+          "Alias validation failed for '$alias': must be 2-20 characters (was ${alias.length})")
       return Exception("Alias must be 2-20 characters")
     }
 

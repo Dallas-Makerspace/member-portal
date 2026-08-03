@@ -28,7 +28,8 @@ constructor(
 
     when {
       cabinetSlug == null && committeeSlug == null -> renderList(call)
-      cabinetSlug != null && reportSlug != null -> renderCabinetReport(call, cabinetSlug, reportSlug)
+      cabinetSlug != null && reportSlug != null ->
+          renderCabinetReport(call, cabinetSlug, reportSlug)
       cabinetSlug != null && view == "reports" -> renderCabinetReportIndex(call, cabinetSlug)
       cabinetSlug != null -> renderCabinetDetail(call, cabinetSlug)
       committeeSlug != null && reportSlug != null ->

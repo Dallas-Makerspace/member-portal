@@ -8,7 +8,6 @@ import kotlin.random.Random
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.plugins.AuthException
-import org.dallasmakerspace.server.plugins.UserSession
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
 
 private const val NONCE_RANGE_START = 1000000

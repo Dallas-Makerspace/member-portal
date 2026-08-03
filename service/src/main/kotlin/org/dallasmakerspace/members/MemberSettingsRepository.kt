@@ -44,10 +44,9 @@ class MemberSettingsRepository @Inject constructor(loggerFactory: LoggerFactory)
         }
   }
 
-  override suspend fun getUsername(profileId: Int): String? =
-      suspendTransaction {
-        ProfileDAO.find { ProfileTable.idColumn eq profileId }.firstOrNull()?.let { it.id.value }
-      }
+  override suspend fun getUsername(profileId: Int): String? = suspendTransaction {
+    ProfileDAO.find { ProfileTable.idColumn eq profileId }.firstOrNull()?.let { it.id.value }
+  }
 
   override suspend fun getUsernames(profileIds: Collection<Int>): Map<Int, String> {
     if (profileIds.isEmpty()) return emptyMap()

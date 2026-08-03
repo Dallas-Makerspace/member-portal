@@ -25,8 +25,8 @@ private fun isPreviewBot(userAgent: String?): Boolean {
 /**
  * Handles /go/{path...} short link resolution. Auth is optional at the Ktor routing level (see
  * Routing.kt) so that Discord/Discourse link-preview crawlers - which can't log in - can be shown
- * an OG-tag preview instead of a login redirect. This handler enforces login itself for every
- * other request, matching what AuthenticatedHandler would have done.
+ * an OG-tag preview instead of a login redirect. This handler enforces login itself for every other
+ * request, matching what AuthenticatedHandler would have done.
  */
 class ShortLinkRedirectHandler(
     private val loggerFactory: LoggerFactory,
@@ -97,8 +97,7 @@ class ShortLinkRedirectHandler(
                       "destinationUrl" to googleDestination,
                       "dmsEmail" to dmsEmail,
                   ),
-              )
-          )
+              ))
         } else {
           log.info("Redirecting to: ${result.location}")
           call.respondRedirect(result.location, permanent = false)
@@ -118,10 +117,9 @@ class ShortLinkRedirectHandler(
   private suspend fun handleBotPreview(call: ApplicationCall, path: String) {
     log.info("Serving link preview to bot for: $path")
 
-    when (
-        val result =
-            memberServiceClient.resolveShortLink(
-                path, sessionId = null, username = null, isPreview = true)) {
+    when (val result =
+        memberServiceClient.resolveShortLink(
+            path, sessionId = null, username = null, isPreview = true)) {
       is ShortLinkResult.Redirect -> {
         val baseUrl = appConfig.requireStringProperty("app.base-url")
         call.respond(
@@ -132,8 +130,7 @@ class ShortLinkRedirectHandler(
                     "ogDescription" to (result.description ?: "Dallas Makerspace Short Link"),
                     "ogImage" to "$baseUrl/static/icons/icon-512x512.png",
                 ),
-            )
-        )
+            ))
       }
       is ShortLinkResult.NotFound -> {
         call.respondText("Short link not found: $path", status = HttpStatusCode.NotFound)

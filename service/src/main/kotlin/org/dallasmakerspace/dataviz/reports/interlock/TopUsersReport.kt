@@ -45,9 +45,8 @@ constructor(
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_REPORT_DAYS
     val actorUsername = params["actorUsername"]?.firstOrNull()
     val isInfra =
-        actorUsername?.let {
-          withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) }
-        } ?: false
+        actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
+            ?: false
 
     val raw = events.fetchEvents(listOf(tool), days)
     val sessions = events.reconstructSessions(raw).filter { it.authorized }

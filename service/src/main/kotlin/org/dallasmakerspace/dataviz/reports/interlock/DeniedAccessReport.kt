@@ -53,9 +53,8 @@ constructor(
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_REPORT_DAYS
     val actorUsername = params["actorUsername"]?.firstOrNull()
     val isInfra =
-        actorUsername?.let {
-          withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) }
-        } ?: false
+        actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
+            ?: false
 
     val isCommitteeScope: Boolean
     val tags: List<String>
@@ -95,7 +94,8 @@ constructor(
     val denied =
         raw.mapNotNull { ev ->
           val msg = stripLeadingTimestamp(ev.message)
-          if (!(msg.startsWith("User:") && msg.contains("'authorized': False"))) return@mapNotNull null
+          if (!(msg.startsWith("User:") && msg.contains("'authorized': False")))
+              return@mapNotNull null
           val badge =
               Regex("'id': '(\\d+)'").find(msg)?.groupValues?.get(1) ?: return@mapNotNull null
           Triple(ev.timestamp, ev.host, badge)

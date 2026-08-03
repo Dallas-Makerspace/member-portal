@@ -99,9 +99,7 @@ constructor(
       put("Cabinets", "${cabinets.size}")
       put("Total sessions", "${sessions.size}")
       put("Timezone", "America/Chicago")
-      put(
-          "Generated at",
-          DateTimeFormatter.ISO_DATE_TIME.format(Instant.now().atZone(chicago)))
+      put("Generated at", DateTimeFormatter.ISO_DATE_TIME.format(Instant.now().atZone(chicago)))
       events
           .buildKibanaDiscoverUrl(
               events.kibanaQueryAuthorizedSwipes(cabinets.map { it.interlockTag }), days)

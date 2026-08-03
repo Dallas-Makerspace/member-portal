@@ -80,7 +80,10 @@ constructor(
       val swipes = swipesDeferred?.await()
       if (swipes != null) {
         result["recent_badge_swipes"] =
-            swipes.map { mapOf("swipe_time" to it.swipeTime, "door_name" to it.doorName, "granted" to it.granted) }
+            swipes.map {
+              mapOf(
+                  "swipe_time" to it.swipeTime, "door_name" to it.doorName, "granted" to it.granted)
+            }
       }
 
       val badgeMM = badgeMMDeferred.await()

@@ -330,7 +330,8 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
       offset: Int
   ): DiscourseUserActionsResponse {
     val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")
-    val url = "$DISCOURSE_BASE_URL/user_actions.json?username=$username&filter=$filter&offset=$offset"
+    val url =
+        "$DISCOURSE_BASE_URL/user_actions.json?username=$username&filter=$filter&offset=$offset"
     try {
       val response =
           getClient().use {
@@ -342,7 +343,8 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
           }
       when (response.status) {
         HttpStatusCode.OK -> {
-          log.debug("Successfully fetched user actions for $username (filter=$filter, offset=$offset)")
+          log.debug(
+              "Successfully fetched user actions for $username (filter=$filter, offset=$offset)")
           return json.decodeFromString<DiscourseUserActionsResponse>(response.bodyAsText())
         }
         else ->

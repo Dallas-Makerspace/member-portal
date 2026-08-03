@@ -59,9 +59,7 @@ fun Application.configureHttp() {
       }
     }
   }
-  install(ContentNegotiation) {
-    gson { setPrettyPrinting() }
-  }
+  install(ContentNegotiation) { gson { setPrettyPrinting() } }
 }
 
 private fun getHttpClient(): HttpClient {

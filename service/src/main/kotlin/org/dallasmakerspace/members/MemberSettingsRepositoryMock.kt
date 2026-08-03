@@ -16,7 +16,8 @@ class MemberSettingsRepositoryMock @Inject constructor() : IMemberSettingsReposi
 
   override suspend fun getLatest(profileId: Int): Map<String, String> {
     val records = store[profileId] ?: return emptyMap()
-    return records.asReversed()
+    return records
+        .asReversed()
         .mapNotNull { record -> record.value?.let { record.key to it } }
         .distinctBy { it.first }
         .toMap()
@@ -29,11 +30,16 @@ class MemberSettingsRepositoryMock @Inject constructor() : IMemberSettingsReposi
       profileIds.entries.firstOrNull { it.value == profileId }?.key
 
   override suspend fun getUsernames(profileIds: Collection<Int>): Map<Int, String> =
-      this.profileIds.entries.filter { (_, id) -> id in profileIds }.associate { (username, id) ->
-        id to username
-      }
+      this.profileIds.entries
+          .filter { (_, id) -> id in profileIds }
+          .associate { (username, id) -> id to username }
 
-  override suspend fun append(profileId: Int, key: String, value: String?, updatedByProfileId: Int?) {
+  override suspend fun append(
+      profileId: Int,
+      key: String,
+      value: String?,
+      updatedByProfileId: Int?
+  ) {
     store
         .getOrPut(profileId) { mutableListOf() }
         .add(

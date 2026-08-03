@@ -96,7 +96,9 @@ constructor(
           )
         }
 
-    val sorted = stats.sortedWith(compareByDescending<Stat> { it.totalSeconds }.thenByDescending { it.members })
+    val sorted =
+        stats.sortedWith(
+            compareByDescending<Stat> { it.totalSeconds }.thenByDescending { it.members })
 
     val dataItems =
         sorted.map { stat ->

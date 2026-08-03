@@ -119,6 +119,30 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
     }
   }
 
+  suspend fun put(
+      url: String,
+      authHeaders: StringValues,
+      payload: Any,
+      timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+  ): Map<String, Any> {
+    val resp =
+        getClient(timeoutMs).use {
+          it.put {
+            url(url)
+            headers { appendAll(authHeaders) }
+            contentType(ContentType.Application.Json)
+            setBody(payload)
+          }
+        }
+    if (resp.status.isSuccess()) {
+      return resp.body<Map<String, Any>>()
+    } else {
+      val body = resp.body<String>()
+      log.error("put: HTTP request failed: $body")
+      throw HttpException("Failed to put $url; Status: ${resp.status} Response: $body")
+    }
+  }
+
   suspend fun delete(
       url: String,
       authHeaders: StringValues,

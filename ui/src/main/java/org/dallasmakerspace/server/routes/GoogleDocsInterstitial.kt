@@ -17,11 +17,11 @@ private val GOOGLE_DOCS_HOSTS =
     )
 
 /**
- * When [location] points at a Google Docs-family destination (Docs, Sheets, Slides, Forms,
- * Drive), returns it with `authuser=<dmsEmail>` applied (replacing any existing value) so Google
- * switches to the member's DMS Workspace session automatically if it's already active in their
- * browser. Returns the original [location] unchanged (still non-null) when [dmsEmail] is null.
- * Returns null when [location] is not a Google Docs-family destination.
+ * When [location] points at a Google Docs-family destination (Docs, Sheets, Slides, Forms, Drive),
+ * returns it with `authuser=<dmsEmail>` applied (replacing any existing value) so Google switches
+ * to the member's DMS Workspace session automatically if it's already active in their browser.
+ * Returns the original [location] unchanged (still non-null) when [dmsEmail] is null. Returns null
+ * when [location] is not a Google Docs-family destination.
  */
 fun googleDocsDestinationOrNull(location: String, dmsEmail: String?): String? {
   val url =

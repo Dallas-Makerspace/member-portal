@@ -99,6 +99,7 @@ object RouteFactory {
     CAMERAS_API("/cameras-api/{path...}"),
     PERSONAL_BIN_SCANNER("/personal-bin-scanner"),
     SCANNER_STATUS_API("/scanner-api/status/{username}"),
+    NOTIFICATIONS("/notifications"),
   }
 }
 

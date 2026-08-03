@@ -170,15 +170,13 @@ constructor(
       }
 
       log.debug(
-          "[live/$dmsUsername] Found ${showAndTellActions.size} show-and-tell post(s) across ${showAndTellActions.map { it.topicId }.distinct().size} topic(s)"
-      )
+          "[live/$dmsUsername] Found ${showAndTellActions.size} show-and-tell post(s) across ${showAndTellActions.map { it.topicId }.distinct().size} topic(s)")
 
       if (showAndTellActions.isEmpty()) {
         if (hadFetchFailure) {
           log.warn(
               "[live/$dmsUsername] Not caching empty result — a fetch failure occurred while " +
-                  "checking for show-and-tell posts, will retry on next request"
-          )
+                  "checking for show-and-tell posts, will retry on next request")
         } else {
           memberLiveCache[dmsUsername] = Clock.System.now() to emptyList()
         }
@@ -197,8 +195,7 @@ constructor(
         val slug = actions.first().slug
 
         log.debug(
-            "[live/$dmsUsername] Topic $topicId ('$title'): fetching ${postIds.size} post(s) by ID: $postIds"
-        )
+            "[live/$dmsUsername] Topic $topicId ('$title'): fetching ${postIds.size} post(s) by ID: $postIds")
 
         val topicPosts =
             fetchWithRateLimitBackoff(dmsUsername, "getTopicPostsByIds($topicId)") {
@@ -214,13 +211,11 @@ constructor(
           if (imageUrl == null) {
             log.debug(
                 "[live/$dmsUsername] Topic $topicId post ${post.id} (postNumber=${post.postNumber}): " +
-                    "no qualifying image (requires width>=${MIN_IMAGE_WIDTH}px) — skipping"
-            )
+                    "no qualifying image (requires width>=${MIN_IMAGE_WIDTH}px) — skipping")
             continue
           }
           log.debug(
-              "[live/$dmsUsername] Topic $topicId post ${post.id}: adding project with image $imageUrl"
-          )
+              "[live/$dmsUsername] Topic $topicId post ${post.id}: adding project with image $imageUrl")
           projects.add(
               FeaturedProject(
                   topicId = topicId,
@@ -234,8 +229,7 @@ constructor(
                   discourseTopicUrl =
                       "https://talk.dallasmakerspace.org/t/$slug/$topicId/${post.postNumber}",
                   createdAt = post.createdAt,
-              )
-          )
+              ))
         }
       }
 
@@ -243,13 +237,11 @@ constructor(
       if (projects.isEmpty() && hadFetchFailure) {
         log.warn(
             "[live/$dmsUsername] Not caching empty result — all post fetches failed, will retry " +
-                "on next request"
-        )
+                "on next request")
         return
       }
-      val sorted = projects.sortedByDescending {
-        runCatching { Instant.parse(it.createdAt) }.getOrNull()
-      }
+      val sorted =
+          projects.sortedByDescending { runCatching { Instant.parse(it.createdAt) }.getOrNull() }
       memberLiveCache[dmsUsername] = Clock.System.now() to sorted
     } catch (e: Exception) {
       log.error("Failed to refresh projects for member $dmsUsername", e)
@@ -272,8 +264,7 @@ constructor(
       if (msg.contains("429") && waitSecondsMatch != null) {
         val waitMs = (waitSecondsMatch.groupValues[1].toLongOrNull() ?: 30L) * 1000L + 2_000L
         log.warn(
-            "[live/$dmsUsername] Rate limited on $callName — waiting ${waitMs}ms before continuing"
-        )
+            "[live/$dmsUsername] Rate limited on $callName — waiting ${waitMs}ms before continuing")
         delay(waitMs)
       } else {
         log.warn("[live/$dmsUsername] Failed $callName", e)
@@ -349,22 +340,22 @@ constructor(
         listOf(
                 async {
                   runCatching {
-                    discourseApiClient.getCategoryTopics(
-                        SHOW_AND_TELL_CATEGORY_SLUG,
-                        SHOW_AND_TELL_CATEGORY_ID,
-                        page = 0,
-                    )
-                  }
+                        discourseApiClient.getCategoryTopics(
+                            SHOW_AND_TELL_CATEGORY_SLUG,
+                            SHOW_AND_TELL_CATEGORY_ID,
+                            page = 0,
+                        )
+                      }
                       .getOrNull()
                 },
                 async {
                   runCatching {
-                    discourseApiClient.getCategoryTopics(
-                        SHOW_AND_TELL_CATEGORY_SLUG,
-                        SHOW_AND_TELL_CATEGORY_ID,
-                        page = 1,
-                    )
-                  }
+                        discourseApiClient.getCategoryTopics(
+                            SHOW_AND_TELL_CATEGORY_SLUG,
+                            SHOW_AND_TELL_CATEGORY_ID,
+                            page = 1,
+                        )
+                      }
                       .getOrNull()
                 },
             )
@@ -373,11 +364,13 @@ constructor(
             .distinctBy { it.id }
       }
 
-      val matchingTopics = allTopics.filter { topic ->
-        topic.title.startsWith("Show and Tell") &&
-            runCatching { Instant.parse(topic.createdAt) }.getOrNull()?.let { it >= topicCutoff } ==
-                true
-      }
+      val matchingTopics =
+          allTopics.filter { topic ->
+            topic.title.startsWith("Show and Tell") &&
+                runCatching { Instant.parse(topic.createdAt) }
+                    .getOrNull()
+                    ?.let { it >= topicCutoff } == true
+          }
 
       if (matchingTopics.isEmpty()) {
         log.info("No Show and Tell topics found in past 2 years")
@@ -416,13 +409,11 @@ constructor(
                     val waitMs =
                         (waitSecondsMatch.groupValues[1].toLongOrNull() ?: 30L) * 1000L + 2_000L
                     log.warn(
-                        "Rate limited fetching posts for topic ${topic.id} — waiting ${waitMs}ms"
-                    )
+                        "Rate limited fetching posts for topic ${topic.id} — waiting ${waitMs}ms")
                     delay(waitMs)
                   } else {
                     log.warn(
-                        "Failed to fetch post chunk for topic ${topic.id}: ${chunk.size} IDs", e
-                    )
+                        "Failed to fetch post chunk for topic ${topic.id}: ${chunk.size} IDs", e)
                   }
                 }
                 .getOrNull()
@@ -434,22 +425,20 @@ constructor(
                   initialDetails.copy(
                       postStream =
                           initialDetails.postStream.copy(
-                              posts = initialDetails.postStream.posts + extraPosts
-                          )
-                  )
-          )
+                              posts = initialDetails.postStream.posts + extraPosts)))
         }
       }
 
       // Collect all image-containing posts (exclude intro post #1)
-      val allCandidatePosts = topicDetails.flatMap { (topic, details) ->
-        details.postStream.posts
-            .filter { post -> post.postNumber != 1 }
-            .mapNotNull { post ->
-              val imageUrl = extractLargeImageUrl(post.cooked) ?: return@mapNotNull null
-              Triple(topic, post, imageUrl)
-            }
-      }
+      val allCandidatePosts =
+          topicDetails.flatMap { (topic, details) ->
+            details.postStream.posts
+                .filter { post -> post.postNumber != 1 }
+                .mapNotNull { post ->
+                  val imageUrl = extractLargeImageUrl(post.cooked) ?: return@mapNotNull null
+                  Triple(topic, post, imageUrl)
+                }
+          }
 
       if (allCandidatePosts.isEmpty()) {
         log.info("No image-containing posts found in Show and Tell topics")
@@ -490,9 +479,10 @@ constructor(
         }
       }
 
-      val newMemberProjects = memberProjectsMap.mapValues { (_, list) ->
-        list.sortedByDescending { runCatching { Instant.parse(it.createdAt) }.getOrNull() }
-      }
+      val newMemberProjects =
+          memberProjectsMap.mapValues { (_, list) ->
+            list.sortedByDescending { runCatching { Instant.parse(it.createdAt) }.getOrNull() }
+          }
       val newGlobalProjects =
           globalCandidates.sortedByDescending { it.likeCount }.take(MAX_FEATURED_PROJECTS)
 
@@ -501,8 +491,7 @@ constructor(
       lastFetchTime.set(Clock.System.now())
       log.info(
           "Featured projects cache updated: ${newGlobalProjects.size} global, " +
-              "${newMemberProjects.size} members cached"
-      )
+              "${newMemberProjects.size} members cached")
       val top5 =
           newMemberProjects.entries
               .sortedByDescending { it.value.size }

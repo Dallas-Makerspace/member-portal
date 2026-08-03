@@ -926,7 +926,8 @@ constructor(
     return try {
       activeDirectoryService.getMemberByUsername(username).groups.any { it.cn == groupCn }
     } catch (e: Exception) {
-      log.warn("Could not check group '$groupCn' membership for '$username', defaulting to false", e)
+      log.warn(
+          "Could not check group '$groupCn' membership for '$username', defaulting to false", e)
       false
     }
   }
@@ -987,7 +988,8 @@ constructor(
     val isPrivileged =
         actorUsername != null &&
             withContext(Dispatchers.IO) {
-              isUserInInfraGroup(actorUsername) || isUserInGroup(actorUsername, LOGISTICS_CHAIR_GROUP_CN)
+              isUserInInfraGroup(actorUsername) ||
+                  isUserInGroup(actorUsername, LOGISTICS_CHAIR_GROUP_CN)
             }
 
     return ScannerStatusResponse(
@@ -1064,7 +1066,9 @@ constructor(
     )
   }
 
-  suspend fun getRecentBadgeSwipes(username: String): List<org.dallasmakerspace.models.BadgeSwipeInfo> {
+  suspend fun getRecentBadgeSwipes(
+      username: String
+  ): List<org.dallasmakerspace.models.BadgeSwipeInfo> {
     return try {
       doorEventsRepository.getRecentSwipesForUser(username)
     } catch (e: Exception) {

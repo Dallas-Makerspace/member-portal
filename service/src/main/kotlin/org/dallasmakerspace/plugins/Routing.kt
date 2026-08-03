@@ -12,6 +12,8 @@ import io.ktor.server.resources.post
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.writeStringUtf8
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -45,6 +47,8 @@ import org.dallasmakerspace.models.AskAiFeedbackRequest
 import org.dallasmakerspace.models.AskAiRequest
 import org.dallasmakerspace.models.AskAiStreamResult
 import org.dallasmakerspace.models.NamespaceOwnerType
+import org.dallasmakerspace.notifications.routing.notificationRoutes
+import org.dallasmakerspace.notifications.routing.profileSubscriptionRoutes
 import org.dallasmakerspace.remoteaccess.routing.remoteAccessRoutes
 import org.dallasmakerspace.routing.*
 import org.dallasmakerspace.routing.BadgeLookup
@@ -55,13 +59,18 @@ import org.dallasmakerspace.shortlinks.RedirectResult
 import org.dallasmakerspace.shortlinks.ShortLinksService
 import org.dallasmakerspace.webhook.WebhookRouter
 
+/** Shared secret guarding the /webhook/notifications endpoint (X-Webhook-Token header). */
+private const val NOTIFICATIONS_WEBHOOK_TOKEN = "dev-insecure-webhook-token-change-in-prod"
+
 @Suppress("LongMethod")
 fun Application.configureRouting() {
   val log = org.slf4j.LoggerFactory.getLogger("Routing")
   install(Resources)
   install(StatusPages) {
     exception { call: ApplicationCall, cause: Exception ->
-      log.error("Failed to process request: ${call.request.httpMethod.value} ${call.request.path()}", cause)
+      log.error(
+          "Failed to process request: ${call.request.httpMethod.value} ${call.request.path()}",
+          cause)
       call.respond(
           HttpStatusCode.InternalServerError,
           ApiResponse(Status.ERROR, cause.localizedMessage, null),
@@ -90,6 +99,40 @@ fun Application.configureRouting() {
   val configOverrideService: ConfigOverrideService =
       DaggerAppComponent.create().getConfigOverrideService()
   launch { configOverrideService.warmCache() }
+
+  // Notification worker: polls the outbox and sends due notifications (mock notifier in dev).
+  val notificationWorker: org.dallasmakerspace.notifications.NotificationWorker =
+      DaggerAppComponent.create().getNotificationWorker()
+  if (appConfig.requireBooleanProperty("app.notifications.worker.enabled")) {
+    val pollIntervalMs = appConfig.requireLongProperty("app.notifications.worker.poll-interval-ms")
+    launch {
+      while (isActive) {
+        try {
+          notificationWorker.processPending()
+        } catch (e: Exception) {
+          log.error("Notification worker run failed: ${e.message}", e)
+        }
+        delay(pollIntervalMs)
+      }
+    }
+  }
+
+  // Digest processor: polls for IN_DIGEST rows and delivers one digest email per member.
+  val digestProcessor: org.dallasmakerspace.notifications.DigestProcessor =
+      DaggerAppComponent.create().getDigestProcessor()
+  if (appConfig.requireBooleanProperty("app.notifications.digest.enabled")) {
+    val pollIntervalMs = appConfig.requireLongProperty("app.notifications.digest.poll-interval-ms")
+    launch {
+      while (isActive) {
+        try {
+          digestProcessor.processDigests()
+        } catch (e: Exception) {
+          log.error("Digest processor run failed: ${e.message}", e)
+        }
+        delay(pollIntervalMs)
+      }
+    }
+  }
 
   routing {
     val groupsService: GroupService by lazy { DaggerAppComponent.create().getGroupService() }
@@ -261,8 +304,9 @@ fun Application.configureRouting() {
         /** Scanner status — focused endpoint for bin QR scanner * */
         get<Members.DMSMember.ScannerStatus> { request ->
           val actorUsername = call.request.headers["X-Actor-Username"]
-          val status = memberService.getScannerStatus(request.parent.username, actorUsername)
-              ?: return@get call.respond(HttpStatusCode.NotFound)
+          val status =
+              memberService.getScannerStatus(request.parent.username, actorUsername)
+                  ?: return@get call.respond(HttpStatusCode.NotFound)
           call.respond(
               ApiResponse(
                   Status.SUCCESS,
@@ -994,9 +1038,29 @@ fun Application.configureRouting() {
       remoteAccessRoutes(remoteAccessService)
     }
 
+    /** Notification REST API (emit, outbox, preferences) * */
+    val notificationService by lazy { DaggerAppComponent.create().getNotificationService() }
+    notificationRoutes(notificationService)
+
+    /** Follow/unfollow another member + who-follows-who listings * */
+    val profileSubscriptionService by lazy {
+      DaggerAppComponent.create().getProfileSubscriptionService()
+    }
+    profileSubscriptionRoutes(profileSubscriptionService)
+
+    // The notifications webhook is protected by a shared secret token (other webhooks stay public
+    // for legacy external senders).
     post("/webhook/*") {
       val path = call.request.path().substringAfter("/webhook/")
       val body = call.receiveText()
+
+      if (path == "notifications" &&
+          call.request.headers["X-Webhook-Token"] != NOTIFICATIONS_WEBHOOK_TOKEN) {
+        call.respond(
+            HttpStatusCode.Unauthorized,
+            ApiResponse(Status.ERROR, "Invalid or missing webhook token", null))
+        return@post
+      }
 
       // Log request details for debugging
       log.info(
@@ -1024,10 +1088,8 @@ fun Application.configureRouting() {
           username?.let { suspendTransaction { ProfileDAO.findById(it)?.idColumn?.value } }
       val isPreview = call.request.queryParameters["preview"] == "true"
 
-      when (
-          val result =
-              shortLinksService.resolveRedirect(
-                  path, updaterProfileId, recordClick = !isPreview)) {
+      when (val result =
+          shortLinksService.resolveRedirect(path, updaterProfileId, recordClick = !isPreview)) {
         is RedirectResult.Success -> {
           result.description?.let {
             call.response.headers.append(
@@ -1060,7 +1122,7 @@ fun routeObjectToModel(it: Members.DMSMember): org.dallasmakerspace.models.DMSMe
   )
 }
 
-@Serializable data class ApiResponse<T>(val status: Status, val message: String, val data: T?)
+data class ApiResponse<T>(val status: Status, val message: String, val data: T?)
 
 @Serializable
 enum class Status {

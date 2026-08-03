@@ -7,8 +7,8 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondRedirect
-import io.ktor.server.sessions.set
 import io.ktor.server.sessions.sessions
+import io.ktor.server.sessions.set
 import io.ktor.server.thymeleaf.ThymeleafContent
 import javax.inject.Inject
 import org.dallasmakerspace.models.CommunicationPreference
@@ -71,7 +71,9 @@ constructor(
             "is_self" to (requestedUsername == currentUsername).toString(),
             "authz" to authz,
             "communication_preferences" to
-                CommunicationPreference.entries.map { pref -> mapOf("value" to pref.name, "label" to pref.label) },
+                CommunicationPreference.entries.map { pref ->
+                  mapOf("value" to pref.name, "label" to pref.label)
+                },
             "communication_preference" to (settings["communication_preference"] ?: ""),
             "discourse_linked" to discourseLinked,
             "discord_linked" to discordLinked,

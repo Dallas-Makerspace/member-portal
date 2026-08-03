@@ -29,7 +29,8 @@ data class EsEvent(val host: String, val timestamp: String, val message: String)
 // the Kibana module sender does not. Strip it only when present so both formats work.
 private val LEADING_TIMESTAMP_PREFIX = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} """)
 
-fun stripLeadingTimestamp(message: String): String = message.replaceFirst(LEADING_TIMESTAMP_PREFIX, "")
+fun stripLeadingTimestamp(message: String): String =
+    message.replaceFirst(LEADING_TIMESTAMP_PREFIX, "")
 
 data class SessionInfo(
     val host: String,
@@ -270,8 +271,7 @@ constructor(
         result
       } catch (e: Exception) {
         ElasticsearchClientManager.log.warn(
-            "InterlockEventsService: last-event aggregation failed: ${e.message}"
-        )
+            "InterlockEventsService: last-event aggregation failed: ${e.message}")
         emptyMap()
       }
     }
@@ -298,8 +298,7 @@ constructor(
             .toMap()
       } catch (e: Exception) {
         ElasticsearchClientManager.log.warn(
-            "InterlockEventsService: AD badge lookup failed: ${e.message}"
-        )
+            "InterlockEventsService: AD badge lookup failed: ${e.message}")
         emptyMap()
       }
     }

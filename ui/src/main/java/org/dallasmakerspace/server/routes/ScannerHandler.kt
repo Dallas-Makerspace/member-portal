@@ -17,8 +17,7 @@ constructor(
   override suspend fun handleAuthenticated(call: ApplicationCall) {
     val userGroups = (userInfo["groups"] as? List<*>) ?: emptyList<String>()
     val isPrivilegedViewer =
-        userGroups.contains("/Infrastructure") ||
-            userGroups.contains("/Logistics Committee Chair")
+        userGroups.contains("/Infrastructure") || userGroups.contains("/Logistics Committee Chair")
     call.respond(ThymeleafContent("scanner", mapOf("isPrivilegedViewer" to isPrivilegedViewer)))
   }
 }

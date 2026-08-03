@@ -25,6 +25,11 @@ import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.MemberSettingsService
+import org.dallasmakerspace.notifications.DigestProcessor
+import org.dallasmakerspace.notifications.NotificationService
+import org.dallasmakerspace.notifications.NotificationWorker
+import org.dallasmakerspace.notifications.ProfileSubscriptionService
+import org.dallasmakerspace.notifications.di.NotificationsModule
 import org.dallasmakerspace.remoteaccess.RemoteAccessService
 import org.dallasmakerspace.shortlinks.ShortLinksService
 import org.dallasmakerspace.smartwaiver.SmartwaiverModule
@@ -48,6 +53,7 @@ import org.dallasmakerspace.webhook.di.WebhookModule
             DataVizModule::class,
             ShortLinksModule::class,
             SmartwaiverModule::class,
+            NotificationsModule::class,
             WebhookModule::class])
 @Suppress("TooManyFunctions")
 interface AppComponent {
@@ -96,4 +102,12 @@ interface AppComponent {
   fun getRemoteAccessService(): RemoteAccessService
 
   fun getMemberSettingsService(): MemberSettingsService
+
+  fun getNotificationService(): NotificationService
+
+  fun getNotificationWorker(): NotificationWorker
+
+  fun getDigestProcessor(): DigestProcessor
+
+  fun getProfileSubscriptionService(): ProfileSubscriptionService
 }

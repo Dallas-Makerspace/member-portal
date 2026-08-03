@@ -76,6 +76,7 @@ dependencies {
   implementation("com.agido:logback-elasticsearch-appender:3.0.11")
 
   testImplementation("io.ktor:ktor-server-test-host")
+  testImplementation("io.ktor:ktor-client-mock:$ktorVersion")
   testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
   testImplementation("junit:junit:4.13.2")
   testImplementation("org.mockito:mockito-core:4.11.0")

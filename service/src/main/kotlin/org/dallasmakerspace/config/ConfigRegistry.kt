@@ -75,6 +75,28 @@ object ConfigRegistry {
           type = ConfigValueType.StringType,
       )
 
+  val NOTIFICATIONS_ENABLED =
+      ConfigKey(
+          key = "notifications.enabled",
+          description =
+              "Master switch for sending member notifications; when false the worker skips " +
+                  "sending and notifications wait in the queue until it is re-enabled",
+          category = "Notifications",
+          defaultValue = true,
+          type = ConfigValueType.BooleanType,
+      )
+
+  val NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP =
+      ConfigKey(
+          key = "notifications.per-member-immediate-daily-cap",
+          description =
+              "Max immediate notifications a member receives per day; beyond this they degrade " +
+                  "to the daily digest (0 = unlimited)",
+          category = "Notifications",
+          defaultValue = 50,
+          type = ConfigValueType.IntType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -85,5 +107,7 @@ object ConfigRegistry {
           REMOTE_ACCESS_MASTERCAM_CONNECTION_IDS,
           REMOTE_ACCESS_MASTERCAM_AD_GROUP,
           WAIVER_REPORT_ALLOWED_USERNAMES,
+          NOTIFICATIONS_ENABLED,
+          NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,
       )
 }

@@ -36,7 +36,8 @@ constructor(
                 metadata = mapOf("error" to "Missing required parameter: committee"),
             )
 
-    val silentDays = params["silentDays"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_INACTIVITY_DAYS
+    val silentDays =
+        params["silentDays"]?.firstOrNull()?.toIntOrNull() ?: Interlocks.DEFAULT_INACTIVITY_DAYS
 
     val c =
         Committees.findBySlug(committee)
@@ -71,8 +72,7 @@ constructor(
     val rows =
         cabinets.map { cabinet ->
           val inst = lastSeen[cabinet.interlockTag]
-          val days =
-              inst?.let { ChronoUnit.DAYS.between(it, now).coerceAtLeast(0) }
+          val days = inst?.let { ChronoUnit.DAYS.between(it, now).coerceAtLeast(0) }
           Row(cabinet, inst, days)
         }
 

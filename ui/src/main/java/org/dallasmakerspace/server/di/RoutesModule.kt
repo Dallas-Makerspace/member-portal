@@ -20,9 +20,6 @@ import org.dallasmakerspace.server.routes.BackendApiHandler
 import org.dallasmakerspace.server.routes.CabinetsHandler
 import org.dallasmakerspace.server.routes.CamerasApiHandler
 import org.dallasmakerspace.server.routes.CamerasHandler
-import org.dallasmakerspace.server.routes.ScannerHandler
-import org.dallasmakerspace.server.routes.ScannerStatusApiHandler
-import org.dallasmakerspace.server.routes.SettingsBannerHandler
 import org.dallasmakerspace.server.routes.CommitteeDetailHandler
 import org.dallasmakerspace.server.routes.CommitteesHandler
 import org.dallasmakerspace.server.routes.ConfigAdminHandler
@@ -33,6 +30,7 @@ import org.dallasmakerspace.server.routes.IndexHandler
 import org.dallasmakerspace.server.routes.InterlockToolsHandler
 import org.dallasmakerspace.server.routes.LoginHandler
 import org.dallasmakerspace.server.routes.ManifestHandler
+import org.dallasmakerspace.server.routes.NotificationsInboxHandler
 import org.dallasmakerspace.server.routes.OfflineHandler
 import org.dallasmakerspace.server.routes.OidcCallbackHandler
 import org.dallasmakerspace.server.routes.PingHandler
@@ -42,7 +40,10 @@ import org.dallasmakerspace.server.routes.ProfileHandler
 import org.dallasmakerspace.server.routes.ProfileMeHandler
 import org.dallasmakerspace.server.routes.ProfileTotalActiveTimeHandler
 import org.dallasmakerspace.server.routes.ReportHandler
+import org.dallasmakerspace.server.routes.ScannerHandler
+import org.dallasmakerspace.server.routes.ScannerStatusApiHandler
 import org.dallasmakerspace.server.routes.SearchPreloadHandler
+import org.dallasmakerspace.server.routes.SettingsBannerHandler
 import org.dallasmakerspace.server.routes.ShortLinkDetailsHandler
 import org.dallasmakerspace.server.routes.ShortLinkRedirectHandler
 import org.dallasmakerspace.server.routes.ShortLinksAdminHandler
@@ -52,6 +53,7 @@ import org.dallasmakerspace.server.routes.SuggestedEventsHandler
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
 
 @Module
+@Suppress("TooManyFunctions")
 class RoutesModule {
 
   @IntoMap
@@ -398,4 +400,13 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       appConfig: AppConfig,
   ): IRouteHandler = SmartWaiverWebhookHandler(loggerFactory, appConfig)
+
+  @IntoMap
+  @Provides
+  @StringKey("/notifications")
+  fun providesNotificationsInboxHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler = NotificationsInboxHandler(loggerFactory, userInfoProvider, memberServiceClient)
 }

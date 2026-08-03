@@ -69,7 +69,8 @@ constructor(
             // Infra ?username= inspection: fetch the inspected member's groups so
             // de-prioritization reflects them, not the infra user.
             try {
-              memberService.getMember(targetUsername, session.sessionId)
+              memberService
+                  .getMember(targetUsername, session.sessionId)
                   .groups
                   .map { it.name.lowercase() }
                   .toSet()
@@ -104,8 +105,7 @@ constructor(
             events
                 .sortedWith(
                     compareBy(
-                        { if (alreadySatisfies(it, targetGroups)) 1 else 0 },
-                        { it.eventStart }))
+                        { if (alreadySatisfies(it, targetGroups)) 1 else 0 }, { it.eventStart }))
                 .take(4)
         val deprioritizedCount = finalEvents.count { alreadySatisfies(it, targetGroups) }
         val organizerMembers = fetchOrganizerProfiles(finalEvents, session.sessionId)
@@ -176,8 +176,7 @@ constructor(
           finalEvents
               .sortedWith(
                   compareBy(
-                      { if (alreadySatisfies(it, targetGroups)) 1 else 0 },
-                      { it.eventStart }))
+                      { if (alreadySatisfies(it, targetGroups)) 1 else 0 }, { it.eventStart }))
               .take(4)
       val deprioritizedCount = eventsForResponse.count { alreadySatisfies(it, targetGroups) }
       val organizerMembers = fetchOrganizerProfiles(eventsForResponse, session.sessionId)

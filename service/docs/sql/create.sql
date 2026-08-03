@@ -302,4 +302,88 @@ CREATE TABLE `member_settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Per-member settings and preferences (append-only audit trail)';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+--
+-- Table structure for table `notifications`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notifications` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id is auto increment primary key.',
+  `profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the member profile the notification is for (recipient)',
+  `topic` varchar(64) NOT NULL COMMENT 'The notification topic (app feature) that produced this notification, e.g. EVENT_ANNOUNCEMENT, ACCOUNT, SYSTEM',
+  `channel` varchar(32) NOT NULL COMMENT 'The delivery channel: EMAIL, SMS, DISCORD, DISCOURSE',
+  `aggregation` varchar(16) NOT NULL COMMENT 'How the notification is delivered: IMMEDIATE, DAILY or WEEKLY (digest)',
+  `template_name` varchar(128) NOT NULL COMMENT 'The name of the code-defined template used to render this notification',
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'JSON template data used to render this notification' CHECK (json_valid(`payload`)),
+  `subject` varchar(512) NOT NULL COMMENT 'Rendered subject line; used as the message body for short channels (SMS/Discord)',
+  `body` longtext DEFAULT NULL COMMENT 'Rendered full body (HTML for email)',
+  `status` varchar(32) NOT NULL COMMENT 'Lifecycle status: QUEUED, IN_DIGEST, SENDING, SENT, FAILED, DEAD_LETTER, SUPPRESSED, SKIPPED',
+  `attempts` int(11) NOT NULL DEFAULT 0 COMMENT 'Number of send attempts made so far',
+  `next_attempt_at` timestamp NULL DEFAULT NULL COMMENT 'Earliest time the worker may retry this notification (NULL = retry immediately)',
+  `dedupe_key` varchar(255) DEFAULT NULL COMMENT 'Caller-supplied idempotency key; unique when present',
+  `provider_id` varchar(128) DEFAULT NULL COMMENT 'Provider-side id (e.g. SparkPost transmission id) for event correlation',
+  `last_error` text DEFAULT NULL COMMENT 'Human-readable description of the most recent failure',
+  `sent_at` timestamp NULL DEFAULT NULL COMMENT 'When the notification was accepted by the provider',
+  `read_at` timestamp NULL DEFAULT NULL COMMENT 'When the member read the notification (inbox)',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'When the notification was created',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() COMMENT 'When the notification was last updated',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `notifications_dedupe_key_UNQ` (`dedupe_key`),
+  KEY `notifications_profile_id_IDX` (`profile_id`) USING BTREE,
+  KEY `notifications_status_next_attempt_IDX` (`status`,`next_attempt_at`) USING BTREE,
+  KEY `notifications_created_at_IDX` (`created_at`) USING BTREE,
+  CONSTRAINT `notifications_profile_FK` FOREIGN KEY (`profile_id`) REFERENCES `profile` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Notification outbox and unified communication log.';
+
+--
+-- Table structure for table `notification_preferences`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notification_preferences` (
+  `profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the member profile this preference belongs to',
+  `topic` varchar(64) NOT NULL COMMENT 'The notification topic this preference applies to',
+  `channel` varchar(32) NOT NULL COMMENT 'The delivery channel this preference applies to',
+  `enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Whether notifications of this topic/channel are enabled for the member',
+  `aggregation` varchar(16) DEFAULT NULL COMMENT 'Member override for how notifications are delivered; NULL = channel default',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() COMMENT 'When this preference was last updated',
+  PRIMARY KEY (`profile_id`,`topic`,`channel`),
+  CONSTRAINT `notification_preferences_profile_FK` FOREIGN KEY (`profile_id`) REFERENCES `profile` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Per-member notification preferences (opt-in/opt-out and aggregation override)';
+
+--
+-- Table structure for table `notification_suppressions`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notification_suppressions` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id is auto increment primary key.',
+  `profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the suppressed member profile',
+  `email` varchar(255) DEFAULT NULL COMMENT 'The email address that bounced/unsubscribed, when known',
+  `reason` varchar(32) NOT NULL COMMENT 'Suppression reason: BOUNCE or UNSUBSCRIBE',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'When the suppression was recorded',
+  PRIMARY KEY (`id`),
+  KEY `notification_suppressions_profile_id_IDX` (`profile_id`) USING BTREE,
+  CONSTRAINT `notification_suppressions_profile_FK` FOREIGN KEY (`profile_id`) REFERENCES `profile` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Members suppressed from receiving notifications (hard bounce or unsubscribe); mirrored from the provider';
+
+--
+-- Table structure for table `profile_subscriptions`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `profile_subscriptions` (
+  `profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the subscribing (follower) member profile',
+  `followed_profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the member profile being followed',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'When the subscription was created',
+  PRIMARY KEY (`profile_id`,`followed_profile_id`),
+  KEY `profile_subscriptions_followed_profile_id_IDX` (`followed_profile_id`) USING BTREE,
+  CONSTRAINT `profile_subscriptions_profile_FK` FOREIGN KEY (`profile_id`) REFERENCES `profile` (`id`),
+  CONSTRAINT `profile_subscriptions_followed_profile_FK` FOREIGN KEY (`followed_profile_id`) REFERENCES `profile` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Member-to-member follow relationships, e.g. follow an event organizer to be notified when they post a new event.';
+
 -- Dump completed on 2025-12-31 21:13:59

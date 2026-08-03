@@ -5,8 +5,8 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
 import io.ktor.server.thymeleaf.ThymeleafContent
 import javax.inject.Inject
-import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.CommitteeReports
+import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.ToolReports
 import org.dallasmakerspace.models.Tools
 import org.dallasmakerspace.server.auth.UserInfoProvider
@@ -57,8 +57,7 @@ constructor(
                   },
           )
         }
-    call.respond(
-        ThymeleafContent("interlock-tools", mapOf("toolsByCommittee" to toolsByCommittee)))
+    call.respond(ThymeleafContent("interlock-tools", mapOf("toolsByCommittee" to toolsByCommittee)))
   }
 
   private suspend fun renderToolDetail(call: ApplicationCall, toolSlug: String) {

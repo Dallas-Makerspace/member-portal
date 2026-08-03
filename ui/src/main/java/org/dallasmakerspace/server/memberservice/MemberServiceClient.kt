@@ -34,6 +34,14 @@ sealed class ShortLinkResult {
   data class Error(val message: String) : ShortLinkResult()
 }
 
+/** Preference update for one topic/channel combination. */
+data class NotificationPreferenceUpdate(
+    val topic: String,
+    val channel: String,
+    val enabled: Boolean,
+    val aggregation: String?,
+)
+
 @Suppress("TooGenericExceptionCaught")
 @Singleton
 class MemberServiceClient
@@ -75,13 +83,14 @@ constructor(
   suspend fun getMemberSettings(username: String, sessionId: String?): Map<String, String> {
     val apiHeaders = getApiHeaders(sessionId)
     val settingsMap = dmsHttpClient.get("$baseUrl/members/$username/settings", apiHeaders)
-    val data =
-        settingsMap["data"] as Map<*, *>?
-            ?: return emptyMap()
+    val data = settingsMap["data"] as Map<*, *>? ?: return emptyMap()
     return data.mapKeys { it.key.toString() }.mapValues { it.value?.toString() ?: "" }
   }
 
-  suspend fun getMemberSettingsHistory(username: String, sessionId: String?): List<Map<String, String?>> {
+  suspend fun getMemberSettingsHistory(
+      username: String,
+      sessionId: String?
+  ): List<Map<String, String?>> {
     val apiHeaders = getApiHeaders(sessionId)
     val historyMap = dmsHttpClient.get("$baseUrl/members/$username/settings/history", apiHeaders)
     val data = historyMap["data"] as List<*>? ?: return emptyList()
@@ -337,6 +346,25 @@ constructor(
     }
   }
 
+  suspend fun callBackendApiPut(
+      path: String,
+      sessionId: String?,
+      username: String?,
+      body: Any,
+  ): Map<String, Any> {
+    try {
+      val apiHeaders = getApiHeaders(sessionId, username)
+      var result: Map<String, Any>
+      withTimeout(DMSHttpClient.DEFAULT_TIMEOUT_MS) {
+        result = dmsHttpClient.put("$baseUrl/$path", apiHeaders, body)
+      }
+      return result
+    } catch (ex: Exception) {
+      log.error("Failed to call backend API PUT: $path ", ex)
+      throw MemberServiceException("Failed to call backend API PUT: $path", ex)
+    }
+  }
+
   suspend fun getEventsOrganizedByMember(
       username: String,
       limit: Int,
@@ -365,6 +393,30 @@ constructor(
     } catch (ex: Exception) {
       log.error("Failed to get events for member: $username", ex)
       throw MemberServiceException("Failed to get events for member: $username", ex)
+    }
+  }
+
+  /** Usernames [username] follows. */
+  suspend fun getFollowing(username: String, sessionId: String?): List<String> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/members/$username/following", apiHeaders)
+      (result["data"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+    } catch (ex: Exception) {
+      log.warn("Failed to get following list for: $username", ex)
+      emptyList()
+    }
+  }
+
+  /** Usernames that follow [username]. */
+  suspend fun getFollowers(username: String, sessionId: String?): List<String> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/members/$username/followers", apiHeaders)
+      (result["data"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+    } catch (ex: Exception) {
+      log.warn("Failed to get followers list for: $username", ex)
+      emptyList()
     }
   }
 
@@ -721,8 +773,7 @@ constructor(
     return try {
       val apiHeaders = getApiHeaders(sessionId)
       val result = dmsHttpClient.get("$baseUrl/members/$username/badge-swipes", apiHeaders)
-      @Suppress("UNCHECKED_CAST")
-      val dataList = result["data"] as? List<*> ?: return emptyList()
+      @Suppress("UNCHECKED_CAST") val dataList = result["data"] as? List<*> ?: return emptyList()
       dataList.mapNotNull { item ->
         val entry = item as? Map<*, *> ?: return@mapNotNull null
         org.dallasmakerspace.models.BadgeSwipeInfo(
@@ -891,6 +942,55 @@ constructor(
             }
           }
     }
+  }
+
+  suspend fun getNotifications(
+      username: String,
+      limit: Int,
+      sessionId: String?,
+  ): List<Map<String, Any?>> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result =
+          dmsHttpClient.get("$baseUrl/notifications?username=$username&limit=$limit", apiHeaders)
+      val data = result["data"] as? List<*> ?: return emptyList()
+      @Suppress("UNCHECKED_CAST")
+      data as List<Map<String, Any?>>
+    } catch (ex: Exception) {
+      log.warn("Failed to get notifications for: $username", ex)
+      emptyList()
+    }
+  }
+
+  suspend fun getNotificationPreferences(
+      username: String,
+      sessionId: String?,
+  ): List<Map<String, Any?>> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/notifications/preferences/$username", apiHeaders)
+      val data = result["data"] as? List<*> ?: return emptyList()
+      @Suppress("UNCHECKED_CAST")
+      data as List<Map<String, Any?>>
+    } catch (ex: Exception) {
+      log.warn("Failed to get notification preferences for: $username", ex)
+      emptyList()
+    }
+  }
+
+  suspend fun updateNotificationPreference(
+      username: String,
+      sessionId: String?,
+      update: NotificationPreferenceUpdate,
+  ) {
+    val body =
+        mapOf(
+            "topic" to update.topic,
+            "channel" to update.channel,
+            "enabled" to update.enabled,
+            "aggregation" to update.aggregation,
+        )
+    callBackendApiPut("notifications/preferences/$username", sessionId, username, body)
   }
 
   companion object {

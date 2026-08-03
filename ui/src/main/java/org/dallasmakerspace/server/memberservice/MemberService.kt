@@ -43,7 +43,10 @@ constructor(
     return memberServiceClient.getMemberSettings(username, sessionId)
   }
 
-  suspend fun getMemberSettingsHistory(username: String, sessionId: String?): List<Map<String, String?>> {
+  suspend fun getMemberSettingsHistory(
+      username: String,
+      sessionId: String?
+  ): List<Map<String, String?>> {
     return memberServiceClient.getMemberSettingsHistory(username, sessionId)
   }
 

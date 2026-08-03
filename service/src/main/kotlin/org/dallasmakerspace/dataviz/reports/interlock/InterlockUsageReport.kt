@@ -46,9 +46,8 @@ constructor(
     val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: 14
     val actorUsername = params["actorUsername"]?.firstOrNull()
     val isInfra =
-        actorUsername?.let {
-          withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) }
-        } ?: false
+        actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
+            ?: false
 
     // Step 1 — ES query
     val esStartTime = System.currentTimeMillis()
@@ -116,7 +115,10 @@ constructor(
               session.shutdownType == "STARTUP_CURRENT" -> {
                 put("variant", JsonPrimitive("danger"))
                 put("text", JsonPrimitive("STARTUP CURRENT"))
-                put("tooltip", JsonPrimitive("User error: start button pressed at the same time as badging in"))
+                put(
+                    "tooltip",
+                    JsonPrimitive(
+                        "User error: start button pressed at the same time as badging in"))
               }
               session.shutdownType == "MANUAL_BADGE_OUT" -> {
                 put("variant", JsonPrimitive("primary"))
@@ -166,9 +168,9 @@ constructor(
       put("Member lookup time", "${memberLookupTimeTaken}ms")
       put("Total sessions", "${sessions.size}")
       put(scopeLabel, interlockTag)
-      events
-          .buildKibanaDiscoverUrl(events.kibanaQueryForTags(listOf(interlockTag)), days)
-          ?.let { put("Kibana", it) }
+      events.buildKibanaDiscoverUrl(events.kibanaQueryForTags(listOf(interlockTag)), days)?.let {
+        put("Kibana", it)
+      }
     }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
