@@ -1,5 +1,6 @@
 package org.dallasmakerspace.webhook.handlers
 
+import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -16,10 +17,11 @@ import org.dallasmakerspace.notifications.NotificationTopic
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.WebhookResult
-import org.dallasmakerspace.webhook.models.CalendarEventWebhookRequest
+import org.dallasmakerspace.webhook.models.CalendarEventWebhookEnvelope
 import org.slf4j.LoggerFactory
 
 private val CENTRAL_ZONE = ZoneId.of("America/Chicago")
+private val UTC_ZONE = ZoneId.of("UTC")
 private val EVENT_START_FORMATTER = DateTimeFormatter.ofPattern("EEE MMM d h:mm a")
 
 /**
@@ -28,6 +30,11 @@ private val EVENT_START_FORMATTER = DateTimeFormatter.ofPattern("EEE MMM d h:mm 
  * to real notifications. The calendar system is internal-only, so it calls this endpoint directly
  * (no UI proxy needed, unlike genuinely external callers such as SparkPost) - same as the existing
  * groups-audit webhook.
+ *
+ * Calendar's WebhookComponent fires this same endpoint for the full event lifecycle (published,
+ * updated, deleted, ...) wrapped in a `{event_type, occurred_at, data}` envelope; only
+ * [EVENT_TYPE_PUBLISHED] triggers a notification here, everything else is a no-op success so
+ * calendar doesn't see it as a failure.
  */
 class CalendarEventWebhook
 @Inject
@@ -40,32 +47,41 @@ constructor(
   private val logger = LoggerFactory.getLogger(CalendarEventWebhook::class.java)
   private val json = Json { ignoreUnknownKeys = true }
 
+  companion object {
+    private const val EVENT_TYPE_PUBLISHED = "event.published"
+  }
+
   override fun getName() = "calendar-event"
 
   @Suppress("TooGenericExceptionCaught")
   override suspend fun handleWebhook(body: String): WebhookResult {
-    val request =
+    val envelope =
         try {
-          json.decodeFromString<CalendarEventWebhookRequest>(body)
+          json.decodeFromString<CalendarEventWebhookEnvelope>(body)
         } catch (e: Exception) {
           logger.error("Invalid calendar-event webhook payload", e)
           return WebhookResult(false, "Invalid calendar-event webhook payload: ${e.message}")
         }
 
-    val followers = profileSubscriptionService.getFollowers(request.organizerUsername)
+    if (envelope.eventType != EVENT_TYPE_PUBLISHED) {
+      return WebhookResult(true, "Ignoring event_type=${envelope.eventType}")
+    }
+
+    val event = envelope.data
+    val followers = profileSubscriptionService.getFollowers(event.organizerUsername)
     if (followers.isEmpty()) {
-      return WebhookResult(true, "No followers for ${request.organizerUsername}, nothing to send")
+      return WebhookResult(true, "No followers for ${event.organizerUsername}, nothing to send")
     }
 
     val payload =
         json.encodeToString(
             EventAnnouncementPayload.serializer(),
             EventAnnouncementPayload(
-                eventName = request.eventName,
-                organizerName = resolveOrganizerName(request.organizerUsername),
-                organizerUsername = request.organizerUsername,
-                eventStart = formatEventStart(request.eventStart),
-                eventUrl = request.eventUrl))
+                eventName = event.name,
+                organizerName = resolveOrganizerName(event.organizerUsername),
+                organizerUsername = event.organizerUsername,
+                eventStart = formatEventStart(event.eventStart, event.eventStartTimezone),
+                eventUrl = event.url))
 
     var sent = 0
     for (follower in followers) {
@@ -77,14 +93,14 @@ constructor(
                 templateName = "event-announcement",
                 payload = payload,
                 channel = Channel.EMAIL,
-                dedupeKey = "event-announcement-${request.eventId}-$follower"))
+                dedupeKey = "event-announcement-${event.id}-$follower"))
         sent++
       } catch (e: Exception) {
         logger.error("Failed to create event-announcement notification for $follower", e)
       }
     }
     return WebhookResult(
-        true, "Notified $sent of ${followers.size} follower(s) of ${request.organizerUsername}")
+        true, "Notified $sent of ${followers.size} follower(s) of ${event.organizerUsername}")
   }
 
   /**
@@ -103,12 +119,24 @@ constructor(
         }
       }
 
+  /**
+   * Parses [raw] as an offset/instant timestamp if it has one; otherwise treats it as a local
+   * timestamp in [timezoneId] (falling back to UTC if that's missing or unrecognized).
+   */
   @Suppress("TooGenericExceptionCaught")
-  private fun formatEventStart(raw: String): String =
+  private fun formatEventStart(raw: String, timezoneId: String?): String =
       try {
-        OffsetDateTime.parse(raw).atZoneSameInstant(CENTRAL_ZONE).format(EVENT_START_FORMATTER)
+        val eventStart =
+            runCatching { OffsetDateTime.parse(raw) }
+                .getOrElse {
+                  val zone =
+                      timezoneId?.let { id -> runCatching { ZoneId.of(id) }.getOrNull() }
+                          ?: UTC_ZONE
+                  LocalDateTime.parse(raw).atZone(zone).toOffsetDateTime()
+                }
+        eventStart.atZoneSameInstant(CENTRAL_ZONE).format(EVENT_START_FORMATTER)
       } catch (e: Exception) {
-        logger.warn("Failed to parse eventStart '$raw', using it verbatim", e)
+        logger.warn("Failed to parse eventStart '$raw' (timezone '$timezoneId'), using it verbatim", e)
         raw
       }
 }

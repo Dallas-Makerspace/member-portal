@@ -41,14 +41,24 @@ class CalendarEventWebhookTest {
           enabled = true,
           groups = emptyList())
 
-  private fun requestBody(eventId: String = "12345") =
+  private fun requestBody(
+      eventId: Long = 12345,
+      eventType: String = "event.published",
+      eventStart: String = "2026-08-10T19:00:00-05:00",
+      eventStartTimezone: String? = null,
+  ) =
       """
       {
-        "eventId": "$eventId",
-        "organizerUsername": "jphelps",
-        "eventName": "Intro to Laser Cutting",
-        "eventStart": "2026-08-10T19:00:00-05:00",
-        "eventUrl": "https://calendar.dallasmakerspace.org/events/view/$eventId"
+        "event_type": "$eventType",
+        "occurred_at": "2026-08-01T00:00:00Z",
+        "data": {
+          "id": $eventId,
+          "organizer_username": "jdoe",
+          "name": "Intro to Laser Cutting",
+          "event_start": "$eventStart",
+          ${eventStartTimezone?.let { "\"event_start_timezone\": \"$it\"," } ?: ""}
+          "url": "https://calendar.dallasmakerspace.org/events/view/$eventId"
+        }
       }
       """
           .trimIndent()
@@ -56,9 +66,9 @@ class CalendarEventWebhookTest {
   @Test
   fun `handleWebhook should notify every follower with the resolved organizer name`() =
       runBlocking {
-        whenever(mockSubscriptions.getFollowers("jphelps")).thenReturn(listOf("alice", "bob"))
-        whenever(mockAd.getMembersByUsernameList(listOf("jphelps")))
-            .thenReturn(mapOf("jphelps" to adUser("jphelps", "Jeff Phelps")))
+        whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice", "bob"))
+        whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+            .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
         whenever(mockNotifications.create(any())).thenReturn(mock())
 
         val result = handler.handleWebhook(requestBody())
@@ -73,8 +83,8 @@ class CalendarEventWebhookTest {
                       templateName == "event-announcement" &&
                       channel == Channel.EMAIL &&
                       dedupeKey == "event-announcement-12345-alice" &&
-                      payload!!.contains("\"organizerName\":\"Jeff Phelps\"") &&
-                      payload!!.contains("\"organizerUsername\":\"jphelps\"") &&
+                      payload!!.contains("\"organizerName\":\"Jane Doe\"") &&
+                      payload!!.contains("\"organizerUsername\":\"jdoe\"") &&
                       payload!!.contains("Mon Aug 10")
                 })
         verify(mockNotifications)
@@ -85,9 +95,9 @@ class CalendarEventWebhookTest {
 
   @Test
   fun `handleWebhook should fall back to username when AD has no display name`() = runBlocking {
-    whenever(mockSubscriptions.getFollowers("jphelps")).thenReturn(listOf("alice"))
-    whenever(mockAd.getMembersByUsernameList(listOf("jphelps")))
-        .thenReturn(mapOf("jphelps" to null))
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
+    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to null))
     whenever(mockNotifications.create(any())).thenReturn(mock())
 
     handler.handleWebhook(requestBody())
@@ -95,14 +105,14 @@ class CalendarEventWebhookTest {
     verify(mockNotifications)
         .create(
             argThat<CreateNotificationRequest> {
-              payload!!.contains("\"organizerName\":\"jphelps\"")
+              payload!!.contains("\"organizerName\":\"jdoe\"")
             })
     Unit
   }
 
   @Test
   fun `handleWebhook should skip and report when the organizer has no followers`() = runBlocking {
-    whenever(mockSubscriptions.getFollowers("jphelps")).thenReturn(emptyList())
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(emptyList())
 
     val result = handler.handleWebhook(requestBody())
 
@@ -115,9 +125,9 @@ class CalendarEventWebhookTest {
   @Test
   fun `handleWebhook should continue notifying remaining followers when one create fails`() =
       runBlocking {
-        whenever(mockSubscriptions.getFollowers("jphelps")).thenReturn(listOf("alice", "bob"))
-        whenever(mockAd.getMembersByUsernameList(listOf("jphelps")))
-            .thenReturn(mapOf("jphelps" to adUser("jphelps", "Jeff Phelps")))
+        whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice", "bob"))
+        whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+            .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
         whenever(
                 mockNotifications.create(
                     argThat<CreateNotificationRequest> { memberUsername == "alice" }))
@@ -140,6 +150,33 @@ class CalendarEventWebhookTest {
     val result = handler.handleWebhook("not json")
 
     assertEquals(false, result.success)
+  }
+
+  @Test
+  fun `handleWebhook should ignore non-published event types`() = runBlocking {
+    val result = handler.handleWebhook(requestBody(eventType = "event.updated"))
+
+    assertTrue(result.success)
+    assertTrue(result.message.contains("Ignoring event_type=event.updated"))
+    verify(mockSubscriptions, never()).getFollowers(any())
+    verify(mockNotifications, never()).create(any())
+    Unit
+  }
+
+  @Test
+  fun `handleWebhook should parse a local eventStart using the provided timezone`() = runBlocking {
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
+    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
+    whenever(mockNotifications.create(any())).thenReturn(mock())
+
+    handler.handleWebhook(
+        requestBody(eventStart = "2026-08-11T00:00:00", eventStartTimezone = "UTC"))
+
+    // 2026-08-11T00:00:00 UTC is 2026-08-10 19:00 Central (UTC-5 in August).
+    verify(mockNotifications)
+        .create(argThat<CreateNotificationRequest> { payload!!.contains("Mon Aug 10") })
+    Unit
   }
 
   @Test

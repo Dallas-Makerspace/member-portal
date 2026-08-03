@@ -10,7 +10,7 @@ data class EventAnnouncementData(
     val eventName: String = "",
     /** Organizer's full display name, e.g. "Jane Phelps". */
     val organizerName: String = "",
-    /** Organizer's DMS username, e.g. "jphelps" - links to their member profile. */
+    /** Organizer's DMS username, e.g. "jdoe" - links to their member profile. */
     val organizerUsername: String = "",
     /** Start time formatted in Central Time, e.g. "Mon Aug 10 7:00 PM". */
     val eventStart: String = "",
