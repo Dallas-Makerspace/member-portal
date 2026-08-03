@@ -18,6 +18,7 @@ import org.dallasmakerspace.server.routes.ActionTrackingHandler
 import org.dallasmakerspace.server.routes.AskAiHandler
 import org.dallasmakerspace.server.routes.BackendApiHandler
 import org.dallasmakerspace.server.routes.CabinetsHandler
+import org.dallasmakerspace.server.routes.CalendarEventWebhookHandler
 import org.dallasmakerspace.server.routes.CamerasApiHandler
 import org.dallasmakerspace.server.routes.CamerasHandler
 import org.dallasmakerspace.server.routes.CommitteeDetailHandler
@@ -49,6 +50,7 @@ import org.dallasmakerspace.server.routes.ShortLinkRedirectHandler
 import org.dallasmakerspace.server.routes.ShortLinksAdminHandler
 import org.dallasmakerspace.server.routes.ShortLinksHandler
 import org.dallasmakerspace.server.routes.SmartWaiverWebhookHandler
+import org.dallasmakerspace.server.routes.SparkPostWebhookHandler
 import org.dallasmakerspace.server.routes.SuggestedEventsHandler
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
 
@@ -400,6 +402,22 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       appConfig: AppConfig,
   ): IRouteHandler = SmartWaiverWebhookHandler(loggerFactory, appConfig)
+
+  @IntoMap
+  @Provides
+  @StringKey("/webhook/sparkpost")
+  fun providesSparkPostWebhookHandler(
+      loggerFactory: LoggerFactory,
+      appConfig: AppConfig,
+  ): IRouteHandler = SparkPostWebhookHandler(loggerFactory, appConfig)
+
+  @IntoMap
+  @Provides
+  @StringKey("/webhook/calendar-event")
+  fun providesCalendarEventWebhookHandler(
+      loggerFactory: LoggerFactory,
+      appConfig: AppConfig,
+  ): IRouteHandler = CalendarEventWebhookHandler(loggerFactory, appConfig)
 
   @IntoMap
   @Provides

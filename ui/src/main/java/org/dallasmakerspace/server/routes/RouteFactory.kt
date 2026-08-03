@@ -95,6 +95,8 @@ object RouteFactory {
     REMOTE_ACCESS_CONNECT("/remote-access/connect/{connectionId}"),
     REMOTE_ACCESS_DISCONNECT("/remote-access/disconnect/{connectionId}"),
     SMARTWAIVER_WEBHOOK("/webhook/smartwaiver"),
+    SPARKPOST_WEBHOOK("/webhook/sparkpost"),
+    CALENDAR_EVENT_WEBHOOK("/webhook/calendar-event"),
     CAMERAS("/cameras"),
     CAMERAS_API("/cameras-api/{path...}"),
     PERSONAL_BIN_SCANNER("/personal-bin-scanner"),

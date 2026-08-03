@@ -5,6 +5,7 @@ import dagger.Provides
 import dagger.multibindings.ElementsIntoSet
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.handlers.ActivityLogWebhook
+import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.dallasmakerspace.webhook.handlers.GroupHistoryWebhook
 import org.dallasmakerspace.webhook.handlers.NotificationWebhook
 import org.dallasmakerspace.webhook.handlers.SmartWaiverWebhook
@@ -20,12 +21,14 @@ class WebhookModule {
       smartWaiverWebhook: SmartWaiverWebhook,
       notificationWebhook: NotificationWebhook,
       sparkPostWebhook: SparkPostWebhook,
+      calendarEventWebhook: CalendarEventWebhook,
   ): Set<WebhookHandler> {
     return setOf(
         groupHistoryWebhook,
         activityLogWebhook,
         smartWaiverWebhook,
         notificationWebhook,
-        sparkPostWebhook)
+        sparkPostWebhook,
+        calendarEventWebhook)
   }
 }

@@ -698,41 +698,40 @@
                 </div>
             </div>
 
-            <!-- Following card -->
+            <!-- Following & Followers card -->
             <div class="dms-card shadow-sm mt-4">
                 <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Following</h4>
-                    <div th:if="${following}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
-                        <div th:each="followedUsername, followedStat : ${following}"
-                             th:if="${followedStat.index < 6}">
-                            <dms-member-card th:attr="username=${followedUsername}" state="mini"></dms-member-card>
-                        </div>
-                    </div>
-                    <div th:if="${following and #lists.size(following) > 6}" class="mt-2 text-muted small text-end">
-                        and <span th:text="${#lists.size(following) - 6}"></span> more...
-                    </div>
-                    <div th:unless="${following}">
-                        <span th:if="${is_self}">You aren't following anyone yet. Follow an organizer to get notified when they post a new event.</span>
-                        <span th:unless="${is_self}">Not following anyone yet.</span>
-                    </div>
-                </div>
-            </div>
+                    <h4 class="card-title mt-3 mb-4 dms-card-title">Following &amp; Followers</h4>
 
-            <!-- Followers card -->
-            <div class="dms-card shadow-sm mt-4">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Followers</h4>
-                    <div th:if="${followers}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
-                        <div th:each="followerUsername, followerStat : ${followers}"
-                             th:if="${followerStat.index < 6}">
-                            <dms-member-card th:attr="username=${followerUsername}" state="mini"></dms-member-card>
+                    <div th:if="${!following and !followers}">
+                        <span th:if="${is_self}">You aren't following anyone, and no one's following you yet. Follow an organizer to get notified when they post a new event.</span>
+                        <span th:unless="${is_self}">Not following anyone, and no followers yet.</span>
+                    </div>
+
+                    <div th:if="${following}" th:classappend="${followers} ? 'mb-4' : ''">
+                        <h6 class="text-muted mb-3">Following (<span th:text="${#lists.size(following)}"></span>)</h6>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                            <div th:each="followedUsername, followedStat : ${following}"
+                                 th:if="${followedStat.index < 6}">
+                                <dms-member-card th:attr="username=${followedUsername}" state="mini"></dms-member-card>
+                            </div>
+                        </div>
+                        <div th:if="${#lists.size(following) > 6}" class="mt-2 text-muted small text-end">
+                            and <span th:text="${#lists.size(following) - 6}"></span> more...
                         </div>
                     </div>
-                    <div th:if="${followers and #lists.size(followers) > 6}" class="mt-2 text-muted small text-end">
-                        and <span th:text="${#lists.size(followers) - 6}"></span> more...
-                    </div>
-                    <div th:unless="${followers}">
-                        <span>No followers yet.</span>
+
+                    <div th:if="${followers}">
+                        <h6 class="text-muted mb-3">Followers (<span th:text="${#lists.size(followers)}"></span>)</h6>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                            <div th:each="followerUsername, followerStat : ${followers}"
+                                 th:if="${followerStat.index < 6}">
+                                <dms-member-card th:attr="username=${followerUsername}" state="mini"></dms-member-card>
+                            </div>
+                        </div>
+                        <div th:if="${#lists.size(followers) > 6}" class="mt-2 text-muted small text-end">
+                            and <span th:text="${#lists.size(followers) - 6}"></span> more...
+                        </div>
                     </div>
                 </div>
             </div>

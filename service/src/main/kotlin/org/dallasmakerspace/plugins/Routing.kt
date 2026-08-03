@@ -1048,8 +1048,10 @@ fun Application.configureRouting() {
     }
     profileSubscriptionRoutes(profileSubscriptionService)
 
-    // The notifications webhook is protected by a shared secret token (other webhooks stay public
-    // for legacy external senders).
+    // The notifications webhook is protected by a shared secret token; calendar-event and other
+    // externally-sourced webhooks stay public here the same way smartwaiver/groups-audit do - this
+    // service is only reachable inside the network, so the UI's public-facing proxy handler (with
+    // its own token, e.g. SparkPostWebhookHandler) is the real auth boundary for those.
     post("/webhook/*") {
       val path = call.request.path().substringAfter("/webhook/")
       val body = call.receiveText()
