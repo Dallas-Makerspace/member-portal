@@ -1,8 +1,12 @@
 package org.dallasmakerspace.plugins
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonDeserializationContext
 import com.google.gson.JsonDeserializer
 import com.google.gson.JsonElement
+import com.google.gson.JsonNull
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
@@ -14,6 +18,11 @@ import java.lang.reflect.Type
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.serialization.json.JsonArray as KxJsonArray
+import kotlinx.serialization.json.JsonElement as KxJsonElement
+import kotlinx.serialization.json.JsonNull as KxJsonNull
+import kotlinx.serialization.json.JsonObject as KxJsonObject
+import kotlinx.serialization.json.JsonPrimitive as KxJsonPrimitive
 
 fun Application.configureSerialization() {
   install(ContentNegotiation) {
@@ -22,6 +31,7 @@ fun Application.configureSerialization() {
       registerTypeAdapter(Instant::class.java, IsoStringAdapter(Instant::parse))
       registerTypeAdapter(LocalDate::class.java, IsoStringAdapter(LocalDate::parse))
       registerTypeAdapter(LocalDateTime::class.java, IsoStringAdapter(LocalDateTime::parse))
+      registerTypeHierarchyAdapter(KxJsonElement::class.java, KotlinxJsonElementAdapter)
     }
   }
 }
@@ -44,4 +54,32 @@ private class IsoStringAdapter<T : Any>(private val parse: (String) -> T) :
       typeOfT: Type,
       context: JsonDeserializationContext
   ): T = parse(json.asString)
+}
+
+/**
+ * Converts kotlinx.serialization's [KxJsonElement] tree (used by [DataItem.values] and similar
+ * dynamic-JSON fields) into Gson's own [JsonElement] tree. Without this, Gson's default reflective
+ * adapter serializes the *internal* fields of JsonPrimitive/JsonObject/JsonArray (e.g. `content`,
+ * `isString`) instead of the value they represent, turning every leaf value into a JS
+ * `[object Object]` on the frontend.
+ */
+private object KotlinxJsonElementAdapter : JsonSerializer<KxJsonElement> {
+  override fun serialize(
+      src: KxJsonElement,
+      typeOfSrc: Type,
+      context: JsonSerializationContext
+  ): JsonElement = convert(src)
+
+  private fun convert(element: KxJsonElement): JsonElement =
+      when (element) {
+        is KxJsonNull -> JsonNull.INSTANCE
+        is KxJsonPrimitive ->
+            if (element.isString) {
+              JsonPrimitive(element.content)
+            } else {
+              JsonParser.parseString(element.content)
+            }
+        is KxJsonObject -> JsonObject().apply { element.forEach { (k, v) -> add(k, convert(v)) } }
+        is KxJsonArray -> JsonArray().apply { element.forEach { add(convert(it)) } }
+      }
 }
