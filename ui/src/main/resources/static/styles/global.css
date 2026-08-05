@@ -322,6 +322,88 @@ div.error-details > p { color: #c1c1c1; }
     50%       { background-color: #ececec; }
 }
 
+/* Facepile: overlapping avatar stack (profile Follows card) */
+.dms-facepile {
+    display: flex;
+    align-items: center;
+}
+
+.dms-facepile-item {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
+    display: block;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-left: -10px;                        /* the overlap */
+    border: 2px solid #fff;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+    text-decoration: none;
+    transition: transform 0.12s ease-out;
+}
+
+.dms-facepile-item:first-child {
+    margin-left: 0;
+}
+
+/* First avatar on top, each subsequent one tucked behind. Flex items honour z-index
+   without position:relative, so no extra positioning is needed. */
+.dms-facepile-item:nth-child(1) { z-index: 15; }
+.dms-facepile-item:nth-child(2) { z-index: 14; }
+.dms-facepile-item:nth-child(3) { z-index: 13; }
+.dms-facepile-item:nth-child(4) { z-index: 12; }
+.dms-facepile-item:nth-child(5) { z-index: 11; }
+/* The overflow pill (see below) is always the 6th and last item when present, since the
+   facepile truncates to 5 real avatars before it can appear. */
+.dms-facepile-item:nth-child(6) { z-index: 10; }
+
+a.dms-facepile-item:hover,
+a.dms-facepile-item:focus-visible {
+    transform: translateY(-2px);
+    z-index: 20;                               /* lift above neighbours */
+}
+
+.dms-facepile-avatar {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* Overflow indicator: one merged stadium-shaped pill continuing the stack (not two separate
+   discs), so there's no seam where circles would otherwise overlap. width:auto + min-width
+   lets it grow for 3-digit counts instead of clipping the text. */
+.dms-facepile-more {
+    width: auto;
+    min-width: 78px;                           /* ~ two 44px circles overlapped by 10px */
+    height: 44px;
+    padding: 0 14px;
+    border-radius: 22px;
+    background: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    color: #6c757d;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+@media (max-width: 575.98px) {
+    .dms-facepile-item { width: 38px; height: 38px; margin-left: -8px; }
+    .dms-facepile-more {
+        min-width: 68px;
+        height: 38px;
+        padding: 0 10px;
+        border-radius: 19px;
+        font-size: 12px;
+    }
+}
+
 /* Communication preference banner */
 .settings-banner {
     background-color: #fff3cd;

@@ -2,6 +2,7 @@ package org.dallasmakerspace.server.routes
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -14,9 +15,15 @@ class NotificationsInboxHandlerTest {
   fun enrichNotificationAddsSentBadge() {
     val enriched =
         enrichNotification(
-            mapOf("id" to 1L, "subject" to "Hello", "status" to "SENT", "attempts" to 1))
+            mapOf(
+                "id" to 1L,
+                "subject" to "Hello",
+                "status" to "SENT",
+                "topic" to "EVENT_ANNOUNCEMENT",
+                "attempts" to 1))
     assertEquals("Sent", enriched["status_display"])
     assertEquals("success", enriched["status_class"])
+    assertEquals("Event announcements", enriched["topic_display"])
     assertEquals("Hello", enriched["subject"])
     assertEquals(1L, enriched["id"])
   }
@@ -47,67 +54,116 @@ class NotificationsInboxHandlerTest {
   }
 
   @Test
-  fun groupPreferencesReturnsAllTopicsAndChannelsWithDefaults() {
+  fun enrichNotificationFallsBackToRawTopicForUnknownTopic() {
+    val enriched = enrichNotification(mapOf("topic" to "SOMETHING_NEW"))
+    assertEquals("SOMETHING_NEW", enriched["topic_display"])
+  }
+
+  @Test
+  fun enrichNotificationHandlesMissingTopic() {
+    val enriched = enrichNotification(mapOf("subject" to "x"))
+    assertEquals("", enriched["topic_display"])
+  }
+
+  @Test
+  fun groupPreferencesReturnsOneRowPerTopicNoRowsKey() {
     val grouped = groupPreferences(emptyList())
 
     assertEquals(listOf("EVENT_ANNOUNCEMENT", "ACCOUNT", "SYSTEM"), grouped.map { it["topic"] })
     assertEquals("Event announcements", grouped[0]["topicDisplayName"])
-    assertEquals(
-        listOf("EMAIL", "SMS", "DISCORD", "DISCOURSE"),
-        grouped[0]["rows"].let { (it as List<*>).map { row -> (row as Map<*, *>)["channel"] } })
-    val row = (grouped[0]["rows"] as List<*>)[0] as Map<*, *>
-    assertTrue(row["enabled"] as Boolean)
-    assertEquals("", row["effectiveAggregation"])
-    assertEquals(null, row["aggregationOverride"])
+    assertFalse(grouped[0].containsKey("rows"))
   }
 
   @Test
-  fun groupPreferencesMergesStoredOverrides() {
+  fun groupPreferencesDefaultsEnabledTrueWhenUnset() {
+    val grouped = groupPreferences(emptyList())
+    assertTrue(grouped[0]["enabled"] as Boolean)
+  }
+
+  @Test
+  fun groupPreferencesDefaultsEffectiveAggregationToImmediateWhenUnset() {
+    val grouped = groupPreferences(emptyList())
+    assertEquals("IMMEDIATE", grouped[0]["effectiveAggregation"])
+    assertEquals("Immediately", grouped[0]["effectiveAggregationDisplay"])
+    assertNull(grouped[0]["aggregationOverride"])
+  }
+
+  @Test
+  fun groupPreferencesIgnoresNonEmailRows() {
     val grouped =
         groupPreferences(
             listOf(
                 mapOf(
-                    "memberUsername" to "jdoe",
+                    "topic" to "EVENT_ANNOUNCEMENT",
+                    "channel" to "SMS",
+                    "enabled" to false,
+                    "effectiveAggregation" to "DAILY",
+                    "aggregationOverride" to "DAILY",
+                )))
+
+    val eventAnnouncement = grouped.first { it["topic"] == "EVENT_ANNOUNCEMENT" }
+    // The SMS row must not leak into the EMAIL-only view - defaults apply instead.
+    assertTrue(eventAnnouncement["enabled"] as Boolean)
+    assertEquals("IMMEDIATE", eventAnnouncement["effectiveAggregation"])
+  }
+
+  @Test
+  fun groupPreferencesRoundTripsStoredAggregationOverride() {
+    val grouped =
+        groupPreferences(
+            listOf(
+                mapOf(
                     "topic" to "ACCOUNT",
                     "channel" to "EMAIL",
                     "enabled" to false,
                     "effectiveAggregation" to "WEEKLY",
                     "aggregationOverride" to "WEEKLY",
-                ),
-                mapOf(
-                    "memberUsername" to "jdoe",
-                    "topic" to "EVENT_ANNOUNCEMENT",
-                    "channel" to "SMS",
-                    "enabled" to true,
-                    "effectiveAggregation" to "DAILY",
-                    "aggregationOverride" to null,
-                ),
-            ))
+                )))
 
-    val accountEmail =
-        (grouped[1]["rows"] as List<*>).filterIsInstance<Map<*, *>>().first {
-          it["channel"] == "EMAIL"
-        }
-    assertFalse(accountEmail["enabled"] as Boolean)
-    assertEquals("WEEKLY", accountEmail["effectiveAggregation"])
-    assertEquals("WEEKLY", accountEmail["aggregationOverride"])
-
-    val eventSms =
-        (grouped[0]["rows"] as List<*>).filterIsInstance<Map<*, *>>().first {
-          it["channel"] == "SMS"
-        }
-    assertTrue(eventSms["enabled"] as Boolean)
-    assertEquals("DAILY", eventSms["effectiveAggregation"])
-    assertEquals(null, eventSms["aggregationOverride"])
+    val account = grouped.first { it["topic"] == "ACCOUNT" }
+    assertFalse(account["enabled"] as Boolean)
+    assertEquals("WEEKLY", account["effectiveAggregation"])
+    assertEquals("Weekly digest", account["effectiveAggregationDisplay"])
+    assertEquals("WEEKLY", account["aggregationOverride"])
   }
 
   @Test
-  fun groupPreferencesPreservesChannelOrderWithinTopic() {
-    val grouped = groupPreferences(emptyList())
-    val channels =
-        (grouped[0]["rows"] as List<*>).filterIsInstance<Map<*, *>>().map {
-          it["channelDisplayName"]
-        }
-    assertEquals(listOf("Email", "SMS", "Discord", "Discourse"), channels)
+  fun groupPreferencesLeavesOverrideNullWhenUnset() {
+    // Guards the hidden-field round-trip contract used by the template: a topic with no stored
+    // override must produce a null aggregationOverride, not an empty string or the effective
+    // value, since the PUT this drives treats null as "no override" and anything else as "set
+    // this override".
+    val grouped =
+        groupPreferences(
+            listOf(
+                mapOf(
+                    "topic" to "EVENT_ANNOUNCEMENT",
+                    "channel" to "EMAIL",
+                    "enabled" to true,
+                    "effectiveAggregation" to "IMMEDIATE",
+                    "aggregationOverride" to null,
+                )))
+
+    assertNull(grouped.first { it["topic"] == "EVENT_ANNOUNCEMENT" }["aggregationOverride"])
+  }
+
+  @Test
+  fun canViewNotificationsForAllowsSelf() {
+    assertTrue(canViewNotificationsFor("jdoe", "jdoe", canManageMembers = false))
+  }
+
+  @Test
+  fun canViewNotificationsForAllowsMemberManager() {
+    assertTrue(canViewNotificationsFor("jdoe", "asmith", canManageMembers = true))
+  }
+
+  @Test
+  fun canViewNotificationsForDeniesOtherMember() {
+    assertFalse(canViewNotificationsFor("jdoe", "asmith", canManageMembers = false))
+  }
+
+  @Test
+  fun canViewNotificationsForDeniesNullCurrentUser() {
+    assertFalse(canViewNotificationsFor("jdoe", null, canManageMembers = false))
   }
 }

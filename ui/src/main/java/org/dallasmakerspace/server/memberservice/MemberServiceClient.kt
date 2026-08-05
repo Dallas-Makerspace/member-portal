@@ -420,6 +420,39 @@ constructor(
     }
   }
 
+  /**
+   * Batch member lookup, username -> member. Mirrors `POST /members/batch` as used by
+   * dms-member-service.js for `dms-member-card`. Used for decorative data (e.g. facepile avatars),
+   * so this fails soft (empty map) rather than throwing, and isolates a single malformed row rather
+   * than losing the whole batch.
+   */
+  suspend fun getMembersByUsernames(
+      usernames: List<String>,
+      sessionId: String?,
+  ): Map<String, DMSMember> {
+    if (usernames.isEmpty()) return emptyMap()
+    return try {
+      withTimeout(BATCH_MEMBERS_TIMEOUT_MS) {
+        val apiHeaders = getApiHeaders(sessionId)
+        val result =
+            dmsHttpClient.post(
+                "$baseUrl/members/batch", apiHeaders, mapOf("usernames" to usernames))
+        val data = result["data"] as? Map<*, *> ?: return@withTimeout emptyMap()
+        data.entries
+            .mapNotNull { (key, value) ->
+              val username = key as? String ?: return@mapNotNull null
+              @Suppress("UNCHECKED_CAST")
+              val map = value as? Map<String, Any?> ?: return@mapNotNull null
+              runCatching { username to dmsMemberFromMap(map) }.getOrNull()
+            }
+            .toMap()
+      }
+    } catch (ex: Exception) {
+      log.warn("Failed to batch-get members: $usernames", ex)
+      emptyMap()
+    }
+  }
+
   suspend fun hasPrerequisiteClasses(groupSlug: String, sessionId: String?): Boolean {
     return try {
       val apiHeaders = getApiHeaders(sessionId)
@@ -1011,5 +1044,6 @@ constructor(
 
   companion object {
     private const val SSE_TIMEOUT_MS = 300_000L
+    private const val BATCH_MEMBERS_TIMEOUT_MS = 10_000L
   }
 }

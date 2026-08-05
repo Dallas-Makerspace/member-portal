@@ -23,6 +23,7 @@ import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.models.slug
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.plugins.UserSession
@@ -44,6 +45,9 @@ constructor(
     private val EVENT_INPUT_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     private val EVENT_OUTPUT_FORMATTER = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy 'at' h:mm a")
     private const val FOLLOW_FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
+    private const val FACEPILE_LIMIT = 5
+    private const val FACEPILE_AVATAR_SIZE = 90
+    private const val PROFILE_PIC_FALLBACK = "/static/images/profile-pic-not-set.svg"
   }
 
   override suspend fun handleAuthenticated(call: ApplicationCall) = coroutineScope {
@@ -94,15 +98,7 @@ constructor(
     // Await critical result; events still running concurrently
     val requestedMember = memberDeferred.await()
 
-    val avatarUrl =
-        requestedMember.discourseAvatarUrl
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { url ->
-              when {
-                url.startsWith("//") -> "https:$url"
-                else -> "https://talk.dallasmakerspace.org$url"
-              }.replace("{size}", "144")
-            } ?: ""
+    val avatarUrl = normalizeAvatarUrl(requestedMember.discourseAvatarUrl)
     val now = Instant.now()
     val memberSince = requestedMember.memberSince?.toJavaInstant()
     val memberSinceString = getMemberSinceString(memberSince)
@@ -197,10 +193,16 @@ constructor(
     if (followFeatureEnabled) {
       val following = followingDeferred.await()
       val followers = followersDeferred.await()
-      jsonMap["following"] = following
-      jsonMap["followers"] = followers
       jsonMap["following_count"] = following.size
       jsonMap["followers_count"] = followers.size
+      jsonMap["following_overflow"] = (following.size - FACEPILE_LIMIT).coerceAtLeast(0)
+      jsonMap["followers_overflow"] = (followers.size - FACEPILE_LIMIT).coerceAtLeast(0)
+      // Only the <=5 avatars actually rendered per row are fetched (<=10 usernames total) - the
+      // facepile isn't meant to represent the full lists, just a preview of them.
+      val shown = (following.take(FACEPILE_LIMIT) + followers.take(FACEPILE_LIMIT)).distinct()
+      val members = memberServiceClient.getMembersByUsernames(shown, session.sessionId)
+      jsonMap["following_facepile"] = buildFacepile(following, members)
+      jsonMap["followers_facepile"] = buildFacepile(followers, members)
       if (!isSelf) {
         jsonMap["is_following"] = (currentUsername in followers).toString()
       }
@@ -244,6 +246,28 @@ constructor(
       jsonMap["toast_message"] = "Communication preference updated."
     }
   }
+
+  /**
+   * Build the facepile rows for a Following/Followers section: up to [FACEPILE_LIMIT] entries, each
+   * with a display name and a normalized avatar URL (falling back to the placeholder SVG).
+   * [members] is the batch lookup result for the union of usernames actually being rendered, so a
+   * lookup miss (e.g. a stale/deleted account) still degrades to a usable row instead of a crash.
+   */
+  private fun buildFacepile(
+      usernames: List<String>,
+      members: Map<String, DMSMember>,
+  ): List<Map<String, String>> =
+      usernames.take(FACEPILE_LIMIT).map { username ->
+        val member = members[username]
+        mapOf(
+            "username" to username,
+            "display_name" to (member?.displayName?.takeIf { it.isNotBlank() } ?: "@$username"),
+            "avatar_url" to
+                normalizeAvatarUrl(
+                        member?.avatarUrl ?: member?.discourseAvatarUrl, FACEPILE_AVATAR_SIZE)
+                    .ifEmpty { PROFILE_PIC_FALLBACK },
+        )
+      }
 
   /**
    * Calculate the duration of time since the member joined the space.

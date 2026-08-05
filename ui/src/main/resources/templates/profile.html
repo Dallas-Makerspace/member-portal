@@ -215,17 +215,17 @@
                         <h4 class="mt-3 mb-0 dms-card-title" th:text="${name}"></h4>
                         <p class="text-muted" th:text="'@' + ${preferred_username}"></p>
                         <th:block th:if="${follow_feature_enabled}">
-                            <p class="text-muted small mb-2">
-                                <span th:text="${following_count}"></span> Following
-                                &middot;
-                                <span th:text="${followers_count}"></span> Followers
-                            </p>
-                            <button th:if="${!is_self}" type="button" id="followBtn"
-                                    class="btn btn-sm"
-                                    th:classappend="${is_following == 'true'} ? 'btn-outline-secondary' : 'btn-primary'"
-                                    th:text="${is_following == 'true'} ? 'Unfollow' : 'Follow'"
-                                    th:attr="data-username=${preferred_username},data-following=${is_following}">
-                            </button>
+                            <div th:if="${!is_self}">
+                                <button type="button" id="followBtn"
+                                        class="btn btn-sm"
+                                        th:classappend="${is_following == 'true'} ? 'btn-outline-secondary' : 'btn-primary'"
+                                        th:text="${is_following == 'true'} ? 'Unfollow' : 'Follow'"
+                                        th:attr="data-username=${preferred_username},data-following=${is_following}">
+                                </button>
+                                <p class="text-muted small mt-2 mb-0 mx-auto" style="max-width: 220px;">
+                                    Get notified when they post new events or projects
+                                </p>
+                            </div>
                         </th:block>
                     </div>
 
@@ -283,15 +283,13 @@
                             </span>
                         </div>
 
-                        <!-- Notifications inbox link hidden for now, pending rollout.
-                        <div th:if="${is_self}"
+                        <div th:if="${is_self and follow_feature_enabled}"
                              class="d-flex align-items-center mb-3">
                             <span class="material-symbols-outlined card-item-icon">notifications</span>
                             <span>Notifications:
-                                <a th:href="'/notifications'">View inbox &amp; preferences</a>
+                                <a th:href="'/profile/@' + ${preferred_username} + '/notifications'">View inbox &amp; preferences</a>
                             </span>
                         </div>
-                        -->
 
                         <div th:if="${communication_preference == 'EMAIL' and personal_email}"
                              class="d-flex align-items-center mb-3">
@@ -711,34 +709,40 @@
                 <div class="card-body pt-0 pb-4">
                     <h4 class="card-title mt-3 mb-4 dms-card-title">Follows</h4>
 
-                    <div th:if="${!following and !followers}">
+                    <div th:if="${following_count == 0 and followers_count == 0}">
                         <span th:if="${is_self}">You aren't following anyone, and no one's following you yet. Follow an organizer to get notified when they post a new event.</span>
                         <span th:unless="${is_self}">Not following anyone, and no followers yet.</span>
                     </div>
 
-                    <div th:if="${following}" th:classappend="${followers} ? 'mb-4' : ''">
-                        <h6 class="text-muted mb-3">Following (<span th:text="${#lists.size(following)}"></span>)</h6>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
-                            <div th:each="followedUsername, followedStat : ${following}"
-                                 th:if="${followedStat.index < 6}">
-                                <dms-member-card th:attr="username=${followedUsername}" state="mini"></dms-member-card>
-                            </div>
-                        </div>
-                        <div th:if="${#lists.size(following) > 6}" class="mt-2 text-muted small text-end">
-                            and <span th:text="${#lists.size(following) - 6}"></span> more...
+                    <div th:if="${following_count > 0}" th:classappend="${followers_count > 0} ? 'mb-4' : ''">
+                        <h6 class="text-muted mb-2">Following
+                            (<span id="followingCount" th:text="${following_count}"></span>)</h6>
+                        <div class="dms-facepile">
+                            <a th:each="m : ${following_facepile}" class="dms-facepile-item"
+                               th:href="'/profile/@' + ${m['username']}" th:title="${m['display_name']}">
+                                <img class="dms-facepile-avatar" th:src="${m['avatar_url']}"
+                                     th:alt="${m['display_name']}" loading="lazy">
+                            </a>
+                            <a th:if="${following_overflow > 0}" class="dms-facepile-item dms-facepile-more"
+                               th:href="'/profile/@' + ${preferred_username} + '/follows#following'"
+                               th:text="'+' + ${following_overflow}"
+                               th:title="'View all ' + ${following_count} + ' following'"></a>
                         </div>
                     </div>
 
-                    <div th:if="${followers}">
-                        <h6 class="text-muted mb-3">Followers (<span th:text="${#lists.size(followers)}"></span>)</h6>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
-                            <div th:each="followerUsername, followerStat : ${followers}"
-                                 th:if="${followerStat.index < 6}">
-                                <dms-member-card th:attr="username=${followerUsername}" state="mini"></dms-member-card>
-                            </div>
-                        </div>
-                        <div th:if="${#lists.size(followers) > 6}" class="mt-2 text-muted small text-end">
-                            and <span th:text="${#lists.size(followers) - 6}"></span> more...
+                    <div th:if="${followers_count > 0}">
+                        <h6 class="text-muted mb-2">Followers
+                            (<span id="followersCount" th:text="${followers_count}"></span>)</h6>
+                        <div class="dms-facepile">
+                            <a th:each="m : ${followers_facepile}" class="dms-facepile-item"
+                               th:href="'/profile/@' + ${m['username']}" th:title="${m['display_name']}">
+                                <img class="dms-facepile-avatar" th:src="${m['avatar_url']}"
+                                     th:alt="${m['display_name']}" loading="lazy">
+                            </a>
+                            <a th:if="${followers_overflow > 0}" class="dms-facepile-item dms-facepile-more"
+                               th:href="'/profile/@' + ${preferred_username} + '/follows#followers'"
+                               th:text="'+' + ${followers_overflow}"
+                               th:title="'View all ' + ${followers_count} + ' followers'"></a>
                         </div>
                     </div>
                 </div>
@@ -787,28 +791,7 @@
         </div>
     </div>
 
-    <!-- Bootstrap Toast for success / error messages -->
-    <div th:if="${toast_message}"
-         id="liveToast"
-         class="toast align-items-center text-bg-success border-0 show"
-         role="alert"
-         aria-live="assertive"
-         aria-atomic="true">
-        <div class="d-flex">
-            <div class="toast-body" th:text="|${toast_message}|"></div>
-            <a th:if="${toast_btn_label}"
-               type="button"
-               class="btn btn-link link-light me-2 m-auto"
-               aria-label="Unlink"
-               th:href="${toast_btn_url}"
-               th:text="|${toast_btn_label}|"></a>
-            <button
-                    type="button"
-                    class="btn-close btn-close-white me-2 m-auto"
-                    data-bs-dismiss="toast"
-                    aria-label="Close"></button>
-        </div>
-    </div>
+    <th:block th:replace="~{fragments/toast :: toast}"></th:block>
 </div>
 
 <!-- Bootstrap JS should be at the bottom of the body -->
@@ -1255,10 +1238,21 @@
         const followBtn = document.getElementById('followBtn');
         if (!followBtn) return;
 
+        function bumpFollowerCount(delta) {
+            // Only the count is adjusted here - re-rendering the facepile itself would need the
+            // viewer's own display name and normalized avatar URL, which this page doesn't have
+            // client-side. Left one avatar stale for the rest of the session; corrects itself on
+            // the next page load.
+            const el = document.getElementById('followersCount');
+            if (!el) return; // Followers section is absent entirely when the count was zero.
+            const next = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
+            el.textContent = String(next);
+        }
+
         followBtn.addEventListener('click', async function() {
             const username = followBtn.getAttribute('data-username');
-            const isFollowing = followBtn.getAttribute('data-following') === 'true';
-            const method = isFollowing ? 'DELETE' : 'POST';
+            const wasFollowing = followBtn.getAttribute('data-following') === 'true';
+            const method = wasFollowing ? 'DELETE' : 'POST';
 
             followBtn.disabled = true;
 
@@ -1266,15 +1260,23 @@
                 const response = await fetch(`/backend-api/members/${username}/follow`, { method });
                 const result = await response.json();
 
-                if (result.status === 'SUCCESS') {
-                    window.location.reload();
+                if (response.ok && result.status === 'SUCCESS') {
+                    const nowFollowing = !wasFollowing;
+                    followBtn.setAttribute('data-following', String(nowFollowing));
+                    followBtn.textContent = nowFollowing ? 'Unfollow' : 'Follow';
+                    followBtn.classList.toggle('btn-primary', !nowFollowing);
+                    followBtn.classList.toggle('btn-outline-secondary', nowFollowing);
+                    bumpFollowerCount(nowFollowing ? 1 : -1);
+                    showToast(nowFollowing
+                        ? `You're now following @${username}.`
+                        : `You unfollowed @${username}.`);
                 } else {
-                    alert(`Failed: ${result.message}`);
-                    followBtn.disabled = false;
+                    showToast(result.message || 'Could not update follow status.', 'danger');
                 }
             } catch (error) {
                 console.error('Error updating follow status:', error);
-                alert(`Error: ${error.message}`);
+                showToast('Could not update follow status. Please try again.', 'danger');
+            } finally {
                 followBtn.disabled = false;
             }
         });

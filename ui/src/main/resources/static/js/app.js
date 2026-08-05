@@ -61,9 +61,15 @@ function getPWAContext() {
 
 document.addEventListener("DOMContentLoaded", (event) => {
     printDMSItBanner();
-    // Hide toast after 20 seconds
+    // Hide toast after 20 seconds. Only affects the legacy #liveToast and a server-rendered
+    // #dmsToast (marked via data-server-rendered) - never a JS-fired showToast(), which manages
+    // its own ~5s auto-hide.
     setTimeout(() => {
         hideToast();
+        const dmsToast = document.getElementById('dmsToast');
+        if (dmsToast && dmsToast.dataset.serverRendered === 'true') {
+            bootstrap.Toast.getOrCreateInstance(dmsToast).hide();
+        }
     }, 20000);
     if (shouldLoadSeasonalEffect()) {
         loadScript('/static/js/falling-effect-v2.js');
@@ -286,6 +292,22 @@ function hideToast() {
         const toastBootstrap = bootstrap.Toast.getOrCreateInstance(toastLive);
         toastBootstrap.hide();
     }
+}
+
+/**
+ * Show the shared toast (templates/fragments/toast.html). No-op if the page has no toast host
+ * (i.e. doesn't include the fragment) or Bootstrap hasn't loaded yet.
+ * @param {string} message - Plain text; set via textContent, never innerHTML.
+ * @param {'success'|'danger'|'warning'|'info'} [type='success']
+ */
+function showToast(message, type = 'success') {
+    const el = document.getElementById('dmsToast');
+    if (!el || typeof bootstrap === 'undefined') return;
+    const body = document.getElementById('dmsToastMessage');
+    if (body) body.textContent = message;
+    el.className = 'toast align-items-center border-0 text-bg-' + type;
+    delete el.dataset.serverRendered;
+    bootstrap.Toast.getOrCreateInstance(el, { delay: 5000, autohide: true }).show();
 }
 
 /**

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en-US" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="initial-scale=1, width=device-width"/>
+
+    <!-- PWA Meta Tags -->
+    <th:block th:replace="~{fragments/pwa-meta :: pwa-meta}"></th:block>
+
+    <link rel="stylesheet" href="/static/styles/global.css"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800;900&display=swap">
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <title th:text="'Follows - @' + ${preferred_username}"></title>
+</head>
+<body>
+<header class="top-nav" th:replace="~{fragments/header :: header}"></header>
+<div class="container pb-8">
+    <div class="row">
+        <div class="col-md-10 col-lg-9 mx-auto">
+            <!-- Back to profile link -->
+            <div class="mt-4">
+                <a th:href="'/profile/@' + ${preferred_username}" class="text-decoration-none">
+                    <span class="material-symbols-outlined align-middle" style="font-size:18px;">arrow_back</span>
+                    Back to profile
+                </a>
+            </div>
+
+            <!-- Following card -->
+            <div class="dms-card shadow-sm mt-3" id="following">
+                <div class="card-body pt-0 pb-4">
+                    <h4 class="card-title mt-3 mb-4 dms-card-title">
+                        Following (<span th:text="${#lists.size(following)}"></span>)
+                    </h4>
+                    <div th:if="${#lists.isEmpty(following)}" class="text-muted">
+                        <span th:text="'@' + ${preferred_username}"></span> isn't following anyone.
+                    </div>
+                    <div th:each="username : ${following}" class="mb-2">
+                        <dms-member-card th:attr="username=${username}" state="mini"></dms-member-card>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Followers card -->
+            <div class="dms-card shadow-sm mt-4" id="followers">
+                <div class="card-body pt-0 pb-4">
+                    <h4 class="card-title mt-3 mb-4 dms-card-title">
+                        Followers (<span th:text="${#lists.size(followers)}"></span>)
+                    </h4>
+                    <div th:if="${#lists.isEmpty(followers)}" class="text-muted">
+                        No one follows <span th:text="'@' + ${preferred_username}"></span> yet.
+                    </div>
+                    <div th:each="username : ${followers}" class="mb-2">
+                        <dms-member-card th:attr="username=${username}" state="mini"></dms-member-card>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+<!-- App JS -->
+<script src="/static/js/app.js"></script>
+<!-- Page Loader (REQUIRED for all pages) -->
+<script src="/static/js/dms-page-loader.js" defer></script>
+<script type="module" src="/static/js/dms-member-card.js"></script>
+</body>
+</html>

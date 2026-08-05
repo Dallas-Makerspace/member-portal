@@ -36,6 +36,7 @@ import org.dallasmakerspace.server.routes.OidcCallbackHandler
 import org.dallasmakerspace.server.routes.PingHandler
 import org.dallasmakerspace.server.routes.ProfileDebugInfoHandler
 import org.dallasmakerspace.server.routes.ProfileFeaturedProjectsHandler
+import org.dallasmakerspace.server.routes.ProfileFollowsHandler
 import org.dallasmakerspace.server.routes.ProfileHandler
 import org.dallasmakerspace.server.routes.ProfileMeHandler
 import org.dallasmakerspace.server.routes.ProfileTotalActiveTimeHandler
@@ -199,6 +200,15 @@ class RoutesModule {
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
   ): IRouteHandler = MemberSettingsHandler(loggerFactory, userInfoProvider, memberService)
+
+  @IntoMap
+  @Provides
+  @StringKey("/profile/@{preferred_username}/follows")
+  fun providesProfileFollowsHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler = ProfileFollowsHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
   @IntoMap
   @Provides
@@ -412,7 +422,7 @@ class RoutesModule {
 
   @IntoMap
   @Provides
-  @StringKey("/notifications")
+  @StringKey("/profile/@{preferred_username}/notifications")
   fun providesNotificationsInboxHandler(
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,

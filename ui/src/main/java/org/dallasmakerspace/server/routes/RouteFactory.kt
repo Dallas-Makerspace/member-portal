@@ -74,6 +74,7 @@ object RouteFactory {
     REGISTER_VOTING("/profile/@{preferred_username}/register-voting"),
     UNREGISTER_VOTING("/profile/@{preferred_username}/unregister-voting"),
     PROFILE_SETTINGS("/profile/@{preferred_username}/settings"),
+    PROFILE_FOLLOWS("/profile/@{preferred_username}/follows"),
     REPORT("/reports/{path...}"),
     BACKEND_API("/backend-api/{path...}"),
     SHORT_LINKS("/short-links"),
@@ -100,7 +101,7 @@ object RouteFactory {
     CAMERAS_API("/cameras-api/{path...}"),
     PERSONAL_BIN_SCANNER("/personal-bin-scanner"),
     SCANNER_STATUS_API("/scanner-api/status/{username}"),
-    NOTIFICATIONS("/notifications"),
+    NOTIFICATIONS("/profile/@{preferred_username}/notifications"),
   }
 }
 
