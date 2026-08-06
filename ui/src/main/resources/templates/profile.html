@@ -269,17 +269,14 @@
                             </button>
                         </div>
 
-                        <div th:if="${is_self or authz.can('MANAGE_MEMBERS')}"
-                             class="d-flex align-items-center mb-3">
+                        <div class="d-flex align-items-center mb-3"
+                             th:with="pref_label=${communication_preference == 'EMAIL'} ? 'Email' : (${communication_preference == 'DISCOURSE'} ? 'Talk' : (${communication_preference == 'DISCORD'} ? 'Discord' : (${communication_preference == 'SMS'} ? 'Text/SMS' : 'Not set')))">
                             <span class="material-symbols-outlined card-item-icon">contact_mail</span>
                             <span>Contact preference:
-                                <a th:href="'/profile/@' + ${preferred_username} + '/settings'">
-                                    <th:block th:if="${communication_preference == 'EMAIL'}">Email</th:block>
-                                    <th:block th:if="${communication_preference == 'DISCOURSE'}">Talk</th:block>
-                                    <th:block th:if="${communication_preference == 'DISCORD'}">Discord</th:block>
-                                    <th:block th:if="${communication_preference == 'SMS'}">Text/SMS</th:block>
-                                    <th:block th:if="${communication_preference == ''}">Not set</th:block>
-                                </a>
+                                <a th:if="${is_self or authz.can('MANAGE_MEMBERS')}"
+                                   th:href="'/profile/@' + ${preferred_username} + '/settings'"
+                                   th:text="${pref_label}"></a>
+                                <th:block th:unless="${is_self or authz.can('MANAGE_MEMBERS')}" th:text="${pref_label}"></th:block>
                             </span>
                         </div>
 
