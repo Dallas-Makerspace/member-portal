@@ -1,5 +1,6 @@
 package org.dallasmakerspace.discourse
 
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -28,6 +29,8 @@ private const val DISCOURSE_REPLY_ACTION = 5
 private const val USER_ACTIONS_PAGE_SIZE = 30
 private const val USER_ACTIONS_MAX_PAGES = 5
 private const val GLOBAL_POST_IDS_CHUNK_SIZE = 50
+private const val MAX_FETCH_ATTEMPTS = 3
+private const val TIMEOUT_RETRY_DELAY_MS = 3_000L
 
 @Singleton
 class FeaturedProjectsService
@@ -51,6 +54,11 @@ constructor(
   private val isRefreshing = AtomicBoolean(false)
   private val memberLiveCache = ConcurrentHashMap<String, Pair<Instant, List<FeaturedProject>>>()
   private val refreshingMembers = ConcurrentHashMap.newKeySet<String>()
+
+  // Last successfully fetched post data per topic, used as a fallback when a fresh fetch fails
+  // after retries — so a transient Discourse hiccup degrades to "yesterday's data" for that
+  // topic instead of dropping all of its images from the cache.
+  private val topicSnapshotCache = ConcurrentHashMap<Int, DiscourseTopicDetails>()
 
   // Capture each full <img ...> tag so we can inspect width and src together
   private val imgTagRegex = Regex("""<img([^>]+)>""")
@@ -142,8 +150,8 @@ constructor(
       outer@ while (page < USER_ACTIONS_MAX_PAGES) {
         if (page > 0) delay(TOPIC_FETCH_DELAY_MS)
         val actionsResponse =
-            fetchWithRateLimitBackoff(
-                dmsUsername,
+            fetchWithRetry(
+                "live/$dmsUsername",
                 "getUserActions(offset=$offset)",
             ) {
               discourseApiClient.getUserActions(discourseUsername, DISCOURSE_REPLY_ACTION, offset)
@@ -198,7 +206,7 @@ constructor(
             "[live/$dmsUsername] Topic $topicId ('$title'): fetching ${postIds.size} post(s) by ID: $postIds")
 
         val topicPosts =
-            fetchWithRateLimitBackoff(dmsUsername, "getTopicPostsByIds($topicId)") {
+            fetchWithRetry("live/$dmsUsername", "getTopicPostsByIds($topicId)") {
               discourseApiClient.getTopicPostsByIds(topicId, postIds)
             }
         if (topicPosts == null) {
@@ -248,30 +256,50 @@ constructor(
     }
   }
 
-  // Runs [block], returning null on failure. On a 429 response, waits the time Discourse
-  // requests before returning so the next call in the loop doesn't immediately re-trigger it.
+  /**
+   * Runs [block], retrying on transient failures up to [MAX_FETCH_ATTEMPTS] total attempts: waits
+   * the time Discourse requests on a 429, or a fixed delay on a request timeout, before retrying
+   * the same call. Returns null if every attempt fails.
+   */
   @Suppress("TooGenericExceptionCaught")
-  private suspend fun <T> fetchWithRateLimitBackoff(
-      dmsUsername: String,
+  private suspend fun <T> fetchWithRetry(
+      contextLabel: String,
       callName: String,
       block: suspend () -> T,
   ): T? {
-    return try {
-      block()
-    } catch (e: Exception) {
-      val msg = e.message ?: ""
-      val waitSecondsMatch = Regex(""""wait_seconds"\s*:\s*(\d+)""").find(msg)
-      if (msg.contains("429") && waitSecondsMatch != null) {
-        val waitMs = (waitSecondsMatch.groupValues[1].toLongOrNull() ?: 30L) * 1000L + 2_000L
-        log.warn(
-            "[live/$dmsUsername] Rate limited on $callName — waiting ${waitMs}ms before continuing")
-        delay(waitMs)
-      } else {
-        log.warn("[live/$dmsUsername] Failed $callName", e)
+    for (attempt in 1..MAX_FETCH_ATTEMPTS) {
+      try {
+        return block()
+      } catch (e: Exception) {
+        val isLastAttempt = attempt == MAX_FETCH_ATTEMPTS
+        val msg = e.message ?: ""
+        val waitSecondsMatch = Regex(""""wait_seconds"\s*:\s*(\d+)""").find(msg)
+        when {
+          msg.contains("429") && waitSecondsMatch != null -> {
+            val waitMs = (waitSecondsMatch.groupValues[1].toLongOrNull() ?: 30L) * 1000L + 2_000L
+            log.warn(
+                "[$contextLabel] Rate limited on $callName (attempt $attempt/$MAX_FETCH_ATTEMPTS)" +
+                    " — waiting ${waitMs}ms")
+            delay(waitMs)
+          }
+          isTimeout(e) && !isLastAttempt -> {
+            log.warn(
+                "[$contextLabel] Timeout on $callName (attempt $attempt/$MAX_FETCH_ATTEMPTS) — " +
+                    "retrying in ${TIMEOUT_RETRY_DELAY_MS}ms")
+            delay(TIMEOUT_RETRY_DELAY_MS)
+          }
+          else -> {
+            log.warn("[$contextLabel] Failed $callName (attempt $attempt/$MAX_FETCH_ATTEMPTS)", e)
+            if (isLastAttempt) return null
+          }
+        }
       }
-      null
     }
+    return null
   }
+
+  private fun isTimeout(e: Throwable): Boolean =
+      e is HttpRequestTimeoutException || e.cause is HttpRequestTimeoutException
 
   private fun triggerRefreshIfStale() {
     val lastFetch = lastFetchTime.get()
@@ -385,47 +413,8 @@ constructor(
       val topicDetails = buildList {
         for ((index, topic) in matchingTopics.withIndex()) {
           if (index > 0) delay(TOPIC_FETCH_DELAY_MS)
-          val initialDetails =
-              runCatching { discourseApiClient.getTopicPosts(topic.id) }
-                  .onFailure { log.warn("Failed to fetch posts for topic ${topic.id}", it) }
-                  .getOrNull() ?: continue
-
-          val fetchedIds = initialDetails.postStream.posts.map { it.id }.toSet()
-          val remainingIds = initialDetails.postStream.stream.filter { it !in fetchedIds }
-
-          if (remainingIds.isEmpty()) {
-            add(topic to initialDetails)
-            continue
-          }
-
-          val extraPosts = mutableListOf<DiscourseTopicPost>()
-          for (chunk in remainingIds.chunked(GLOBAL_POST_IDS_CHUNK_SIZE)) {
-            delay(TOPIC_FETCH_DELAY_MS)
-            runCatching { discourseApiClient.getTopicPostsByIds(topic.id, chunk) }
-                .onFailure { e ->
-                  val msg = e.message ?: ""
-                  val waitSecondsMatch = Regex(""""wait_seconds"\s*:\s*(\d+)""").find(msg)
-                  if (msg.contains("429") && waitSecondsMatch != null) {
-                    val waitMs =
-                        (waitSecondsMatch.groupValues[1].toLongOrNull() ?: 30L) * 1000L + 2_000L
-                    log.warn(
-                        "Rate limited fetching posts for topic ${topic.id} — waiting ${waitMs}ms")
-                    delay(waitMs)
-                  } else {
-                    log.warn(
-                        "Failed to fetch post chunk for topic ${topic.id}: ${chunk.size} IDs", e)
-                  }
-                }
-                .getOrNull()
-                ?.let { extraPosts.addAll(it.postStream.posts) }
-          }
-
-          add(
-              topic to
-                  initialDetails.copy(
-                      postStream =
-                          initialDetails.postStream.copy(
-                              posts = initialDetails.postStream.posts + extraPosts)))
+          val details = fetchTopicDetailsWithFallback(topic) ?: continue
+          add(topic to details)
         }
       }
 
@@ -501,5 +490,64 @@ constructor(
     } catch (e: Exception) {
       log.error("Failed to refresh featured projects cache; keeping stale data", e)
     }
+  }
+
+  /**
+   * Fetches full post details for [topic] (initial page plus any paginated remainder), retrying
+   * transient failures via [fetchWithRetry]. If the initial fetch still fails after retries,
+   * falls back to the last successfully fetched snapshot of this topic (if any) rather than
+   * dropping the topic's images entirely — so a transient Discourse hiccup degrades to stale data
+   * for that one topic instead of losing it from the cache for a full day. Returns null only if
+   * there's no fallback snapshot available (e.g. the topic has never been fetched successfully).
+   */
+  private suspend fun fetchTopicDetailsWithFallback(topic: DiscourseCategoryTopic): DiscourseTopicDetails? {
+    val initialDetails = fetchWithRetry("global", "getTopicPosts(${topic.id})") {
+      discourseApiClient.getTopicPosts(topic.id)
+    }
+
+    if (initialDetails == null) {
+      val fallback = topicSnapshotCache[topic.id]
+      if (fallback != null) {
+        log.warn(
+            "Using last-known-good snapshot for topic ${topic.id} (fresh fetch failed after " +
+                "$MAX_FETCH_ATTEMPTS attempts)")
+      } else {
+        log.warn(
+            "No fallback snapshot for topic ${topic.id}; skipping it this refresh " +
+                "(fresh fetch failed after $MAX_FETCH_ATTEMPTS attempts)")
+      }
+      return fallback
+    }
+
+    val fetchedIds = initialDetails.postStream.posts.map { it.id }.toSet()
+    val remainingIds = initialDetails.postStream.stream.filter { it !in fetchedIds }
+
+    val merged =
+        if (remainingIds.isEmpty()) {
+          initialDetails
+        } else {
+          val extraPosts = mutableListOf<DiscourseTopicPost>()
+          for (chunk in remainingIds.chunked(GLOBAL_POST_IDS_CHUNK_SIZE)) {
+            delay(TOPIC_FETCH_DELAY_MS)
+            val chunkPosts =
+                fetchWithRetry("global", "getTopicPostsByIds(${topic.id})") {
+                  discourseApiClient.getTopicPostsByIds(topic.id, chunk)
+                }
+            if (chunkPosts != null) {
+              extraPosts.addAll(chunkPosts.postStream.posts)
+            } else {
+              log.warn(
+                  "Failed to fetch post chunk for topic ${topic.id} after $MAX_FETCH_ATTEMPTS " +
+                      "attempts: ${chunk.size} IDs — proceeding with partial data")
+            }
+          }
+          initialDetails.copy(
+              postStream =
+                  initialDetails.postStream.copy(
+                      posts = initialDetails.postStream.posts + extraPosts))
+        }
+
+    topicSnapshotCache[topic.id] = merged
+    return merged
   }
 }
