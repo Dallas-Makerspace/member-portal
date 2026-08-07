@@ -64,6 +64,8 @@ interface AppComponent {
 
   fun getMemberService(): MemberService
 
+  fun getActiveDirectoryService(): org.dallasmakerspace.activedirectory.IActiveDirectoryService
+
   fun getGroupService(): GroupService
 
   fun getActivityLogService(): ActivityLogService

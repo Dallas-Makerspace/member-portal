@@ -19,7 +19,7 @@ fun main() {
   val appComponent = DaggerAppComponent.create()
   val appConfig = appComponent.getAppConfig()
   val portStr = appConfig.requireStringProperty("ktor.deployment.port")
-  val healthProbeMemberService = appComponent.getMemberService()
+  val healthProbeActiveDirectoryService = appComponent.getActiveDirectoryService()
 
   // Disable SSL certificate verification until we can embed our root CA cert sig
   // TODO: remove this
@@ -27,7 +27,7 @@ fun main() {
 
   val server =
       embeddedServer(Netty, port = portStr.toInt(), host = "0.0.0.0") {
-        configureHealth(healthProbeMemberService)
+        configureHealth(healthProbeActiveDirectoryService)
         configureSerialization()
         configureMonitoring()
         configureHTTP()

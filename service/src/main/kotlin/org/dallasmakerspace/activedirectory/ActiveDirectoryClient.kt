@@ -29,9 +29,16 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
   private val ldapUser = appConfig.requireStringProperty("app.ldap.user")
   private val ldapPass = appConfig.requireStringProperty("app.ldap.password")
-  private val bindHost = appConfig.requireStringProperty("app.ldap.host")
+
+  // app.ldap.host may be a single host or a comma-separated list of hosts in failover-preference
+  // order (e.g. "dc1.dms.local,dc2.dms.local,dc3.dms.local"). FailoverServerSet always attempts
+  // hosts in the order given, so the first entry is preferred and later entries are only used if
+  // earlier ones are unreachable.
+  private val bindHosts =
+      appConfig.requireStringProperty("app.ldap.host").split(",").map { it.trim() }.toTypedArray()
   private val bindPort = appConfig.requireIntProperty("app.ldap.port")
-  private val serverSet = FailoverServerSet(arrayOf(bindHost), intArrayOf(bindPort))
+  private val serverSet =
+      FailoverServerSet(bindHosts, IntArray(bindHosts.size) { bindPort })
   private val ldapPool =
       LDAPConnectionPool(
           serverSet,
@@ -42,7 +49,9 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
   init {
     ldapPool.setMaxWaitTimeMillis(10_000L)
-    log.info("$TAG/init Configured LDAP server: $bindHost:$bindPort")
+    log.info(
+        "$TAG/init Configured LDAP servers in failover-preference order: " +
+            bindHosts.joinToString(" -> ") { "$it:$bindPort" })
     log.info(
         "$TAG/init LDAP connection pool initialized with $INITIAL_LDAP_CONNECTIONS initial connections, max $MAX_LDAP_CONNECTIONS")
   }
@@ -141,26 +150,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
     }
   }
 
-  /**
-   * Logs the actual connected AD server for a connection from the pool. Useful for debugging issues
-   * with specific domain controllers.
-   */
-  private fun logConnectedServer(operation: String) {
-    try {
-      val connection = ldapPool.connection
-      try {
-        val actualServer = getConnectedServerInfo(connection)
-        log.info("$TAG/$operation Using AD server: $actualServer")
-      } finally {
-        ldapPool.releaseConnection(connection)
-      }
-    } catch (e: Exception) {
-      log.warn("$TAG/$operation Unable to determine connected AD server: ${e.message}")
-    }
-  }
-
   override fun getUsersByUsernameList(usernames: List<String>): Map<String, Map<String, Any?>> {
-    logConnectedServer("getUsersByUsernameList")
     log.info("$TAG/getUsersByUsernameList Fetching ${usernames.size} users")
 
     val filter =
@@ -390,7 +380,6 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
    * @return List of distinguished names of all members
    */
   private fun getAllGroupMembers(groupDN: String): List<String> {
-    logConnectedServer("getAllGroupMembers")
     log.info("$TAG/getAllGroupMembers Fetching members for group: $groupDN")
 
     val allMembers = mutableListOf<String>()
@@ -455,7 +444,6 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
    * @return List of distinguished names of administrators
    */
   private fun getGroupAdministrators(groupEntry: com.unboundid.ldap.sdk.Entry): List<String> {
-    logConnectedServer("getGroupAdministrators")
     val administrators = mutableListOf<String>()
 
     // First check managedBy attribute
@@ -488,7 +476,6 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
   /** {@inheritDoc} */
   override fun getUsersByDnList(dnList: List<String>): Map<String, Map<String, Any?>> {
-    logConnectedServer("getUsersByDnList")
     log.info("$TAG/getUsersByDnList Fetching ${dnList.size} users by DN")
 
     val filter =
