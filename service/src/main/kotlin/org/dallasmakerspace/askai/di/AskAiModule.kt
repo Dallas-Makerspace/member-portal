@@ -28,7 +28,11 @@ import org.dallasmakerspace.core.LoggerFactory
 @Module
 class AskAiModule {
 
+  // OpenRouterClient/BedrockClient build their own HttpClient(CIO) — without @Singleton here,
+  // Dagger built a brand-new one for every injection site (same bug found and fixed for AD's LDAP
+  // pool).
   @Provides
+  @Singleton
   fun provideOpenRouterClient(
       appConfig: AppConfig,
       loggerFactory: LoggerFactory
@@ -40,7 +44,10 @@ class AskAiModule {
     }
   }
 
+  // ConfluenceApiClient builds its own HttpClient(CIO) — without @Singleton here, Dagger built a
+  // brand-new one for every injection site (same bug found and fixed for AD's LDAP pool).
   @Provides
+  @Singleton
   fun provideConfluenceApiClient(
       appConfig: AppConfig,
       loggerFactory: LoggerFactory
