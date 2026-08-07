@@ -13,6 +13,16 @@ import org.dallasmakerspace.server.di.VoterRegistrationModule
 object RouteFactory {
   val redirects = mutableMapOf<String, String>()
 
+  // getHandler() runs on every single incoming request. DaggerRoutesComponent.create() builds an
+  // entirely independent object graph each time it's called — @Singleton scope only guarantees one
+  // instance *within* a component instance, not across separate .create() calls, and this is a
+  // wholly separate component from AppComponent/AppComponentHolder. Calling .create() fresh per
+  // request meant every handler-level dependency (UserInfoProvider, and anything handlers hold like
+  // MemberServiceClient/DMSHttpClient) was rebuilt from scratch on every request — silently
+  // reintroducing the "new HttpClient per request" cost that AppComponentHolder was supposed to
+  // have already fixed elsewhere, and the reason the userinfo cache never actually cached anything.
+  private val routesComponent: RoutesComponent by lazy { DaggerRoutesComponent.create() }
+
   fun getHandler(call: ApplicationCall): IRouteHandler? {
     val path = sanitizePathInternal(call.request.path())
     return getHandler(path)
@@ -43,7 +53,7 @@ object RouteFactory {
   }
 
   fun getHandler(path: String): IRouteHandler? {
-    val routesMap = DaggerRoutesComponent.create().getRoutesMap()
+    val routesMap = routesComponent.getRoutesMap()
     return routesMap[path]
   }
 
