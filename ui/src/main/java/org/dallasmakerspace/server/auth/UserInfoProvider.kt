@@ -5,7 +5,7 @@ import io.ktor.util.*
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import org.dallasmakerspace.server.common.AppConfig
@@ -50,17 +50,17 @@ constructor(private val httpClient: DMSHttpClient, private val appConfig: AppCon
   }
 
   // Lazy cleanup so the map doesn't grow unbounded across many distinct logins over a long-running
-  // process (session cookies live up to 8h — see Sessions.kt — so that's the natural upper bound
-  // per token, but we still want expired entries reclaimed rather than sitting forever).
+  // process.
   private fun pruneExpired(now: Instant) {
     cache.entries.removeIf { now - it.value.cachedAt >= CACHE_TTL }
   }
 
   companion object {
     const val DEV_TOKEN = "dev-token"
-    // Matches the session cookie's own max age (Sessions.kt) — the token's groups/username don't
-    // change within a session, so there's no reason to expire the cache before the session itself
-    // would expire.
-    private val CACHE_TTL = 8.hours
+    // Short TTL: this cache backs AuthenticatedHandler's authz (what the logged-in user is allowed
+    // to do), not just display data. A longer TTL (e.g. matching the 8h session cookie) would mean
+    // a revoked/granted permission could take that long to take effect for an active session. 60s
+    // still eliminates the vast majority of repeat Keycloak calls during a normal browsing burst.
+    private val CACHE_TTL = 60.seconds
   }
 }
