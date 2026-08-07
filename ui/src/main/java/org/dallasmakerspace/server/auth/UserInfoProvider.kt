@@ -5,16 +5,27 @@ import io.ktor.util.*
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.hours
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.DMSHttpClient
+import org.dallasmakerspace.server.common.logging.LoggerFactory
 
 @Singleton
 class UserInfoProvider
 @Inject
-constructor(private val httpClient: DMSHttpClient, private val appConfig: AppConfig) {
+constructor(
+    private val httpClient: DMSHttpClient,
+    private val appConfig: AppConfig,
+    loggerFactory: LoggerFactory,
+) {
+  private val log = loggerFactory.create(javaClass)
+  private val instanceId = System.identityHashCode(this)
+
+  init {
+    log.info("UserInfoProvider instance created: $instanceId")
+  }
 
   private data class CacheEntry(val userInfo: Map<String, Any>, val cachedAt: Instant)
 
@@ -42,11 +53,15 @@ constructor(private val httpClient: DMSHttpClient, private val appConfig: AppCon
     }
 
     val now = Clock.System.now()
+    val tokenKey = accessToken.takeLast(8)
     cache[accessToken]?.let { entry ->
-      if (now - entry.cachedAt < CACHE_TTL) {
+      val age = now - entry.cachedAt
+      if (age < CACHE_TTL) {
+        log.info("UserInfoProvider[$instanceId] cache HIT for ...$tokenKey (age=${age.inWholeMilliseconds}ms, size=${cache.size})")
         return entry.userInfo
       }
-    }
+      log.info("UserInfoProvider[$instanceId] cache EXPIRED for ...$tokenKey (age=${age.inWholeMilliseconds}ms)")
+    } ?: log.info("UserInfoProvider[$instanceId] cache MISS for ...$tokenKey (size=${cache.size})")
 
     val resp =
         httpClient.get(
@@ -66,6 +81,9 @@ constructor(private val httpClient: DMSHttpClient, private val appConfig: AppCon
 
   companion object {
     const val DEV_TOKEN = "dev-token"
-    private val CACHE_TTL = 60.seconds
+    // Matches the session cookie's own max age (Sessions.kt) — the token's groups/username don't
+    // change within a session, so there's no reason to expire the cache before the session itself
+    // would expire.
+    private val CACHE_TTL = 8.hours
   }
 }
