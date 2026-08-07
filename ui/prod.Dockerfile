@@ -24,9 +24,4 @@ USER appuser
 EXPOSE 8000
 
 # Command to run the application
-# -Djava.net.preferIPv4Stack=true: this container has no working IPv6 egress. Without this flag,
-# outbound calls to dual-stack hosts (e.g. Keycloak, which resolves to both A and AAAA records via
-# Cloudflare) attempt the IPv6 address first, fail/timeout, then fall back to IPv4 — adding ~1s to
-# every single such call. All-IPv4 in-network calls (e.g. to member-profile-service) are unaffected
-# since Docker's embedded DNS never returns AAAA records for sibling containers.
-CMD ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar"]
+CMD ["java", "-jar", "app.jar"]

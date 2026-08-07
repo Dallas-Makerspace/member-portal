@@ -23,8 +23,4 @@ USER appuser
 EXPOSE 8081
 
 # Command to run the application
-# -Djava.net.preferIPv4Stack=true: this container has no working IPv6 egress. Without this flag,
-# outbound calls to dual-stack hosts (e.g. Discourse, MakerManager/WHMCS) attempt the IPv6 address
-# first, fail/timeout, then fall back to IPv4 — adding real latency to every such call. See the
-# matching fix in ui/prod.Dockerfile for the fuller writeup.
-CMD ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar"]
+CMD ["java", "-jar", "app.jar"]
