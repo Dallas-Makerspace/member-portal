@@ -14,11 +14,11 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.dallasmakerspace.server.common.logging.ElasticsearchClientManager
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 import org.slf4j.MDC
 
 fun Application.configureElasticsearch() {
-  val appConfig = DaggerAppComponent.create().getAppConfig()
+  val appConfig = AppComponentHolder.instance.getAppConfig()
   val isDevelopment = appConfig.requireBooleanProperty("ktor.development")
   if (!isDevelopment) {
     intercept(ApplicationCallPipeline.Monitoring) {

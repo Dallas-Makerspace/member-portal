@@ -13,11 +13,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.core.logging.ElasticsearchClientManager
-import org.dallasmakerspace.di.DaggerAppComponent
+import org.dallasmakerspace.di.AppComponentHolder
 import org.slf4j.MDC
 
 fun Application.configureElasticsearch() {
-  val appConfig = DaggerAppComponent.create().getAppConfig()
+  val appConfig = AppComponentHolder.instance.getAppConfig()
   val isDevelopment = appConfig.requireBooleanProperty("ktor.development")
   if (!isDevelopment) {
     intercept(ApplicationCallPipeline.Monitoring) {

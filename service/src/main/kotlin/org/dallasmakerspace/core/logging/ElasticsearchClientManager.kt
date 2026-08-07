@@ -18,16 +18,16 @@ import org.apache.http.client.config.RequestConfig
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
 import org.apache.http.impl.nio.client.HttpAsyncClients
 import org.apache.http.ssl.SSLContextBuilder
-import org.dallasmakerspace.di.DaggerAppComponent
+import org.dallasmakerspace.di.AppComponentHolder
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
 
 object ElasticsearchClientManager {
   // We can't use Dagger to inject dependencies since this class is called from a library
-  private val appConfig = DaggerAppComponent.create().getAppConfig()
+  private val appConfig = AppComponentHolder.instance.getAppConfig()
   private val esApiKey = appConfig.requireStringProperty("app.logging.elastic-api-key")
   private val esHost = appConfig.requireStringProperty("app.logging.elastic-host")
-  private val loggerFactory = DaggerAppComponent.create().getLoggerFactory()
+  private val loggerFactory = AppComponentHolder.instance.getLoggerFactory()
   val log = loggerFactory.create(ElasticsearchClientManager::class.java)
   val client: ElasticsearchClient by lazy {
     // Create an SSLContext that ignores self-signed certificates

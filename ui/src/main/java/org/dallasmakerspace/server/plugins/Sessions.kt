@@ -9,7 +9,7 @@ import io.ktor.server.sessions.Sessions
 import io.ktor.server.sessions.cookie
 import io.ktor.util.hex
 import kotlinx.serialization.Serializable
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 import org.slf4j.LoggerFactory
 
 private val sessionLog = LoggerFactory.getLogger("Sessions")
@@ -40,7 +40,7 @@ private class SizeCheckingTransformer(
 }
 
 fun Application.configureSessions() {
-  val appConfig = DaggerAppComponent.create().getAppConfig()
+  val appConfig = AppComponentHolder.instance.getAppConfig()
   val encryptKey = hex(appConfig.requireStringProperty("app.session.encrypt-key"))
   val signKey = hex(appConfig.requireStringProperty("app.session.sign-key"))
   install(Sessions) {

@@ -12,11 +12,11 @@ import java.io.File
 import java.net.URL
 import java.security.MessageDigest
 import org.dallasmakerspace.server.auth.UserInfoProvider
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 import org.dallasmakerspace.server.routes.RouteFactory
 
 fun Application.configureRouting() {
-  val appConfig = DaggerAppComponent.create().getAppConfig()
+  val appConfig = AppComponentHolder.instance.getAppConfig()
 
   routing {
     // Dev-only: bypass Keycloak by injecting a fake session

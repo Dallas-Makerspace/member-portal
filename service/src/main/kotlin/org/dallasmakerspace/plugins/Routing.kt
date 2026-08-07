@@ -36,7 +36,7 @@ import org.dallasmakerspace.cron.ShowAndTellCronJobParams
 import org.dallasmakerspace.cron.SmartWaiverBackfillJob
 import org.dallasmakerspace.cron.SmartWaiverProcessQueueJob
 import org.dallasmakerspace.dataviz.DataVizRouter
-import org.dallasmakerspace.di.DaggerAppComponent
+import org.dallasmakerspace.di.AppComponentHolder
 import org.dallasmakerspace.discourse.FeaturedProjectsService
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
@@ -82,28 +82,28 @@ fun Application.configureRouting() {
     // Actual validation is done in the provider, this can be refactored away
     validate { null }
   }
-  val appConfig: AppConfig = DaggerAppComponent.create().getAppConfig()
+  val appConfig: AppConfig = AppComponentHolder.instance.getAppConfig()
   install(Authentication) { apiKey(appConfig, ApiKeyAuthProvider.X_API_KEY, apiKeyAuthProvider) }
   // Eagerly initialize memberService so we can launch the WHMCS ID cache population
   // before the first request arrives. All other services stay lazy (initialized on first use).
-  val memberService: MemberService = DaggerAppComponent.create().getMemberService()
+  val memberService: MemberService = AppComponentHolder.instance.getMemberService()
   launch { memberService.populateWhmcsAccountCache() }
 
   // Eagerly initialize featuredProjectsService to trigger background cache fill on startup.
   // Skip in development mode to avoid hammering the Discourse server on every hot-reload.
   val featuredProjectsService: FeaturedProjectsService =
-      DaggerAppComponent.create().getFeaturedProjectsService()
+      AppComponentHolder.instance.getFeaturedProjectsService()
   if (!appConfig.requireBooleanProperty("ktor.development")) {
     featuredProjectsService.getFeaturedProjects()
   }
 
   val configOverrideService: ConfigOverrideService =
-      DaggerAppComponent.create().getConfigOverrideService()
+      AppComponentHolder.instance.getConfigOverrideService()
   launch { configOverrideService.warmCache() }
 
   // Notification worker: polls the outbox and sends due notifications (mock notifier in dev).
   val notificationWorker: org.dallasmakerspace.notifications.NotificationWorker =
-      DaggerAppComponent.create().getNotificationWorker()
+      AppComponentHolder.instance.getNotificationWorker()
   if (appConfig.requireBooleanProperty("app.notifications.worker.enabled")) {
     val pollIntervalMs = appConfig.requireLongProperty("app.notifications.worker.poll-interval-ms")
     launch {
@@ -120,7 +120,7 @@ fun Application.configureRouting() {
 
   // Digest processor: polls for IN_DIGEST rows and delivers one digest email per member.
   val digestProcessor: org.dallasmakerspace.notifications.DigestProcessor =
-      DaggerAppComponent.create().getDigestProcessor()
+      AppComponentHolder.instance.getDigestProcessor()
   if (appConfig.requireBooleanProperty("app.notifications.digest.enabled")) {
     val pollIntervalMs = appConfig.requireLongProperty("app.notifications.digest.poll-interval-ms")
     launch {
@@ -136,34 +136,34 @@ fun Application.configureRouting() {
   }
 
   routing {
-    val groupsService: GroupService by lazy { DaggerAppComponent.create().getGroupService() }
+    val groupsService: GroupService by lazy { AppComponentHolder.instance.getGroupService() }
     val activityLogService: ActivityLogService by lazy {
-      DaggerAppComponent.create().getActivityLogService()
+      AppComponentHolder.instance.getActivityLogService()
     }
-    val calendarService by lazy { DaggerAppComponent.create().getCalendarService() }
+    val calendarService by lazy { AppComponentHolder.instance.getCalendarService() }
     val memberRefreshCronJob: MemberRefreshCronJob by lazy {
-      DaggerAppComponent.create().getMemberRefreshCronJob()
+      AppComponentHolder.instance.getMemberRefreshCronJob()
     }
     val showAndTellCronJob: ShowAndTellCronJob by lazy {
-      DaggerAppComponent.create().getShowAndTellCronJob()
+      AppComponentHolder.instance.getShowAndTellCronJob()
     }
     val doorSwipesCronJob: DoorSwipesCronJob by lazy {
-      DaggerAppComponent.create().getDoorSwipesCronJob()
+      AppComponentHolder.instance.getDoorSwipesCronJob()
     }
     val backfillJob: SmartWaiverBackfillJob by lazy {
-      DaggerAppComponent.create().getSmartWaiverBackfillJob()
+      AppComponentHolder.instance.getSmartWaiverBackfillJob()
     }
     val processQueueJob: SmartWaiverProcessQueueJob by lazy {
-      DaggerAppComponent.create().getSmartWaiverProcessQueueJob()
+      AppComponentHolder.instance.getSmartWaiverProcessQueueJob()
     }
-    val dataVizRouter: DataVizRouter by lazy { DaggerAppComponent.create().getDataVizRouter() }
-    val webhookRouter: WebhookRouter by lazy { DaggerAppComponent.create().getWebhookRouter() }
+    val dataVizRouter: DataVizRouter by lazy { AppComponentHolder.instance.getDataVizRouter() }
+    val webhookRouter: WebhookRouter by lazy { AppComponentHolder.instance.getWebhookRouter() }
     val shortLinksService: ShortLinksService by lazy {
-      DaggerAppComponent.create().getShortLinksService()
+      AppComponentHolder.instance.getShortLinksService()
     }
-    val askAiService: AskAiService by lazy { DaggerAppComponent.create().getAskAiService() }
+    val askAiService: AskAiService by lazy { AppComponentHolder.instance.getAskAiService() }
     val memberSettingsService: MemberSettingsService by lazy {
-      DaggerAppComponent.create().getMemberSettingsService()
+      AppComponentHolder.instance.getMemberSettingsService()
     }
 
     get("/") {
@@ -1035,19 +1035,19 @@ fun Application.configureRouting() {
       configRoutes(configOverrideService)
 
       /** Remote Access — Guacamole VM categories and occupancy * */
-      val remoteAccessService by lazy { DaggerAppComponent.create().getRemoteAccessService() }
+      val remoteAccessService by lazy { AppComponentHolder.instance.getRemoteAccessService() }
       remoteAccessRoutes(remoteAccessService)
     }
 
     /** Notification REST API (emit, outbox, preferences) * */
-    val notificationService by lazy { DaggerAppComponent.create().getNotificationService() }
+    val notificationService by lazy { AppComponentHolder.instance.getNotificationService() }
     notificationRoutes(notificationService)
 
     /** Follow/unfollow another member + who-follows-who listings * */
     val profileSubscriptionService by lazy {
-      DaggerAppComponent.create().getProfileSubscriptionService()
+      AppComponentHolder.instance.getProfileSubscriptionService()
     }
-    val featureFlagService by lazy { DaggerAppComponent.create().getFeatureFlagService() }
+    val featureFlagService by lazy { AppComponentHolder.instance.getFeatureFlagService() }
     profileSubscriptionRoutes(profileSubscriptionService, featureFlagService)
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */

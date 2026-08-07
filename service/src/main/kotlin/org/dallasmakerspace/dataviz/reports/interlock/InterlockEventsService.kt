@@ -14,7 +14,7 @@ import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.logging.ElasticsearchClientManager
-import org.dallasmakerspace.di.DaggerAppComponent
+import org.dallasmakerspace.di.AppComponentHolder
 
 private const val RESCAN_DEBOUNCE_SECONDS = 30L
 private const val ES_INDEX = "not-john-index"
@@ -330,7 +330,7 @@ constructor(
 
   fun maskBadge(badge: String, unmask: Boolean = false): String {
     if (unmask) return badge // Infrastructure members can see full badge numbers
-    val appConfig = DaggerAppComponent.create().getAppConfig()
+    val appConfig = AppComponentHolder.instance.getAppConfig()
     val isDevelopment = appConfig.requireBooleanProperty("ktor.development")
     if (isDevelopment) return badge // no masking in development mode
     if (badge.length <= MIN_BADGE_LEN_FOR_PARTIAL_MASK) return "*".repeat(badge.length)

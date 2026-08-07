@@ -15,7 +15,7 @@ import org.apache.http.HttpRequestInterceptor
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
 import org.apache.http.impl.nio.client.HttpAsyncClients
 import org.apache.http.ssl.SSLContextBuilder
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
 
@@ -61,10 +61,10 @@ object ElasticsearchClientManager {
   }
 
   // We can't use Dagger to inject dependencies since this class is called from a library
-  private val appConfig = DaggerAppComponent.create().getAppConfig()
+  private val appConfig = AppComponentHolder.instance.getAppConfig()
   private val esApiKey = appConfig.requireStringProperty("app.logging.elastic-api-key")
   private val esHost = appConfig.requireStringProperty("app.logging.elastic-host")
-  private val loggerFactory = DaggerAppComponent.create().getLoggerFactory()
+  private val loggerFactory = AppComponentHolder.instance.getLoggerFactory()
   val log = loggerFactory.create(ElasticsearchClientManager::class.java)
 
   // Async client: index() returns a CompletableFuture instead of blocking the calling thread for

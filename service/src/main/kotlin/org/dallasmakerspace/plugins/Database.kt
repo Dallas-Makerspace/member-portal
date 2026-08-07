@@ -1,11 +1,11 @@
 package org.dallasmakerspace.plugins
 
 import io.ktor.server.application.*
-import org.dallasmakerspace.di.DaggerAppComponent
+import org.dallasmakerspace.di.AppComponentHolder
 
 fun Application.configureDatabase() {
-  val dbConnection = DaggerAppComponent.create().getDBConnection()
+  val dbConnection = AppComponentHolder.instance.getDBConnection()
   dbConnection.connect()
-  val dbMasterConnection = DaggerAppComponent.create().getDBMasterConnection()
+  val dbMasterConnection = AppComponentHolder.instance.getDBMasterConnection()
   dbMasterConnection.connect()
 }

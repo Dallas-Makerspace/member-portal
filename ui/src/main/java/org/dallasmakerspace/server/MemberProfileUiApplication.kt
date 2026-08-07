@@ -4,7 +4,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import org.dallasmakerspace.server.common.PostHogConfig
 import org.dallasmakerspace.server.common.TrustManager
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 import org.dallasmakerspace.server.plugins.HealthState
 import org.dallasmakerspace.server.plugins.configureCommonModel
 import org.dallasmakerspace.server.plugins.configureElasticsearch
@@ -18,7 +18,7 @@ import org.dallasmakerspace.server.plugins.configureStatusPages
 import org.dallasmakerspace.server.plugins.configureTemplating
 
 fun main() {
-  val appComponent = DaggerAppComponent.create()
+  val appComponent = AppComponentHolder.instance
   val appConfig = appComponent.getAppConfig()
   val memberServiceClient = appComponent.getMemberServiceClient()
   PostHogConfig.initialize(appConfig)

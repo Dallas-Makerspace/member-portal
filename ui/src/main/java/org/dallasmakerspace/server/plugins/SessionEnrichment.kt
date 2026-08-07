@@ -3,7 +3,7 @@ package org.dallasmakerspace.server.plugins
 import io.ktor.server.application.*
 import io.ktor.server.sessions.*
 import org.dallasmakerspace.server.common.HttpException
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 import org.slf4j.LoggerFactory
 
 /**
@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
  */
 val SessionEnrichmentPlugin =
     createApplicationPlugin(name = "SessionEnrichment") {
-      val appComponent = DaggerAppComponent.create()
+      val appComponent = AppComponentHolder.instance
       val userInfoProvider = appComponent.getUserInfoProvider()
       val log = LoggerFactory.getLogger("SessionEnrichment")
 

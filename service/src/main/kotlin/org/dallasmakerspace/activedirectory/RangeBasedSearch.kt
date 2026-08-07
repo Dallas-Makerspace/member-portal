@@ -8,10 +8,10 @@ import com.unboundid.ldap.sdk.SearchResultEntry
 import com.unboundid.ldap.sdk.SearchScope
 import io.ktor.util.logging.*
 import org.dallasmakerspace.core.LoggerFactory
-import org.dallasmakerspace.di.DaggerAppComponent
+import org.dallasmakerspace.di.AppComponentHolder
 
 object RangeBasedSearch {
-  val loggerFactory: LoggerFactory by lazy { DaggerAppComponent.create().getLoggerFactory() }
+  val loggerFactory: LoggerFactory by lazy { AppComponentHolder.instance.getLoggerFactory() }
   val log: Logger by lazy { loggerFactory.create(RangeBasedSearch::class.java) }
 
   /**

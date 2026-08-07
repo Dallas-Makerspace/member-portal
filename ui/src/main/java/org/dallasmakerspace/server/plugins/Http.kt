@@ -17,11 +17,11 @@ import kotlin.collections.listOf
 import kotlin.collections.set
 import org.dallasmakerspace.server.auth.OAuthSettings
 import org.dallasmakerspace.server.auth.getOAuthSettings
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 import org.dallasmakerspace.server.routes.RouteFactory
 
 fun Application.configureHttp() {
-  val appConfig = DaggerAppComponent.create().getAppConfig()
+  val appConfig = AppComponentHolder.instance.getAppConfig()
   val settings = getOAuthSettings(appConfig)
   val httpClient = getHttpClient()
 

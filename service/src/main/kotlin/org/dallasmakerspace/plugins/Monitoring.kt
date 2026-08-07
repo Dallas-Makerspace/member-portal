@@ -9,11 +9,11 @@ import io.ktor.server.plugins.calllogging.*
 import io.ktor.server.request.*
 import io.ktor.util.date.*
 import org.dallasmakerspace.core.logging.SessionIdGenerator
-import org.dallasmakerspace.di.DaggerAppComponent
+import org.dallasmakerspace.di.AppComponentHolder
 import org.slf4j.event.Level
 
 fun Application.configureMonitoring() {
-  val loggerFactory = DaggerAppComponent.create().getLoggerFactory()
+  val loggerFactory = AppComponentHolder.instance.getLoggerFactory()
   install(CallLogging) {
     level = Level.INFO
     logger = loggerFactory.create(Application::class.java)

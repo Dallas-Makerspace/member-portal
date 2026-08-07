@@ -8,10 +8,10 @@ import io.ktor.server.response.respond
 import io.ktor.server.sessions.*
 import io.ktor.server.thymeleaf.ThymeleafContent
 import org.dallasmakerspace.server.auth.getOAuthSettings
-import org.dallasmakerspace.server.di.DaggerAppComponent
+import org.dallasmakerspace.server.di.AppComponentHolder
 
 fun Application.configureStatusPages() {
-  val appConfig = DaggerAppComponent.create().getAppConfig()
+  val appConfig = AppComponentHolder.instance.getAppConfig()
   val settings = getOAuthSettings(appConfig)
   val ssoProfileUrl = settings.ssoProfileUrl
   install(StatusPages) {
