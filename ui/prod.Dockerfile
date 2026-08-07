@@ -24,4 +24,15 @@ USER appuser
 EXPOSE 8000
 
 # Command to run the application
-CMD ["java", "-jar", "app.jar"]
+# -Djava.net.preferIPv4Stack=true: this container has no working IPv6 egress. Without this flag,
+# outbound calls to dual-stack hosts (e.g. Keycloak, which resolves to both A and AAAA records via
+# Cloudflare) attempt the IPv6 address first, fail/timeout, then fall back to IPv4 — adding ~1-2s to
+# every single such call. All-IPv4 in-network calls (e.g. to member-profile-service) are unaffected
+# since Docker's embedded DNS never returns AAAA records for sibling containers.
+#
+# Previously reverted (84df0b3) not because this flag was itself faulty, but because it happened
+# to ship in the same commit as an unrelated LDAP connection-pool bug (missing @Singleton scope on
+# Dagger @Provides methods, fixed separately in 6eb0761) that caused a production hang the two got
+# tangled together in the incident. Re-applying now that the real cause is confirmed fixed and
+# stable on its own.
+CMD ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar"]
