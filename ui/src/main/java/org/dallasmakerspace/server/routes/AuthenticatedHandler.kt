@@ -34,8 +34,11 @@ abstract class AuthenticatedHandler(
 
   final override suspend fun handle(call: ApplicationCall) {
     val log = loggerFactory.create(javaClass)
+    val t0 = System.nanoTime()
+    fun ms() = (System.nanoTime() - t0) / 1_000_000
 
     session = call.sessions.get<UserSession>() ?: throw AuthException("No session found")
+    val sessionLookupMs = ms()
 
     try {
       userInfo = userInfoProvider.getUserInfo(session.accessToken!!)
@@ -50,6 +53,7 @@ abstract class AuthenticatedHandler(
       }
       throw e
     }
+    val userInfoMs = ms()
 
     val userGroups = (userInfo["groups"] as? List<*>) ?: emptyList<String>()
     val permissions = Role.fromKeycloakGroups(userGroups).flatMap { it.permissions }.toSet()
@@ -57,6 +61,12 @@ abstract class AuthenticatedHandler(
 
     val isInfraUser = authz.can(Permission.MANAGE_CONFIG.name)
     call.attributes.put(IS_INFRA_USER_KEY, isInfraUser)
+    val authzMs = ms()
+
+    log.info(
+        "AuthenticatedHandler timings for ${call.request.uri}: " +
+            "sessionLookup=${sessionLookupMs}ms, getUserInfo=${userInfoMs - sessionLookupMs}ms, " +
+            "authz=${authzMs - userInfoMs}ms, total-before-handler=${authzMs}ms")
 
     handleAuthenticated(call)
   }
