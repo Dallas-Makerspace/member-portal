@@ -5,8 +5,10 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.jackson.*
@@ -25,17 +27,23 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
     const val SHORT_TIMEOUT_MS: Long = 2_500 // 2.5 seconds for non-essential calls
   }
 
-  private fun getClient(timeoutMs: Long = DEFAULT_TIMEOUT_MS) =
+  // One long-lived client for the lifetime of the app, reused across every request. This used to
+  // build (and .use{}-close) a brand-new HttpClient(CIO) per call, which pays full engine
+  // startup + connection/TLS + shutdown cost every time — that was adding well over a second to
+  // every single outbound call (Keycloak userinfo, every backend-service call, etc.), which is why
+  // every authenticated page load had a multi-second floor regardless of how little work it
+  // actually did. HttpTimeout lets each call still override the timeout per-request.
+  private val client =
       HttpClient(CIO) {
         engine {
           endpoint {
             keepAliveTime = 10_000
             maxConnectionsPerRoute = 100
-            requestTimeout = timeoutMs
             connectTimeout = 10_000
             connectAttempts = 2
           }
         }
+        install(HttpTimeout) { requestTimeoutMillis = DEFAULT_TIMEOUT_MS }
         install(ContentNegotiation) { jackson {} }
         install(Logging) {
           logger = Logger.DEFAULT
@@ -48,7 +56,11 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
       customHeaders: StringValues,
       timeoutMs: Long = DEFAULT_TIMEOUT_MS,
   ): Map<String, Any> {
-    val resp = getClient(timeoutMs).use { it.get(url) { headers { appendAll(customHeaders) } } }
+    val resp =
+        client.get(url) {
+          headers { appendAll(customHeaders) }
+          timeout { requestTimeoutMillis = timeoutMs }
+        }
     if (resp.status.isSuccess()) {
       return resp.body<Map<String, Any>>()
     } else {
@@ -78,13 +90,12 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
       timeoutMs: Long = DEFAULT_TIMEOUT_MS,
   ): Map<String, Any> {
     val resp =
-        getClient(timeoutMs).use {
-          it.post {
-            url(url)
-            headers { appendAll(authHeaders) }
-            contentType(ContentType.Application.Json)
-            setBody(payload)
-          }
+        client.post {
+          url(url)
+          headers { appendAll(authHeaders) }
+          contentType(ContentType.Application.Json)
+          setBody(payload)
+          timeout { requestTimeoutMillis = timeoutMs }
         }
     if (resp.status.isSuccess()) {
       return resp.body<Map<String, Any>>()
@@ -102,13 +113,12 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
       timeoutMs: Long = DEFAULT_TIMEOUT_MS,
   ): Map<String, Any> {
     val resp =
-        getClient(timeoutMs).use {
-          it.patch {
-            url(url)
-            headers { appendAll(authHeaders) }
-            contentType(ContentType.Application.Json)
-            setBody(payload)
-          }
+        client.patch {
+          url(url)
+          headers { appendAll(authHeaders) }
+          contentType(ContentType.Application.Json)
+          setBody(payload)
+          timeout { requestTimeoutMillis = timeoutMs }
         }
     if (resp.status.isSuccess()) {
       return resp.body<Map<String, Any>>()
@@ -126,13 +136,12 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
       timeoutMs: Long = DEFAULT_TIMEOUT_MS,
   ): Map<String, Any> {
     val resp =
-        getClient(timeoutMs).use {
-          it.put {
-            url(url)
-            headers { appendAll(authHeaders) }
-            contentType(ContentType.Application.Json)
-            setBody(payload)
-          }
+        client.put {
+          url(url)
+          headers { appendAll(authHeaders) }
+          contentType(ContentType.Application.Json)
+          setBody(payload)
+          timeout { requestTimeoutMillis = timeoutMs }
         }
     if (resp.status.isSuccess()) {
       return resp.body<Map<String, Any>>()
@@ -149,11 +158,10 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
       timeoutMs: Long = DEFAULT_TIMEOUT_MS,
   ): Map<String, Any> {
     val resp =
-        getClient(timeoutMs).use {
-          it.delete {
-            url(url)
-            headers { appendAll(authHeaders) }
-          }
+        client.delete {
+          url(url)
+          headers { appendAll(authHeaders) }
+          timeout { requestTimeoutMillis = timeoutMs }
         }
     if (resp.status.isSuccess()) {
       return resp.body<Map<String, Any>>()
@@ -171,13 +179,12 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
       timeoutMs: Long = DEFAULT_TIMEOUT_MS,
   ) {
     val resp =
-        getClient(timeoutMs).use {
-          it.delete {
-            url(url)
-            headers { appendAll(authHeaders) }
-            contentType(ContentType.Application.Json)
-            setBody(payload)
-          }
+        client.delete {
+          url(url)
+          headers { appendAll(authHeaders) }
+          contentType(ContentType.Application.Json)
+          setBody(payload)
+          timeout { requestTimeoutMillis = timeoutMs }
         }
     if (!resp.status.isSuccess()) {
       log.error("delete: HTTP request failed: $resp")
