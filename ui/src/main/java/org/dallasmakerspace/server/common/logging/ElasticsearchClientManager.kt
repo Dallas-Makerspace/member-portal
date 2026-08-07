@@ -1,6 +1,6 @@
 package org.dallasmakerspace.server.common.logging
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient
+import co.elastic.clients.elasticsearch.ElasticsearchAsyncClient
 import co.elastic.clients.json.jackson.JacksonJsonpMapper
 import co.elastic.clients.transport.rest_client.RestClientTransport
 import java.io.IOException
@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSession
+import kotlinx.coroutines.future.await
 import org.apache.http.HttpHost
 import org.apache.http.HttpRequestInterceptor
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
@@ -40,7 +41,7 @@ object ElasticsearchClientManager {
     var failed = 0
     for (entry in toRetry) {
       try {
-        client.index { i -> i.index("member-portal-logs").document(entry) }
+        client.index { i -> i.index("member-portal-logs").document(entry) }.await()
       } catch (e: IOException) {
         failed++
         retryQueue.offer(entry)
@@ -65,7 +66,14 @@ object ElasticsearchClientManager {
   private val esHost = appConfig.requireStringProperty("app.logging.elastic-host")
   private val loggerFactory = DaggerAppComponent.create().getLoggerFactory()
   val log = loggerFactory.create(ElasticsearchClientManager::class.java)
-  val client: ElasticsearchClient by lazy {
+
+  // Async client: index() returns a CompletableFuture instead of blocking the calling thread for
+  // the full ES round trip. The underlying Apache transport is already async (HttpAsyncClients
+  // below) — the old sync ElasticsearchClient wrapper was needlessly blocking a Dispatchers.IO
+  // worker thread waiting on that async operation for every request/tracked action, which under
+  // load starved other coroutines (including unrelated ones, like the Keycloak userinfo call)
+  // sharing that same limited thread pool.
+  val client: ElasticsearchAsyncClient by lazy {
     // Create an SSLContext that ignores self-signed certificates
     // TODO: verify the server's certificate
     val sslContext: SSLContext =
@@ -100,6 +108,6 @@ object ElasticsearchClientManager {
 
     val restClient = restClientBuilder.build()
     val transport = RestClientTransport(restClient, JacksonJsonpMapper())
-    ElasticsearchClient(transport)
+    ElasticsearchAsyncClient(transport)
   }
 }

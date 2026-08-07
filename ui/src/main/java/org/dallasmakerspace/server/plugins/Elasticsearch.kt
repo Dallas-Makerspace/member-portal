@@ -1,6 +1,6 @@
 package org.dallasmakerspace.server.plugins
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient
+import co.elastic.clients.elasticsearch.ElasticsearchAsyncClient
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
@@ -10,6 +10,7 @@ import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.dallasmakerspace.server.common.logging.ElasticsearchClientManager
@@ -35,7 +36,7 @@ fun Application.configureElasticsearch() {
 }
 
 @Suppress("SwallowedException")
-suspend fun logToElasticsearch(call: PipelineCall, client: ElasticsearchClient) {
+suspend fun logToElasticsearch(call: PipelineCall, client: ElasticsearchAsyncClient) {
   val request = call.request
   val response = call.response
   if (response.status() == HttpStatusCode.TemporaryRedirect ||
@@ -66,7 +67,7 @@ suspend fun logToElasticsearch(call: PipelineCall, client: ElasticsearchClient) 
 
   call.application.launch(Dispatchers.IO) {
     try {
-      client.index { i -> i.index("member-portal-logs").document(logEntry) }
+      client.index { i -> i.index("member-portal-logs").document(logEntry) }.await()
     } catch (e: IOException) {
       ElasticsearchClientManager.enqueueForRetry(logEntry)
     }
