@@ -35,4 +35,12 @@ EXPOSE 8000
 # Dagger @Provides methods, fixed separately in 6eb0761) that caused a production hang the two got
 # tangled together in the incident. Re-applying now that the real cause is confirmed fixed and
 # stable on its own.
-CMD ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar"]
+#
+# -Xlog:gc*:stdout:time,level: TEMPORARY diagnostic logging. Packet capture on 2026-08-07 showed
+# outbound Keycloak calls start fast after a fresh deploy (~100-250ms) and climb steadily with
+# load (~600ms+ within a minute), with the extra time entirely in our own process's reaction time
+# to I/O (network RTTs and Keycloak's own response time stayed constant between fast/slow samples).
+# That pattern - degrades with request volume, resets clean on restart, no corresponding growth in
+# RSS or thread count - points at GC pause frequency rising with allocation rate. This flag lets us
+# correlate GC pause timestamps against request timing to confirm. Remove once diagnosed.
+CMD ["java", "-Djava.net.preferIPv4Stack=true", "-Xlog:gc*:stdout:time,level", "-jar", "app.jar"]
