@@ -108,6 +108,35 @@ class NotificationWorkerTest {
       }
 
   @Test
+  fun `processPending should send to allowlisted testers when globally disabled`() = runBlocking {
+    whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
+        .thenReturn(FeatureFlagValue(enabled = false, enabledUsernames = setOf("jdoe")))
+    whenever(mockRepository.getPending(any(), any())).thenReturn(listOf(notification(id = 1L)))
+    whenever(mockNotifier.send(any(), anyOrNull())).thenReturn(SendResult.Success("txn-1"))
+
+    val summary = worker.processPending()
+
+    assertTrue(summary.contains("sent=1"))
+    assertTrue(summary.contains("skipped=0"))
+    verify(mockRepository).markSent(eq(1L), eq("txn-1"), any())
+  }
+
+  @Test
+  fun `processPending should skip non-allowlisted members when globally disabled`() = runBlocking {
+    whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
+        .thenReturn(FeatureFlagValue(enabled = false, enabledUsernames = setOf("someoneelse")))
+    whenever(mockRepository.getPending(any(), any())).thenReturn(listOf(notification(id = 1L)))
+
+    val summary = worker.processPending()
+
+    assertTrue(summary.contains("processed=0"))
+    assertTrue(summary.contains("skipped=1"))
+    verify(mockRepository, org.mockito.kotlin.never()).markSending(any())
+    verify(mockNotifier, org.mockito.kotlin.never()).send(any(), anyOrNull())
+    Unit
+  }
+
+  @Test
   fun `processPending should mark notification sent on success`() = runBlocking {
     whenever(mockRepository.getPending(any(), any())).thenReturn(listOf(notification(id = 1L)))
     whenever(mockNotifier.send(any(), anyOrNull())).thenReturn(SendResult.Success("txn-123"))

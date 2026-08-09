@@ -7,6 +7,7 @@ import javax.inject.Singleton
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
+import org.dallasmakerspace.config.FeatureFlagValue
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.channels.Notifier
@@ -52,33 +53,47 @@ constructor(
    * output.
    *
    * When the site config flag [ConfigRegistry.NOTIFICATIONS_ENABLED] is false, nothing is sent and
-   * rows remain in IN_DIGEST until it is re-enabled.
+   * rows remain in IN_DIGEST until it is re-enabled - except for members listed in the flag's
+   * `enabledUsernames` allowlist (e.g. trusted testers piloting notifications ahead of a full
+   * rollout), whose digests are still sent. `enabledGroupNames` is not checked here: doing so
+   * would require an AD group-membership lookup per queued recipient, so only the per-username
+   * allowlist is honored at this call site.
    */
   suspend fun processDigests(): String {
-    if (!configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED).enabled) {
+    val flag = configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED)
+    if (!flag.enabled && flag.enabledUsernames.isEmpty()) {
       log.info("Digest processor paused: site config notifications.enabled=false")
       return "processed=0\npaused=true"
     }
-    return processDueBatch(LocalDateTime.now(utcZone))
+    return processDueBatch(LocalDateTime.now(utcZone), flag)
   }
 
-  private suspend fun processDueBatch(now: LocalDateTime): String {
+  private suspend fun processDueBatch(now: LocalDateTime, flag: FeatureFlagValue): String {
     val rows = repository.getInDigest(batchSize)
     if (rows.isEmpty()) return "processed=0"
+
+    val grouped = rows.groupBy { it.memberUsername }
+    // When the master switch is off, only send to allowlisted testers; everyone else's rows stay
+    // in IN_DIGEST untouched until the flag is flipped on or they're allowlisted too.
+    val eligibleGroups =
+        if (flag.enabled) grouped else grouped.filterKeys { it in flag.enabledUsernames }
+    val skipped = rows.size - eligibleGroups.values.sumOf { it.size }
 
     var sent = 0
     var transient = 0
     var deadLetter = 0
-    for ((memberUsername, group) in rows.groupBy { it.memberUsername }) {
+    for ((memberUsername, group) in eligibleGroups) {
       val outcome = deliverGroup(memberUsername, group, now)
       sent += outcome.sent
       transient += outcome.transient
       deadLetter += outcome.deadLetter
     }
+    val processed = rows.size - skipped
     log.info(
-        "Digest processor processed ${rows.size} rows" +
-            " (sent=$sent, transient=$transient, dead-letter=$deadLetter)")
-    return "processed=${rows.size}\nsent=$sent\ntransient=$transient\ndead-letter=$deadLetter"
+        "Digest processor processed $processed rows" +
+            " (sent=$sent, transient=$transient, dead-letter=$deadLetter, skipped=$skipped)")
+    return "processed=$processed\nsent=$sent\ntransient=$transient" +
+        "\ndead-letter=$deadLetter\nskipped=$skipped"
   }
 
   private data class GroupOutcome(

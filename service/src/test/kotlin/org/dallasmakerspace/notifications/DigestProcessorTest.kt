@@ -100,6 +100,49 @@ class DigestProcessorTest {
       }
 
   @Test
+  fun `processDigests should send to allowlisted testers when globally disabled`() = runBlocking {
+    whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
+        .thenReturn(FeatureFlagValue(enabled = false, enabledUsernames = setOf("jdoe")))
+    whenever(mockRepository.getInDigest(any(), anyOrNull()))
+        .thenReturn(
+            listOf(
+                notification(id = 1L, memberUsername = "jdoe"),
+                notification(id = 2L, memberUsername = "asmith")))
+    whenever(mockActiveDirectory.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to adUser("jdoe", "jdoe@example.com")))
+    whenever(mockNotifier.sendDigest(any(), anyOrNull(), any(), any(), any()))
+        .thenReturn(SendResult.Success("digest-txn"))
+
+    val summary = processor.processDigests()
+
+    assertTrue(summary.contains("sent=1"))
+    assertTrue(summary.contains("skipped=1"))
+    verify(mockNotifier).sendDigest(eq("jdoe"), eq("jdoe@example.com"), any(), any(), any())
+    verify(mockNotifier, org.mockito.kotlin.never())
+        .sendDigest(eq("asmith"), anyOrNull(), any(), any(), any())
+    verify(mockRepository).markSent(eq(1L), eq("digest-txn"), any())
+    verify(mockRepository, org.mockito.kotlin.never()).markSending(2L)
+    Unit
+  }
+
+  @Test
+  fun `processDigests should skip all when disabled and no members allowlisted`() = runBlocking {
+    whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
+        .thenReturn(FeatureFlagValue(enabled = false, enabledUsernames = setOf("someoneelse")))
+    whenever(mockRepository.getInDigest(any(), anyOrNull()))
+        .thenReturn(listOf(notification(id = 1L, memberUsername = "jdoe")))
+
+    val summary = processor.processDigests()
+
+    assertTrue(summary.contains("processed=0"))
+    assertTrue(summary.contains("skipped=1"))
+    verify(mockRepository, org.mockito.kotlin.never()).markSending(any())
+    verify(mockNotifier, org.mockito.kotlin.never())
+        .sendDigest(any(), anyOrNull(), any(), any(), any())
+    Unit
+  }
+
+  @Test
   fun `processDigests should send one digest email per member and mark rows sent`() = runBlocking {
     whenever(mockRepository.getInDigest(any(), anyOrNull()))
         .thenReturn(

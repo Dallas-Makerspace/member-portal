@@ -7,6 +7,7 @@ import javax.inject.Singleton
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
+import org.dallasmakerspace.config.FeatureFlagValue
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.channels.Notifier
@@ -49,22 +50,43 @@ constructor(
    * Processes one batch of due notifications. Returns a summary string for logging/cron output.
    *
    * When the site config flag [ConfigRegistry.NOTIFICATIONS_ENABLED] is false, nothing is sent and
-   * notifications remain queued until it is re-enabled. Immediate notifications beyond
+   * notifications remain queued until it is re-enabled - except for members listed in the flag's
+   * `enabledUsernames` allowlist (e.g. trusted testers piloting notifications ahead of a full
+   * rollout), whose queued notifications are still sent. `enabledGroupNames` is not checked here:
+   * doing so would require an AD group-membership lookup per queued recipient, so only the
+   * per-username allowlist is honored at this call site. Immediate notifications beyond
    * [ConfigRegistry.NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP] per member per day are deferred
    * to the next digest instead of being sent.
    */
   suspend fun processPending(): String {
-    if (!configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED).enabled) {
+    val flag = configOverrideService.get(ConfigRegistry.NOTIFICATIONS_ENABLED)
+    if (!flag.enabled && flag.enabledUsernames.isEmpty()) {
       log.info("Notification worker paused: site config notifications.enabled=false")
       return "processed=0\npaused=true"
     }
-    return processDueBatch(LocalDateTime.now(utcZone))
+    return processDueBatch(LocalDateTime.now(utcZone), flag)
   }
 
-  private suspend fun processDueBatch(now: LocalDateTime): String {
+  private suspend fun processDueBatch(now: LocalDateTime, flag: FeatureFlagValue): String {
     val pending = repository.getPending(batchSize, now)
     if (pending.isEmpty()) return "processed=0"
 
+    // When the master switch is off, only send to allowlisted testers; everyone else's rows stay
+    // queued as-is (not touched/retried) until the flag is flipped on or they're allowlisted too.
+    val eligible =
+        if (flag.enabled) pending else pending.filter { it.memberUsername in flag.enabledUsernames }
+    val skipped = pending.size - eligible.size
+    return if (eligible.isEmpty()) {
+      log.info(
+          "Notification worker skipped all ${pending.size} pending rows: notifications " +
+              "disabled and no allowlisted recipients in batch")
+      "processed=0\nskipped=$skipped"
+    } else {
+      sendEligible(eligible, skipped, now)
+    }
+  }
+
+  private suspend fun sendEligible(eligible: List<Notification>, skipped: Int, now: LocalDateTime): String {
     val dailyCap =
         configOverrideService.get(ConfigRegistry.NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP)
     val dayStartUtc = now.toLocalDate().atStartOfDay()
@@ -73,7 +95,7 @@ constructor(
     var transient = 0
     var deadLetter = 0
     var deferredToDigest = 0
-    for (notification in pending) {
+    for (notification in eligible) {
       if (dailyCap > 0 &&
           notification.aggregation == Aggregation.IMMEDIATE &&
           repository.countImmediateSentSince(notification.memberUsername, dayStartUtc) >=
@@ -113,10 +135,10 @@ constructor(
       }
     }
     log.info(
-        "Notification worker processed ${pending.size} rows" +
-            " (sent=$sent, transient=$transient, dead-letter=$deadLetter, deferred-to-digest=$deferredToDigest)")
-    return "processed=${pending.size}\nsent=$sent\ntransient=$transient" +
-        "\ndead-letter=$deadLetter\ndeferred-to-digest=$deferredToDigest"
+        "Notification worker processed ${eligible.size} rows (sent=$sent, transient=$transient, " +
+            "dead-letter=$deadLetter, deferred-to-digest=$deferredToDigest, skipped=$skipped)")
+    return "processed=${eligible.size}\nsent=$sent\ntransient=$transient" +
+        "\ndead-letter=$deadLetter\ndeferred-to-digest=$deferredToDigest\nskipped=$skipped"
   }
 
   @Suppress("TooGenericExceptionCaught") // Catch-all: any provider/network error is retryable.

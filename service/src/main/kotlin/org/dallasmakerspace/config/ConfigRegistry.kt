@@ -92,10 +92,12 @@ object ConfigRegistry {
           key = "notifications.enabled",
           description =
               "Master switch for sending member notifications; when disabled the worker skips " +
-                  "sending and notifications wait in the queue until it is re-enabled. Stored as " +
-                  "a FeatureFlagType for consistency with other flags, but only the global " +
-                  "'enabled' bit is checked here - there's no per-recipient username to allowlist " +
-                  "against at this call site",
+                  "sending and notifications wait in the queue until it is re-enabled, except for " +
+                  "members listed in enabledUsernames below, whose notifications are still sent - " +
+                  "use that to pilot with trusted testers before a full rollout. " +
+                  "enabledGroupNames is not honored by the notification worker/digest processor " +
+                  "(would require a per-recipient AD group lookup); only enabledUsernames is " +
+                  "checked at those call sites",
           category = "Notifications",
           defaultValue = FeatureFlagValue(enabled = true),
           type = ConfigValueType.FeatureFlagType,
