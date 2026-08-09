@@ -20,6 +20,18 @@ object ConfigRegistry {
           type = ConfigValueType.BooleanType,
       )
 
+  val GROUP_SETTINGS_ENABLED =
+      ConfigKey(
+          key = "groups.settings-enabled",
+          description =
+              "Enable viewing and editing per-group settings (such as allow_self_add_remove " +
+                  "and allow_follow) via the member portal; can be piloted for specific " +
+                  "admins/AD groups before a full rollout",
+          category = "Groups",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val REMOTE_ACCESS_ENABLED =
       ConfigKey(
           key = "remote-access.enabled",
@@ -116,6 +128,7 @@ object ConfigRegistry {
       listOf(
           VOTING_ELECTIONS_URL,
           GROUP_MEMBER_MANAGEMENT_ENABLED,
+          GROUP_SETTINGS_ENABLED,
           REMOTE_ACCESS_ENABLED,
           REMOTE_ACCESS_JUMP_SERVER_CONNECTION_IDS,
           REMOTE_ACCESS_JUMP_SERVER_AD_GROUP,

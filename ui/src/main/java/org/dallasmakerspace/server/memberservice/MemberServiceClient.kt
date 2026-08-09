@@ -115,6 +115,41 @@ constructor(
     dmsHttpClient.patch("$baseUrl/members/$username/settings", apiHeaders, body)
   }
 
+  suspend fun getGroupSettings(groupSlug: String, sessionId: String?): Map<String, String> {
+    val apiHeaders = getApiHeaders(sessionId)
+    val settingsMap = dmsHttpClient.get("$baseUrl/groups/$groupSlug/settings", apiHeaders)
+    val data = settingsMap["data"] as Map<*, *>? ?: return emptyMap()
+    return data.mapKeys { it.key.toString() }.mapValues { it.value?.toString() ?: "" }
+  }
+
+  suspend fun getGroupSettingsHistory(
+      groupSlug: String,
+      sessionId: String?
+  ): List<Map<String, String?>> {
+    val apiHeaders = getApiHeaders(sessionId)
+    val historyMap =
+        dmsHttpClient.get("$baseUrl/groups/$groupSlug/settings/history", apiHeaders)
+    val data = historyMap["data"] as List<*>? ?: return emptyList()
+    return data.mapNotNull { entry ->
+      (entry as? Map<*, *>)?.mapKeys { it.key.toString() }?.mapValues { it.value?.toString() }
+    }
+  }
+
+  suspend fun updateGroupSettings(
+      groupSlug: String,
+      actorUsername: String?,
+      updates: Map<String, String?>,
+      sessionId: String?,
+  ) {
+    val baseHeaders = getApiHeaders(sessionId)
+    val apiHeaders =
+        StringValues.build {
+          baseHeaders.forEach { key, values -> values.forEach { value -> append(key, value) } }
+          actorUsername?.let { append("X-Actor-Username", it) }
+        }
+    dmsHttpClient.patch("$baseUrl/groups/$groupSlug/settings", apiHeaders, updates)
+  }
+
   private fun getApiHeaders(sessionId: String?, username: String? = null) =
       StringValues.build {
         sessionId?.apply { append("X-Request-Id", sessionId) }

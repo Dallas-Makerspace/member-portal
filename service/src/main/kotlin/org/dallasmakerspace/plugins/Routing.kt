@@ -41,6 +41,7 @@ import org.dallasmakerspace.discourse.FeaturedProjectsService
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
 import org.dallasmakerspace.members.MemberService
+import org.dallasmakerspace.members.GroupSettingsService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.suspendTransaction
@@ -165,6 +166,10 @@ fun Application.configureRouting() {
     val memberSettingsService: MemberSettingsService by lazy {
       AppComponentHolder.instance.getMemberSettingsService()
     }
+    val groupSettingsService: GroupSettingsService by lazy {
+      AppComponentHolder.instance.getGroupSettingsService()
+    }
+    val featureFlagService by lazy { AppComponentHolder.instance.getFeatureFlagService() }
 
     get("/") {
       call.respondText(
@@ -479,6 +484,19 @@ fun Application.configureRouting() {
           }
         }
 
+        get<Groups.DMSGroup.Settings> { request ->
+          val groupName = Groups.getNameFromSlug(request.parent.groupslug)
+          val settings = groupSettingsService.getSettings(groupName)
+          call.respond(ApiResponse(Status.SUCCESS, "Group settings for $groupName", settings))
+        }
+
+        get<Groups.DMSGroup.Settings.History> { request ->
+          val groupName = Groups.getNameFromSlug(request.parent.parent.groupslug)
+          val history = groupSettingsService.getSettingsHistory(groupName)
+          call.respond(
+              ApiResponse(Status.SUCCESS, "Group settings history for $groupName", history))
+        }
+
         post("/calendar/upcoming-events") {
           val groupNames = call.receive<List<String>>()
           val events = calendarService.getUpcomingPrerequisiteEvents(groupNames)
@@ -554,6 +572,38 @@ fun Application.configureRouting() {
                   "Removed member from $groupslug: $memberUsername",
                   null,
               ))
+        }
+
+        /**
+         * Group settings — gated by [ConfigRegistry.GROUP_SETTINGS_ENABLED], not by
+         * GROUP_MEMBER_MANAGEMENT_ENABLED. That flag controls whether self-service add/remove is
+         * exposed to end members; group settings is a separate, still-in-progress admin feature
+         * with its own rollout switch.
+         */
+        patch<Groups.DMSGroup.Settings> { request ->
+          val groupslug = request.parent.groupslug
+          val groupName = Groups.getNameFromSlug(groupslug)
+          val actorUsername = call.request.headers["X-Actor-Username"]
+          // Can't verify pilot membership without an actor, so treat a missing actor as disabled.
+          val featureEnabled =
+              actorUsername?.let {
+                featureFlagService.isEnabledForUsername(ConfigRegistry.GROUP_SETTINGS_ENABLED, it)
+              } ?: false
+          if (!featureEnabled) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                ApiResponse(Status.ERROR, "Group settings feature is not enabled", null))
+            return@patch
+          }
+          // No AD lookup here for the group's real DN: this is a framework-only, admin-editable
+          // feature, and depending on a live AD call in the settings write path would make it
+          // fail whenever AD is slow/unavailable for no real benefit. getOrCreateGroup already
+          // falls back to a placeholder DN when none is supplied.
+          val updates = call.receive<Map<String, String?>>()
+          groupSettingsService.updateSettings(groupName, null, updates, actorUsername)
+          val settings = groupSettingsService.getSettings(groupName)
+          call.respond(
+              ApiResponse(Status.SUCCESS, "Group settings updated for $groupName", settings))
         }
 
         /** Voter registration — not gated by GROUP_MEMBER_MANAGEMENT_ENABLED */
@@ -1047,7 +1097,6 @@ fun Application.configureRouting() {
     val profileSubscriptionService by lazy {
       AppComponentHolder.instance.getProfileSubscriptionService()
     }
-    val featureFlagService by lazy { AppComponentHolder.instance.getFeatureFlagService() }
     profileSubscriptionRoutes(profileSubscriptionService, featureFlagService)
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */

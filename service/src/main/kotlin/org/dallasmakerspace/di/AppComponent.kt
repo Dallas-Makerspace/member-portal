@@ -24,6 +24,7 @@ import org.dallasmakerspace.discourse.FeaturedProjectsService
 import org.dallasmakerspace.doorcontroller.DoorControllerService
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
+import org.dallasmakerspace.members.GroupSettingsService
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.notifications.DigestProcessor
@@ -107,6 +108,8 @@ interface AppComponent {
   fun getRemoteAccessService(): RemoteAccessService
 
   fun getMemberSettingsService(): MemberSettingsService
+
+  fun getGroupSettingsService(): GroupSettingsService
 
   fun getNotificationService(): NotificationService
 

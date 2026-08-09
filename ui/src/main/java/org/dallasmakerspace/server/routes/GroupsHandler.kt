@@ -44,13 +44,25 @@ constructor(
       memberServiceClient.getFeatureFlag(
           "groups.member-management-enabled", session.sessionId, isInfraUser)
     }
+    val groupSettingsFeatureEnabledDeferred = async {
+      // groups.settings-enabled is a FeatureFlagType (can be piloted per admin/AD group), so this
+      // needs the per-username check rather than the plain current-value lookup used above.
+      val currentUsername = userInfo["preferred_username"] as? String
+      currentUsername?.let {
+        memberServiceClient.isFeatureEnabled("groups.settings-enabled", it, session.sessionId)
+      } ?: false
+    }
 
     val requestedGroup = groupDeferred.await()
     val hasPrerequisiteClasses = hasPrerequisiteClassesDeferred.await()
     val featureEnabled = featureEnabledDeferred.await()
+    val groupSettingsFeatureEnabled = groupSettingsFeatureEnabledDeferred.await()
 
     // Check feature flag and user role
     val canManageMembers = featureEnabled && authz.can(Permission.MANAGE_GROUPS.name)
+    // Group settings are a separate admin action from member management, gated by its own
+    // "groups.settings-enabled" rollout flag rather than the member-management one.
+    val canManageGroupSettings = groupSettingsFeatureEnabled && authz.can(Permission.MANAGE_GROUPS.name)
     val actorUsername = userInfo["preferred_username"] as? String
 
     log.debug("Group: {}", requestedGroup)
@@ -59,6 +71,7 @@ constructor(
             "name" to requestedGroupName,
             "slug" to requestedGroupSlug,
             "hasPrerequisiteClasses" to hasPrerequisiteClasses,
+            "canManageGroupSettings" to canManageGroupSettings,
             "canManageMembers" to canManageMembers,
             "actorUsername" to (actorUsername ?: ""),
             "memberUsernamesJson" to "[]",

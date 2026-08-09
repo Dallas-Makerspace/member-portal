@@ -63,6 +63,7 @@ data class UserSession(
     var isLinkedInLinkSuccess: Boolean = false,
     var isVoterRegistrationSuccess: Boolean = false,
     var isSettingsUpdateSuccess: Boolean = false,
+    var isGroupSettingsUpdateSuccess: Boolean = false,
     var pendingCommunicationPreference: String? = null,
     var sessionId: String? = null,
     var userId: String? = null,

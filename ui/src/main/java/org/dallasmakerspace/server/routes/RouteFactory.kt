@@ -34,6 +34,7 @@ object RouteFactory {
         .replace("@[a-zA-Z0-9_-]*".toRegex(), "@{preferred_username}")
         .replace("/groups/[^/]+/members/[^/]+".toRegex(), "/groups/{group_slug}/members/{username}")
         .replace("/groups/[^/]+/members".toRegex(), "/groups/{group_slug}/members")
+        .replace("/groups/[^/]+/settings".toRegex(), "/groups/{group_slug}/settings")
         .replace("/groups/[^/]+$".toRegex(), "/groups/{group_slug}")
         .replace("/reports.*".toRegex(), "/reports/{path...}")
         .replace("/backend-api/.*".toRegex(), "/backend-api/{path...}")
@@ -77,6 +78,7 @@ object RouteFactory {
     GROUPS("/groups/{group_slug}"),
     GROUP_MEMBERS("/groups/{group_slug}/members"),
     GROUP_MEMBER_DETAIL("/groups/{group_slug}/members/{username}"),
+    GROUP_SETTINGS("/groups/{group_slug}/settings"),
     SEARCH_PRELOAD("/search-preload"),
     PROFILE_DEBUG_INFO("/profile/@{preferred_username}/debug-info"),
     PROFILE_TOTAL_ACTIVE_TIME("/profile/@{preferred_username}/total-active-time"),

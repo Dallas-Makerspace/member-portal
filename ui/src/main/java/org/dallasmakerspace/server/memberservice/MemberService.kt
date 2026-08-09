@@ -140,6 +140,26 @@ constructor(
     return memberServiceClient.getGroup(groupName, sessionId)
   }
 
+  suspend fun getGroupSettings(groupSlug: String, sessionId: String?): Map<String, String> {
+    return memberServiceClient.getGroupSettings(groupSlug, sessionId)
+  }
+
+  suspend fun getGroupSettingsHistory(
+      groupSlug: String,
+      sessionId: String?
+  ): List<Map<String, String?>> {
+    return memberServiceClient.getGroupSettingsHistory(groupSlug, sessionId)
+  }
+
+  suspend fun updateGroupSettings(
+      groupSlug: String,
+      actorUsername: String?,
+      updates: Map<String, String?>,
+      sessionId: String?,
+  ) {
+    memberServiceClient.updateGroupSettings(groupSlug, actorUsername, updates, sessionId)
+  }
+
   suspend fun getAllGroups(sessionId: String?): List<DMSGroup> {
     return memberServiceClient.getAllGroups(sessionId)
   }

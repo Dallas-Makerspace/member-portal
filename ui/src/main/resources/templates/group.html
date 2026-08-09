@@ -37,6 +37,13 @@
                             View Prerequisite Classes
                         </a>
                     </div>
+                    <div th:if="${canManageGroupSettings}" class="mt-3">
+                        <a th:href="'/groups/' + ${slug} + '/settings'"
+                           class="btn btn-outline-secondary btn-sm">
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">settings</span>
+                            Settings
+                        </a>
+                    </div>
                 </div>
             </div>
 

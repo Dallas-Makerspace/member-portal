@@ -18,6 +18,11 @@ class Groups {
     @Resource("remove") class Remove(val parent: DMSGroup)
 
     @Resource("has-prerequisite-classes") class HasPrerequisiteClasses(val parent: DMSGroup)
+
+    @Resource("settings")
+    class Settings(val parent: DMSGroup) {
+      @Resource("history") class History(val parent: Settings)
+    }
   }
 
   companion object {

@@ -282,6 +282,28 @@ CREATE TABLE `ask_ai_feedback` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `group_settings`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `group_settings` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT 'id is auto increment primary key.',
+  `group_id` int(10) unsigned NOT NULL COMMENT 'The id of the group this setting belongs to',
+  `setting_key` varchar(100) NOT NULL COMMENT 'The key identifying the setting',
+  `setting_value` longtext DEFAULT NULL COMMENT 'The serialized value of the setting; NULL records a cleared setting',
+  `updated_by` int(10) unsigned DEFAULT NULL COMMENT 'The id of the member who made the change',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() COMMENT 'The timestamp when this setting was last updated',
+  PRIMARY KEY (`id`),
+  KEY `group_settings_group_id_IDX` (`group_id`) USING BTREE,
+  KEY `group_settings_setting_key_IDX` (`setting_key`) USING BTREE,
+  KEY `group_settings_updated_by_IDX` (`updated_by`) USING BTREE,
+  CONSTRAINT `group_settings_group_FK` FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`),
+  CONSTRAINT `group_settings_updated_by_FK` FOREIGN KEY (`updated_by`) REFERENCES `profile` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Per-group settings (append-only audit trail). Framework only — see GroupSettingsRegistry for what each key gates.';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `member_settings`
 --
 
