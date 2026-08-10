@@ -500,6 +500,22 @@ constructor(
     }
   }
 
+  suspend fun isGroupAdmin(username: String, groupSlug: String, sessionId: String?): Boolean {
+    return try {
+      val baseHeaders = getApiHeaders(sessionId)
+      val apiHeaders =
+          StringValues.build {
+            baseHeaders.forEach { key, values -> values.forEach { value -> append(key, value) } }
+            append("X-Actor-Username", username)
+          }
+      val result = dmsHttpClient.get("$baseUrl/groups/$groupSlug/is-admin", apiHeaders)
+      result["data"] as? Boolean ?: false
+    } catch (ex: Exception) {
+      log.warn("Failed to check group admin status for $username on group: $groupSlug", ex)
+      false
+    }
+  }
+
   suspend fun getUpcomingPrerequisiteEvents(
       groupNames: List<String>,
       sessionId: String?,

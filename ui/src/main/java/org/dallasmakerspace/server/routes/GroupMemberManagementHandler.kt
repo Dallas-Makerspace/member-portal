@@ -27,8 +27,6 @@ constructor(
   @Serializable data class ApiResponse(val success: Boolean, val message: String)
 
   override suspend fun handleAuthenticated(call: ApplicationCall) {
-    if (!call.require(Permission.MANAGE_GROUPS)) return
-
     val groupSlug =
         call.parameters["group_slug"]
             ?: run {
@@ -37,6 +35,18 @@ constructor(
             }
 
     val actorUsername = userInfo["preferred_username"] as? String
+
+    // A group's own AD-designated admin (e.g. a "managedBy" group like "CA Teachers") may manage
+    // membership even without the site-wide MANAGE_GROUPS permission — see GroupAuthz.kt. This is
+    // the real enforcement boundary for group member add/remove: the service trusts the UI
+    // backend's service account completely and does no per-human check of its own.
+    val isGroupAdmin =
+        actorUsername?.let { memberService.isGroupAdmin(it, groupSlug, session.sessionId) }
+            ?: false
+    if (!canManageGroup(authz.can(Permission.MANAGE_GROUPS.name), isGroupAdmin)) {
+      call.respond(HttpStatusCode.Forbidden, ApiResponse(false, "Forbidden"))
+      return
+    }
 
     when (call.request.httpMethod) {
       HttpMethod.Post -> {

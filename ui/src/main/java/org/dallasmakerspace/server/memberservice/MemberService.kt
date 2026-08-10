@@ -226,6 +226,10 @@ constructor(
     return memberServiceClient.hasPrerequisiteClasses(groupSlug, sessionId)
   }
 
+  suspend fun isGroupAdmin(username: String, groupSlug: String, sessionId: String?): Boolean {
+    return memberServiceClient.isGroupAdmin(username, groupSlug, sessionId)
+  }
+
   suspend fun getUpcomingPrerequisiteEvents(
       groupNames: List<String>,
       sessionId: String?,

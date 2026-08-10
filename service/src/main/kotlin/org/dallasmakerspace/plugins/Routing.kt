@@ -484,6 +484,13 @@ fun Application.configureRouting() {
           }
         }
 
+        get<Groups.DMSGroup.IsAdmin> { request ->
+          val groupslug = request.parent.groupslug
+          val actorUsername = call.request.headers["X-Actor-Username"]
+          val isAdmin = actorUsername?.let { memberService.isGroupAdmin(it, groupslug) } ?: false
+          call.respond(ApiResponse(Status.SUCCESS, "Group admin check", isAdmin))
+        }
+
         get<Groups.DMSGroup.Settings> { request ->
           val groupName = Groups.getNameFromSlug(request.parent.groupslug)
           val settings = groupSettingsService.getSettings(groupName)

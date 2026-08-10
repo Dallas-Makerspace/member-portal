@@ -33,6 +33,7 @@ constructor(
     val requestedGroupSlug =
         call.parameters["group_slug"] ?: throw AuthException("No group slug found in url path")
     val requestedGroupName = getNameFromSlug(requestedGroupSlug)
+    val actorUsername = userInfo["preferred_username"] as? String
 
     // Fetch group data and prerequisite classes check in parallel
     val groupDeferred = async { memberService.getGroup(requestedGroupSlug, session.sessionId) }
@@ -47,9 +48,15 @@ constructor(
     val groupSettingsFeatureEnabledDeferred = async {
       // groups.settings-enabled is a FeatureFlagType (can be piloted per admin/AD group), so this
       // needs the per-username check rather than the plain current-value lookup used above.
-      val currentUsername = userInfo["preferred_username"] as? String
-      currentUsername?.let {
+      actorUsername?.let {
         memberServiceClient.isFeatureEnabled("groups.settings-enabled", it, session.sessionId)
+      } ?: false
+    }
+    // Lets a group's own AD-designated admin (e.g. a "managedBy" group like "CA Teachers") manage
+    // membership even without the site-wide MANAGE_GROUPS permission — see GroupAuthz.kt.
+    val isGroupAdminDeferred = async {
+      actorUsername?.let {
+        memberServiceClient.isGroupAdmin(it, requestedGroupSlug, session.sessionId)
       } ?: false
     }
 
@@ -57,13 +64,14 @@ constructor(
     val hasPrerequisiteClasses = hasPrerequisiteClassesDeferred.await()
     val featureEnabled = featureEnabledDeferred.await()
     val groupSettingsFeatureEnabled = groupSettingsFeatureEnabledDeferred.await()
+    val isGroupAdmin = isGroupAdminDeferred.await()
 
     // Check feature flag and user role
-    val canManageMembers = featureEnabled && authz.can(Permission.MANAGE_GROUPS.name)
+    val canManageMembers =
+        featureEnabled && canManageGroup(authz.can(Permission.MANAGE_GROUPS.name), isGroupAdmin)
     // Group settings are a separate admin action from member management, gated by its own
     // "groups.settings-enabled" rollout flag rather than the member-management one.
     val canManageGroupSettings = groupSettingsFeatureEnabled && authz.can(Permission.MANAGE_GROUPS.name)
-    val actorUsername = userInfo["preferred_username"] as? String
 
     log.debug("Group: {}", requestedGroup)
     val jsonMap: MutableMap<String, Any> =

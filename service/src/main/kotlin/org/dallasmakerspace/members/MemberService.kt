@@ -14,6 +14,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toKotlinLocalDate
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
+import org.dallasmakerspace.activedirectory.isGroupDN
+import org.dallasmakerspace.activedirectory.parseCNFromDN
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.db.master.IMakerManagerDataService
 import org.dallasmakerspace.db.master.IWhmcsDataService
@@ -932,6 +934,64 @@ constructor(
     }
   }
 
+  /**
+   * Whether [username] administers [groupslug]: directly (member of one of the group's
+   * `administrators` entries) or one hop removed (member of a group that is itself a direct
+   * member of an administrators entry). Capped at [MAX_GROUP_ADMIN_DEPTH] hops as a guardrail —
+   * no AD-side recursive/chain query is used, so this is a plain bounded frontier expansion over
+   * already-fetched group data. Only `administrators` entries that are themselves groups are
+   * considered; an individual `managedBy` person still falls back to requiring MANAGE_GROUPS.
+   *
+   * DN comparisons are done case-insensitively — AD's distinguishedNameMatch rule is
+   * case-insensitive, and the same DN can come back with different casing depending on which
+   * attribute (`memberOf` vs. `member`/`managedBy`) it was read from.
+   *
+   * AD calls are blocking, so run on IO dispatcher to avoid blocking coroutine threads.
+   */
+  suspend fun isGroupAdmin(username: String, groupslug: String): Boolean {
+    return try {
+      val groupName = Groups.getNameFromSlug(groupslug)
+      val adminGroupDNs =
+          withContext(Dispatchers.IO) { activeDirectoryService.getGroup(groupName) }
+              .administrators
+              .filter { isGroupDN(it) }
+      if (adminGroupDNs.isEmpty()) return false
+
+      val actorGroupDNs =
+          withContext(Dispatchers.IO) { activeDirectoryService.getMemberByUsername(username) }
+              .groups
+              .map { it.distinguishedName }
+
+      var frontier = adminGroupDNs
+      if (actorGroupDNs.matchesAnyDn(frontier)) return true
+
+      repeat(MAX_GROUP_ADMIN_DEPTH - 1) {
+        frontier =
+            frontier.flatMap { dn ->
+              try {
+                withContext(Dispatchers.IO) {
+                  activeDirectoryService.getGroup(parseCNFromDN(dn)).nestedGroups
+                }
+              } catch (e: Exception) {
+                log.warn(
+                    "Could not resolve nested groups for admin group DN '$dn' while " +
+                        "checking '$username' on '$groupslug', skipping this branch",
+                    e)
+                emptyList()
+              }
+            }
+        if (actorGroupDNs.matchesAnyDn(frontier)) return true
+      }
+      false
+    } catch (e: Exception) {
+      log.warn(
+          "Could not check group admin status for '$username' on group '$groupslug', " +
+              "defaulting to false",
+          e)
+      false
+    }
+  }
+
   private suspend fun computeWhmcsStatus(username: String): WhmcsStatusSummary {
     val relatedAccounts = makerManagerDataService.getAccountInfoMap(listOf(username))
     val accountInfo =
@@ -1079,6 +1139,16 @@ constructor(
 }
 
 private const val LOGISTICS_CHAIR_GROUP_CN = "Logistics Committee Chair"
+
+// Guardrail for MemberService.isGroupAdmin: bounds the AD group-nesting walk so a misconfigured
+// or deeply-nested group tree can't turn it into an unbounded traversal.
+private const val MAX_GROUP_ADMIN_DEPTH = 2
+
+// AD's distinguishedNameMatch equality rule is case-insensitive, and the same DN can come back
+// with different casing depending on which attribute (memberOf vs. member/managedBy) it was read
+// from — so DN comparisons must not rely on exact String/Set equality.
+private fun List<String>.matchesAnyDn(other: List<String>): Boolean =
+    any { dn -> other.any { it.equals(dn, ignoreCase = true) } }
 
 /** Cached WHMCS account metadata for a username; populated at startup from MakerManager. */
 private data class WhmcsAccountCacheEntry(val whmcsId: Int, val isPrimaryAccount: Boolean)

@@ -226,21 +226,6 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
   }
 
   /**
-   * Determine if a DN represents a group (vs. a user). Groups typically have OU=Security,
-   * OU=Organizational, or OU=Groups in their DN. Users typically have OU=Users or OU=People in
-   * their DN.
-   *
-   * @param dn The distinguished name to check
-   * @return true if the DN represents a group, false otherwise
-   */
-  private fun isGroupDN(dn: String): Boolean {
-    val lowerDN = dn.lowercase()
-    return lowerDN.contains("ou=security") ||
-        lowerDN.contains("ou=organizational") ||
-        lowerDN.contains("ou=groups")
-  }
-
-  /**
    * Parses the list of group names into a list of ADGroup objects.
    *
    * @param list The list of group names in distinguishedName format

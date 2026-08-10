@@ -19,6 +19,8 @@ class Groups {
 
     @Resource("has-prerequisite-classes") class HasPrerequisiteClasses(val parent: DMSGroup)
 
+    @Resource("is-admin") class IsAdmin(val parent: DMSGroup)
+
     @Resource("settings")
     class Settings(val parent: DMSGroup) {
       @Resource("history") class History(val parent: Settings)
