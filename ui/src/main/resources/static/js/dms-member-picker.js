@@ -1,23 +1,38 @@
 /**
- * DmsMemberPicker - A web component for multi-selecting members to add to a group.
+ * DmsMemberPicker - A web component for searching and multi-selecting people, with removable
+ * chips, then submitting the selected usernames to a caller-supplied endpoint. Not tied to any
+ * particular use case (group membership, mailing lists, event rosters, ...) — the host page
+ * configures the endpoint, button label, and placeholder text.
  *
  * @element dms-member-picker
- * @attribute {String} group-slug - The group's slug (e.g., 'laser-cutter-operators')
- * @attribute {String} excluded-usernames - JSON array string of usernames already in the group
+ * @attribute {String} add-endpoint - Required. URL to POST { usernames: [...] } to.
+ * @attribute {String} existing-usernames - JSON array string of usernames to show as already
+ *   added (dimmed, non-selectable, with an "Added" badge) instead of as addable candidates.
+ * @attribute {String} add-button-label - Optional. Text for the submit button. Default "Add".
+ * @attribute {String} search-placeholder - Optional. Search input placeholder. Default
+ *   "Search to add...".
+ * @attribute {String} reload-on-success - Optional. Set to the literal string "false" to skip
+ *   the default "reload the page shortly after a successful add" behavior. Default: reload.
  *
  * Features:
  * - Text input with autocomplete (debounced 300ms)
  * - Dropdown showing up to 8 matching members
  * - Multi-select with removable chips (Gmail-style)
  * - Keyboard navigation (arrow keys, Enter, Escape, Backspace)
- * - Add to Group button that POSTs to /groups/{group-slug}/members
+ * - Submits selected usernames via POST to `add-endpoint`
  * - Success/error message display
- * - Page reload on successful add
+ * - Dispatches `dms-picker-add-success` / `dms-picker-add-error` CustomEvents so a host page can
+ *   hook additional behavior (e.g. updating in place instead of reloading) without this
+ *   component needing to know what that behavior is
+ * - Reloads the page on successful add unless `reload-on-success="false"`
  */
 
 // Module-level cache for member data (fetched once across all picker instances)
 let cachedMemberData = null;
 let memberDataFetched = false;
+
+const DEFAULT_ADD_BUTTON_LABEL = 'Add';
+const DEFAULT_SEARCH_PLACEHOLDER = 'Search to add...';
 
 class DmsMemberPicker extends HTMLElement {
   constructor() {
@@ -27,30 +42,48 @@ class DmsMemberPicker extends HTMLElement {
     this.allMembers = []; // All members from /search-preload
     this.filteredResults = []; // Filtered members for dropdown
     this.selectedIndex = -1; // Index in dropdown for keyboard nav
-    this.groupSlug = '';
-    this.excludedUsernames = [];
+    this.addEndpoint = '';
+    this.existingUsernames = [];
+    this.addButtonLabel = DEFAULT_ADD_BUTTON_LABEL;
+    this.searchPlaceholder = DEFAULT_SEARCH_PLACEHOLDER;
+    this.reloadOnSuccess = true;
     this.isAddingMembers = false;
   }
 
   static get observedAttributes() {
-    return ['group-slug', 'excluded-usernames'];
+    return [
+      'add-endpoint',
+      'existing-usernames',
+      'add-button-label',
+      'search-placeholder',
+      'reload-on-success',
+    ];
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
-    if (name === 'group-slug') {
-      this.groupSlug = newValue;
-    } else if (name === 'excluded-usernames') {
+    if (name === 'add-endpoint') {
+      this.addEndpoint = newValue || '';
+    } else if (name === 'existing-usernames') {
       try {
-        this.excludedUsernames = newValue ? JSON.parse(newValue) : [];
+        this.existingUsernames = newValue ? JSON.parse(newValue) : [];
       } catch (e) {
-        console.error('Failed to parse excluded-usernames JSON:', e);
-        this.excludedUsernames = [];
+        console.error('Failed to parse existing-usernames JSON:', e);
+        this.existingUsernames = [];
       }
+    } else if (name === 'add-button-label') {
+      this.addButtonLabel = newValue || DEFAULT_ADD_BUTTON_LABEL;
+    } else if (name === 'search-placeholder') {
+      this.searchPlaceholder = newValue || DEFAULT_SEARCH_PLACEHOLDER;
+    } else if (name === 'reload-on-success') {
+      this.reloadOnSuccess = newValue !== 'false';
     }
   }
 
   connectedCallback() {
     this._outsideClickHandler = (e) => this.handleOutsideClick(e);
+    if (!this.addEndpoint) {
+      console.error('dms-member-picker: missing required "add-endpoint" attribute');
+    }
     this.render();
     this.setupEventListeners();
     this.fetchMembers();
@@ -213,6 +246,18 @@ class DmsMemberPicker extends HTMLElement {
           letter-spacing: 0.3px;
         }
 
+        .added-badge {
+          font-size: 10px;
+          font-weight: 600;
+          color: #fff;
+          background-color: #6c757d;
+          border-radius: 3px;
+          padding: 1px 5px;
+          flex-shrink: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
+        }
+
         .loading-text {
           padding: 12px 15px;
           font-style: italic;
@@ -264,10 +309,10 @@ class DmsMemberPicker extends HTMLElement {
           <input
             type="text"
             class="search-input"
-            placeholder="Search for members to add..."
+            placeholder="${this.searchPlaceholder}"
             autocomplete="off"
           />
-          <button class="add-button btn btn-primary btn-sm" disabled>Add to Group</button>
+          <button class="add-button btn btn-primary btn-sm" disabled>${this.addButtonLabel}</button>
           <div class="dropdown-container">
             <ul class="dropdown-list"></ul>
           </div>
@@ -342,19 +387,25 @@ class DmsMemberPicker extends HTMLElement {
 
     // Get usernames of already selected members
     const selectedUsernames = new Set(this.selectedMembers.map(m => m.username));
-    const excludedSet = new Set(this.excludedUsernames);
 
-    // Filter members (include disabled members so they can be shown with a visual indicator)
-    this.filteredResults = this.allMembers.filter(member => {
-      // Skip already selected members
+    // Match against username, display name (include disabled/already-added members so they can
+    // be shown with a visual indicator rather than silently disappearing from results)
+    const matches = this.allMembers.filter(member => {
       if (selectedUsernames.has(member.username)) return false;
-      // Skip excluded members
-      if (excludedSet.has(member.username)) return false;
-      // Match against username, display name
       const displayName = (member.displayName || '').toLowerCase();
       const username = (member.username || '').toLowerCase();
       return displayName.includes(query) || username.includes(query);
-    }).slice(0, 8); // Limit to 8 results
+    });
+
+    // Addable members first, already-added members after — so a broad query never crowds out
+    // people you can actually add behind a wall of "Added" chips.
+    const existingSet = new Set(this.existingUsernames);
+    const addable = matches.filter(m => !existingSet.has(m.username));
+    const alreadyAdded = matches
+        .filter(m => existingSet.has(m.username))
+        // Clone rather than mutate — these objects are shared via the module-level member cache.
+        .map(m => ({ ...m, alreadyAdded: true }));
+    this.filteredResults = [...addable, ...alreadyAdded].slice(0, 8); // Limit to 8 results
 
     this.selectedIndex = -1;
     this.displayDropdownResults();
@@ -380,7 +431,7 @@ class DmsMemberPicker extends HTMLElement {
     this.filteredResults.forEach((member, index) => {
       const li = document.createElement('li');
       li.dataset.index = index;
-      if (!member.enabled) {
+      if (!member.enabled || member.alreadyAdded) {
         li.classList.add('disabled-member');
       }
 
@@ -450,6 +501,11 @@ class DmsMemberPicker extends HTMLElement {
         const badge = document.createElement('span');
         badge.className = 'disabled-badge';
         badge.textContent = 'Disabled';
+        memberDiv.appendChild(badge);
+      } else if (member.alreadyAdded) {
+        const badge = document.createElement('span');
+        badge.className = 'added-badge';
+        badge.textContent = 'Added';
         memberDiv.appendChild(badge);
       }
 
@@ -538,6 +594,16 @@ class DmsMemberPicker extends HTMLElement {
       this.updateAddButtonState();
       return;
     }
+    if (this.existingUsernames.includes(member.username)) {
+      const input = this.shadowRoot.querySelector('.search-input');
+      input.value = '';
+      const statusMessage = this.shadowRoot.querySelector('.status-message');
+      statusMessage.className = 'status-message error-message';
+      statusMessage.textContent = `@${member.username} has already been added.`;
+      this.hideDropdown();
+      this.updateAddButtonState();
+      return;
+    }
     this.selectedMembers.push(member);
     const input = this.shadowRoot.querySelector('.search-input');
     input.value = '';
@@ -600,6 +666,10 @@ class DmsMemberPicker extends HTMLElement {
 
   async handleAddMembers() {
     if (this.selectedMembers.length === 0 || this.isAddingMembers) return;
+    if (!this.addEndpoint) {
+      console.error('dms-member-picker: cannot submit, "add-endpoint" attribute is not set');
+      return;
+    }
 
     this.isAddingMembers = true;
     const addButton = this.shadowRoot.querySelector('.add-button');
@@ -612,7 +682,7 @@ class DmsMemberPicker extends HTMLElement {
     const usernames = this.selectedMembers.map(m => m.username);
 
     try {
-      const response = await fetch(`/groups/${this.groupSlug}/members`, {
+      const response = await fetch(this.addEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -623,10 +693,17 @@ class DmsMemberPicker extends HTMLElement {
       if (response.ok) {
         statusMessage.className = 'status-message success-message';
         statusMessage.textContent = 'Members added successfully!';
-        // Reload page after 800ms
-        setTimeout(() => {
-          window.location.reload();
-        }, 800);
+        this.dispatchEvent(new CustomEvent('dms-picker-add-success', {
+          detail: { usernames },
+          bubbles: true,
+          composed: true,
+        }));
+        if (this.reloadOnSuccess) {
+          // Reload page after 800ms
+          setTimeout(() => {
+            window.location.reload();
+          }, 800);
+        }
       } else {
         let errorText = 'Failed to add members';
         try {
@@ -636,12 +713,22 @@ class DmsMemberPicker extends HTMLElement {
         statusMessage.className = 'status-message error-message';
         statusMessage.textContent = errorText;
         addButton.disabled = this.selectedMembers.length === 0;
+        this.dispatchEvent(new CustomEvent('dms-picker-add-error', {
+          detail: { error: errorText },
+          bubbles: true,
+          composed: true,
+        }));
       }
     } catch (error) {
       console.error('Error adding members:', error);
       statusMessage.className = 'status-message error-message';
       statusMessage.textContent = 'Error: ' + error.message;
       addButton.disabled = this.selectedMembers.length === 0;
+      this.dispatchEvent(new CustomEvent('dms-picker-add-error', {
+        detail: { error: error.message },
+        bubbles: true,
+        composed: true,
+      }));
     } finally {
       this.isAddingMembers = false;
     }

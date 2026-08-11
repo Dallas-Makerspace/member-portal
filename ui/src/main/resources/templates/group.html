@@ -131,7 +131,9 @@
                     <!-- Member management UI - only shown when feature is enabled and user has admin role -->
                     <div th:if="${canManageMembers}" class="mb-3">
                         <dms-member-picker
-                            th:attr="group-slug=${slug},excluded-usernames=${memberUsernamesJson}">
+                            add-button-label="Add to Group"
+                            search-placeholder="Search for members to add..."
+                            th:attr="add-endpoint='/groups/' + ${slug} + '/members',existing-usernames=${memberUsernamesJson}">
                         </dms-member-picker>
                     </div>
                     <div class="card-text" th:if="${members != null or inactiveMembers != null}">
