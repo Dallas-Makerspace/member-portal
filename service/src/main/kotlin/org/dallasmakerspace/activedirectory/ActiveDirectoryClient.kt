@@ -186,6 +186,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
             "objectGUID",
             "userAccountControl",
             "whenCreated",
+            "distinguishedName",
         )
     return searchResult.searchEntries.associate { entry ->
       val username = entry.getAttributeValue("sAMAccountName")
@@ -511,6 +512,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
             "objectGUID",
             "userAccountControl",
             "whenCreated",
+            "distinguishedName",
         )
     return searchResult.searchEntries.associate { entry ->
       val dn = entry.dn.toString()
@@ -558,6 +560,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
             "objectGUID",
             "userAccountControl",
             "whenCreated",
+            "distinguishedName",
         )
     return searchResult.searchEntries.associate { entry ->
       val badgeNumber = entry.getAttributeValue("employeeID")?.trim() ?: ""
@@ -609,6 +612,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
             "displayName",
             "userAccountControl",
             "whenCreated",
+            "distinguishedName",
         )
 
     // Process the search results

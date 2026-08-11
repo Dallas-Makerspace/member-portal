@@ -83,6 +83,7 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
                     telephoneNumber = "1234567890",
                     employeeID = "123456",
                     enabled = true,
+                    distinguishedName = "CN=User One,OU=Members,DC=dms,DC=local",
                     groups =
                         listOf(
                             ADGroup(
@@ -105,6 +106,7 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
                     objectGuid = "12345678-1234-1234-1234-123456789013",
                     whenCreated = "2021-01-02T00:00:00Z",
                     enabled = false,
+                    distinguishedName = "CN=User Two,OU=Members,DC=dms,DC=local",
                     groups =
                         listOf(
                             ADGroup(

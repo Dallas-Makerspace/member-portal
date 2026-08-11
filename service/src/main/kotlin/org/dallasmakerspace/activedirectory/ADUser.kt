@@ -11,5 +11,9 @@ data class ADUser(
     val objectGuid: String,
     val whenCreated: String?,
     val enabled: Boolean,
-    val groups: List<ADGroup>
+    val groups: List<ADGroup>,
+    // Defaults to "" rather than being required, so the many pre-existing test fixtures that
+    // construct ADUser directly (unrelated to group-admin checks) don't need updating. Real
+    // callers (ActiveDirectoryService) always populate it from AD.
+    val distinguishedName: String = "",
 )

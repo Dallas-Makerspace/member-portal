@@ -18,6 +18,7 @@ import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.slf4j.Logger
@@ -29,6 +30,10 @@ private const val MID_DN = "CN=Fiber Arts Leads,OU=Security,OU=Groups,DC=dms,DC=
 private const val FAR_DN = "CN=Sewing 101 TAs,OU=Security,OU=Groups,DC=dms,DC=local"
 private const val TARGET_GROUP_SLUG = "CA+Sewing+Basics"
 private const val TARGET_GROUP_NAME = "CA Sewing Basics"
+// A person-type managedBy entry — under OU=Members, not OU=Security/Organizational/Groups, so
+// isGroupDN treats it as a person, not a group (mirrors "Susie Kadota7299" set directly as
+// managedBy on "Voting Members - Test").
+private const val PERSON_ADMIN_DN = "CN=Susie Kadota7299,OU=Members,DC=dms,DC=local"
 
 class MemberServiceGroupAdminTest {
 
@@ -69,7 +74,7 @@ class MemberServiceGroupAdminTest {
           membersListIncomplete = false,
           nestedGroups = nestedGroups)
 
-  private fun adUser(directGroupDns: List<String>) =
+  private fun adUser(directGroupDns: List<String>, ownDn: String = "CN=Actor User,OU=Members,DC=dms,DC=local") =
       ADUser(
           sAMAccountName = "actor",
           mail = "actor@dallasmakerspace.org",
@@ -81,6 +86,7 @@ class MemberServiceGroupAdminTest {
           objectGuid = "guid",
           whenCreated = null,
           enabled = true,
+          distinguishedName = ownDn,
           groups = directGroupDns.map { adGroup(cn = it, dn = it) })
 
   @Test
@@ -104,6 +110,34 @@ class MemberServiceGroupAdminTest {
         .thenReturn(adUser(directGroupDns = listOf(ADMIN_DN.uppercase())))
 
     assertTrue(service.isGroupAdmin("nomad4life", TARGET_GROUP_SLUG))
+  }
+
+  @Test
+  fun `the person set as managedBy is a group admin`() {
+    runBlocking {
+      whenever(mockActiveDirectoryService.getGroup(TARGET_GROUP_NAME))
+          .thenReturn(
+              adGroup(TARGET_GROUP_NAME, "irrelevant")
+                  .copy(administrators = listOf(PERSON_ADMIN_DN)))
+      whenever(mockActiveDirectoryService.getMemberByUsername("susie"))
+          .thenReturn(adUser(directGroupDns = emptyList(), ownDn = PERSON_ADMIN_DN))
+
+      assertTrue(service.isGroupAdmin("susie", TARGET_GROUP_SLUG))
+      // A person entry has no members to walk — getGroup should only be called once, for the
+      // target group itself, never for a nested-group expansion hop.
+      verify(mockActiveDirectoryService, times(1)).getGroup(any<String>())
+    }
+  }
+
+  @Test
+  fun `a different member is not a group admin when managedBy is a specific person`() = runBlocking {
+    whenever(mockActiveDirectoryService.getGroup(TARGET_GROUP_NAME))
+        .thenReturn(
+            adGroup(TARGET_GROUP_NAME, "irrelevant").copy(administrators = listOf(PERSON_ADMIN_DN)))
+    whenever(mockActiveDirectoryService.getMemberByUsername("outsider"))
+        .thenReturn(adUser(directGroupDns = emptyList()))
+
+    assertFalse(service.isGroupAdmin("outsider", TARGET_GROUP_SLUG))
   }
 
   @Test

@@ -935,12 +935,13 @@ constructor(
   }
 
   /**
-   * Whether [username] administers [groupslug]: directly (member of one of the group's
-   * `administrators` entries) or one hop removed (member of a group that is itself a direct
-   * member of an administrators entry). Capped at [MAX_GROUP_ADMIN_DEPTH] hops as a guardrail —
-   * no AD-side recursive/chain query is used, so this is a plain bounded frontier expansion over
-   * already-fetched group data. Only `administrators` entries that are themselves groups are
-   * considered; an individual `managedBy` person still falls back to requiring MANAGE_GROUPS.
+   * Whether [username] administers [groupslug]: directly — either as the individual
+   * `managedBy` person, or as a member of a `managedBy` group — or one hop removed (member of
+   * a group that is itself a direct member of a group-type `administrators` entry). Capped at
+   * [MAX_GROUP_ADMIN_DEPTH] hops as a guardrail — no AD-side recursive/chain query is used, so
+   * this is a plain bounded frontier expansion over already-fetched group data. Only group-type
+   * `administrators` entries are walked further; a person can't have nested members, so a
+   * person-type entry is only ever matched directly against the actor's own account.
    *
    * DN comparisons are done case-insensitively — AD's distinguishedNameMatch rule is
    * case-insensitive, and the same DN can come back with different casing depending on which
@@ -951,20 +952,20 @@ constructor(
   suspend fun isGroupAdmin(username: String, groupslug: String): Boolean {
     return try {
       val groupName = Groups.getNameFromSlug(groupslug)
-      val adminGroupDNs =
-          withContext(Dispatchers.IO) { activeDirectoryService.getGroup(groupName) }
-              .administrators
-              .filter { isGroupDN(it) }
-      if (adminGroupDNs.isEmpty()) return false
+      val administrators =
+          withContext(Dispatchers.IO) { activeDirectoryService.getGroup(groupName) }.administrators
+      if (administrators.isEmpty()) return false
 
-      val actorGroupDNs =
+      val actor =
           withContext(Dispatchers.IO) { activeDirectoryService.getMemberByUsername(username) }
-              .groups
-              .map { it.distinguishedName }
+      // "Who the actor is, directly": their own account DN (matches a person-type managedBy
+      // entry) plus every AD group they're a direct member of (matches a group-type entry).
+      val actorIdentityDNs = actor.groups.map { it.distinguishedName } + actor.distinguishedName
+      if (actorIdentityDNs.matchesAnyDn(administrators)) return true
 
-      var frontier = adminGroupDNs
-      if (actorGroupDNs.matchesAnyDn(frontier)) return true
-
+      // One hop further, via group-type administrators entries only — a person entry has no
+      // members to walk, and was already checked above.
+      var frontier = administrators.filter { isGroupDN(it) }
       repeat(MAX_GROUP_ADMIN_DEPTH - 1) {
         frontier =
             frontier.flatMap { dn ->
@@ -980,7 +981,7 @@ constructor(
                 emptyList()
               }
             }
-        if (actorGroupDNs.matchesAnyDn(frontier)) return true
+        if (actorIdentityDNs.matchesAnyDn(frontier)) return true
       }
       false
     } catch (e: Exception) {

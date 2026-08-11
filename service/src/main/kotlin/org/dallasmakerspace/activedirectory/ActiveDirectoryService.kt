@@ -51,6 +51,7 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
           whenCreated = memberMap["whenCreated"].toString(),
           enabled = memberMap["userAccountControl"].toString().toInt() and 2 != 2,
           groups = groups,
+          distinguishedName = memberMap["distinguishedName"].toString(),
       )
     }
   }
@@ -77,6 +78,8 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
               whenCreated = memberMap["whenCreated"].toString(),
               enabled = memberMap["userAccountControl"].toString().toInt() and 2 != 2,
               groups = groups,
+              // dnList's own key is already the canonical DN for this entry.
+              distinguishedName = dn,
           )
         }
         .filterNotNull()
@@ -110,6 +113,7 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
           whenCreated = memberMap["whenCreated"].toString(),
           enabled = memberMap["userAccountControl"].toString().toInt() and 2 != 2,
           groups = groups,
+          distinguishedName = memberMap["distinguishedName"].toString(),
       )
     }
   }
@@ -191,6 +195,7 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
           whenCreated = memberMap["whenCreated"].toString(),
           enabled = memberMap["userAccountControl"].toString().toInt() and 2 != 2,
           groups = groups,
+          distinguishedName = memberMap["distinguishedName"].toString(),
       )
     }
   }
