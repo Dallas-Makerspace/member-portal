@@ -89,9 +89,10 @@ constructor(
 
   private suspend fun showInbox(call: ApplicationCall, username: String) {
     val notifications =
-        memberServiceClient
-            .getNotifications(username, INBOX_LIMIT, session.sessionId)
-            .map(::enrichNotification)
+        groupDigests(
+            memberServiceClient
+                .getNotifications(username, INBOX_LIMIT, session.sessionId)
+                .map(::enrichNotification))
     val preferences = memberServiceClient.getNotificationPreferences(username, session.sessionId)
     val model =
         mutableMapOf<String, Any>(
@@ -134,6 +135,65 @@ fun enrichNotification(notification: Map<String, Any?>): Map<String, Any?> {
           "status_class" to (STATUS_BADGE_CLASSES[status] ?: "secondary"),
           "topic_display" to (TOPICS[topic] ?: topic),
       )
+}
+
+/**
+ * Collapses rows that were mailed out together in a single digest email into one parent row with
+ * the underlying notifications nested as `children`, so the page mirrors what the member actually
+ * received (one email) instead of listing each contributing event as its own delivery.
+ *
+ * Rows are grouped by (providerId, sentAt). [DigestProcessor.deliverGroup] calls the notifier once
+ * per digest batch and stamps that single call's `providerId` onto every row in the batch via
+ * `markSent` - so a shared providerId reliably means "one delivered email". This deliberately does
+ * NOT key off the row's own `aggregation` column: [NotificationWorker.sendEligible] defers
+ * `IMMEDIATE` rows to a digest when a member hits their per-member daily cap without ever rewriting
+ * `aggregation`, so a row delivered via digest can still read `aggregation=IMMEDIATE`. sentAt rides
+ * along with providerId because a mock/test notifier may return a provider id that's stable per
+ * member rather than per send, which would otherwise collide across two unrelated digest emails to
+ * the same member. A "group" of exactly one row is just an ordinary individual send and is left
+ * standalone.
+ */
+fun groupDigests(notifications: List<Map<String, Any?>>): List<Map<String, Any?>> {
+  fun deliveryKey(n: Map<String, Any?>): String? {
+    if (n["status"] != "SENT") return null
+    val providerId = n["providerId"] as? String
+    val sentAt = n["sentAt"] as? String
+    return if (providerId != null && sentAt != null) "$providerId|$sentAt" else null
+  }
+
+  val childrenByKey =
+      notifications.filter { deliveryKey(it) != null }.groupBy { deliveryKey(it)!! }
+  val emitted = mutableSetOf<String>()
+  return notifications.mapNotNull { n ->
+    val key = deliveryKey(n)
+    val siblings = key?.let(childrenByKey::get).orEmpty()
+    when {
+      key == null || siblings.size <= 1 -> n + mapOf("isDigest" to false)
+      !emitted.add(key) -> null
+      else -> buildDigestGroup(siblings)
+    }
+  }
+}
+
+/** Builds the parent row shown for one digest email; [children] are already-enriched rows. */
+private fun buildDigestGroup(children: List<Map<String, Any?>>): Map<String, Any?> {
+  val first = children.first()
+  val topics = children.mapNotNull { it["topic"] as? String }.toSet()
+  val topicDisplay =
+      if (topics.size == 1) (TOPICS[topics.first()] ?: topics.first()) else "Multiple topics"
+  return mapOf(
+      "isDigest" to true,
+      // Mirrors DigestBodyBuilder.subject on the service side - the actual subject line the
+      // delivered email went out with.
+      "subject" to
+          "Dallas Makerspace digest: ${children.size} update${if (children.size == 1) "" else "s"}",
+      "topic_display" to topicDisplay,
+      "sentAt" to first["sentAt"],
+      // Stable per-group CSS class (not an id, since it targets every child <tr> at once via
+      // Bootstrap's multi-target collapse) - the first child's id is unique enough to key it.
+      "groupId" to "digest-${first["id"]}",
+      "children" to children,
+  )
 }
 
 /**

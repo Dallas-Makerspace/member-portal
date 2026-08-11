@@ -79,7 +79,10 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
                     displayName = "User One",
                     mail = "user1@example.com",
                     objectGuid = "12345678-1234-1234-1234-123456789012",
-                    whenCreated = "2021-01-01T00:00:00Z",
+                    // Raw AD LDAP generalized-time format (yyyyMMddHHmmss.0Z), not ISO-8601 —
+                    // MemberService.calculateMemberSince(String?) reassembles separators by fixed
+                    // character position and expects this exact shape.
+                    whenCreated = "20210101000000.0Z",
                     telephoneNumber = "1234567890",
                     employeeID = "123456",
                     enabled = true,
@@ -104,7 +107,8 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
                     telephoneNumber = "1234567890",
                     employeeID = "123456",
                     objectGuid = "12345678-1234-1234-1234-123456789013",
-                    whenCreated = "2021-01-02T00:00:00Z",
+                    // See user1's whenCreated comment above for the expected format.
+                    whenCreated = "20210102000000.0Z",
                     enabled = false,
                     distinguishedName = "CN=User Two,OU=Members,DC=dms,DC=local",
                     groups =
