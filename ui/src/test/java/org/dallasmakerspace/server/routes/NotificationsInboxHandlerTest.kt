@@ -20,6 +20,7 @@ class NotificationsInboxHandlerTest {
                 "subject" to "Hello",
                 "status" to "SENT",
                 "topic" to "EVENT_ANNOUNCEMENT",
+                "topicDisplayName" to "Event announcements",
                 "attempts" to 1))
     assertEquals("Sent", enriched["status_display"])
     assertEquals("success", enriched["status_class"])
@@ -66,30 +67,53 @@ class NotificationsInboxHandlerTest {
   }
 
   @Test
-  fun groupPreferencesReturnsOneRowPerTopicNoRowsKey() {
-    val grouped = groupPreferences(emptyList())
+  fun groupPreferencesReturnsNothingWhenFetchYieldsNoRows() {
+    // No rows to source display from - an empty result (e.g. a failed preferences fetch) means an
+    // empty table rather than a fabricated set of defaults, now that visibility and content both
+    // come from the fetched rows rather than a locally-held topic list.
+    assertEquals(emptyList<Map<String, Any?>>(), groupPreferences(emptyList()))
+  }
 
-    assertEquals(listOf("EVENT_ANNOUNCEMENT", "ACCOUNT", "SYSTEM"), grouped.map { it["topic"] })
+  @Test
+  fun groupPreferencesHidesRowsTheTopicItselfMarksNotVisible() {
+    // ACCOUNT has no producer wired up yet on the service side, so its topic object's own
+    // visibleInPreferences is false - the API echoes that per-row, and this must not surface it as
+    // a toggle-able row.
+    val grouped =
+        groupPreferences(
+            listOf(
+                mapOf(
+                    "topic" to "ACCOUNT",
+                    "channel" to "EMAIL",
+                    "enabled" to true,
+                    "effectiveAggregation" to "IMMEDIATE",
+                    "visibleInPreferences" to false,
+                )))
+
+    assertTrue(grouped.isEmpty())
+  }
+
+  @Test
+  fun groupPreferencesShowsRowsTheTopicItselfMarksVisible() {
+    val grouped =
+        groupPreferences(
+            listOf(
+                mapOf(
+                    "topic" to "EVENT_ANNOUNCEMENT",
+                    "topicDisplayName" to "Event announcements",
+                    "channel" to "EMAIL",
+                    "enabled" to true,
+                    "effectiveAggregation" to "IMMEDIATE",
+                    "visibleInPreferences" to true,
+                )))
+
+    assertEquals(listOf("EVENT_ANNOUNCEMENT"), grouped.map { it["topic"] })
     assertEquals("Event announcements", grouped[0]["topicDisplayName"])
     assertFalse(grouped[0].containsKey("rows"))
   }
 
   @Test
-  fun groupPreferencesDefaultsEnabledTrueWhenUnset() {
-    val grouped = groupPreferences(emptyList())
-    assertTrue(grouped[0]["enabled"] as Boolean)
-  }
-
-  @Test
-  fun groupPreferencesDefaultsEffectiveAggregationToImmediateWhenUnset() {
-    val grouped = groupPreferences(emptyList())
-    assertEquals("IMMEDIATE", grouped[0]["effectiveAggregation"])
-    assertEquals("Immediately", grouped[0]["effectiveAggregationDisplay"])
-    assertNull(grouped[0]["aggregationOverride"])
-  }
-
-  @Test
-  fun groupPreferencesIgnoresNonEmailRows() {
+  fun groupPreferencesIgnoresNonEmailRowsEvenWhenVisible() {
     val grouped =
         groupPreferences(
             listOf(
@@ -99,12 +123,10 @@ class NotificationsInboxHandlerTest {
                     "enabled" to false,
                     "effectiveAggregation" to "DAILY",
                     "aggregationOverride" to "DAILY",
+                    "visibleInPreferences" to true,
                 )))
 
-    val eventAnnouncement = grouped.first { it["topic"] == "EVENT_ANNOUNCEMENT" }
-    // The SMS row must not leak into the EMAIL-only view - defaults apply instead.
-    assertTrue(eventAnnouncement["enabled"] as Boolean)
-    assertEquals("IMMEDIATE", eventAnnouncement["effectiveAggregation"])
+    assertTrue(grouped.isEmpty())
   }
 
   @Test
@@ -113,18 +135,19 @@ class NotificationsInboxHandlerTest {
         groupPreferences(
             listOf(
                 mapOf(
-                    "topic" to "ACCOUNT",
+                    "topic" to "EVENT_ANNOUNCEMENT",
                     "channel" to "EMAIL",
                     "enabled" to false,
                     "effectiveAggregation" to "WEEKLY",
                     "aggregationOverride" to "WEEKLY",
+                    "visibleInPreferences" to true,
                 )))
 
-    val account = grouped.first { it["topic"] == "ACCOUNT" }
-    assertFalse(account["enabled"] as Boolean)
-    assertEquals("WEEKLY", account["effectiveAggregation"])
-    assertEquals("Weekly digest", account["effectiveAggregationDisplay"])
-    assertEquals("WEEKLY", account["aggregationOverride"])
+    val eventAnnouncement = grouped.first { it["topic"] == "EVENT_ANNOUNCEMENT" }
+    assertFalse(eventAnnouncement["enabled"] as Boolean)
+    assertEquals("WEEKLY", eventAnnouncement["effectiveAggregation"])
+    assertEquals("Weekly digest", eventAnnouncement["effectiveAggregationDisplay"])
+    assertEquals("WEEKLY", eventAnnouncement["aggregationOverride"])
   }
 
   @Test
@@ -142,6 +165,7 @@ class NotificationsInboxHandlerTest {
                     "enabled" to true,
                     "effectiveAggregation" to "IMMEDIATE",
                     "aggregationOverride" to null,
+                    "visibleInPreferences" to true,
                 )))
 
     assertNull(grouped.first { it["topic"] == "EVENT_ANNOUNCEMENT" }["aggregationOverride"])
@@ -191,6 +215,7 @@ class NotificationsInboxHandlerTest {
                 "id" to 1L,
                 "subject" to "First",
                 "topic" to "EVENT_ANNOUNCEMENT",
+                "topicDisplayName" to "Event announcements",
                 "aggregation" to "DAILY",
                 "status" to "SENT",
                 "providerId" to "mock-digest-jdoe",
@@ -199,6 +224,7 @@ class NotificationsInboxHandlerTest {
                 "id" to 2L,
                 "subject" to "Second",
                 "topic" to "EVENT_ANNOUNCEMENT",
+                "topicDisplayName" to "Event announcements",
                 "aggregation" to "DAILY",
                 "status" to "SENT",
                 "providerId" to "mock-digest-jdoe",
@@ -249,6 +275,7 @@ class NotificationsInboxHandlerTest {
             mapOf(
                 "id" to 1L,
                 "topic" to "EVENT_ANNOUNCEMENT",
+                "topicDisplayName" to "Event announcements",
                 "aggregation" to "WEEKLY",
                 "status" to "SENT",
                 "providerId" to "mock-digest-jdoe",
@@ -256,6 +283,7 @@ class NotificationsInboxHandlerTest {
             mapOf(
                 "id" to 2L,
                 "topic" to "ACCOUNT",
+                "topicDisplayName" to "Account",
                 "aggregation" to "WEEKLY",
                 "status" to "SENT",
                 "providerId" to "mock-digest-jdoe",

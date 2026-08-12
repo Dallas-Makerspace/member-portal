@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class NotificationWebhookRequest(
     val memberUsername: String,
-    /** One of the NotificationTopic enum names (EVENT_ANNOUNCEMENT, ACCOUNT, SYSTEM). */
+    /** A registered NotificationTopic key, e.g. `EVENT_ANNOUNCEMENT`. */
     val topic: String,
     /** Registered template name, e.g. `event-announcement`. */
     val templateName: String,

@@ -4,6 +4,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.junit.Test
 
 class DigestBodyBuilderTest {
@@ -14,7 +15,7 @@ class DigestBodyBuilderTest {
       Notification(
           id = id,
           memberUsername = "jdoe",
-          topic = NotificationTopic.SYSTEM,
+          topic = SystemTopic,
           channel = Channel.EMAIL,
           aggregation = Aggregation.DAILY,
           templateName = "system-test",

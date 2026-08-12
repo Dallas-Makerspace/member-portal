@@ -10,7 +10,11 @@ import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.db.NotificationsRepository
+import org.dallasmakerspace.notifications.templates.EventAnnouncementTemplate
+import org.dallasmakerspace.notifications.templates.SystemTestTemplate
 import org.dallasmakerspace.notifications.templates.TemplateRegistry
+import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -45,7 +49,7 @@ class NotificationServiceTest {
       whenever(mockRepository.create(any())).thenAnswer { it.getArgument(0) as Notification }
     }
 
-    templateRegistry = TemplateRegistry()
+    templateRegistry = TemplateRegistry(setOf(EventAnnouncementTemplate(), SystemTestTemplate()))
     service =
         NotificationService(
             mockRepository, templateRegistry, mockActiveDirectoryService, mockLoggerFactory)
@@ -68,7 +72,7 @@ class NotificationServiceTest {
   private fun createRequest(templateName: String = "system-test") =
       CreateNotificationRequest(
           memberUsername = "jdoe",
-          topic = NotificationTopic.SYSTEM,
+          topic = SystemTopic,
           templateName = templateName,
           payload = """{"message":"Test Message"}""",
           dedupeKey = "dedupe-1")
@@ -76,13 +80,12 @@ class NotificationServiceTest {
   @Test
   fun `create should queue notification for immediate delivery`() = runBlocking {
     whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
-    whenever(mockRepository.getPreference("jdoe", NotificationTopic.SYSTEM, Channel.EMAIL))
-        .thenReturn(null)
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.EMAIL)).thenReturn(null)
 
     val result = service.create(createRequest())
 
     assertEquals("jdoe", result.memberUsername)
-    assertEquals(NotificationTopic.SYSTEM, result.topic)
+    assertEquals(SystemTopic, result.topic)
     assertEquals(Channel.EMAIL, result.channel)
     assertEquals(Aggregation.IMMEDIATE, result.aggregation)
     assertEquals(NotificationStatus.QUEUED, result.status)
@@ -100,7 +103,7 @@ class NotificationServiceTest {
         Notification(
             id = 1L,
             memberUsername = "jdoe",
-            topic = NotificationTopic.SYSTEM,
+            topic = SystemTopic,
             channel = Channel.EMAIL,
             aggregation = Aggregation.IMMEDIATE,
             templateName = "system-test",
@@ -147,11 +150,11 @@ class NotificationServiceTest {
   fun `create should mark notification skipped when channel disabled in preferences`() =
       runBlocking {
         whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
-        whenever(mockRepository.getPreference("jdoe", NotificationTopic.SYSTEM, Channel.EMAIL))
+        whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.EMAIL))
             .thenReturn(
                 NotificationPreference(
                     memberUsername = "jdoe",
-                    topic = NotificationTopic.SYSTEM,
+                    topic = SystemTopic,
                     channel = Channel.EMAIL,
                     enabled = false,
                     aggregation = null))
@@ -165,11 +168,11 @@ class NotificationServiceTest {
   @Test
   fun `create should use daily aggregation from preference override`() = runBlocking {
     whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
-    whenever(mockRepository.getPreference("jdoe", NotificationTopic.SYSTEM, Channel.EMAIL))
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.EMAIL))
         .thenReturn(
             NotificationPreference(
                 memberUsername = "jdoe",
-                topic = NotificationTopic.SYSTEM,
+                topic = SystemTopic,
                 channel = Channel.EMAIL,
                 enabled = true,
                 aggregation = Aggregation.DAILY))
@@ -183,8 +186,7 @@ class NotificationServiceTest {
   @Test
   fun `create should not store a read state for unread notification`() = runBlocking {
     whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
-    whenever(mockRepository.getPreference("jdoe", NotificationTopic.SYSTEM, Channel.EMAIL))
-        .thenReturn(null)
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.EMAIL)).thenReturn(null)
 
     val result = service.create(createRequest())
 
@@ -195,8 +197,7 @@ class NotificationServiceTest {
   @Test
   fun `create should mark notification skipped when member is inactive`() = runBlocking {
     whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
-    whenever(mockRepository.getPreference("jdoe", NotificationTopic.SYSTEM, Channel.EMAIL))
-        .thenReturn(null)
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.EMAIL)).thenReturn(null)
     whenever(mockActiveDirectoryService.getMembersByUsernameList(listOf("jdoe")))
         .thenReturn(mapOf("jdoe" to adUser(enabled = false)))
 
@@ -209,8 +210,7 @@ class NotificationServiceTest {
   @Test
   fun `create should mark notification skipped when member is unknown to AD`() = runBlocking {
     whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
-    whenever(mockRepository.getPreference("jdoe", NotificationTopic.SYSTEM, Channel.EMAIL))
-        .thenReturn(null)
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.EMAIL)).thenReturn(null)
     whenever(mockActiveDirectoryService.getMembersByUsernameList(listOf("jdoe")))
         .thenReturn(mapOf("jdoe" to null))
 
@@ -234,9 +234,7 @@ class NotificationServiceTest {
     whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
 
     assertFailsWith<IllegalArgumentException> {
-      service.create(
-          createRequest()
-              .copy(templateName = "event-announcement", topic = NotificationTopic.SYSTEM))
+      service.create(createRequest().copy(templateName = "event-announcement", topic = SystemTopic))
     }
     Unit
   }
@@ -258,7 +256,7 @@ class NotificationServiceTest {
 
     val views = service.getPreferences("jdoe")
 
-    assertEquals(NotificationTopic.entries.size * Channel.entries.size, views.size)
+    assertEquals(templateRegistry.topics.size * Channel.entries.size, views.size)
     assertTrue(views.all { it.enabled })
     views.forEach { view ->
       assertEquals(view.channel.defaultAggregation, view.effectiveAggregation)
@@ -274,7 +272,7 @@ class NotificationServiceTest {
             listOf(
                 NotificationPreference(
                     memberUsername = "jdoe",
-                    topic = NotificationTopic.EVENT_ANNOUNCEMENT,
+                    topic = EventAnnouncementTopic,
                     channel = Channel.EMAIL,
                     enabled = false,
                     aggregation = Aggregation.DAILY)))
@@ -282,17 +280,13 @@ class NotificationServiceTest {
     val views = service.getPreferences("jdoe")
 
     val overridden =
-        views.single {
-          it.topic == NotificationTopic.EVENT_ANNOUNCEMENT && it.channel == Channel.EMAIL
-        }
+        views.single { it.topic == EventAnnouncementTopic && it.channel == Channel.EMAIL }
     assertEquals(false, overridden.enabled)
     assertEquals(Aggregation.DAILY, overridden.aggregationOverride)
     assertEquals(Aggregation.DAILY, overridden.effectiveAggregation)
     assertTrue(
         views
-            .filter {
-              !(it.topic == NotificationTopic.EVENT_ANNOUNCEMENT && it.channel == Channel.EMAIL)
-            }
+            .filter { !(it.topic == EventAnnouncementTopic && it.channel == Channel.EMAIL) }
             .all { it.enabled })
     Unit
   }
@@ -306,7 +300,7 @@ class NotificationServiceTest {
     val view =
         service.setPreference(
             "jdoe",
-            NotificationTopic.ACCOUNT,
+            SystemTopic,
             Channel.EMAIL,
             enabled = false,
             aggregationOverride = Aggregation.DAILY)
@@ -317,7 +311,7 @@ class NotificationServiceTest {
         .setPreference(
             NotificationPreference(
                 memberUsername = "jdoe",
-                topic = NotificationTopic.ACCOUNT,
+                topic = SystemTopic,
                 channel = Channel.EMAIL,
                 enabled = false,
                 aggregation = Aggregation.DAILY))
@@ -396,7 +390,7 @@ class NotificationServiceTest {
       Notification(
           id = 99L,
           memberUsername = "jdoe",
-          topic = NotificationTopic.SYSTEM,
+          topic = SystemTopic,
           channel = Channel.EMAIL,
           aggregation = Aggregation.IMMEDIATE,
           templateName = "system-test",

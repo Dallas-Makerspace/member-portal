@@ -2,7 +2,7 @@ package org.dallasmakerspace.notifications.templates
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import org.dallasmakerspace.notifications.NotificationTopic
+import org.dallasmakerspace.notifications.topics.SystemTopic
 
 /** Template data for a system test notification. */
 @Serializable data class SystemTestData(val message: String = "")
@@ -11,7 +11,7 @@ import org.dallasmakerspace.notifications.NotificationTopic
 class SystemTestTemplate :
     NotificationTemplate<SystemTestData>(
         name = "system-test",
-        topic = NotificationTopic.SYSTEM,
+        topic = SystemTopic,
     ) {
   override val serializer: KSerializer<SystemTestData> = SystemTestData.serializer()
 

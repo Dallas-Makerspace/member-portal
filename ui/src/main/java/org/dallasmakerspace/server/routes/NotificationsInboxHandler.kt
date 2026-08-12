@@ -73,17 +73,25 @@ constructor(
    */
   private suspend fun updatePreferences(call: ApplicationCall, username: String) {
     val params = call.receiveParameters()
-    TOPICS.keys.forEach { topic ->
-      val enabled = params["enabled_$topic"] == "true"
-      // Round-tripped verbatim from a hidden field in the template so toggling "enabled" never
-      // clears an existing aggregation override - the PUT below treats a null aggregation as
-      // "clear the override".
-      val aggregation = params["aggregation_$topic"]?.takeIf { it.isNotBlank() }
-      memberServiceClient.updateNotificationPreference(
-          username,
-          session.sessionId,
-          NotificationPreferenceUpdate(topic, EMAIL_CHANNEL, enabled, aggregation))
-    }
+    // Save exactly the topics the template rendered a row for, read back from the form itself
+    // (every visible row carries a hidden `aggregation_$topic` field - see notifications.html)
+    // rather than from a fixed topic list here: a WIP topic's missing `enabled_$topic` would
+    // otherwise read as "unchecked" and silently PUT enabled=false for a control the member never
+    // saw.
+    params.names()
+        .filter { it.startsWith(AGGREGATION_FIELD_PREFIX) }
+        .map { it.removePrefix(AGGREGATION_FIELD_PREFIX) }
+        .forEach { topic ->
+          val enabled = params["enabled_$topic"] == "true"
+          // Round-tripped verbatim from a hidden field in the template so toggling "enabled" never
+          // clears an existing aggregation override - the PUT below treats a null aggregation as
+          // "clear the override".
+          val aggregation = params["aggregation_$topic"]?.takeIf { it.isNotBlank() }
+          memberServiceClient.updateNotificationPreference(
+              username,
+              session.sessionId,
+              NotificationPreferenceUpdate(topic, EMAIL_CHANNEL, enabled, aggregation))
+        }
     call.respondRedirect(notificationsPathFor(username) + "?updated=true", permanent = false)
   }
 
@@ -113,6 +121,7 @@ constructor(
   private companion object {
     const val INBOX_LIMIT = 50
     const val FOLLOW_FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
+    const val AGGREGATION_FIELD_PREFIX = "aggregation_"
   }
 }
 
@@ -133,7 +142,7 @@ fun enrichNotification(notification: Map<String, Any?>): Map<String, Any?> {
       mapOf(
           "status_display" to (STATUS_DISPLAY_NAMES[status] ?: status),
           "status_class" to (STATUS_BADGE_CLASSES[status] ?: "secondary"),
-          "topic_display" to (TOPICS[topic] ?: topic),
+          "topic_display" to ((notification["topicDisplayName"] as? String) ?: topic),
       )
 }
 
@@ -178,9 +187,8 @@ fun groupDigests(notifications: List<Map<String, Any?>>): List<Map<String, Any?>
 /** Builds the parent row shown for one digest email; [children] are already-enriched rows. */
 private fun buildDigestGroup(children: List<Map<String, Any?>>): Map<String, Any?> {
   val first = children.first()
-  val topics = children.mapNotNull { it["topic"] as? String }.toSet()
-  val topicDisplay =
-      if (topics.size == 1) (TOPICS[topics.first()] ?: topics.first()) else "Multiple topics"
+  val topicDisplays = children.mapNotNull { it["topicDisplayName"] as? String }.toSet()
+  val topicDisplay = if (topicDisplays.size == 1) topicDisplays.first() else "Multiple topics"
   return mapOf(
       "isDigest" to true,
       // Mirrors DigestBodyBuilder.subject on the service side - the actual subject line the
@@ -197,31 +205,31 @@ private fun buildDigestGroup(children: List<Map<String, Any?>>): Map<String, Any
 }
 
 /**
- * One row per topic, email only - SMS/Discord/Discourse exist in the Channel enum but have no
- * notifier (DigestProcessor dead-letters them), so they're not worth showing here.
+ * One row per topic the member can actually act on: an EMAIL preference the topic itself marks
+ * `visibleInPreferences` (see `NotificationTopic.visibleInPreferences` on the service side, echoed
+ * per-row as `PreferenceView.visibleInPreferences`) - so a WIP topic nothing produces yet stays
+ * hidden without this page keeping its own list of what's ready or what to call it (`topic` and
+ * `topicDisplayName` both come straight off the fetched row - the service is the only place topic
+ * names/labels are declared). SMS/Discord/Discourse exist in the Channel enum but have no notifier
+ * wired up (DigestProcessor dead-letters them), so only EMAIL rows are worth showing here.
  */
 fun groupPreferences(preferences: List<Map<String, Any?>>): List<Map<String, Any?>> =
-    TOPICS.map { (topic, topicDisplayName) ->
-      val pref = preferences.firstOrNull { it["topic"] == topic && it["channel"] == EMAIL_CHANNEL }
-      val effective =
-          (pref?.get("effectiveAggregation") as? String)?.takeIf { it.isNotBlank() }
-              ?: DEFAULT_EMAIL_AGGREGATION
-      mapOf(
-          "topic" to topic,
-          "topicDisplayName" to topicDisplayName,
-          "enabled" to (pref?.get("enabled") as? Boolean ?: true),
-          "aggregationOverride" to (pref?.get("aggregationOverride") as? String),
-          "effectiveAggregation" to effective,
-          "effectiveAggregationDisplay" to (AGGREGATION_DISPLAY_NAMES[effective] ?: effective),
-      )
-    }
-
-val TOPICS =
-    linkedMapOf(
-        "EVENT_ANNOUNCEMENT" to "Event announcements",
-        "ACCOUNT" to "Account",
-        "SYSTEM" to "System",
-    )
+    preferences
+        .filter { it["channel"] == EMAIL_CHANNEL && it["visibleInPreferences"] == true }
+        .map { pref ->
+          val topic = pref["topic"] as? String ?: ""
+          val effective =
+              (pref["effectiveAggregation"] as? String)?.takeIf { it.isNotBlank() }
+                  ?: DEFAULT_EMAIL_AGGREGATION
+          mapOf(
+              "topic" to topic,
+              "topicDisplayName" to ((pref["topicDisplayName"] as? String) ?: topic),
+              "enabled" to (pref["enabled"] as? Boolean ?: true),
+              "aggregationOverride" to (pref["aggregationOverride"] as? String),
+              "effectiveAggregation" to effective,
+              "effectiveAggregationDisplay" to (AGGREGATION_DISPLAY_NAMES[effective] ?: effective),
+          )
+        }
 
 const val EMAIL_CHANNEL = "EMAIL"
 

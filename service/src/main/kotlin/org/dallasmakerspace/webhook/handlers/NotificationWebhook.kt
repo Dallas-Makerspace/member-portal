@@ -5,7 +5,6 @@ import kotlinx.serialization.json.Json
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.CreateNotificationRequest
 import org.dallasmakerspace.notifications.NotificationService
-import org.dallasmakerspace.notifications.NotificationTopic
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.WebhookResult
 import org.dallasmakerspace.webhook.models.NotificationWebhookRequest
@@ -32,7 +31,9 @@ constructor(private val notificationService: NotificationService) : WebhookHandl
           notificationService.create(
               CreateNotificationRequest(
                   memberUsername = request.memberUsername,
-                  topic = NotificationTopic.valueOf(request.topic),
+                  topic = notificationService.findTopic(request.topic)
+                      ?: throw IllegalArgumentException(
+                          "Unknown notification topic: ${request.topic}"),
                   templateName = request.templateName,
                   payload = request.payload,
                   channel = Channel.valueOf(request.channel),

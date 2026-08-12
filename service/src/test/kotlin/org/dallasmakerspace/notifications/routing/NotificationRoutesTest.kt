@@ -27,7 +27,8 @@ import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.notifications.NotificationTopic
+import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.dallasmakerspace.plugins.ApiResponse
 import org.dallasmakerspace.plugins.Status
 import org.junit.Before
@@ -45,6 +46,11 @@ class NotificationRoutesTest {
   @Before
   fun setUp() {
     mockService = mock()
+    // The emit/PUT-preferences routes both resolve a topic string via
+    // notificationService.findTopic(...) (mockService is a bare mock, so this must be stubbed for
+    // any test that expects a route to get past topic resolution).
+    whenever(mockService.findTopic("EVENT_ANNOUNCEMENT")).thenReturn(EventAnnouncementTopic)
+    whenever(mockService.findTopic("SYSTEM")).thenReturn(SystemTopic)
   }
 
   private fun appConfig(): AppConfig {
@@ -75,7 +81,7 @@ class NotificationRoutesTest {
       Notification(
           id = id,
           memberUsername = "jdoe",
-          topic = NotificationTopic.SYSTEM,
+          topic = SystemTopic,
           channel = Channel.EMAIL,
           aggregation = Aggregation.IMMEDIATE,
           templateName = "system-test",
@@ -185,14 +191,14 @@ class NotificationRoutesTest {
       whenever(
               mockService.setPreference(
                   eq("jdoe"),
-                  eq(NotificationTopic.EVENT_ANNOUNCEMENT),
+                  eq(EventAnnouncementTopic),
                   eq(Channel.EMAIL),
                   eq(false),
                   eq(null)))
           .thenReturn(
               org.dallasmakerspace.notifications.MemberPreferenceView(
                   memberUsername = "jdoe",
-                  topic = NotificationTopic.EVENT_ANNOUNCEMENT,
+                  topic = EventAnnouncementTopic,
                   channel = Channel.EMAIL,
                   enabled = false,
                   aggregationOverride = null,
@@ -211,7 +217,7 @@ class NotificationRoutesTest {
     verify(mockService)
         .setPreference(
             eq("jdoe"),
-            eq(NotificationTopic.EVENT_ANNOUNCEMENT),
+            eq(EventAnnouncementTopic),
             eq(Channel.EMAIL),
             eq(false),
             eq(null))

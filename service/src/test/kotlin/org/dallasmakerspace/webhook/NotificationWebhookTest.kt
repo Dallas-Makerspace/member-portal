@@ -12,7 +12,8 @@ import org.dallasmakerspace.notifications.CreateNotificationRequest
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.notifications.NotificationTopic
+import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.dallasmakerspace.webhook.handlers.NotificationWebhook
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -29,7 +30,7 @@ class NotificationWebhookTest {
       Notification(
           id = 42,
           memberUsername = "jdoe",
-          topic = NotificationTopic.EVENT_ANNOUNCEMENT,
+          topic = EventAnnouncementTopic,
           channel = Channel.EMAIL,
           aggregation = Aggregation.IMMEDIATE,
           templateName = "event-announcement",
@@ -49,6 +50,7 @@ class NotificationWebhookTest {
   @Test
   fun `handleWebhook should create notification on valid payload`() = runBlocking {
     val notificationService = mock<NotificationService>()
+    whenever(notificationService.findTopic("EVENT_ANNOUNCEMENT")).thenReturn(EventAnnouncementTopic)
     whenever(notificationService.create(any())).thenReturn(createdNotification())
     val handler = NotificationWebhook(notificationService)
 
@@ -72,7 +74,7 @@ class NotificationWebhookTest {
         .create(
             argThat<CreateNotificationRequest> {
               memberUsername == "jdoe" &&
-                  topic == NotificationTopic.EVENT_ANNOUNCEMENT &&
+                  topic == EventAnnouncementTopic &&
                   templateName == "event-announcement" &&
                   channel == Channel.EMAIL &&
                   dedupeKey == "solder-night-2026-08-02"
@@ -83,6 +85,7 @@ class NotificationWebhookTest {
   @Test
   fun `handleWebhook should default channel to email`() = runBlocking {
     val notificationService = mock<NotificationService>()
+    whenever(notificationService.findTopic("SYSTEM")).thenReturn(SystemTopic)
     whenever(notificationService.create(any())).thenReturn(createdNotification())
     val handler = NotificationWebhook(notificationService)
 
@@ -96,6 +99,8 @@ class NotificationWebhookTest {
 
   @Test
   fun `handleWebhook should reject unknown topic`() = runBlocking {
+    // findTopic("NOPE") naturally returns null from an unstubbed mock, reproducing the same
+    // "unknown topic" rejection the old NotificationTopic.valueOf(...) throw used to produce.
     val handler = NotificationWebhook(mock())
 
     val result =
@@ -108,7 +113,11 @@ class NotificationWebhookTest {
 
   @Test
   fun `handleWebhook should reject unknown channel`() = runBlocking {
-    val handler = NotificationWebhook(mock())
+    // Topic is resolved before channel in CreateNotificationRequest's named-arg construction, so
+    // the topic must resolve successfully for this test to actually reach the channel check.
+    val notificationService = mock<NotificationService>()
+    whenever(notificationService.findTopic("SYSTEM")).thenReturn(SystemTopic)
+    val handler = NotificationWebhook(notificationService)
 
     val result =
         handler.handleWebhook(
@@ -130,6 +139,7 @@ class NotificationWebhookTest {
   @Test
   fun `handleWebhook should surface service validation errors`() = runBlocking {
     val notificationService = mock<NotificationService>()
+    whenever(notificationService.findTopic("SYSTEM")).thenReturn(SystemTopic)
     whenever(notificationService.create(any()))
         .thenThrow(IllegalArgumentException("Unknown notification template: nope"))
     val handler = NotificationWebhook(notificationService)

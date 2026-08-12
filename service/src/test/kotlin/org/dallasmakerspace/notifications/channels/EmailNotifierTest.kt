@@ -19,7 +19,7 @@ import org.dallasmakerspace.notifications.Aggregation
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.notifications.NotificationTopic
+import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -51,7 +51,7 @@ class EmailNotifierTest {
       Notification(
           id = 1L,
           memberUsername = "jdoe",
-          topic = NotificationTopic.SYSTEM,
+          topic = SystemTopic,
           channel = Channel.EMAIL,
           aggregation = Aggregation.IMMEDIATE,
           templateName = "system-test",

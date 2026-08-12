@@ -8,8 +8,8 @@ import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.CreateNotificationRequest
 import org.dallasmakerspace.notifications.NotificationService
-import org.dallasmakerspace.notifications.NotificationTopic
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
+import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -79,7 +79,7 @@ class CalendarEventWebhookTest {
             .create(
                 argThat<CreateNotificationRequest> {
                   memberUsername == "alice" &&
-                      topic == NotificationTopic.EVENT_ANNOUNCEMENT &&
+                      topic == EventAnnouncementTopic &&
                       templateName == "event-announcement" &&
                       channel == Channel.EMAIL &&
                       dedupeKey == "event-announcement-12345-alice" &&

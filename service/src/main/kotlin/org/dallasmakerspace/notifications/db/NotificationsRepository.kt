@@ -14,6 +14,7 @@ import org.dallasmakerspace.notifications.NotificationPreference
 import org.dallasmakerspace.notifications.NotificationStatus
 import org.dallasmakerspace.notifications.NotificationSuppression
 import org.dallasmakerspace.notifications.NotificationTopic
+import org.dallasmakerspace.notifications.templates.TemplateRegistry
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -34,7 +35,9 @@ import org.jetbrains.exposed.sql.update
  */
 @Singleton
 @Suppress("TooManyFunctions") // Outbox CRUD + status transitions; kept together for cohesion.
-class NotificationsRepository @Inject constructor(loggerFactory: LoggerFactory) {
+class NotificationsRepository
+@Inject
+constructor(loggerFactory: LoggerFactory, private val templateRegistry: TemplateRegistry) {
   private val log = loggerFactory.create(javaClass)
 
   private val utcZone = ZoneId.of("UTC")
@@ -51,7 +54,7 @@ class NotificationsRepository @Inject constructor(loggerFactory: LoggerFactory) 
         val statement =
             NotificationsTable.insert {
               it[profileId] = resolvedProfileId
-              it[topic] = notification.topic.name
+              it[topic] = notification.topic.key
               it[channel] = notification.channel.name
               it[aggregation] = notification.aggregation.name
               it[templateName] = notification.templateName
@@ -260,7 +263,7 @@ class NotificationsRepository @Inject constructor(loggerFactory: LoggerFactory) 
         ProfileResolver.findProfileId(memberUsername) ?: return@suspendTransaction null
     NotificationPreferencesTable.select {
           (NotificationPreferencesTable.profileId eq resolvedProfileId) and
-              (NotificationPreferencesTable.topic eq topic.name) and
+              (NotificationPreferencesTable.topic eq topic.key) and
               (NotificationPreferencesTable.channel eq channel.name)
         }
         .firstOrNull()
@@ -286,7 +289,7 @@ class NotificationsRepository @Inject constructor(loggerFactory: LoggerFactory) 
         val updated =
             NotificationPreferencesTable.update({
               (NotificationPreferencesTable.profileId eq resolvedProfileId) and
-                  (NotificationPreferencesTable.topic eq preference.topic.name) and
+                  (NotificationPreferencesTable.topic eq preference.topic.key) and
                   (NotificationPreferencesTable.channel eq preference.channel.name)
             }) {
               it[enabled] = preference.enabled
@@ -296,7 +299,7 @@ class NotificationsRepository @Inject constructor(loggerFactory: LoggerFactory) 
         if (updated == 0) {
           NotificationPreferencesTable.insert {
             it[profileId] = resolvedProfileId
-            it[topic] = preference.topic.name
+            it[topic] = preference.topic.key
             it[channel] = preference.channel.name
             it[enabled] = preference.enabled
             it[aggregation] = preference.aggregation?.name
@@ -382,10 +385,18 @@ class NotificationsRepository @Inject constructor(loggerFactory: LoggerFactory) 
     }
   }
 
+  /** Resolves a stored topic key back to its [NotificationTopic] instance; crashes loudly on data
+   *  corruption (an unknown key means the row predates that topic's producer, or the producer was
+   *  removed), matching the enum-`valueOf`-throws behavior this replaces. */
+  private fun resolveTopic(key: String) =
+      requireNotNull(templateRegistry.findTopic(key)) {
+        "Unknown notification topic '$key' in stored row"
+      }
+
   private fun toPreference(memberUsername: String, row: ResultRow): NotificationPreference =
       NotificationPreference(
           memberUsername = memberUsername,
-          topic = NotificationTopic.valueOf(row[NotificationPreferencesTable.topic]),
+          topic = resolveTopic(row[NotificationPreferencesTable.topic]),
           channel = Channel.valueOf(row[NotificationPreferencesTable.channel]),
           enabled = row[NotificationPreferencesTable.enabled],
           aggregation =
@@ -407,7 +418,7 @@ class NotificationsRepository @Inject constructor(loggerFactory: LoggerFactory) 
       Notification(
           id = row[NotificationsTable.idColumn].value,
           memberUsername = memberUsername,
-          topic = NotificationTopic.valueOf(row[NotificationsTable.topic]),
+          topic = resolveTopic(row[NotificationsTable.topic]),
           channel = Channel.valueOf(row[NotificationsTable.channel]),
           aggregation = Aggregation.valueOf(row[NotificationsTable.aggregation]),
           templateName = row[NotificationsTable.templateName],

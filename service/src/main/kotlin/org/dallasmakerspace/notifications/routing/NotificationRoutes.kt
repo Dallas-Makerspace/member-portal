@@ -18,7 +18,6 @@ import org.dallasmakerspace.notifications.MemberPreferenceView
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.notifications.NotificationTopic
 import org.dallasmakerspace.plugins.ApiResponse
 import org.dallasmakerspace.plugins.Status
 
@@ -27,6 +26,7 @@ data class NotificationView(
     val id: Long,
     val memberUsername: String,
     val topic: String,
+    val topicDisplayName: String,
     val channel: String,
     val aggregation: String,
     val subject: String,
@@ -42,7 +42,8 @@ data class NotificationView(
         NotificationView(
             id = notification.id,
             memberUsername = notification.memberUsername,
-            topic = notification.topic.name,
+            topic = notification.topic.key,
+            topicDisplayName = notification.topic.displayName,
             channel = notification.channel.name,
             aggregation = notification.aggregation.name,
             subject = notification.subject,
@@ -60,10 +61,30 @@ data class NotificationView(
 data class PreferenceView(
     val memberUsername: String,
     val topic: String,
+    val topicDisplayName: String,
     val channel: String,
     val enabled: Boolean,
     val aggregationOverride: String?,
     val effectiveAggregation: String,
+    /** Mirrors [org.dallasmakerspace.notifications.NotificationTopic.visibleInPreferences] - the
+     * topic's own say on whether it's ready to be offered as a toggle, so callers don't need their
+     * own list of what's WIP. */
+    val visibleInPreferences: Boolean,
+)
+
+/**
+ * Wire format for POST /notifications - [topic] is a string key rather than [NotificationTopic]
+ * directly, resolved via [NotificationService.findTopic] before reaching the service. Gson (this
+ * route's content negotiation) can't deserialize an interface-typed field on its own, so this
+ * mirrors [UpdatePreferenceRequest]'s existing string-then-resolve shape.
+ */
+data class CreateNotificationRequestBody(
+    val memberUsername: String,
+    val topic: String,
+    val templateName: String,
+    val payload: String? = null,
+    val channel: Channel = Channel.EMAIL,
+    val dedupeKey: String? = null,
 )
 
 /** Request body for PUT /notifications/preferences/{username}. */
@@ -92,8 +113,21 @@ private fun Route.protectedNotificationRoutes(notificationService: NotificationS
 /** Emit a notification for a member (returns the stored notification). */
 private fun Route.emitNotificationRoute(notificationService: NotificationService) {
   post("/notifications") {
-    val request = call.receive<CreateNotificationRequest>()
-    val created = notificationService.create(request)
+    val body = call.receive<CreateNotificationRequestBody>()
+    val topic =
+        notificationService.findTopic(body.topic)
+            ?: return@post call.respond(
+                HttpStatusCode.BadRequest,
+                ApiResponse(Status.ERROR, "Invalid topic: ${body.topic}", null))
+    val created =
+        notificationService.create(
+            CreateNotificationRequest(
+                memberUsername = body.memberUsername,
+                topic = topic,
+                templateName = body.templateName,
+                payload = body.payload,
+                channel = body.channel,
+                dedupeKey = body.dedupeKey))
     call.respond(
         ApiResponse(
             Status.SUCCESS, "Notification ${created.id} created", NotificationView.from(created)))
@@ -149,12 +183,10 @@ private fun Route.updatePreferenceRoute(notificationService: NotificationService
         call.parameters["username"] ?: return@put call.respondBadRequest("Username required")
     val body = call.receive<UpdatePreferenceRequest>()
     val topic =
-        runCatching { NotificationTopic.valueOf(body.topic) }
-            .getOrElse {
-              return@put call.respond(
-                  HttpStatusCode.BadRequest,
-                  ApiResponse(Status.ERROR, "Invalid topic: ${body.topic}", null))
-            }
+        notificationService.findTopic(body.topic)
+            ?: return@put call.respond(
+                HttpStatusCode.BadRequest,
+                ApiResponse(Status.ERROR, "Invalid topic: ${body.topic}", null))
     val channel =
         runCatching { Channel.valueOf(body.channel) }
             .getOrElse {
@@ -176,7 +208,7 @@ private fun Route.updatePreferenceRoute(notificationService: NotificationService
     call.respond(
         ApiResponse(
             Status.SUCCESS,
-            "Preference updated for $username/${topic.name}/${channel.name}",
+            "Preference updated for $username/${topic.key}/${channel.name}",
             view.toView(),
         ))
   }
@@ -185,11 +217,13 @@ private fun Route.updatePreferenceRoute(notificationService: NotificationService
 private fun MemberPreferenceView.toView(): PreferenceView =
     PreferenceView(
         memberUsername = memberUsername,
-        topic = topic.name,
+        topic = topic.key,
+        topicDisplayName = topic.displayName,
         channel = channel.name,
         enabled = enabled,
         aggregationOverride = aggregationOverride?.name,
         effectiveAggregation = effectiveAggregation.name,
+        visibleInPreferences = topic.visibleInPreferences,
     )
 
 private suspend fun io.ktor.server.application.ApplicationCall.respondBadRequest(message: String) =

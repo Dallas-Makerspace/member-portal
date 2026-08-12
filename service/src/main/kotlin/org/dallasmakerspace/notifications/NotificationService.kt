@@ -18,6 +18,7 @@ import org.dallasmakerspace.notifications.templates.TemplateRegistry
  * (enabled + aggregation override), then template rendering.
  */
 @Singleton
+@Suppress("TooManyFunctions") // Single entry point for create/preferences/tracking; kept together for cohesion.
 class NotificationService
 @Inject
 constructor(
@@ -35,7 +36,7 @@ constructor(
    */
   suspend fun getPreferences(memberUsername: String): List<MemberPreferenceView> {
     val stored = repository.getPreferences(memberUsername).associateBy { it.topic to it.channel }
-    return NotificationTopic.entries.flatMap { topic ->
+    return templateRegistry.topics.flatMap { topic ->
       Channel.entries.map { channel ->
         val preference = stored[topic to channel]
         MemberPreferenceView(
@@ -75,6 +76,13 @@ constructor(
         effectiveAggregation = aggregationOverride ?: channel.defaultAggregation,
     )
   }
+
+  /**
+   * Resolves a topic by its persisted/serialized key; null if unknown. Keeps the routing layer
+   * decoupled from [TemplateRegistry] directly, consistent with existing layering (routes only
+   * ever talk to this service).
+   */
+  fun findTopic(key: String): NotificationTopic? = templateRegistry.findTopic(key)
 
   /** Most recent [limit] notifications, optionally filtered by member/status (newest first). */
   suspend fun list(

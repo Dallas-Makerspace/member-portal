@@ -15,6 +15,7 @@ import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.channels.Notifier
 import org.dallasmakerspace.notifications.channels.SendResult
 import org.dallasmakerspace.notifications.db.NotificationsRepository
+import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.junit.Before
 import org.junit.Test
 import org.mockito.ArgumentMatchers.contains
@@ -47,7 +48,7 @@ class NotificationWorkerTest {
       Notification(
           id = id,
           memberUsername = "jdoe",
-          topic = NotificationTopic.SYSTEM,
+          topic = SystemTopic,
           channel = channel,
           aggregation = aggregation,
           templateName = "system-test",

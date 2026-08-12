@@ -2,7 +2,7 @@ package org.dallasmakerspace.notifications.templates
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import org.dallasmakerspace.notifications.NotificationTopic
+import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
 
 /** Template data for an event announcement (organizer-following feature). */
 @Serializable
@@ -21,7 +21,7 @@ data class EventAnnouncementData(
 class EventAnnouncementTemplate :
     NotificationTemplate<EventAnnouncementData>(
         name = "event-announcement",
-        topic = NotificationTopic.EVENT_ANNOUNCEMENT,
+        topic = EventAnnouncementTopic,
     ) {
   override val serializer: KSerializer<EventAnnouncementData> = EventAnnouncementData.serializer()
 
