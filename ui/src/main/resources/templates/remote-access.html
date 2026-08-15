@@ -25,13 +25,40 @@
         })();
     </script>
     <style>
-        .machine-card { transition: box-shadow 0.2s; }
+        /* Card redesign (see COMMIT: reverts cleanly if this doesn't land well) - reuses the same
+           colored-left-border language already used for .category-header, so a card's status is
+           readable at a glance without a loud filled badge competing with it. */
+        .machine-card {
+            transition: box-shadow 0.2s, border-color 0.2s;
+            border: 1px solid rgba(0,0,0,.08);
+            border-left-width: 4px;
+            border-left-style: solid;
+        }
         .machine-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.15) !important; }
-        .status-badge-free { background-color: #198754; }
-        .status-badge-inuse { background-color: #dc3545; }
-        .status-badge-offline { background-color: #6c757d; }
+        .machine-card-available { border-left-color: #198754; }
+        .machine-card-inuse { border-left-color: #dc3545; }
+        .machine-card-offline { border-left-color: #adb5bd; }
+
+        .status-line { display: flex; align-items: center; gap: 0.4rem; font-weight: 600; font-size: 0.8125rem; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .status-dot-free { background-color: #198754; }
+        .status-dot-inuse { background-color: #dc3545; }
+        .status-dot-offline { background-color: #adb5bd; }
+        .status-text-free { color: #146c43; }
+        .status-text-inuse { color: #b02a37; }
+        .status-text-offline { color: #6c757d; }
+
         .protocol-icon { font-size: 1.4rem; color: #6c757d; }
         .category-header { border-left: 4px solid #0b9cc9; padding-left: 0.75rem; }
+
+        /* Occupant rows read as one grouped "who's on this machine" unit, distinct from the
+           status/action area below it. */
+        .occupant-list { background-color: #f8f9fa; border-radius: 6px; padding: 0.4rem 0.5rem; }
+        .occupant-row { display: flex; align-items: center; gap: 0.5rem; }
+        .occupant-row + .occupant-row { margin-top: 0.35rem; }
+        .occupant-row dms-member-card { min-width: 0; flex-shrink: 1; overflow: hidden; }
+        .occupant-row dms-relative-date { flex-shrink: 0; }
+        .occupant-row .kill-btn { margin-left: auto; flex-shrink: 0; }
     </style>
 </head>
 <body>
@@ -66,7 +93,8 @@
 
             <div class="row g-3">
                 <div th:each="machine : ${category.machines}" class="col-sm-6 col-md-4 col-lg-3">
-                    <div class="card machine-card h-100 shadow-sm">
+                    <div class="card machine-card h-100 shadow-sm"
+                         th:classappend="${machine.status == 'AVAILABLE' ? 'machine-card-available' : (machine.status == 'IN_USE' ? 'machine-card-inuse' : 'machine-card-offline')}">
                         <div class="card-body d-flex flex-column">
                             <div class="d-flex align-items-start mb-2">
                                 <span class="material-symbols-outlined protocol-icon me-2"
@@ -74,27 +102,26 @@
                                 <h6 class="card-title mb-0 flex-grow-1" th:text="${machine.displayName}">Machine</h6>
                             </div>
 
-                            <div class="mb-2">
-                                <span th:if="${machine.status == 'AVAILABLE'}"
-                                      class="badge status-badge-free text-white">Available</span>
-                                <span th:if="${machine.status == 'IN_USE'}"
-                                      class="badge status-badge-inuse text-white">Full</span>
-                                <span th:if="${machine.status == 'OFFLINE'}"
-                                      class="badge status-badge-offline text-white">Offline</span>
+                            <div class="status-line mb-2">
+                                <span th:if="${machine.status == 'AVAILABLE'}" class="status-dot status-dot-free"></span>
+                                <span th:if="${machine.status == 'IN_USE'}" class="status-dot status-dot-inuse"></span>
+                                <span th:if="${machine.status == 'OFFLINE'}" class="status-dot status-dot-offline"></span>
+                                <span th:if="${machine.status == 'AVAILABLE'}" class="status-text-free">Available</span>
+                                <span th:if="${machine.status == 'IN_USE'}" class="status-text-inuse">Full</span>
+                                <span th:if="${machine.status == 'OFFLINE'}" class="status-text-offline">Offline</span>
                             </div>
 
                             <!-- Current occupant(s) - only rendered when someone is actually connected,
                                  so an unoccupied machine looks exactly as simple as before. -->
-                            <div th:if="${!machine.sessions.isEmpty()}" class="mb-3 small">
-                                <div th:each="sess : ${machine.sessions}"
-                                     class="d-flex align-items-center justify-content-between mb-1">
+                            <div th:if="${!machine.sessions.isEmpty()}" class="occupant-list mb-3 small">
+                                <div th:each="sess : ${machine.sessions}" class="occupant-row">
                                     <dms-member-card th:attr="username=${sess.username}" state="mini"></dms-member-card>
                                     <dms-relative-date th:attr="timestamp=${sess.sessionStartDisplay}"
-                                                        class="text-muted ms-2"></dms-relative-date>
+                                                        class="text-muted"></dms-relative-date>
                                     <button th:if="${canKillConnections}"
                                             th:data-active-connection-id="${sess.activeConnectionId}"
                                             th:data-occupant="${sess.username}"
-                                            class="btn btn-outline-danger btn-sm ms-2 kill-btn"
+                                            class="btn btn-outline-danger btn-sm kill-btn"
                                             title="Kill this session">
                                         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">power_off</span>
                                     </button>
@@ -117,22 +144,27 @@
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
                                     Connect
                                 </a>
-                                <!-- Full -->
+                                <!-- Full - danger-tinted (rather than the same gray as Offline) so it
+                                     visually ties back to the red status dot/border instead of reading
+                                     the same as "unreachable". -->
                                 <button th:if="${machine.status == 'IN_USE'}"
-                                        class="btn btn-secondary btn-sm w-100" disabled>Full</button>
+                                        class="btn btn-outline-danger btn-sm w-100" disabled>Full</button>
                                 <!-- Has access but at their personal session limit (machine itself
                                      still has room, hence not IN_USE) -->
                                 <button th:if="${category.userHasAccess && machine.status == 'AVAILABLE' && !machine.userCanConnect}"
                                         class="btn btn-outline-secondary btn-sm w-100" disabled>
                                     Already Connected
                                 </button>
-                                <!-- No access -->
+                                <!-- No access - the reason is shown as visible text below the button,
+                                     not just a hover title, so it's legible on touch devices too. -->
                                 <button th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}"
-                                        class="btn btn-outline-secondary btn-sm w-100" disabled
-                                        th:title="'Requires: ' + ${category.requiredAdGroup}">
+                                        class="btn btn-outline-secondary btn-sm w-100" disabled>
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">lock</span>
                                     Connect
                                 </button>
+                                <div th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}"
+                                     class="small text-muted text-center mt-1"
+                                     th:text="'Requires: ' + ${category.requiredAdGroup}"></div>
                             </div>
                         </div>
                     </div>
