@@ -9,6 +9,25 @@ This is a Gradle multi-module monorepo containing two Kotlin/Ktor applications f
 - **service/** - Backend REST API service (Ktor 3.0.1, Kotlin 2.0.21)
 - **ui/** - Web UI with SSO (Ktor 2.3.5, Kotlin 1.9.23, Thymeleaf)
 
+## Git Workflow
+
+This repo uses **trunk-based development**: all work happens directly on `master`, not on feature branches. `master` has CI/CD wired to it (`Service CD` / `UI CD` workflows), so every commit pushed to `master` is built and deployed automatically — keep it green and keep changes small enough to land safely on their own.
+
+- **Do not create feature branches for normal work.** Commit and push directly to `master`.
+- **Guard incomplete/WIP features behind a `FeatureFlagType` site config**, not behind a branch. Add a `ConfigKey` in `service/src/main/kotlin/org/dallasmakerspace/config/ConfigRegistry.kt`:
+  ```kotlin
+  val MY_NEW_FEATURE_ENABLED =
+      ConfigKey(
+          key = "my-feature.enabled",
+          description = "Enable my new feature",
+          category = "My Feature",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+  ```
+  This lets a feature ship to `master`/production in an off state, then be piloted for specific members/AD groups (`enabledUsernames`/`enabledGroupNames`) before a full rollout (`enabled = true`) — see `GROUP_SETTINGS_ENABLED` or `REMOTE_ACCESS_ENABLED` for existing examples, and `service/src/main/kotlin/org/dallasmakerspace/config/FeatureFlagService.kt` (`isEnabledForUsername`) plus `MemberServiceClient.isFeatureEnabled(...)` in the UI module for how to check the flag for the current user at runtime, rather than the plain `ConfigOverrideService.get(...)` boolean lookup (that pattern has no per-user piloting and is only for simple `BooleanType` toggles).
+- A short-lived local branch is fine if you need one for your own workflow (e.g. an editor requirement), but merge/rebase it back into `master` and push promptly — don't let it become a long-running feature branch that master diverges from.
+
 ## Browser Testing Workflow
 
 To test UI changes in the browser, start both modules in the background, wait for startup, then use browser tools.
