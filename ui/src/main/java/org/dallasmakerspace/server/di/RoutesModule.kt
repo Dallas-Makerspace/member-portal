@@ -14,6 +14,7 @@ import org.dallasmakerspace.server.memberservice.MemberSettingsHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessConnectHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessDisconnectHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessHandler
+import org.dallasmakerspace.server.remoteaccess.RemoteAccessRefreshHandler
 import org.dallasmakerspace.server.routes.ActionTrackingHandler
 import org.dallasmakerspace.server.routes.AskAiHandler
 import org.dallasmakerspace.server.routes.BackendApiHandler
@@ -361,6 +362,15 @@ class RoutesModule {
       userInfoProvider: UserInfoProvider,
       memberServiceClient: MemberServiceClient,
   ): IRouteHandler = RemoteAccessHandler(loggerFactory, userInfoProvider, memberServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/remote-access/refresh")
+  fun providesRemoteAccessRefreshHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler = RemoteAccessRefreshHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
   @IntoMap
   @Provides

@@ -35,10 +35,12 @@ object ConfigRegistry {
   val REMOTE_ACCESS_ENABLED =
       ConfigKey(
           key = "remote-access.enabled",
-          description = "Enable the Remote Access feature (VM connections via Guacamole)",
+          description =
+              "Enable the Remote Access feature (VM connections via Guacamole); can be piloted " +
+                  "for specific members/AD groups before a full rollout",
           category = "Remote Access",
-          defaultValue = false,
-          type = ConfigValueType.BooleanType,
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
       )
 
   val REMOTE_ACCESS_JUMP_SERVER_CONNECTION_IDS =

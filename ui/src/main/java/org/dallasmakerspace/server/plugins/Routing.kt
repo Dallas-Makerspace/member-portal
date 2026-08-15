@@ -140,6 +140,9 @@ fun Application.configureRouting() {
       }
       get(RouteFactory.Paths.CONFIG_ADMIN.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.REMOTE_ACCESS.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+      get(RouteFactory.Paths.REMOTE_ACCESS_REFRESH.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.REMOTE_ACCESS_CONNECT.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

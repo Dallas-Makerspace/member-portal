@@ -37,79 +37,103 @@
 <body>
 <header class="top-nav" th:replace="~{fragments/header :: header}"></header>
 <div class="container pb-5 mt-4">
-    <h1 class="mb-1">Remote Access</h1>
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <h1 class="mb-0">Remote Access</h1>
+        <span id="refresh-indicator" class="d-none text-muted small d-flex align-items-center gap-1">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            Refreshing&hellip;
+        </span>
+    </div>
     <p class="text-muted mb-4">Connect to Dallas Makerspace virtual machines and workstations.</p>
 
-    <div th:if="${categories == null || categories.isEmpty()}" class="alert alert-warning">
-        No remote access categories are currently configured.
-    </div>
-
-    <div th:each="category : ${categories}" class="mb-5">
-        <h2 class="category-header mb-1" th:text="${category.displayName}">Category</h2>
-        <p class="text-muted mb-3" th:text="${category.description}"></p>
-
-        <div th:if="${!category.userHasAccess}" class="alert alert-warning d-flex align-items-center mb-3">
-            <span class="material-symbols-outlined me-2">lock</span>
-            <span>
-                Access requires membership in the
-                <strong th:text="${category.requiredAdGroup}"></strong> group.
-                Contact Infrastructure to request access.
-            </span>
+    <div id="remote-access-categories" th:fragment="categoriesFragment">
+        <div th:if="${categories == null || categories.isEmpty()}" class="alert alert-warning">
+            No remote access categories are currently configured.
         </div>
 
-        <div class="row g-3">
-            <div th:each="machine : ${category.machines}" class="col-sm-6 col-md-4 col-lg-3">
-                <div class="card machine-card h-100 shadow-sm">
-                    <div class="card-body d-flex flex-column">
-                        <div class="d-flex align-items-start mb-2">
-                            <span class="material-symbols-outlined protocol-icon me-2"
-                                  th:text="${machine.protocol == 'ssh' ? 'terminal' : 'desktop_windows'}">desktop_windows</span>
-                            <h6 class="card-title mb-0 flex-grow-1" th:text="${machine.displayName}">Machine</h6>
-                        </div>
+        <div th:each="category : ${categories}" class="mb-5">
+            <h2 class="category-header mb-1" th:text="${category.displayName}">Category</h2>
+            <p class="text-muted mb-3" th:text="${category.description}"></p>
 
-                        <div class="mb-3">
-                            <span th:if="${machine.status == 'AVAILABLE'}"
-                                  class="badge status-badge-free text-white">Available</span>
-                            <span th:if="${machine.status == 'IN_USE'}"
-                                  class="badge status-badge-inuse text-white"
-                                  th:text="'In use by ' + ${machine.occupantUsername}">In use</span>
-                            <span th:if="${machine.status == 'OFFLINE'}"
-                                  class="badge status-badge-offline text-white">Offline</span>
-                        </div>
+            <div th:if="${!category.userHasAccess}" class="alert alert-warning d-flex align-items-center mb-3">
+                <span class="material-symbols-outlined me-2">lock</span>
+                <span>
+                    Access requires membership in the
+                    <strong th:text="${category.requiredAdGroup}"></strong> group.
+                    Contact Infrastructure to request access.
+                </span>
+            </div>
 
-                        <div class="mt-auto">
-                            <!-- Offline -->
-                            <button th:if="${machine.status == 'OFFLINE'}"
-                                    class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">cloud_off</span>
-                                Offline
-                            </button>
-                            <!-- Available and user has access -->
-                            <a th:if="${category.userHasAccess && machine.status == 'AVAILABLE'}"
-                               th:href="'/remote-access/connect/' + ${machine.connectionId}"
-                               target="_blank"
-                               class="btn btn-primary btn-sm w-100">
-                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
-                                Connect
-                            </a>
-                            <!-- In use -->
-                            <button th:if="${machine.status == 'IN_USE'}"
-                                    class="btn btn-secondary btn-sm w-100" disabled>In Use</button>
-                            <!-- Kill session (infra only) -->
-                            <button th:if="${canKillConnections && machine.status == 'IN_USE'}"
-                                    th:data-connection-id="${machine.connectionId}"
-                                    th:data-occupant="${machine.occupantUsername}"
-                                    class="btn btn-danger btn-sm w-100 mt-1 kill-btn">
-                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">power_off</span>
-                                Kill Session
-                            </button>
-                            <!-- No access -->
-                            <button th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}"
-                                    class="btn btn-outline-secondary btn-sm w-100" disabled
-                                    th:title="'Requires: ' + ${category.requiredAdGroup}">
-                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">lock</span>
-                                Connect
-                            </button>
+            <div class="row g-3">
+                <div th:each="machine : ${category.machines}" class="col-sm-6 col-md-4 col-lg-3">
+                    <div class="card machine-card h-100 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex align-items-start mb-2">
+                                <span class="material-symbols-outlined protocol-icon me-2"
+                                      th:text="${machine.protocol == 'ssh' ? 'terminal' : 'desktop_windows'}">desktop_windows</span>
+                                <h6 class="card-title mb-0 flex-grow-1" th:text="${machine.displayName}">Machine</h6>
+                            </div>
+
+                            <div class="mb-2">
+                                <span th:if="${machine.status == 'AVAILABLE'}"
+                                      class="badge status-badge-free text-white">Available</span>
+                                <span th:if="${machine.status == 'IN_USE'}"
+                                      class="badge status-badge-inuse text-white">Full</span>
+                                <span th:if="${machine.status == 'OFFLINE'}"
+                                      class="badge status-badge-offline text-white">Offline</span>
+                            </div>
+
+                            <!-- Current occupant(s) - only rendered when someone is actually connected,
+                                 so an unoccupied machine looks exactly as simple as before. -->
+                            <div th:if="${!machine.sessions.isEmpty()}" class="mb-3 small">
+                                <div th:each="sess : ${machine.sessions}"
+                                     class="d-flex align-items-center justify-content-between mb-1">
+                                    <dms-member-card th:attr="username=${sess.username}" state="mini"></dms-member-card>
+                                    <dms-relative-date th:attr="timestamp=${sess.sessionStartDisplay}"
+                                                        class="text-muted ms-2"></dms-relative-date>
+                                    <button th:if="${canKillConnections}"
+                                            th:data-active-connection-id="${sess.activeConnectionId}"
+                                            th:data-occupant="${sess.username}"
+                                            class="btn btn-outline-danger btn-sm ms-2 kill-btn"
+                                            title="Kill this session">
+                                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">power_off</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="mt-auto">
+                                <!-- Offline -->
+                                <button th:if="${machine.status == 'OFFLINE'}"
+                                        class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">cloud_off</span>
+                                    Offline
+                                </button>
+                                <!-- Connectable and user has access (may already have occupants if the
+                                     machine supports multiple concurrent logins) -->
+                                <a th:if="${category.userHasAccess && machine.status != 'OFFLINE' && machine.userCanConnect}"
+                                   th:href="'/remote-access/connect/' + ${machine.connectionId}"
+                                   target="_blank"
+                                   class="btn btn-primary btn-sm w-100">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
+                                    Connect
+                                </a>
+                                <!-- Full -->
+                                <button th:if="${machine.status == 'IN_USE'}"
+                                        class="btn btn-secondary btn-sm w-100" disabled>Full</button>
+                                <!-- Has access but at their personal session limit (machine itself
+                                     still has room, hence not IN_USE) -->
+                                <button th:if="${category.userHasAccess && machine.status == 'AVAILABLE' && !machine.userCanConnect}"
+                                        class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                    Already Connected
+                                </button>
+                                <!-- No access -->
+                                <button th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}"
+                                        class="btn btn-outline-secondary btn-sm w-100" disabled
+                                        th:title="'Requires: ' + ${category.requiredAdGroup}">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">lock</span>
+                                    Connect
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -126,25 +150,55 @@
 <script src="/static/js/app.js"></script>
 <!-- Page Loader (REQUIRED for all pages) -->
 <script src="/static/js/dms-page-loader.js" defer></script>
+<!-- Member card + relative date, used to render current occupant(s) -->
+<script type="module" src="/static/js/dms-member-card.js"></script>
+<script type="module" src="/static/js/dms-relative-date.js"></script>
 <script>
-    // Reload machine state when user returns to this tab (e.g. after a Guacamole session)
+    // Refresh machine/session state when the user returns to this tab (e.g. after a Guacamole
+    // session), without a full page reload. The container is swapped via outerHTML, so listeners
+    // are attached via delegation on a stable ancestor rather than re-wired after every refresh.
     var lastLoad = Date.now();
+    var refreshIndicator = document.getElementById('refresh-indicator');
+    var refreshInFlight = false;
+
+    function refreshCategories() {
+        if (refreshInFlight) return;
+        refreshInFlight = true;
+        refreshIndicator.classList.remove('d-none');
+        fetch('/remote-access/refresh', {credentials: 'same-origin'})
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.text();
+            })
+            .then(function (html) {
+                document.getElementById('remote-access-categories').outerHTML = html;
+                lastLoad = Date.now();
+            })
+            .catch(function (e) {
+                console.warn('Failed to refresh Remote Access state', e);
+            })
+            .finally(function () {
+                refreshIndicator.classList.add('d-none');
+                refreshInFlight = false;
+            });
+    }
+
     document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'visible' && Date.now() - lastLoad > 2000) {
-            location.reload();
+            refreshCategories();
         }
     });
 
-    document.querySelectorAll('.kill-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var id = this.dataset.connectionId;
-            var who = this.dataset.occupant || 'this user';
-            if (!confirm('Force disconnect ' + who + ' from this machine?')) return;
-            btn.disabled = true;
-            fetch('/remote-access/disconnect/' + id, {method: 'POST', credentials: 'same-origin'})
-                .then(function () { location.reload(); })
-                .catch(function (e) { alert('Failed: ' + e); btn.disabled = false; });
-        });
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.kill-btn');
+        if (!btn) return;
+        var id = btn.dataset.activeConnectionId;
+        var who = btn.dataset.occupant || 'this user';
+        if (!confirm('Force disconnect ' + who + ' from this machine?')) return;
+        btn.disabled = true;
+        fetch('/remote-access/disconnect/' + id, {method: 'POST', credentials: 'same-origin'})
+            .then(function () { refreshCategories(); })
+            .catch(function (e) { alert('Failed: ' + e); btn.disabled = false; });
     });
 </script>
 </body>

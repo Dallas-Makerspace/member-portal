@@ -4,7 +4,6 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import javax.inject.Inject
-import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
@@ -26,9 +25,11 @@ constructor(
               return
             }
 
-    val isInfraUser = authz.can(Permission.MANAGE_CONFIG.name)
+    val currentUsername = userInfo["preferred_username"] as? String
     val featureEnabled =
-        memberServiceClient.getFeatureFlag("remote-access.enabled", session.sessionId, isInfraUser)
+        currentUsername?.let {
+          memberServiceClient.isFeatureEnabled("remote-access.enabled", it, session.sessionId)
+        } ?: false
 
     if (!featureEnabled) {
       call.respond(HttpStatusCode.Forbidden)
@@ -39,14 +40,17 @@ constructor(
     val userGroups =
         ((userInfo["groups"] as? List<*>) ?: emptyList<String>()).filterIsInstance<String>()
 
+    var matchingMachine: Map<String, Any?>? = null
     val matchingCategory =
         rawCategories.firstOrNull { category ->
           @Suppress("UNCHECKED_CAST")
           val machines = (category["machines"] as? List<Map<String, Any?>>) ?: emptyList()
-          machines.any { it["connectionId"] as? String == connectionId }
+          val machine = machines.firstOrNull { it["connectionId"] as? String == connectionId }
+          if (machine != null) matchingMachine = machine
+          machine != null
         }
 
-    if (matchingCategory == null) {
+    if (matchingCategory == null || matchingMachine == null) {
       call.respond(HttpStatusCode.NotFound)
       return
     }
@@ -57,6 +61,12 @@ constructor(
             userGroups.any { it.trimStart('/') == requiredAdGroup.trimStart('/') }
 
     if (!userHasAccess) {
+      call.respond(HttpStatusCode.Forbidden)
+      return
+    }
+
+    val viewModel = buildMachineViewModel(matchingMachine!!, currentUsername)
+    if (viewModel["canConnect"] != true) {
       call.respond(HttpStatusCode.Forbidden)
       return
     }

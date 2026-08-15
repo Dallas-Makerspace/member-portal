@@ -105,6 +105,7 @@ object RouteFactory {
     OFFLINE("/offline"),
     CONFIG_ADMIN("/admin/config"),
     REMOTE_ACCESS("/remote-access"),
+    REMOTE_ACCESS_REFRESH("/remote-access/refresh"),
     REMOTE_ACCESS_CONNECT("/remote-access/connect/{connectionId}"),
     REMOTE_ACCESS_DISCONNECT("/remote-access/disconnect/{connectionId}"),
     SMARTWAIVER_WEBHOOK("/webhook/smartwaiver"),

@@ -94,12 +94,21 @@ constructor(
               null
             } else {
               val reachable = reachabilityById[id] ?: true
-              val sessions = activeSessions[id]
-              val firstSession = sessions?.firstOrNull()
+              val sessions =
+                  (activeSessions[id] ?: emptyList()).map {
+                    RemoteAccessSessionDTO(
+                        activeConnectionId = it.identifier,
+                        username = it.username,
+                        sessionStartEpochMs = it.startDate,
+                    )
+                  }
+              // null/0 means unlimited.
+              val maxConnections = conn.maxConnections?.takeIf { it > 0 }
+              val hasCapacity = maxConnections == null || sessions.size < maxConnections
               val status =
                   when {
                     !reachable -> MachineStatus.OFFLINE
-                    !sessions.isNullOrEmpty() -> MachineStatus.IN_USE
+                    sessions.isNotEmpty() && !hasCapacity -> MachineStatus.IN_USE
                     else -> MachineStatus.AVAILABLE
                   }
               RemoteAccessMachineDTO(
@@ -107,9 +116,10 @@ constructor(
                   displayName = conn.name,
                   protocol = conn.protocol,
                   status = status,
-                  occupantUsername = firstSession?.username,
-                  sessionStartEpochMs = firstSession?.startDate,
-                  activeConnectionId = firstSession?.identifier,
+                  sessions = sessions,
+                  maxConnections = conn.maxConnections,
+                  maxConnectionsPerUser = conn.maxConnectionsPerUser,
+                  canConnect = reachable && hasCapacity,
               )
             }
           }
