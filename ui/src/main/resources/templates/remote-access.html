@@ -140,7 +140,7 @@
                                 <a th:if="${category.userHasAccess && machine.status != 'OFFLINE' && machine.userCanConnect}"
                                    th:href="'/remote-access/connect/' + ${machine.connectionId}"
                                    target="_blank"
-                                   class="btn btn-primary btn-sm w-100">
+                                   class="btn btn-primary btn-sm w-100 remote-access-connect-btn">
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
                                     Connect
                                 </a>
@@ -194,21 +194,35 @@
     var refreshIndicator = document.getElementById('refresh-indicator');
     var refreshInFlight = false;
 
+    // Status checks (TCP + WinRM) can take a couple of seconds, so Connect is disabled for the
+    // duration of a refresh to avoid clicking into a machine whose displayed state is stale.
+    function setConnectButtonsDisabled(disabled) {
+        document.querySelectorAll('.remote-access-connect-btn').forEach(function (btn) {
+            btn.classList.toggle('disabled', disabled);
+            btn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        });
+    }
+
     function refreshCategories() {
         if (refreshInFlight) return;
         refreshInFlight = true;
         refreshIndicator.classList.remove('d-none');
+        setConnectButtonsDisabled(true);
         fetch('/remote-access/refresh', {credentials: 'same-origin'})
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.text();
             })
             .then(function (html) {
+                // Fresh, already-enabled buttons come in with the new HTML - no need to re-enable.
                 document.getElementById('remote-access-categories').outerHTML = html;
                 lastLoad = Date.now();
             })
             .catch(function (e) {
                 console.warn('Failed to refresh Remote Access state', e);
+                // The DOM was NOT replaced on failure, so buttons disabled above would otherwise
+                // stay stuck disabled indefinitely - re-enable them explicitly here.
+                setConnectButtonsDisabled(false);
             })
             .finally(function () {
                 refreshIndicator.classList.add('d-none');
@@ -223,6 +237,13 @@
     });
 
     document.addEventListener('click', function (e) {
+        // Bootstrap's .btn.disabled already blocks pointer clicks (pointer-events: none), but not
+        // keyboard Enter/Space activation of a focused <a> - guard that here too.
+        var connectBtn = e.target.closest('a.remote-access-connect-btn.disabled');
+        if (connectBtn) {
+            e.preventDefault();
+            return;
+        }
         var btn = e.target.closest('.kill-btn');
         if (!btn) return;
         var id = btn.dataset.activeConnectionId;

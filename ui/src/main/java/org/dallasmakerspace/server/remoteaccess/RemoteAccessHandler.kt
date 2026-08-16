@@ -63,6 +63,9 @@ fun buildMachineViewModel(
       "status" to (machine["status"] as? String ?: ""),
       "sessions" to sessions,
       "canConnect" to (globalCanConnect && !userAtPersonalCap),
+      // Not yet rendered by the template - threaded through now for a future "not confirmed"
+      // affordance. null = the WinRM check couldn't verify direct-RDP occupancy for this machine.
+      "directRdpSessionCount" to (machine["directRdpSessionCount"] as? Number)?.toInt(),
   )
 }
 

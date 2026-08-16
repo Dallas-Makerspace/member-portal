@@ -68,6 +68,22 @@ dependencies {
   implementation("ch.qos.logback:logback-classic:$logbackVersion")
   implementation("org.codehaus.janino:janino:3.1.12") // For conditional logback config
   implementation("org.mariadb.jdbc:mariadb-java-client:3.4.0")
+  // WinRM client - used to detect direct (non-Guacamole) RDP sessions on target machines.
+  // winrm4j 0.12.3 is built on the pre-Jakarta (javax.*) Apache CXF 3.x, which assumes several
+  // Java EE APIs that were REMOVED from the JDK in Java 11+ (this project targets JDK 21) and are
+  // no longer transitively pulled in (CXF's own poms mark them "provided", i.e. compileOnly, on
+  // the assumption the JDK still supplies them). Without ALL of these, WinRM calls fail
+  // immediately with NoClassDefFoundError - discovered by actually exercising WinRmClientTest
+  // against a real (if unresponsive) socket rather than trusting the library to "just work".
+  implementation("io.cloudsoft.windows:winrm4j:0.12.3")
+  implementation("javax.annotation:javax.annotation-api:1.3.2")
+  implementation("javax.xml.ws:jaxws-api:2.3.1")
+  implementation("javax.jws:javax.jws-api:1.1")
+  implementation("javax.xml.soap:javax.xml.soap-api:1.4.0")
+  implementation("com.sun.xml.messaging.saaj:saaj-impl:1.5.3")
+  implementation("javax.xml.bind:jaxb-api:2.3.1")
+  implementation("com.sun.xml.bind:jaxb-impl:2.3.1")
+  implementation("javax.activation:javax.activation-api:1.2.0")
   // AWS Bedrock
   implementation("software.amazon.awssdk:bedrockruntime:2.28.3")
   // Elasticsearch logging

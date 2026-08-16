@@ -10,17 +10,25 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.guacamole.GuacamoleActiveConnection
+import org.dallasmakerspace.guacamole.GuacamoleConnection
 import org.dallasmakerspace.guacamole.IGuacamoleApiClient
+import org.dallasmakerspace.winrm.IWinRmClient
 
 private const val PROBE_TIMEOUT_MS = 2_000
 private const val PORT_RDP = 3389
 private const val PORT_SSH = 22
+
+/** Result of probing a single machine: TCP reachability, and (RDP machines only) the count of
+ * direct/bypass RDP sessions observed via WinRM, already excluding Guacamole's own session(s). */
+private data class MachineProbeResult(val reachable: Boolean, val directRdpSessionCount: Int?)
 
 @Singleton
 class RemoteAccessService
 @Inject
 constructor(
     private val guacamoleApiClient: IGuacamoleApiClient,
+    private val winRmClient: IWinRmClient,
     private val configOverrideService: ConfigOverrideService,
     loggerFactory: LoggerFactory,
 ) {
@@ -66,25 +74,27 @@ constructor(
             }
             .distinct()
 
-    // Fetch hostname from Guacamole and TCP-probe each VM in parallel
+    // Fetch hostname from Guacamole once per VM, then TCP-probe reachability and (RDP machines
+    // only) check for direct/bypass RDP sessions via WinRM concurrently with each other - all
+    // machines' checks are themselves already running concurrently via this outer async wave.
     val probeJobs =
         allConnectionIds.mapNotNull { id ->
-          connectionById[id]?.let { conn ->
-            id to
-                async {
-                  val hostname = guacamoleApiClient.getConnectionHostname(id)
-                  probeConnectivity(hostname, conn.protocol)
-                }
-          }
+          connectionById[id]?.let { conn -> id to async { probeMachine(id, conn, activeSessions) } }
         }
     // All jobs are running concurrently; await each in turn
-    val reachabilityById =
-        buildMap<String, Boolean> { for ((id, deferred) in probeJobs) put(id, deferred.await()) }
+    val probeResultById =
+        buildMap<String, MachineProbeResult> {
+          for ((id, deferred) in probeJobs) put(id, deferred.await())
+        }
 
     RemoteAccessCategory.entries.map { category ->
-      val connectionIdsRaw = configOverrideService.get(category.connectionIdsConfigKey)
       val requiredAdGroup = configOverrideService.get(category.adGroupConfigKey)
-      val connectionIds = connectionIdsRaw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+      val connectionIds =
+          configOverrideService
+              .get(category.connectionIdsConfigKey)
+              .split(",")
+              .map { it.trim() }
+              .filter { it.isNotEmpty() }
 
       val machines =
           connectionIds.mapNotNull { id ->
@@ -93,34 +103,7 @@ constructor(
               log.warn("Guacamole connection ID $id (category ${category.slug}) not found")
               null
             } else {
-              val reachable = reachabilityById[id] ?: true
-              val sessions =
-                  (activeSessions[id] ?: emptyList()).map {
-                    RemoteAccessSessionDTO(
-                        activeConnectionId = it.identifier,
-                        username = it.username,
-                        sessionStartEpochMs = it.startDate,
-                    )
-                  }
-              // null/0 means unlimited.
-              val maxConnections = conn.maxConnections?.takeIf { it > 0 }
-              val hasCapacity = maxConnections == null || sessions.size < maxConnections
-              val status =
-                  when {
-                    !reachable -> MachineStatus.OFFLINE
-                    sessions.isNotEmpty() && !hasCapacity -> MachineStatus.IN_USE
-                    else -> MachineStatus.AVAILABLE
-                  }
-              RemoteAccessMachineDTO(
-                  connectionId = id,
-                  displayName = conn.name,
-                  protocol = conn.protocol,
-                  status = status,
-                  sessions = sessions,
-                  maxConnections = conn.maxConnections,
-                  maxConnectionsPerUser = conn.maxConnectionsPerUser,
-                  canConnect = reachable && hasCapacity,
-              )
+              buildMachineDto(id, conn, probeResultById[id], activeSessions[id] ?: emptyList())
             }
           }
 
@@ -132,6 +115,70 @@ constructor(
           machines = machines,
       )
     }
+  }
+
+  /** TCP-probes reachability and (RDP machines only) checks for direct/bypass RDP sessions via
+   * WinRM, concurrently with each other. */
+  private suspend fun probeMachine(
+      id: String,
+      conn: GuacamoleConnection,
+      activeSessions: Map<String, List<GuacamoleActiveConnection>>,
+  ): MachineProbeResult {
+    val hostname = guacamoleApiClient.getConnectionHostname(id)
+    return coroutineScope {
+      val reachableDeferred = async { probeConnectivity(hostname, conn.protocol) }
+      val directRdpDeferred = async {
+        if (conn.protocol == "rdp" && hostname.isNotBlank()) {
+          winRmClient.getEstablishedRdpConnectionCount(hostname)?.let { total ->
+            // WinRM sees Guacamole's own RDP session too - subtract the count we already know
+            // about from Guacamole to isolate direct/bypass sessions.
+            (total - (activeSessions[id]?.size ?: 0)).coerceAtLeast(0)
+          }
+        } else {
+          null
+        }
+      }
+      MachineProbeResult(reachableDeferred.await(), directRdpDeferred.await())
+    }
+  }
+
+  private fun buildMachineDto(
+      id: String,
+      conn: GuacamoleConnection,
+      probeResult: MachineProbeResult?,
+      activeSessionsForMachine: List<GuacamoleActiveConnection>,
+  ): RemoteAccessMachineDTO {
+    val reachable = probeResult?.reachable ?: true
+    val directRdpSessionCount = probeResult?.directRdpSessionCount // null = fail-open
+    val sessions =
+        activeSessionsForMachine.map {
+          RemoteAccessSessionDTO(
+              activeConnectionId = it.identifier,
+              username = it.username,
+              sessionStartEpochMs = it.startDate,
+          )
+        }
+    // null/0 means unlimited.
+    val maxConnections = conn.maxConnections?.takeIf { it > 0 }
+    val effectiveSessionCount = sessions.size + (directRdpSessionCount ?: 0)
+    val hasCapacity = maxConnections == null || effectiveSessionCount < maxConnections
+    val status =
+        when {
+          !reachable -> MachineStatus.OFFLINE
+          effectiveSessionCount > 0 && !hasCapacity -> MachineStatus.IN_USE
+          else -> MachineStatus.AVAILABLE
+        }
+    return RemoteAccessMachineDTO(
+        connectionId = id,
+        displayName = conn.name,
+        protocol = conn.protocol,
+        status = status,
+        sessions = sessions,
+        maxConnections = conn.maxConnections,
+        maxConnectionsPerUser = conn.maxConnectionsPerUser,
+        canConnect = reachable && hasCapacity,
+        directRdpSessionCount = directRdpSessionCount,
+    )
   }
 
   private suspend fun probeConnectivity(hostname: String, protocol: String): Boolean {

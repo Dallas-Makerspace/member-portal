@@ -28,6 +28,10 @@ data class RemoteAccessMachineDTO(
     val maxConnections: Int?,
     val maxConnectionsPerUser: Int?,
     val canConnect: Boolean,
+    // Direct (non-Guacamole) RDP sessions observed via WinRM, already excluding Guacamole's own
+    // session(s). null means the check couldn't be completed (WinRM unreachable/timed out/failed)
+    // - treated as "unknown", not zero, so it never blocks connecting on its own (fail open).
+    val directRdpSessionCount: Int?,
 )
 
 @Serializable
