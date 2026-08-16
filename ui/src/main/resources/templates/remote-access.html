@@ -84,10 +84,10 @@
 
             <div th:if="${!category.userHasAccess}" class="alert alert-warning d-flex align-items-center mb-3">
                 <span class="material-symbols-outlined me-2">lock</span>
-                <span>
+                <span class="d-flex align-items-center flex-wrap gap-1">
                     Access requires membership in the
-                    <strong th:text="${category.requiredAdGroup}"></strong> group.
-                    Contact Infrastructure to request access.
+                    <dms-group-pill th:attr="name=${category.requiredAdGroup},slug=${category.requiredAdGroupSlug}"></dms-group-pill>
+                    group.
                 </span>
             </div>
 
@@ -182,9 +182,10 @@
 <script src="/static/js/app.js"></script>
 <!-- Page Loader (REQUIRED for all pages) -->
 <script src="/static/js/dms-page-loader.js" defer></script>
-<!-- Member card + relative date, used to render current occupant(s) -->
+<!-- Member card + relative date, used to render current occupant(s); group pill for locked-category access group -->
 <script type="module" src="/static/js/dms-member-card.js"></script>
 <script type="module" src="/static/js/dms-relative-date.js"></script>
+<script type="module" src="/static/js/dms-group-pill.js"></script>
 <script>
     // Refresh machine/session state when the user returns to this tab (e.g. after a Guacamole
     // session), without a full page reload. The container is swapped via outerHTML, so listeners

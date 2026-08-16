@@ -11,6 +11,7 @@ import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.models.getSlugFromName
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
 
 private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
@@ -101,6 +102,7 @@ suspend fun buildRemoteAccessCategories(
         "displayName" to (category["displayName"] as? String ?: ""),
         "description" to (category["description"] as? String ?: ""),
         "requiredAdGroup" to requiredAdGroup,
+        "requiredAdGroupSlug" to (if (requiredAdGroup.isBlank()) "" else getSlugFromName(requiredAdGroup)),
         "userHasAccess" to userHasAccess,
         "machines" to machines,
     )
