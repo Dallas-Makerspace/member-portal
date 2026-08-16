@@ -5,7 +5,7 @@
     <div id="settings-banner" class="settings-banner d-none" role="alert">
         <div class="container">
             <span>Let other members know how to reach you.</span>
-            <a id="settings-banner-link" href="#" class="btn btn-sm btn-primary">Set preference</a>
+            <a id="settings-banner-link" href="#" class="btn btn-sm btn-primary">Set contact preference</a>
         </div>
     </div>
     <nav class="navbar navbar-expand-lg custom-navbar">
@@ -201,12 +201,12 @@
             fetch('/api/settings-banner')
                 .then(function(response) { return response.ok ? response.json() : null; })
                 .then(function(data) {
-                    if (isSettingsPage) return;
-                    if (data && data.showBanner && data.settingsUrl) {
-                        link.href = data.settingsUrl;
-                        banner.classList.remove('d-none');
-                    }
-                })
+                if (isSettingsPage) return;
+                if (data && data.showBanner && data.settingsUrl) {
+                    link.href = data.settingsUrl;
+                    banner.classList.remove('d-none');
+                }
+            })
                 .catch(function() { /* silent: banner is non-critical */ });
         })();
     </script>
