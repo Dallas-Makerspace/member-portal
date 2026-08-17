@@ -38,12 +38,10 @@ class WinRmClientTest {
 
           assertNull(result)
           // connect-timeout-ms (500) + call-timeout-ms (1500) from application.conf is the
-          // configured budget, but this is also the FIRST time in the JVM that winrm4j's heavy
-          // CXF/JAX-WS/JAXB/SAAJ dependency stack gets classloaded, which measurably adds to wall
-          // clock on a cold run - 15s gives real headroom for that while still conclusively
-          // proving this returns in seconds, not "hangs forever" (which is what this test guards
-          // against; the precise millisecond budget is exercised by mocked RemoteAccessServiceTest
-          // cases instead).
+          // configured budget; 15s gives headroom for JVM/classloading variance on a cold run
+          // while still conclusively proving this returns in seconds, not "hangs forever" (which
+          // is what this test guards against; the precise millisecond budget is exercised by
+          // mocked RemoteAccessServiceTest cases instead).
           assertTrue(elapsedMs < 15_000, "Expected to return well under 15s, took ${elapsedMs}ms")
         }
       }

@@ -97,13 +97,6 @@
         </else>
     </if>
     <logger name="org.apache" level="INFO"/>
-    <!-- TEMPORARY diagnostic logging for the WinRM "Authorization loop" investigation - shows the
-    raw NTLM/WS-Man HTTP exchange so we can see exactly which round-trip breaks. Remove once
-    root-caused. -->
-    <logger name="org.apache.http.wire" level="DEBUG"/>
-    <logger name="org.apache.http.headers" level="DEBUG"/>
-    <logger name="org.apache.cxf" level="DEBUG"/>
-    <logger name="io.cloudsoft.winrm4j" level="DEBUG"/>
     <logger name="io.netty" level="INFO"/>
     <logger name="io.ktor" level="INFO"/>
     <logger name="io.ktor.client.HttpClient" level="WARN"/>
