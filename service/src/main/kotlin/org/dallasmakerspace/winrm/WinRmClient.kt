@@ -3,6 +3,11 @@ package org.dallasmakerspace.winrm
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.time.Duration
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.util.Locale
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
@@ -13,42 +18,49 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.metricshub.winrm.WinRMClient as MetricsHubWinRMClient
 
-// Lists RDP (LogonType=10/RemoteInteractive) logon sessions currently on the target, with real
-// identity and logon time - not just a raw connection count - via Get-CimInstance, a structured
-// JSON array, no text-table parsing. Win32_LogonSession/Win32_Account are readable by any
-// authenticated account by default, no elevated rights required beyond standard WMI read access.
-//
-// The script travels base64-encoded (winrm-java's .powerShell() uses -EncodedCommand under the
-// hood), so pipes/quotes/newlines/$variables reach PowerShell exactly as written here - no
-// cmd.exe-layer quoting to worry about, unlike a raw WinRS command string.
-//
-// @() forces array/collection context on the ForEach-Object result. ConvertTo-Json still unwraps
-// a *single-element* array to a bare JSON object rather than a one-element array - a longstanding
-// quirk present in Windows PowerShell 5.1, where the -AsArray fix (added in PS 6.2+) doesn't
-// exist - so that's handled client-side in parseSessions() rather than by adding -AsArray, which
-// would break with a parameter-not-found error on any target still running Windows PowerShell 5.1.
-private val LIST_RDP_LOGON_SESSIONS_PS =
-    """
-    @(Get-CimInstance Win32_LogonSession -Filter "LogonType=10" | ForEach-Object {
-      ${'$'}acct = Get-CimAssociatedInstance -InputObject ${'$'}_ -ResultClassName Win32_Account -ErrorAction SilentlyContinue | Select-Object -First 1
-      if (${'$'}acct) {
-        [PSCustomObject]@{ Username = ${'$'}acct.Name; StartEpochMs = [DateTimeOffset]::new(${'$'}_.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds() }
-      }
-    }) | ConvertTo-Json -Compress
-    """
-        .trimIndent()
+private const val QUSER_PS = "quser"
+
+// quser's own documented way of saying "zero sessions on this machine" is a non-zero exit code
+// plus this exact message (landing on stdout or stderr depending on Windows version) - a real
+// empty result, not a failure. Discovered the hard way: Win32_LogonSession (tried first) retains
+// leaked/orphaned LSA session records for months after a user has genuinely logged off (confirmed
+// live against prwjump - 100+ stale LogonType=10 entries dating back to September, for users who
+// were nowhere in quser's own output), making it fundamentally unreliable for "who's really on
+// this machine right now". quser talks to the same Remote Desktop Session Host session table an
+// admin would see via Task Manager - the actual ground truth - at the cost of parsing its
+// console-table text instead of getting clean structured JSON.
+private const val QUSER_NO_SESSIONS_MARKER = "No User exists"
+
+// USERNAME SESSIONNAME ID STATE IDLE-TIME LOGON-TIME. SESSIONNAME is blank for some disconnected
+// sessions, which shifts the remaining columns - handled by making that group optional rather than
+// assuming a fixed column count; STATE is anchored to its known value set specifically so the
+// optional-SESSIONNAME case can't misalign against it. The caller's own session (if any) is
+// prefixed with ">" instead of a space - stripped, not treated as part of the username.
+private val QUSER_LINE_REGEX =
+    Regex(
+        """^\s*>?(\S+)\s+(?:(\S+)\s+)?(\d+)\s+(Active|Disc|Conn|Idle|Listen|Shadow|Down|Init)\s+(\S+)\s+(.+?)\s*$""")
+private const val QUSER_USERNAME_GROUP = 1
+private const val QUSER_LOGON_TIME_GROUP = 6
+
+// quser renders LOGON TIME as the target machine's own local wall-clock time with no timezone
+// info and no fixed AM/PM presence (depends on the OS locale) - tried in order, first match wins.
+// Assumes America/Chicago, matching every other target machine in this deployment (see CLAUDE.md's
+// Timestamp Handling section for why this repo treats Chicago as the anchor) - a real assumption,
+// not a guarantee, since quser's exact format follows the target's OS locale, not ours.
+private val QUSER_LOGON_TIME_FORMATS =
+    listOf(
+        DateTimeFormatter.ofPattern("M/d/yyyy h:mm a", Locale.US),
+        DateTimeFormatter.ofPattern("M/d/yyyy H:mm", Locale.US),
+    )
+private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
 
 /**
- * Detects RDP (LogonType=10) logon sessions on a target Windows machine via WinRM, with real
+ * Detects RDP logon sessions on a target Windows machine via WinRM (using `quser`, the same
+ * Remote Desktop Session Host session table an admin would see in Task Manager), with real
  * identity (AD username) and logon start time - see [IWinRmClient] for why this can be reconciled
  * against Guacamole's own already-known sessions to isolate direct/bypass ones.
  *
@@ -74,7 +86,6 @@ private val LIST_RDP_LOGON_SESSIONS_PS =
 class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
     IWinRmClient {
   private val log = loggerFactory.create(javaClass)
-  private val json = Json { ignoreUnknownKeys = true }
 
   private val port by lazy { appConfig.requireIntProperty("app.winrm.port") }
   private val username by lazy { appConfig.requireStringProperty("app.winrm.username") }
@@ -130,19 +141,23 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
                   .http()
                   .timeout(Duration.ofMillis(operationTimeoutMs))
                   .build()
-                  .use { it.powerShell(LIST_RDP_LOGON_SESSIONS_PS).execute() }
+                  .use { it.powerShell(QUSER_PS).execute() }
             })
     return try {
       val response = future.get(callTimeoutMs, TimeUnit.MILLISECONDS)
-      if (response.exitCode() != 0) {
-        log.warn(
-            "WinRM RDP session query on {} exited non-zero ({}): {}",
-            hostname,
-            response.exitCode(),
-            response.stderr().trim())
-        return null
+      when {
+        response.exitCode() == 0 -> parseQuserOutput(response.stdout())
+        (response.stdout() + response.stderr()).contains(QUSER_NO_SESSIONS_MARKER, ignoreCase = true) ->
+            emptyList()
+        else -> {
+          log.warn(
+              "quser on {} exited non-zero ({}): {}",
+              hostname,
+              response.exitCode(),
+              response.stderr().trim())
+          null
+        }
       }
-      parseSessions(response.stdout(), hostname)
     } catch (e: TimeoutException) {
       future.cancel(true) // best-effort - the underlying client may not honor interruption
       log.debug("WinRM RDP session query on {} timed out after {}ms", hostname, callTimeoutMs)
@@ -153,26 +168,35 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
     }
   }
 
-  private fun parseSessions(stdout: String, hostname: String): List<WinRmRdpSession>? {
-    val trimmed = stdout.trim()
-    if (trimmed.isEmpty()) return emptyList()
-    return try {
-      // ConvertTo-Json unwraps a single-element array to a bare object (see LIST_RDP_LOGON_-
-      // SESSIONS_PS's comment) - normalize both shapes into a uniform list of objects.
-      val objects =
-          when (val element = json.parseToJsonElement(trimmed)) {
-            is JsonArray -> element.filterIsInstance<JsonObject>()
-            is JsonObject -> listOf(element)
-            else -> emptyList()
-          }
-      objects.mapNotNull { obj ->
-        val user = obj["Username"]?.jsonPrimitive?.content
-        val startMs = obj["StartEpochMs"]?.jsonPrimitive?.long
-        if (user != null && startMs != null) WinRmRdpSession(user, startMs) else null
+  // internal, not private, so tests can exercise the parsing logic directly with canned quser
+  // text - the interesting edge cases (blank SESSIONNAME, unparseable lines, locale-dependent
+  // LOGON TIME formats) are far easier to cover this way than via a real WinRM round-trip.
+  internal fun parseQuserOutput(stdout: String): List<WinRmRdpSession> {
+    // First line is always the column header - quser has no way to suppress it, and we only get
+    // here once the exit code already told us at least one real session exists.
+    val dataLines = stdout.lines().drop(1).filter { it.isNotBlank() }
+    return dataLines.mapNotNull { line ->
+      val match = QUSER_LINE_REGEX.find(line)
+      if (match == null) {
+        log.warn("Could not parse quser line: '{}'", line)
+        return@mapNotNull null
       }
-    } catch (e: Exception) {
-      log.warn("Could not parse WinRM RDP session response from {}: '{}'", hostname, stdout, e)
-      null
+      val groups = match.groupValues
+      val user = groups[QUSER_USERNAME_GROUP]
+      val logonTimeRaw = groups[QUSER_LOGON_TIME_GROUP].trim()
+      WinRmRdpSession(user, parseQuserLogonTime(logonTimeRaw) ?: System.currentTimeMillis())
     }
+  }
+
+  internal fun parseQuserLogonTime(raw: String): Long? {
+    for (formatter in QUSER_LOGON_TIME_FORMATS) {
+      try {
+        return LocalDateTime.parse(raw, formatter).atZone(CHICAGO_ZONE).toInstant().toEpochMilli()
+      } catch (e: DateTimeParseException) {
+        // try the next format
+      }
+    }
+    log.warn("Could not parse quser LOGON TIME '{}' with any known format", raw)
+    return null
   }
 }
