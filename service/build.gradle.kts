@@ -23,6 +23,20 @@ application {
   applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
 }
 
+// Apache CXF (pulled in by winrm4j) discovers its extensions - e.g. WSDLManager - via SPI
+// resource files such as META-INF/cxf/bus-extensions.txt. shadowJar's default merge strategy
+// keeps only one copy of any same-named resource across all dependency jars, silently dropping
+// the others - which breaks CXF's extension registry at runtime (Bus.getExtension returns null)
+// even though everything works fine against the unshaded test classpath. Line-merge it instead.
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+  // Gradle's default duplicatesStrategy (EXCLUDE) drops every copy but the first BEFORE
+  // transformers like append()/mergeServiceFiles() ever see them - without this, only one
+  // dependency jar's bus-extensions.txt survives regardless of the merge config below.
+  duplicatesStrategy = DuplicatesStrategy.INCLUDE
+  mergeServiceFiles()
+  append("META-INF/cxf/bus-extensions.txt")
+}
+
 repositories { mavenCentral() }
 
 dependencies {
