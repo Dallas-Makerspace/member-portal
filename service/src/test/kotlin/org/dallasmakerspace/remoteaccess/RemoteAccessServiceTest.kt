@@ -13,7 +13,9 @@ import org.dallasmakerspace.guacamole.IGuacamoleApiClient
 import org.dallasmakerspace.winrm.IWinRmClient
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.spy
 import org.mockito.kotlin.whenever
 import org.slf4j.Logger
 
@@ -31,7 +33,10 @@ class RemoteAccessServiceTest {
     configOverrideService = mock()
     val loggerFactory = mock<LoggerFactory>()
     whenever(loggerFactory.create(RemoteAccessService::class.java)).thenReturn(mock<Logger>())
-    service = RemoteAccessService(guacamoleApiClient, winRmClient, configOverrideService, loggerFactory)
+    // spy(), not a plain instance, so individual tests can stub probeConnectivity directly instead
+    // of depending on a real socket connection to a real host (unavailable in CI, and prone to
+    // colliding with whatever's already bound to well-known ports like 3389 on a dev machine).
+    service = spy(RemoteAccessService(guacamoleApiClient, winRmClient, configOverrideService, loggerFactory))
 
     runBlocking {
       whenever(configOverrideService.get(RemoteAccessCategory.JUMP_SERVER.connectionIdsConfigKey))
@@ -58,6 +63,23 @@ class RemoteAccessServiceTest {
 
   private fun mockActiveConnections(vararg sessions: GuacamoleActiveConnection) = runBlocking {
     whenever(guacamoleApiClient.getActiveConnections()).thenReturn(sessions.toList())
+  }
+
+  /** Stubs the real TCP reachability probe so tests can force a non-blank hostname (to unlock the
+   * WinRM check, which is skipped for blank hostnames) without depending on a real, reachable
+   * network host - unavailable in CI and prone to colliding with whatever's already bound to
+   * well-known ports like 3389 on a dev machine. */
+  private fun stubReachable() = runBlocking {
+    // doReturn(), not whenever().thenReturn() - the latter calls through to the real (spied)
+    // method during stub setup, and the real probeConnectivity NPEs on the null that Mockito's
+    // any() matcher substitutes for its non-nullable String parameters.
+    doReturn(true)
+        .whenever(service)
+        .probeConnectivity(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    // Without this, the stubbing call above (which Mockito's recording proxy returns null from)
+    // flows through as this block's - and stubReachable()'s - inferred non-null Boolean return
+    // type, NPEing on unboxing at the call site.
+    Unit
   }
 
   private fun jumpServerMachine(categories: List<RemoteAccessCategoryDTO>) =
@@ -176,6 +198,7 @@ class RemoteAccessServiceTest {
 
   @Test
   fun `direct RDP session detected via WinRM alone can reach capacity`() = runBlocking {
+    stubReachable()
     mockConnections(prwJump(maxConnections = 2), mastercam)
     mockActiveConnections() // no Guacamole sessions at all
     whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
@@ -194,6 +217,7 @@ class RemoteAccessServiceTest {
         // Regression test: Guacamole itself connects over RDP, so WinRM sees it too. A WinRM
         // count equal to the already-known Guacamole session count means there are ZERO direct/
         // bypass sessions - not one extra, which the naive "add on top" formula would produce.
+        stubReachable()
         mockConnections(prwJump(maxConnections = 2), mastercam)
         mockActiveConnections(GuacamoleActiveConnection("active-1", "5", "jdoe", 1_000L))
         whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
@@ -208,6 +232,7 @@ class RemoteAccessServiceTest {
 
   @Test
   fun `null WinRM result fails open and does not block connecting`() = runBlocking {
+    stubReachable()
     mockConnections(prwJump(maxConnections = 2), mastercam)
     mockActiveConnections()
     whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
@@ -223,6 +248,7 @@ class RemoteAccessServiceTest {
   @Test
   fun `directRdpSessionCount is 0, not null, when the WinRM check succeeds with no sessions`() =
       runBlocking {
+        stubReachable()
         mockConnections(prwJump(), mastercam)
         mockActiveConnections()
         whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")

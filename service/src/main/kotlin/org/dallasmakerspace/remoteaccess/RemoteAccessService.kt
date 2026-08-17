@@ -24,7 +24,7 @@ private const val PORT_SSH = 22
 private data class MachineProbeResult(val reachable: Boolean, val directRdpSessionCount: Int?)
 
 @Singleton
-class RemoteAccessService
+open class RemoteAccessService
 @Inject
 constructor(
     private val guacamoleApiClient: IGuacamoleApiClient,
@@ -181,7 +181,10 @@ constructor(
     )
   }
 
-  private suspend fun probeConnectivity(hostname: String, protocol: String): Boolean {
+  // internal + open so tests can spy() and stub this one collaborator, avoiding real socket I/O
+  // (and the well-known-port bind conflicts that come with it - e.g. 3389 is often already bound
+  // by a local RDP-related service on a Windows dev machine even though it's free on CI runners).
+  internal open suspend fun probeConnectivity(hostname: String, protocol: String): Boolean {
     val host = hostname
     if (host.isBlank()) return true
     val port = if (protocol == "rdp") PORT_RDP else PORT_SSH
