@@ -38,20 +38,6 @@ private const val COUNT_ESTABLISHED_RDP_CONNECTIONS_PS =
 @Singleton
 class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
     IWinRmClient {
-  companion object {
-    init {
-      // winrm4j pulls in cxf-rt-transports-http-hc, which registers an async
-      // (HttpAsyncClient-based) conduit factory. Async mode hands requests off across pooled
-      // connections, but NTLM's challenge-response handshake must stay pinned to a single TCP
-      // connection - breaking that produces exactly "Authorization loop detected ... realm null",
-      // not a real auth failure. Forcing sync mode makes the same factory return a synchronous
-      // Apache HttpClient conduit instead, which correctly pins the connection for the handshake.
-      // Must be set before the first WinRM call in the JVM's lifetime, hence here rather than at
-      // call time.
-      System.setProperty("org.apache.cxf.transport.http.async.usePolicy", "NEVER")
-    }
-  }
-
   private val log = loggerFactory.create(javaClass)
 
   private val port by lazy { appConfig.requireIntProperty("app.winrm.port") }
