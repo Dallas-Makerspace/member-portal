@@ -8,8 +8,8 @@ import org.dallasmakerspace.core.LoggerFactory
 class WinRmClientMock @Inject constructor(loggerFactory: LoggerFactory) : IWinRmClient {
   private val log = loggerFactory.create(javaClass)
 
-  override suspend fun getEstablishedRdpConnectionCount(hostname: String): Int? {
-    log.info("Mock: getEstablishedRdpConnectionCount hostname=$hostname")
-    return 0
+  override suspend fun getRdpLogonSessions(hostname: String): List<WinRmRdpSession>? {
+    log.info("Mock: getRdpLogonSessions hostname=$hostname")
+    return emptyList()
   }
 }

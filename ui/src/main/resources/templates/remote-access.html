@@ -111,14 +111,20 @@
                                 <span th:if="${machine.status == 'OFFLINE'}" class="status-text-offline">Offline</span>
                             </div>
 
-                            <!-- Current occupant(s) - only rendered when someone is actually connected,
-                                 so an unoccupied machine looks exactly as simple as before. -->
+                            <!-- Current occupant(s) - both Guacamole-routed and direct/bypass RDP
+                                 sessions detected via WinRM, rendered identically (same member card,
+                                 same relative timestamp) since there's nothing route-specific for a
+                                 member to care about here. Only rendered when someone is actually
+                                 connected, so an unoccupied machine looks exactly as simple as before.
+                                 A session only gets a kill button when it has a Guacamole
+                                 activeConnectionId to kill by - a direct/bypass session detected via
+                                 WinRM alone has none. -->
                             <div th:if="${!machine.sessions.isEmpty()}" class="occupant-list mb-3 small">
                                 <div th:each="sess : ${machine.sessions}" class="occupant-row">
                                     <dms-member-card th:attr="username=${sess.username}" state="mini"></dms-member-card>
                                     <dms-relative-date th:attr="timestamp=${sess.sessionStartDisplay}"
                                                         class="text-muted"></dms-relative-date>
-                                    <button th:if="${canKillConnections}"
+                                    <button th:if="${canKillConnections && sess.activeConnectionId != null}"
                                             th:data-active-connection-id="${sess.activeConnectionId}"
                                             th:data-occupant="${sess.username}"
                                             class="btn btn-outline-danger btn-sm kill-btn"

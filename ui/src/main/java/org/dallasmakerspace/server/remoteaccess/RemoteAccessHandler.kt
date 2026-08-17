@@ -41,7 +41,9 @@ fun buildMachineViewModel(
       rawSessions.map { sess ->
         val startEpochMs = (sess["sessionStartEpochMs"] as? Number)?.toLong() ?: 0L
         mapOf(
-            "activeConnectionId" to (sess["activeConnectionId"] as? String ?: ""),
+            // Null for a direct/bypass RDP session detected via WinRM alone - Guacamole has no
+            // record of it, so there's no ID to kill it by (see RemoteAccessMachineDTO).
+            "activeConnectionId" to (sess["activeConnectionId"] as? String),
             "username" to (sess["username"] as? String ?: ""),
             "sessionStartDisplay" to epochMsToChicagoDisplay(startEpochMs),
         )
@@ -63,9 +65,6 @@ fun buildMachineViewModel(
       "status" to (machine["status"] as? String ?: ""),
       "sessions" to sessions,
       "canConnect" to (globalCanConnect && !userAtPersonalCap),
-      // Not yet rendered by the template - threaded through now for a future "not confirmed"
-      // affordance. null = the WinRM check couldn't verify direct-RDP occupancy for this machine.
-      "directRdpSessionCount" to (machine["directRdpSessionCount"] as? Number)?.toInt(),
   )
 }
 

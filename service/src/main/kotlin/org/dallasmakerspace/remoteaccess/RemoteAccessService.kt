@@ -14,14 +14,18 @@ import org.dallasmakerspace.guacamole.GuacamoleActiveConnection
 import org.dallasmakerspace.guacamole.GuacamoleConnection
 import org.dallasmakerspace.guacamole.IGuacamoleApiClient
 import org.dallasmakerspace.winrm.IWinRmClient
+import org.dallasmakerspace.winrm.WinRmRdpSession
 
 private const val PROBE_TIMEOUT_MS = 2_000
 private const val PORT_RDP = 3389
 private const val PORT_SSH = 22
 
-/** Result of probing a single machine: TCP reachability, and (RDP machines only) the count of
- * direct/bypass RDP sessions observed via WinRM, already excluding Guacamole's own session(s). */
-private data class MachineProbeResult(val reachable: Boolean, val directRdpSessionCount: Int?)
+/** Result of probing a single machine: TCP reachability, and (RDP machines only) the RDP logon
+ * sessions observed via WinRM - INCLUDES Guacamole's own session(s), see [IWinRmClient]. */
+private data class MachineProbeResult(
+    val reachable: Boolean,
+    val winRmSessions: List<WinRmRdpSession>?,
+)
 
 @Singleton
 open class RemoteAccessService
@@ -79,7 +83,7 @@ constructor(
     // machines' checks are themselves already running concurrently via this outer async wave.
     val probeJobs =
         allConnectionIds.mapNotNull { id ->
-          connectionById[id]?.let { conn -> id to async { probeMachine(id, conn, activeSessions) } }
+          connectionById[id]?.let { conn -> id to async { probeMachine(id, conn) } }
         }
     // All jobs are running concurrently; await each in turn
     val probeResultById =
@@ -117,28 +121,20 @@ constructor(
     }
   }
 
-  /** TCP-probes reachability and (RDP machines only) checks for direct/bypass RDP sessions via
-   * WinRM, concurrently with each other. */
-  private suspend fun probeMachine(
-      id: String,
-      conn: GuacamoleConnection,
-      activeSessions: Map<String, List<GuacamoleActiveConnection>>,
-  ): MachineProbeResult {
+  /** TCP-probes reachability and (RDP machines only) lists RDP logon sessions via WinRM,
+   * concurrently with each other. */
+  private suspend fun probeMachine(id: String, conn: GuacamoleConnection): MachineProbeResult {
     val hostname = guacamoleApiClient.getConnectionHostname(id)
     return coroutineScope {
       val reachableDeferred = async { probeConnectivity(hostname, conn.protocol) }
-      val directRdpDeferred = async {
+      val winRmSessionsDeferred = async {
         if (conn.protocol == "rdp" && hostname.isNotBlank()) {
-          winRmClient.getEstablishedRdpConnectionCount(hostname)?.let { total ->
-            // WinRM sees Guacamole's own RDP session too - subtract the count we already know
-            // about from Guacamole to isolate direct/bypass sessions.
-            (total - (activeSessions[id]?.size ?: 0)).coerceAtLeast(0)
-          }
+          winRmClient.getRdpLogonSessions(hostname)
         } else {
           null
         }
       }
-      MachineProbeResult(reachableDeferred.await(), directRdpDeferred.await())
+      MachineProbeResult(reachableDeferred.await(), winRmSessionsDeferred.await())
     }
   }
 
@@ -149,8 +145,7 @@ constructor(
       activeSessionsForMachine: List<GuacamoleActiveConnection>,
   ): RemoteAccessMachineDTO {
     val reachable = probeResult?.reachable ?: true
-    val directRdpSessionCount = probeResult?.directRdpSessionCount // null = fail-open
-    val sessions =
+    val guacSessions =
         activeSessionsForMachine.map {
           RemoteAccessSessionDTO(
               activeConnectionId = it.identifier,
@@ -158,14 +153,14 @@ constructor(
               sessionStartEpochMs = it.startDate,
           )
         }
+    val sessions = guacSessions + reconcileDirectSessions(guacSessions, probeResult?.winRmSessions)
     // null/0 means unlimited.
     val maxConnections = conn.maxConnections?.takeIf { it > 0 }
-    val effectiveSessionCount = sessions.size + (directRdpSessionCount ?: 0)
-    val hasCapacity = maxConnections == null || effectiveSessionCount < maxConnections
+    val hasCapacity = maxConnections == null || sessions.size < maxConnections
     val status =
         when {
           !reachable -> MachineStatus.OFFLINE
-          effectiveSessionCount > 0 && !hasCapacity -> MachineStatus.IN_USE
+          sessions.isNotEmpty() && !hasCapacity -> MachineStatus.IN_USE
           else -> MachineStatus.AVAILABLE
         }
     return RemoteAccessMachineDTO(
@@ -177,8 +172,39 @@ constructor(
         maxConnections = conn.maxConnections,
         maxConnectionsPerUser = conn.maxConnectionsPerUser,
         canConnect = reachable && hasCapacity,
-        directRdpSessionCount = directRdpSessionCount,
     )
+  }
+
+  /**
+   * Reconciles WinRM's observed RDP logon sessions against Guacamole's own already-known active
+   * connections to find genuinely direct/bypass sessions Guacamole doesn't know about. Guacamole
+   * itself connects over RDP using the connecting member's own AD identity (not a shared account -
+   * see [IWinRmClient]), so a Guacamole session and a direct one are indistinguishable by identity
+   * alone: up to [guacSessions]'s own per-username count is treated as "already accounted for" and
+   * skipped, and any WinRM-observed session for a username beyond that count is surfaced as a new,
+   * kill-button-less entry (no Guacamole activeConnectionId exists for a session Guacamole never
+   * routed). null/empty WinRM results fail open - contribute nothing extra, never treated as "no
+   * one's here" on their own.
+   */
+  private fun reconcileDirectSessions(
+      guacSessions: List<RemoteAccessSessionDTO>,
+      winRmSessions: List<WinRmRdpSession>?,
+  ): List<RemoteAccessSessionDTO> {
+    if (winRmSessions.isNullOrEmpty()) return emptyList()
+    val remainingGuacByUsername = guacSessions.groupingBy { it.username }.eachCount().toMutableMap()
+    return winRmSessions.mapNotNull { winRmSession ->
+      val remaining = remainingGuacByUsername[winRmSession.username] ?: 0
+      if (remaining > 0) {
+        remainingGuacByUsername[winRmSession.username] = remaining - 1
+        null // already represented by a known Guacamole session for this user
+      } else {
+        RemoteAccessSessionDTO(
+            activeConnectionId = null,
+            username = winRmSession.username,
+            sessionStartEpochMs = winRmSession.logonStartEpochMs,
+        )
+      }
+    }
   }
 
   // internal + open so tests can spy() and stub this one collaborator, avoiding real socket I/O

@@ -2,7 +2,6 @@ package org.dallasmakerspace.remoteaccess
 
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.config.ConfigOverrideService
@@ -11,6 +10,7 @@ import org.dallasmakerspace.guacamole.GuacamoleActiveConnection
 import org.dallasmakerspace.guacamole.GuacamoleConnection
 import org.dallasmakerspace.guacamole.IGuacamoleApiClient
 import org.dallasmakerspace.winrm.IWinRmClient
+import org.dallasmakerspace.winrm.WinRmRdpSession
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.doReturn
@@ -53,7 +53,7 @@ class RemoteAccessServiceTest {
       whenever(guacamoleApiClient.getConnectionHostname(org.mockito.kotlin.any())).thenReturn("")
       // Default: WinRM check succeeds and observes no sessions at all. Individual tests override
       // this (and the hostname stub above) when they need the WinRM check to actually run.
-      whenever(winRmClient.getEstablishedRdpConnectionCount(org.mockito.kotlin.any())).thenReturn(0)
+      whenever(winRmClient.getRdpLogonSessions(org.mockito.kotlin.any())).thenReturn(emptyList())
     }
   }
 
@@ -197,37 +197,68 @@ class RemoteAccessServiceTest {
   }
 
   @Test
-  fun `direct RDP session detected via WinRM alone can reach capacity`() = runBlocking {
-    stubReachable()
-    mockConnections(prwJump(maxConnections = 2), mastercam)
-    mockActiveConnections() // no Guacamole sessions at all
-    whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
-    whenever(winRmClient.getEstablishedRdpConnectionCount("prwjump.dms.local")).thenReturn(2)
-
-    val machine = jumpServerMachine(service.getCategories())
-
-    assertEquals(MachineStatus.IN_USE, machine.status)
-    assertFalse(machine.canConnect)
-    assertEquals(2, machine.directRdpSessionCount)
-  }
-
-  @Test
-  fun `WinRM count matching the known Guacamole session is not double-counted as direct`() =
+  fun `direct RDP session detected via WinRM alone surfaces with real identity and can reach capacity`() =
       runBlocking {
-        // Regression test: Guacamole itself connects over RDP, so WinRM sees it too. A WinRM
-        // count equal to the already-known Guacamole session count means there are ZERO direct/
-        // bypass sessions - not one extra, which the naive "add on top" formula would produce.
         stubReachable()
         mockConnections(prwJump(maxConnections = 2), mastercam)
-        mockActiveConnections(GuacamoleActiveConnection("active-1", "5", "jdoe", 1_000L))
+        mockActiveConnections() // no Guacamole sessions at all
         whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
-        whenever(winRmClient.getEstablishedRdpConnectionCount("prwjump.dms.local")).thenReturn(1)
+        whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
+            .thenReturn(
+                listOf(
+                    WinRmRdpSession("mrogers", 1_000L),
+                    WinRmRdpSession("bwayne", 2_000L),
+                ))
 
         val machine = jumpServerMachine(service.getCategories())
 
-        assertEquals(0, machine.directRdpSessionCount)
-        assertEquals(MachineStatus.AVAILABLE, machine.status)
-        assertTrue(machine.canConnect)
+        assertEquals(MachineStatus.IN_USE, machine.status)
+        assertFalse(machine.canConnect)
+        assertEquals(2, machine.sessions.size)
+        assertEquals(setOf("mrogers", "bwayne"), machine.sessions.map { it.username }.toSet())
+        // No Guacamole activeConnectionId exists for a session Guacamole never routed.
+        assertTrue(machine.sessions.all { it.activeConnectionId == null })
+      }
+
+  @Test
+  fun `WinRM session matching a known Guacamole session is not double-counted`() = runBlocking {
+    // Regression test: Guacamole itself connects over RDP using the member's own AD identity, so
+    // WinRM sees that same session too. A WinRM session for a username Guacamole already reports
+    // means there's ZERO extra direct/bypass sessions for that user - not one on top, which the
+    // naive "always add" approach would produce.
+    stubReachable()
+    mockConnections(prwJump(maxConnections = 2), mastercam)
+    mockActiveConnections(GuacamoleActiveConnection("active-1", "5", "jdoe", 1_000L))
+    whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
+    whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
+        .thenReturn(listOf(WinRmRdpSession("jdoe", 1_000L)))
+
+    val machine = jumpServerMachine(service.getCategories())
+
+    assertEquals(1, machine.sessions.size)
+    assertEquals("active-1", machine.sessions.single().activeConnectionId)
+    assertEquals(MachineStatus.AVAILABLE, machine.status)
+    assertTrue(machine.canConnect)
+  }
+
+  @Test
+  fun `a second WinRM session for an already-known Guacamole user surfaces as an extra direct session`() =
+      runBlocking {
+        // Same user, but genuinely two distinct logons (e.g. a Guacamole tunnel AND a separate
+        // direct RDP login as themselves) - only ONE should be absorbed as "already known".
+        stubReachable()
+        mockConnections(prwJump(maxConnections = 3), mastercam)
+        mockActiveConnections(GuacamoleActiveConnection("active-1", "5", "jdoe", 1_000L))
+        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
+        whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
+            .thenReturn(listOf(WinRmRdpSession("jdoe", 1_000L), WinRmRdpSession("jdoe", 5_000L)))
+
+        val machine = jumpServerMachine(service.getCategories())
+
+        assertEquals(2, machine.sessions.size)
+        assertEquals(1, machine.sessions.count { it.activeConnectionId == "active-1" })
+        assertEquals(1, machine.sessions.count { it.activeConnectionId == null })
+        assertTrue(machine.sessions.all { it.username == "jdoe" })
       }
 
   @Test
@@ -236,28 +267,14 @@ class RemoteAccessServiceTest {
     mockConnections(prwJump(maxConnections = 2), mastercam)
     mockActiveConnections()
     whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
-    whenever(winRmClient.getEstablishedRdpConnectionCount("prwjump.dms.local")).thenReturn(null)
+    whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local")).thenReturn(null)
 
     val machine = jumpServerMachine(service.getCategories())
 
-    assertNull(machine.directRdpSessionCount)
+    assertTrue(machine.sessions.isEmpty())
     assertEquals(MachineStatus.AVAILABLE, machine.status)
     assertTrue(machine.canConnect)
   }
-
-  @Test
-  fun `directRdpSessionCount is 0, not null, when the WinRM check succeeds with no sessions`() =
-      runBlocking {
-        stubReachable()
-        mockConnections(prwJump(), mastercam)
-        mockActiveConnections()
-        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
-        whenever(winRmClient.getEstablishedRdpConnectionCount("prwjump.dms.local")).thenReturn(0)
-
-        val machine = jumpServerMachine(service.getCategories())
-
-        assertEquals(0, machine.directRdpSessionCount)
-      }
 
   @Test
   fun `SSH-protocol machines never invoke the WinRM check`() = runBlocking {
@@ -271,7 +288,7 @@ class RemoteAccessServiceTest {
     service.getCategories()
 
     org.mockito.kotlin.verify(winRmClient, org.mockito.kotlin.never())
-        .getEstablishedRdpConnectionCount(org.mockito.kotlin.any())
+        .getRdpLogonSessions(org.mockito.kotlin.any())
     Unit
   }
 
@@ -283,9 +300,9 @@ class RemoteAccessServiceTest {
 
     val machine = jumpServerMachine(service.getCategories())
 
-    assertNull(machine.directRdpSessionCount)
+    assertTrue(machine.sessions.isEmpty())
     org.mockito.kotlin.verify(winRmClient, org.mockito.kotlin.never())
-        .getEstablishedRdpConnectionCount(org.mockito.kotlin.any())
+        .getRdpLogonSessions(org.mockito.kotlin.any())
     Unit
   }
 }

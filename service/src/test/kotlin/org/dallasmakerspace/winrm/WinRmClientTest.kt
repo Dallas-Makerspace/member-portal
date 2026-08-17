@@ -21,7 +21,7 @@ import org.slf4j.Logger
 class WinRmClientTest {
 
   @Test
-  fun `getEstablishedRdpConnectionCount returns null within the configured deadline when the target hangs`() =
+  fun `getRdpLogonSessions returns null within the configured deadline when the target hangs`() =
       runBlocking {
         val loggerFactory = mock<LoggerFactory>()
         whenever(loggerFactory.create(WinRmClient::class.java)).thenReturn(mock<Logger>())
@@ -33,7 +33,7 @@ class WinRmClientTest {
         // response that never comes, exercising the Future.get timeout path specifically.
         ServerSocket(5985).use {
           val startMs = System.currentTimeMillis()
-          val result = client.getEstablishedRdpConnectionCount("127.0.0.1")
+          val result = client.getRdpLogonSessions("127.0.0.1")
           val elapsedMs = System.currentTimeMillis() - startMs
 
           assertNull(result)

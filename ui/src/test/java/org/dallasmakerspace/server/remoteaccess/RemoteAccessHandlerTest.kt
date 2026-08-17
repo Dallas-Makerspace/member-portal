@@ -22,7 +22,7 @@ class RemoteAccessHandlerTest {
           "canConnect" to canConnect,
       )
 
-  private fun session(username: String, epochMs: Long, activeConnectionId: String = "active-1") =
+  private fun session(username: String, epochMs: Long, activeConnectionId: String? = "active-1") =
       mapOf(
           "activeConnectionId" to activeConnectionId,
           "username" to username,
@@ -95,5 +95,20 @@ class RemoteAccessHandlerTest {
             machine(canConnect = false, maxConnectionsPerUser = 1), currentUsername = "jdoe")
 
     assertFalse(viewModel["canConnect"] as Boolean)
+  }
+
+  @Test
+  fun `a direct-bypass session (no Guacamole activeConnectionId) passes through as null, not a placeholder string`() {
+    // A session detected via WinRM alone has no Guacamole active-connection ID to kill it by - the
+    // template uses a null activeConnectionId to decide whether to render a kill button at all, so
+    // this must stay a real null, not silently coerced to "" (which would look kill-able).
+    val raw = listOf(session("jdoe", 1_000L, activeConnectionId = null))
+
+    val viewModel = buildMachineViewModel(machine(sessions = raw), currentUsername = "jdoe")
+
+    @Suppress("UNCHECKED_CAST")
+    val sessions = viewModel["sessions"] as List<Map<String, Any?>>
+    assertEquals(1, sessions.size)
+    assertEquals(null, sessions.single()["activeConnectionId"])
   }
 }

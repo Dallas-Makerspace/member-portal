@@ -13,18 +13,44 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.metricshub.winrm.WinRMClient as MetricsHubWinRMClient
 
-// Counts ESTABLISHED RDP connections rather than logon sessions - a plain, structured integer
-// with no text-table parsing, and only needs standard user rights (consistent with a
-// least-privilege "Remote Management Users" account, no admin required).
-private const val COUNT_ESTABLISHED_RDP_CONNECTIONS_PS =
-    "@(Get-NetTCPConnection -LocalPort 3389 -State Established -ErrorAction SilentlyContinue).Count"
+// Lists RDP (LogonType=10/RemoteInteractive) logon sessions currently on the target, with real
+// identity and logon time - not just a raw connection count - via Get-CimInstance, a structured
+// JSON array, no text-table parsing. Win32_LogonSession/Win32_Account are readable by any
+// authenticated account by default, no elevated rights required beyond standard WMI read access.
+//
+// The script travels base64-encoded (winrm-java's .powerShell() uses -EncodedCommand under the
+// hood), so pipes/quotes/newlines/$variables reach PowerShell exactly as written here - no
+// cmd.exe-layer quoting to worry about, unlike a raw WinRS command string.
+//
+// @() forces array/collection context on the ForEach-Object result. ConvertTo-Json still unwraps
+// a *single-element* array to a bare JSON object rather than a one-element array - a longstanding
+// quirk present in Windows PowerShell 5.1, where the -AsArray fix (added in PS 6.2+) doesn't
+// exist - so that's handled client-side in parseSessions() rather than by adding -AsArray, which
+// would break with a parameter-not-found error on any target still running Windows PowerShell 5.1.
+private val LIST_RDP_LOGON_SESSIONS_PS =
+    """
+    @(Get-CimInstance Win32_LogonSession -Filter "LogonType=10" | ForEach-Object {
+      ${'$'}acct = Get-CimAssociatedInstance -InputObject ${'$'}_ -ResultClassName Win32_Account -ErrorAction SilentlyContinue | Select-Object -First 1
+      if (${'$'}acct) {
+        [PSCustomObject]@{ Username = ${'$'}acct.Name; StartEpochMs = [DateTimeOffset]::new(${'$'}_.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds() }
+      }
+    }) | ConvertTo-Json -Compress
+    """
+        .trimIndent()
 
 /**
- * Detects direct (non-Guacamole) RDP sessions on a target Windows machine via WinRM.
+ * Detects RDP (LogonType=10) logon sessions on a target Windows machine via WinRM, with real
+ * identity (AD username) and logon start time - see [IWinRmClient] for why this can be reconciled
+ * against Guacamole's own already-known sessions to isolate direct/bypass ones.
  *
  * Uses org.metricshub:winrm-java (vendored - see service/libs/README.md), not the more commonly
  * recommended winrm4j: winrm4j wraps an old Apache CXF stack whose NTLM implementation has a
@@ -48,6 +74,7 @@ private const val COUNT_ESTABLISHED_RDP_CONNECTIONS_PS =
 class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
     IWinRmClient {
   private val log = loggerFactory.create(javaClass)
+  private val json = Json { ignoreUnknownKeys = true }
 
   private val port by lazy { appConfig.requireIntProperty("app.winrm.port") }
   private val username by lazy { appConfig.requireStringProperty("app.winrm.username") }
@@ -73,14 +100,15 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
         })
   }
 
-  override suspend fun getEstablishedRdpConnectionCount(hostname: String): Int? {
-    if (hostname.isBlank()) return null
-    if (!canReachWinRmPort(hostname)) {
-      log.debug("WinRM port {} unreachable on {}, skipping session check", port, hostname)
-      return null
-    }
-    return withContext(Dispatchers.IO) { executeCountQuery(hostname) }
-  }
+  override suspend fun getRdpLogonSessions(hostname: String): List<WinRmRdpSession>? =
+      when {
+        hostname.isBlank() -> null
+        !canReachWinRmPort(hostname) -> {
+          log.debug("WinRM port {} unreachable on {}, skipping session check", port, hostname)
+          null
+        }
+        else -> withContext(Dispatchers.IO) { executeSessionQuery(hostname) }
+      }
 
   private fun canReachWinRmPort(hostname: String): Boolean =
       try {
@@ -92,7 +120,7 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
         false
       }
 
-  private fun executeCountQuery(hostname: String): Int? {
+  private fun executeSessionQuery(hostname: String): List<WinRmRdpSession>? {
     val future =
         executor.submit(
             Callable {
@@ -102,29 +130,48 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
                   .http()
                   .timeout(Duration.ofMillis(operationTimeoutMs))
                   .build()
-                  .use { it.powerShell(COUNT_ESTABLISHED_RDP_CONNECTIONS_PS).execute() }
+                  .use { it.powerShell(LIST_RDP_LOGON_SESSIONS_PS).execute() }
             })
     return try {
       val response = future.get(callTimeoutMs, TimeUnit.MILLISECONDS)
       if (response.exitCode() != 0) {
         log.warn(
-            "WinRM session count on {} exited non-zero ({}): {}",
+            "WinRM RDP session query on {} exited non-zero ({}): {}",
             hostname,
             response.exitCode(),
             response.stderr().trim())
         return null
       }
-      response.stdout().trim().toIntOrNull().also {
-        if (it == null) {
-          log.warn("Could not parse WinRM session count response from {}: '{}'", hostname, response.stdout())
-        }
-      }
+      parseSessions(response.stdout(), hostname)
     } catch (e: TimeoutException) {
       future.cancel(true) // best-effort - the underlying client may not honor interruption
-      log.debug("WinRM session count on {} timed out after {}ms", hostname, callTimeoutMs)
+      log.debug("WinRM RDP session query on {} timed out after {}ms", hostname, callTimeoutMs)
       null
     } catch (e: Exception) {
-      log.warn("WinRM session count check failed for {}", hostname, e)
+      log.warn("WinRM RDP session query failed for {}", hostname, e)
+      null
+    }
+  }
+
+  private fun parseSessions(stdout: String, hostname: String): List<WinRmRdpSession>? {
+    val trimmed = stdout.trim()
+    if (trimmed.isEmpty()) return emptyList()
+    return try {
+      // ConvertTo-Json unwraps a single-element array to a bare object (see LIST_RDP_LOGON_-
+      // SESSIONS_PS's comment) - normalize both shapes into a uniform list of objects.
+      val objects =
+          when (val element = json.parseToJsonElement(trimmed)) {
+            is JsonArray -> element.filterIsInstance<JsonObject>()
+            is JsonObject -> listOf(element)
+            else -> emptyList()
+          }
+      objects.mapNotNull { obj ->
+        val user = obj["Username"]?.jsonPrimitive?.content
+        val startMs = obj["StartEpochMs"]?.jsonPrimitive?.long
+        if (user != null && startMs != null) WinRmRdpSession(user, startMs) else null
+      }
+    } catch (e: Exception) {
+      log.warn("Could not parse WinRM RDP session response from {}: '{}'", hostname, stdout, e)
       null
     }
   }
