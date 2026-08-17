@@ -55,7 +55,16 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
   private val log = loggerFactory.create(javaClass)
 
   private val port by lazy { appConfig.requireIntProperty("app.winrm.port") }
-  private val username by lazy { appConfig.requireStringProperty("app.winrm.username") }
+  // winrm4j's 3-arg WinRmTool.Builder.builder(host, username, password) hardcodes domain=null -
+  // it does NOT parse "DOMAIN\user" out of a combined username string (confirmed from its
+  // source: `builder(address, username, password)` just delegates to
+  // `builder(address, null, username, password)`). Passing the literal "DOMAIN\user" string as a
+  // bare username with domain=null produces exactly the symptom this caused in production:
+  // "Authorization loop detected ... realm null" on every call. Split it ourselves and use the
+  // domain-aware 4-arg overload instead.
+  private val rawUsername by lazy { appConfig.requireStringProperty("app.winrm.username") }
+  private val domain by lazy { rawUsername.substringBefore('\\', missingDelimiterValue = "").ifBlank { null } }
+  private val username by lazy { rawUsername.substringAfter('\\') }
   private val password by lazy { appConfig.requireStringProperty("app.winrm.password") }
   private val connectTimeoutMs by lazy { appConfig.requireIntProperty("app.winrm.connect-timeout-ms") }
   private val operationTimeoutMs by lazy {
@@ -105,7 +114,7 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
               val context = WinRmClientContext.newInstance()
               try {
                 val tool =
-                    WinRmTool.Builder.builder(hostname, username, password)
+                    WinRmTool.Builder.builder(hostname, domain, username, password)
                         .authenticationScheme(AuthSchemes.NTLM)
                         .port(port)
                         .useHttps(false)
