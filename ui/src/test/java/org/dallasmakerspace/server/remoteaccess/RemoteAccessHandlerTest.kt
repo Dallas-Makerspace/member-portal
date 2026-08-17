@@ -22,11 +22,17 @@ class RemoteAccessHandlerTest {
           "canConnect" to canConnect,
       )
 
-  private fun session(username: String, epochMs: Long, activeConnectionId: String? = "active-1") =
+  private fun session(
+      username: String,
+      epochMs: Long,
+      activeConnectionId: String? = "active-1",
+      isActive: Boolean = true,
+  ) =
       mapOf(
           "activeConnectionId" to activeConnectionId,
           "username" to username,
           "sessionStartEpochMs" to epochMs,
+          "isActive" to isActive,
       )
 
   @Test
@@ -73,6 +79,46 @@ class RemoteAccessHandlerTest {
         )
 
     assertFalse(viewModel["canConnect"] as Boolean)
+  }
+
+  @Test
+  fun `a Disconnected session of the user's own does not block them from reconnecting`() {
+    // Real production scenario: the member's RDP client closed without logging off - quser still
+    // reports the session (isActive=false), but they should be able to reconnect to themselves
+    // rather than being stuck on "Already Connected" forever.
+    val raw = listOf(session("jdoe", 1_000L, activeConnectionId = null, isActive = false))
+
+    val viewModel =
+        buildMachineViewModel(
+            machine(sessions = raw, canConnect = true, maxConnectionsPerUser = 1),
+            currentUsername = "jdoe",
+        )
+
+    assertTrue(viewModel["canConnect"] as Boolean)
+    assertTrue(viewModel["resumingOwnSession"] as Boolean)
+  }
+
+  @Test
+  fun `an Active session of the user's own still blocks them, unlike a Disconnected one`() {
+    val raw = listOf(session("jdoe", 1_000L, isActive = true))
+
+    val viewModel =
+        buildMachineViewModel(
+            machine(sessions = raw, canConnect = true, maxConnectionsPerUser = 1),
+            currentUsername = "jdoe",
+        )
+
+    assertFalse(viewModel["canConnect"] as Boolean)
+    assertFalse(viewModel["resumingOwnSession"] as Boolean)
+  }
+
+  @Test
+  fun `resumingOwnSession is false for a brand new connection with no prior session at all`() {
+    val viewModel =
+        buildMachineViewModel(machine(canConnect = true, maxConnectionsPerUser = 1), currentUsername = "jdoe")
+
+    assertTrue(viewModel["canConnect"] as Boolean)
+    assertFalse(viewModel["resumingOwnSession"] as Boolean)
   }
 
   @Test

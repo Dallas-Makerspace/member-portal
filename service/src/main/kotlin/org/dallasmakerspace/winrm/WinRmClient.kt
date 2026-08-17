@@ -44,7 +44,9 @@ private val QUSER_LINE_REGEX =
     Regex(
         """^\s*>?(\S+)\s+(?:(\S+)\s+)?(\d+)\s+(Active|Disc|Conn|Idle|Listen|Shadow|Down|Init)\s+(\S+)\s+(.+?)\s*$""")
 private const val QUSER_USERNAME_GROUP = 1
+private const val QUSER_STATE_GROUP = 4
 private const val QUSER_LOGON_TIME_GROUP = 6
+private const val QUSER_ACTIVE_STATE = "Active"
 
 // quser renders LOGON TIME as the target machine's own local wall-clock time with no timezone
 // info and no fixed AM/PM presence (depends on the OS locale) - tried in order, first match wins.
@@ -183,8 +185,9 @@ class WinRmClient @Inject constructor(private val appConfig: AppConfig, loggerFa
       }
       val groups = match.groupValues
       val user = groups[QUSER_USERNAME_GROUP]
+      val isActive = groups[QUSER_STATE_GROUP] == QUSER_ACTIVE_STATE
       val logonTimeRaw = groups[QUSER_LOGON_TIME_GROUP].trim()
-      WinRmRdpSession(user, parseQuserLogonTime(logonTimeRaw) ?: System.currentTimeMillis())
+      WinRmRdpSession(user, parseQuserLogonTime(logonTimeRaw) ?: System.currentTimeMillis(), isActive)
     }
   }
 

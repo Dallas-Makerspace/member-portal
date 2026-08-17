@@ -18,6 +18,13 @@ data class RemoteAccessSessionDTO(
     val activeConnectionId: String?,
     val username: String,
     val sessionStartEpochMs: Long,
+    // Always true for a Guacamole-routed session (an active Guacamole tunnel is, by definition,
+    // actively connected right now). For a direct/bypass session, reflects quser's own STATE
+    // column - false means the session is merely Disconnected (client closed without logging off,
+    // programs still alive server-side, resumable) rather than genuinely in use. The UI layer uses
+    // this to avoid blocking a user from reconnecting to their OWN disconnected session as if it
+    // were a duplicate active one - see RemoteAccessHandler.buildMachineViewModel.
+    val isActive: Boolean,
 )
 
 @Serializable

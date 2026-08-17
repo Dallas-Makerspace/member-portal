@@ -151,6 +151,7 @@ constructor(
               activeConnectionId = it.identifier,
               username = it.username,
               sessionStartEpochMs = it.startDate,
+              isActive = true, // an active Guacamole tunnel is, by definition, connected right now
           )
         }
     val sessions = guacSessions + reconcileDirectSessions(guacSessions, probeResult?.winRmSessions)
@@ -202,6 +203,7 @@ constructor(
             activeConnectionId = null,
             username = winRmSession.username,
             sessionStartEpochMs = winRmSession.logonStartEpochMs,
+            isActive = winRmSession.isActive,
         )
       }
     }

@@ -142,13 +142,16 @@
                                     Offline
                                 </button>
                                 <!-- Connectable and user has access (may already have occupants if the
-                                     machine supports multiple concurrent logins) -->
+                                     machine supports multiple concurrent logins). Relabeled
+                                     "Reconnect" when this would resume the user's own Disconnected
+                                     session rather than start a brand new one - see
+                                     RemoteAccessHandler.buildMachineViewModel. -->
                                 <a th:if="${category.userHasAccess && machine.status != 'OFFLINE' && machine.userCanConnect}"
                                    th:href="'/remote-access/connect/' + ${machine.connectionId}"
                                    target="_blank"
                                    class="btn btn-primary btn-sm w-100 remote-access-connect-btn">
                                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
-                                    Connect
+                                    <span th:text="${machine.resumingOwnSession} ? 'Reconnect' : 'Connect'">Connect</span>
                                 </a>
                                 <!-- Full - danger-tinted (rather than the same gray as Offline) so it
                                      visually ties back to the red status dot/border instead of reading

@@ -206,8 +206,8 @@ class RemoteAccessServiceTest {
         whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
             .thenReturn(
                 listOf(
-                    WinRmRdpSession("mrogers", 1_000L),
-                    WinRmRdpSession("bwayne", 2_000L),
+                    WinRmRdpSession("mrogers", 1_000L, isActive = true),
+                    WinRmRdpSession("bwayne", 2_000L, isActive = true),
                 ))
 
         val machine = jumpServerMachine(service.getCategories())
@@ -231,7 +231,7 @@ class RemoteAccessServiceTest {
     mockActiveConnections(GuacamoleActiveConnection("active-1", "5", "jdoe", 1_000L))
     whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
     whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
-        .thenReturn(listOf(WinRmRdpSession("jdoe", 1_000L)))
+        .thenReturn(listOf(WinRmRdpSession("jdoe", 1_000L, isActive = true)))
 
     val machine = jumpServerMachine(service.getCategories())
 
@@ -251,7 +251,11 @@ class RemoteAccessServiceTest {
         mockActiveConnections(GuacamoleActiveConnection("active-1", "5", "jdoe", 1_000L))
         whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
         whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
-            .thenReturn(listOf(WinRmRdpSession("jdoe", 1_000L), WinRmRdpSession("jdoe", 5_000L)))
+            .thenReturn(
+                listOf(
+                    WinRmRdpSession("jdoe", 1_000L, isActive = true),
+                    WinRmRdpSession("jdoe", 5_000L, isActive = true),
+                ))
 
         val machine = jumpServerMachine(service.getCategories())
 
@@ -259,6 +263,27 @@ class RemoteAccessServiceTest {
         assertEquals(1, machine.sessions.count { it.activeConnectionId == "active-1" })
         assertEquals(1, machine.sessions.count { it.activeConnectionId == null })
         assertTrue(machine.sessions.all { it.username == "jdoe" })
+      }
+
+  @Test
+  fun `a Disconnected direct RDP session propagates isActive=false, not the machine's overall status`() =
+      runBlocking {
+        // Regression test for a real production scenario: a member's RDP client closed without
+        // logging off (quser reports Disc, not Active) - the session still occupies a real slot
+        // (machine-wide status/capacity is unaffected, still IN_USE), but RemoteAccessSessionDTO
+        // must carry isActive=false so the UI layer can let that SAME member reconnect to
+        // themselves instead of being told "Already Connected" forever.
+        stubReachable()
+        mockConnections(prwJump(maxConnections = 1), mastercam)
+        mockActiveConnections() // no Guacamole session - this member is only visible via WinRM
+        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
+        whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
+            .thenReturn(listOf(WinRmRdpSession("mandarlimaye", 1_000L, isActive = false)))
+
+        val machine = jumpServerMachine(service.getCategories())
+
+        assertEquals(MachineStatus.IN_USE, machine.status)
+        assertFalse(machine.sessions.single().isActive)
       }
 
   @Test

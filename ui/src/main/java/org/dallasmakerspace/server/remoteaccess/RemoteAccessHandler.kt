@@ -50,13 +50,25 @@ fun buildMachineViewModel(
       }
 
   val maxConnectionsPerUser = (machine["maxConnectionsPerUser"] as? Number)?.toInt()
-  val userSessionCount = rawSessions.count { it["username"] as? String == currentUsername }
+  val ownSessions = rawSessions.filter { it["username"] as? String == currentUsername }
+  // Only a genuinely Active session of the CURRENT user's own counts against their personal cap -
+  // a merely Disconnected one (client closed without logging off; quser still reports it, see
+  // RemoteAccessSessionDTO.isActive) shouldn't block them from reconnecting to themselves. Absent
+  // key defaults to true (a Guacamole-routed session doesn't carry an explicit isActive key in the
+  // raw JSON... actually it does, but this stays permissive if that ever changes) since it's the
+  // safer default - never silently letting a real duplicate-active-session case slip through.
+  val ownActiveSessionCount = ownSessions.count { (it["isActive"] as? Boolean) != false }
   val userAtPersonalCap =
       maxConnectionsPerUser != null &&
           maxConnectionsPerUser > 0 &&
-          userSessionCount >= maxConnectionsPerUser
+          ownActiveSessionCount >= maxConnectionsPerUser
 
   val globalCanConnect = machine["canConnect"] as? Boolean ?: false
+  val canConnect = globalCanConnect && !userAtPersonalCap
+  // Connecting will resume (not duplicate) the user's own existing session - relabel the button
+  // from "Connect" to "Reconnect" so it's clear why it became clickable again despite them already
+  // showing as an occupant.
+  val resumingOwnSession = canConnect && ownSessions.isNotEmpty()
 
   return mapOf(
       "connectionId" to (machine["connectionId"] as? String ?: ""),
@@ -64,7 +76,8 @@ fun buildMachineViewModel(
       "protocol" to (machine["protocol"] as? String ?: ""),
       "status" to (machine["status"] as? String ?: ""),
       "sessions" to sessions,
-      "canConnect" to (globalCanConnect && !userAtPersonalCap),
+      "canConnect" to canConnect,
+      "resumingOwnSession" to resumingOwnSession,
   )
 }
 

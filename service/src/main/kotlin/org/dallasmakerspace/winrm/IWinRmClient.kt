@@ -1,9 +1,15 @@
 package org.dallasmakerspace.winrm
 
-/** A single RDP (LogonType=10/RemoteInteractive) logon session observed on a target machine via
- * WinRM - just the account's own AD identity and when it logged on, nothing Guacamole-specific
- * (see [IWinRmClient] for why that's enough to reconcile against Guacamole's own session list). */
-data class WinRmRdpSession(val username: String, val logonStartEpochMs: Long)
+/**
+ * A single RDP logon session observed on a target machine via WinRM - the account's own AD
+ * identity, when it logged on, and whether it's genuinely `Active` right now (per `quser`'s own
+ * STATE column) versus merely `Disc` (disconnected - the client closed without logging off, so
+ * the session and its programs are still alive server-side, resumable by reconnecting with the
+ * same credentials). [isActive] matters specifically for a user reconnecting to their OWN
+ * disconnected session: it should never be blocked as "already connected" the way a genuinely
+ * duplicate *active* session would be - see `RemoteAccessHandler.buildMachineViewModel`.
+ */
+data class WinRmRdpSession(val username: String, val logonStartEpochMs: Long, val isActive: Boolean)
 
 interface IWinRmClient {
   /**

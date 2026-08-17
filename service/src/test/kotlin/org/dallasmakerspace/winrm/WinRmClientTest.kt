@@ -5,6 +5,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -66,9 +67,23 @@ class WinRmClientTest {
 
     assertEquals(1, sessions.size)
     assertEquals("mandarlimaye", sessions.single().username)
+    assertTrue(sessions.single().isActive)
     val expectedEpochMs =
         ZonedDateTime.of(2026, 8, 17, 8, 28, 0, 0, ZoneId.of("America/Chicago")).toInstant().toEpochMilli()
     assertEquals(expectedEpochMs, sessions.single().logonStartEpochMs)
+  }
+
+  @Test
+  fun `parseQuserOutput marks a Disc-state row as isActive=false`() {
+    // A real, common scenario: the member's RDP client closed without logging off - the session
+    // (and their running programs) is still alive server-side, just not currently Active. The UI
+    // layer relies on this distinction to let them reconnect to themselves without being blocked
+    // as "already connected" - see RemoteAccessHandler.buildMachineViewModel.
+    val stdout = "$quserHeader\n mandarlimaye          rdp-tcp#140       110  Disc            3  8/17/2026 8:28 AM"
+
+    val sessions = newClient().parseQuserOutput(stdout)
+
+    assertFalse(sessions.single().isActive)
   }
 
   @Test
