@@ -123,6 +123,7 @@
                                 <div th:each="sess : ${machine.sessions}" class="occupant-row">
                                     <dms-member-card th:attr="username=${sess.username}" state="mini"></dms-member-card>
                                     <dms-relative-date th:attr="timestamp=${sess.sessionStartDisplay}"
+                                                        elapsed
                                                         class="text-muted"></dms-relative-date>
                                     <button th:if="${canKillConnections && sess.activeConnectionId != null}"
                                             th:data-active-connection-id="${sess.activeConnectionId}"

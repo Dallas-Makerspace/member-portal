@@ -8,14 +8,20 @@ import { LitElement, html, css } from 'https://esm.sh/lit@3.3.0';
  * @prop {String} prefix - Optional prefix text (e.g., "(")
  * @prop {String} suffix - Optional suffix text (e.g., ")")
  * @prop {Boolean} relativeOnly - If true, only show when date is relative (Today, Yesterday, X days/weeks ago)
+ * @prop {Boolean} elapsed - If true, ignore the relative-date/full-date modes entirely and instead
+ *   render a live ticking "how long ago" stopwatch as Xh:Ym:Zs (dropping leading zero units, e.g.
+ *   "45m:09s" under an hour, "9s" under a minute). Updates once a second while on screen. Clicking
+ *   still toggles to the full absolute timestamp, same as the default mode.
  *
  * Output examples:
  * - "Today", "Yesterday", "3 days ago", "2 weeks ago", "Dec 18"
+ * - elapsed mode: "2h:05m:09s", "45m:09s", "9s"
  *
  * Usage:
  * <dms-relative-date timestamp="2025-12-18T00:11:00"></dms-relative-date>
  * <dms-relative-date timestamp="2025-12-18" prefix="(" suffix=")"></dms-relative-date>
  * <dms-relative-date timestamp="2025-12-18" relativeOnly="true"></dms-relative-date>
+ * <dms-relative-date timestamp="2025-12-18T00:11:00" elapsed></dms-relative-date>
  */
 class DmsRelativeDate extends LitElement {
     static properties = {
@@ -23,6 +29,7 @@ class DmsRelativeDate extends LitElement {
         prefix: { type: String },
         suffix: { type: String },
         relativeOnly: { type: Boolean },
+        elapsed: { type: Boolean },
         _showFull: { type: Boolean, state: true }
     };
 
@@ -51,7 +58,24 @@ class DmsRelativeDate extends LitElement {
         this.prefix = '';
         this.suffix = '';
         this.relativeOnly = false;
+        this.elapsed = false;
         this._showFull = false;
+        this._tickInterval = null;
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        if (this.elapsed) {
+            this._tickInterval = setInterval(() => this.requestUpdate(), 1000);
+        }
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._tickInterval !== null) {
+            clearInterval(this._tickInterval);
+            this._tickInterval = null;
+        }
     }
 
     _toggleDisplay() {
@@ -226,6 +250,30 @@ class DmsRelativeDate extends LitElement {
         return { text: `${months[chicagoDate.getMonth()]} ${chicagoDate.getDate()}`, isRelative: false };
     }
 
+    /**
+     * Format elapsed time since the timestamp as a live stopwatch string, e.g. "2h:05m:09s".
+     * The leading (most-significant present) unit is unpadded; every unit after it is
+     * zero-padded to 2 digits. Leading zero units are dropped entirely (no "0h", no "0m:09s").
+     */
+    _formatElapsedDuration() {
+        const eventDate = this._parseTimestamp();
+        if (!eventDate) return 'Invalid date';
+
+        const diffMs = Math.max(0, Date.now() - eventDate.getTime());
+        const totalSeconds = Math.floor(diffMs / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const pad = (n) => String(n).padStart(2, '0');
+
+        if (hours > 0) {
+            return `${hours}h:${pad(minutes)}m:${pad(seconds)}s`;
+        } else if (minutes > 0) {
+            return `${minutes}m:${pad(seconds)}s`;
+        }
+        return `${seconds}s`;
+    }
+
     render() {
         if (!this.timestamp) {
             return html`
@@ -233,13 +281,6 @@ class DmsRelativeDate extends LitElement {
                     Error: timestamp is required for dms-relative-date
                 </span>
             `;
-        }
-
-        const { text, isRelative } = this._formatRelativeDate();
-
-        // If relativeOnly is true and this is not a relative date, render nothing
-        if (this.relativeOnly && !isRelative) {
-            return html``;
         }
 
         const fullTimestamp = this._formatFullTimestamp();
@@ -250,6 +291,23 @@ class DmsRelativeDate extends LitElement {
                     ${this.prefix}${fullTimestamp}${this.suffix}
                 </span>
             `;
+        }
+
+        if (this.elapsed) {
+            return html`
+                <span class="relative-date"
+                      title="${fullTimestamp}"
+                      @click="${this._toggleDisplay}">
+                    ${this.prefix}${this._formatElapsedDuration()}${this.suffix}
+                </span>
+            `;
+        }
+
+        const { text, isRelative } = this._formatRelativeDate();
+
+        // If relativeOnly is true and this is not a relative date, render nothing
+        if (this.relativeOnly && !isRelative) {
+            return html``;
         }
 
         return html`
