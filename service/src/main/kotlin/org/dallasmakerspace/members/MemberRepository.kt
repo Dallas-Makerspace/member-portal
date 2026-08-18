@@ -217,4 +217,16 @@ class MemberRepository @Inject constructor(loggerFactory: LoggerFactory) : IMemb
           .associateBy { it.discourseUsername!! }
     }
   }
+
+  override suspend fun getMembersByDiscordUserIds(
+      discordUserIds: List<String>
+  ): Map<String, DMSMember> {
+    if (discordUserIds.isEmpty()) return emptyMap()
+    return suspendTransaction {
+      ProfileDAO.find { ProfileTable.discordUserId inList discordUserIds }
+          .map { daoToProfileModel(it) }
+          .filter { it.discordUserId != null }
+          .associateBy { it.discordUserId!! }
+    }
+  }
 }

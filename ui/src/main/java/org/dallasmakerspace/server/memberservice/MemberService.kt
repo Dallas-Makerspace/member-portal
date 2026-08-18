@@ -31,7 +31,7 @@ constructor(
       memberServiceClient.patchMember(username, member, sessionId)
     } catch (e: HttpException) {
       log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException("Failed to patch member: $username; member object: $member", e)
+      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
     }
   }
 
@@ -70,7 +70,7 @@ constructor(
       memberServiceClient.patchMember(username, member, sessionId)
     } catch (e: HttpException) {
       log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException("Failed to patch member: $username; member object: $member", e)
+      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
     }
   }
 
@@ -91,7 +91,7 @@ constructor(
       memberServiceClient.patchMember(username, member, sessionId)
     } catch (e: HttpException) {
       log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException("Failed to patch member: $username; member object: $member", e)
+      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
     }
   }
 
@@ -106,7 +106,7 @@ constructor(
       memberServiceClient.patchMember(username, member, sessionId)
     } catch (e: HttpException) {
       log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException("Failed to patch member: $username; member object: $member", e)
+      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
     }
   }
 
@@ -119,7 +119,7 @@ constructor(
       memberServiceClient.patchMember(username, member, sessionId)
     } catch (e: HttpException) {
       log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException("Failed to patch member: $username; member object: $member", e)
+      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
     }
   }
 
@@ -132,7 +132,7 @@ constructor(
       memberServiceClient.patchMember(username, member, sessionId)
     } catch (e: HttpException) {
       log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException("Failed to patch member: $username; member object: $member", e)
+      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
     }
   }
 

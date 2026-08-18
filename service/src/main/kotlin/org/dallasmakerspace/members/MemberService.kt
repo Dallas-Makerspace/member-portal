@@ -441,6 +441,17 @@ constructor(
       "Member is not active in AD: $username, we should not update this record!"
     }
     val dbMember = memberRepository.getMemberOrInsert(username, adMember.enabled)
+
+    // Check both before any side effects below, so a rejected link can't half-apply another.
+    if (memberFromApi.discourseUsername != null &&
+        dbMember.discourseUsername != memberFromApi.discourseUsername) {
+      reassignDiscourseLinkIfClaimedElsewhere(username, memberFromApi.discourseUsername!!)
+    }
+    if (memberFromApi.discordUserId != null &&
+        dbMember.discordUserId != memberFromApi.discordUserId) {
+      reassignDiscordLinkIfClaimedElsewhere(username, memberFromApi.discordUserId!!)
+    }
+
     var propertiesUpdated = false
     // Figure out which properties have been updated by comparing dbMember and memberFromApi.
     if (dbMember.avatarUrl != memberFromApi.avatarUrl) {
@@ -464,6 +475,11 @@ constructor(
           "Discord user ID updated for $username; Old ID: ${dbMember.discordUserId}; " +
               "New ID: ${memberFromApi.discordUserId}")
       propertiesUpdated = true
+      if (memberFromApi.discordUserId == null) {
+        unlinkDiscord(dbMember)
+      } else {
+        linkDiscord(memberFromApi)
+      }
     }
     if (dbMember.discordUsername != memberFromApi.discordUsername) {
       log.info(
@@ -512,6 +528,69 @@ constructor(
         subjectUsername = dbMember.username,
         event = ActivityLogEvent.UNLINK_DISCOURSE,
     )
+  }
+
+  private suspend fun linkDiscord(memberFromApi: DMSMember) {
+    activityLogService.insertActivityLogEntry(
+        subjectUsername = memberFromApi.username,
+        event = ActivityLogEvent.LINK_DISCORD,
+    )
+  }
+
+  private suspend fun unlinkDiscord(dbMember: DMSMember) {
+    activityLogService.insertActivityLogEntry(
+        subjectUsername = dbMember.username,
+        event = ActivityLogEvent.UNLINK_DISCORD,
+    )
+  }
+
+  private suspend fun reassignDiscourseLinkIfClaimedElsewhere(
+      newUsername: String,
+      discourseUsername: String,
+  ) {
+    val conflictingMember =
+        memberRepository.getMembersByDiscourseUsernames(listOf(discourseUsername))[
+            discourseUsername]
+    if (conflictingMember == null || conflictingMember.username == newUsername) return
+
+    if (conflictingMember.enabled) {
+      throw ExternalAccountAlreadyLinkedException(
+          "This Talk account is already linked to another active member profile. Please " +
+              "contact staff to resolve.")
+    }
+
+    log.warn(
+        "Talk account $discourseUsername is linked to disabled member " +
+            "${conflictingMember.username}; reassigning it to $newUsername")
+    unlinkDiscourse(conflictingMember)
+    conflictingMember.discourseUsername = null
+    conflictingMember.discourseAvatarUrl = null
+    memberRepository.updateMember(conflictingMember.username, conflictingMember)
+  }
+
+  /** Discord counterpart of [reassignDiscourseLinkIfClaimedElsewhere]. */
+  private suspend fun reassignDiscordLinkIfClaimedElsewhere(
+      newUsername: String,
+      discordUserId: String,
+  ) {
+    val conflictingMember =
+        memberRepository.getMembersByDiscordUserIds(listOf(discordUserId))[discordUserId]
+    if (conflictingMember == null || conflictingMember.username == newUsername) return
+
+    if (conflictingMember.enabled) {
+      throw ExternalAccountAlreadyLinkedException(
+          "This Discord account is already linked to another active member profile. Please " +
+              "contact staff to resolve.")
+    }
+
+    log.warn(
+        "Discord account $discordUserId is linked to disabled member " +
+            "${conflictingMember.username}; reassigning it to $newUsername")
+    unlinkDiscord(conflictingMember)
+    conflictingMember.discordUserId = null
+    conflictingMember.discordUsername = null
+    conflictingMember.discordAvatarUrl = null
+    memberRepository.updateMember(conflictingMember.username, conflictingMember)
   }
 
   suspend fun getAllMembersWithProfiles(): List<DMSMember> {

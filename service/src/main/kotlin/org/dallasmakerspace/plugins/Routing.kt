@@ -41,6 +41,7 @@ import org.dallasmakerspace.dataviz.DataVizRouter
 import org.dallasmakerspace.di.AppComponentHolder
 import org.dallasmakerspace.discourse.FeaturedProjectsService
 import org.dallasmakerspace.members.ActivityLogService
+import org.dallasmakerspace.members.ExternalAccountAlreadyLinkedException
 import org.dallasmakerspace.members.GroupService
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.GroupSettingsService
@@ -71,6 +72,12 @@ fun Application.configureRouting() {
   val log = org.slf4j.LoggerFactory.getLogger("Routing")
   install(Resources)
   install(StatusPages) {
+    exception<ExternalAccountAlreadyLinkedException> { call, cause ->
+      log.warn(
+          "Rejected request: ${call.request.httpMethod.value} ${call.request.path()}: ${cause.message}")
+      call.respond(
+          HttpStatusCode.Conflict, ApiResponse(Status.ERROR, cause.message ?: "Conflict", null))
+    }
     exception { call: ApplicationCall, cause: Exception ->
       log.error(
           "Failed to process request: ${call.request.httpMethod.value} ${call.request.path()}",

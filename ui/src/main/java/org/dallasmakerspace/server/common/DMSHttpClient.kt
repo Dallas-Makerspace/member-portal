@@ -123,9 +123,22 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
     if (resp.status.isSuccess()) {
       return resp.body<Map<String, Any>>()
     } else {
+      // If member-profile-service encounters an error, it will return json with a message attribute
       val body = resp.body<String>()
       log.error("patch: HTTP request failed: $body")
-      throw HttpException("Failed to patch $url; Status: ${resp.status} Response: $body")
+      val message =
+          try {
+            if (body.contains("message")) {
+              val json = objectMapper.readValue(body, Map::class.java)
+              (json["message"] as? String) ?: "Failed to patch $url; Status: ${resp.status} Response: $body"
+            } else {
+              "Failed to patch $url; Status: ${resp.status} Response: $body"
+            }
+          } catch (e: JsonProcessingException) {
+            log.warn("patch: Failed to parse error response as JSON: ${e.message}")
+            "Failed to patch $url; Status: ${resp.status} Response: $body"
+          }
+      throw HttpException(message, resp.status.value)
     }
   }
 

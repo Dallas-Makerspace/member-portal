@@ -24,4 +24,6 @@ interface IMemberRepository {
   suspend fun getMembersByDiscourseUsernames(
       discourseUsernames: List<String>
   ): Map<String, DMSMember>
+
+  suspend fun getMembersByDiscordUserIds(discordUserIds: List<String>): Map<String, DMSMember>
 }

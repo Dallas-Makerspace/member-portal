@@ -50,6 +50,11 @@ class MemberRepositoryMock @Inject constructor() : IMemberRepository {
           .filter { it.discourseUsername in discourseUsernames }
           .associateBy { it.discourseUsername!! }
 
+  override suspend fun getMembersByDiscordUserIds(
+      discordUserIds: List<String>
+  ): Map<String, DMSMember> =
+      store.values.filter { it.discordUserId in discordUserIds }.associateBy { it.discordUserId!! }
+
   companion object {
     private val SEED_MEMBERS =
         listOf(
