@@ -213,12 +213,14 @@
         });
     }
 
+    // Resolves true on a successful refresh, false on failure, so the poll loop below can back
+    // off on repeated errors. A refresh already in flight resolves true (no-op, not a failure).
     function refreshCategories() {
-        if (refreshInFlight) return;
+        if (refreshInFlight) return Promise.resolve(true);
         refreshInFlight = true;
         refreshIndicator.classList.remove('d-none');
         setConnectButtonsDisabled(true);
-        fetch('/remote-access/refresh', {credentials: 'same-origin'})
+        return fetch('/remote-access/refresh', {credentials: 'same-origin'})
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.text();
@@ -227,12 +229,14 @@
                 // Fresh, already-enabled buttons come in with the new HTML - no need to re-enable.
                 document.getElementById('remote-access-categories').outerHTML = html;
                 lastLoad = Date.now();
+                return true;
             })
             .catch(function (e) {
                 console.warn('Failed to refresh Remote Access state', e);
                 // The DOM was NOT replaced on failure, so buttons disabled above would otherwise
                 // stay stuck disabled indefinitely - re-enable them explicitly here.
                 setConnectButtonsDisabled(false);
+                return false;
             })
             .finally(function () {
                 refreshIndicator.classList.add('d-none');
@@ -240,11 +244,69 @@
             });
     }
 
-    document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible' && Date.now() - lastLoad > 2000) {
+    // Background polling while this tab is visible, with exponential backoff so a long-forgotten
+    // open tab (or a struggling backend) doesn't get hit every 30s forever. Backs off on two
+    // independent signals - sustained idle (nobody's looking, poll less often) and consecutive
+    // fetch failures (the endpoint is struggling, ramp off faster) - and snaps straight back to
+    // the 30s baseline the moment the user actually shows up again (see handleBecameActive below).
+    var POLL_BASE_MS = 30000; // baseline while actively watched
+    var POLL_MAX_MS = 5 * 60000; // ceiling
+    var IDLE_POLLS_BEFORE_BACKOFF = 4; // ~2 min of untouched successful polling before ramping up
+
+    var pollTimer = null;
+    var pollIntervalMs = POLL_BASE_MS;
+    var idlePollCount = 0;
+    var consecutiveFailures = 0;
+
+    function schedulePoll() {
+        clearTimeout(pollTimer);
+        if (document.visibilityState !== 'visible') return; // paused - resumed by handleBecameActive
+        pollTimer = setTimeout(runScheduledPoll, pollIntervalMs);
+    }
+
+    function runScheduledPoll() {
+        refreshCategories().then(function (ok) {
+            if (ok) {
+                consecutiveFailures = 0;
+                idlePollCount++;
+                if (idlePollCount >= IDLE_POLLS_BEFORE_BACKOFF) {
+                    pollIntervalMs = Math.min(pollIntervalMs * 2, POLL_MAX_MS);
+                    idlePollCount = 0;
+                }
+            } else {
+                consecutiveFailures++;
+                pollIntervalMs = Math.min(POLL_BASE_MS * Math.pow(2, consecutiveFailures), POLL_MAX_MS);
+            }
+            schedulePoll();
+        });
+    }
+
+    // visibilitychange and window focus/blur are complementary signals: switching tabs within the
+    // same browser window fires only visibilitychange, while alt-tabbing to a different
+    // application and back (this tab stays the frontmost tab of its now-background window) fires
+    // only window focus/blur. Listening to both is what makes "the user came back" reliable.
+    function handleBecameActive() {
+        if (document.visibilityState !== 'visible') return;
+        if (Date.now() - lastLoad > 2000) {
             refreshCategories();
         }
+        pollIntervalMs = POLL_BASE_MS;
+        idlePollCount = 0;
+        consecutiveFailures = 0;
+        schedulePoll();
+    }
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+            handleBecameActive();
+        } else {
+            clearTimeout(pollTimer);
+        }
     });
+
+    window.addEventListener('focus', handleBecameActive);
+
+    schedulePoll(); // kick off the poll loop (page was just server-rendered, so no immediate fetch)
 
     document.addEventListener('click', function (e) {
         // Bootstrap's .btn.disabled already blocks pointer clicks (pointer-events: none), but not
