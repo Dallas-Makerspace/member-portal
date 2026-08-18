@@ -4,6 +4,8 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
@@ -146,10 +148,12 @@ constructor(
     return try {
       val recipientEmail =
           if (notification.channel == Channel.EMAIL) {
-            activeDirectoryService
-                .getMembersByUsernameList(listOf(notification.memberUsername))[
-                    notification.memberUsername]
-                ?.mail
+            withContext(Dispatchers.IO) {
+              activeDirectoryService
+                  .getMembersByUsernameList(listOf(notification.memberUsername))[
+                      notification.memberUsername]
+                  ?.mail
+            }
           } else {
             null
           }

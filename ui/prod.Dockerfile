@@ -35,4 +35,9 @@ EXPOSE 8000
 # Dagger @Provides methods, fixed separately in 6eb0761) that caused a production hang the two got
 # tangled together in the incident. Re-applying now that the real cause is confirmed fixed and
 # stable on its own.
-CMD ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar"]
+#
+# -Dnetworkaddress.cache.ttl=5: this JVM is long-lived and resolves 'member-profile-service', whose
+# backing container changes on every service blue/green deploy - without a short TTL, a stale
+# resolution can get cached for the rest of this process's lifetime.
+CMD ["java", "-Djava.net.preferIPv4Stack=true", "-Dnetworkaddress.cache.ttl=5", \
+     "-Dnetworkaddress.cache.negative.ttl=0", "-jar", "app.jar"]

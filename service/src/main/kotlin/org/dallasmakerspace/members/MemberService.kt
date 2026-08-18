@@ -256,7 +256,7 @@ constructor(
     if (usernames.isEmpty()) return emptyMap()
 
     // Batch fetch from Active Directory
-    val adMembers = activeDirectoryService.getMembersByUsernameList(usernames)
+    val adMembers = withContext(Dispatchers.IO) { activeDirectoryService.getMembersByUsernameList(usernames) }
 
     // Batch fetch from local DB - only fetch the specific usernames we need
     val dbMembers = memberRepository.getMembersByUsernames(usernames)
@@ -435,7 +435,7 @@ constructor(
 
   suspend fun updateMember(username: String, memberFromApi: DMSMember) {
     // Fetch member from active directory.
-    val adMember = activeDirectoryService.getMemberByUsername(username)
+    val adMember = withContext(Dispatchers.IO) { activeDirectoryService.getMemberByUsername(username) }
     // If member is not active in AD then throw an exception.
     check(adMember.enabled) {
       "Member is not active in AD: $username, we should not update this record!"
@@ -1096,7 +1096,7 @@ constructor(
   suspend fun getDebugInfo(username: String): org.dallasmakerspace.models.MemberDebugInfo {
     val adAccountEnabled =
         try {
-          activeDirectoryService.getMemberByUsername(username).enabled
+          withContext(Dispatchers.IO) { activeDirectoryService.getMemberByUsername(username).enabled }
         } catch (e: Exception) {
           log.error("Failed to get AD account status for $username", e)
           false

@@ -3,7 +3,9 @@ package org.dallasmakerspace.cron
 import dagger.Reusable
 import javax.inject.Inject
 import kotlin.random.Random
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.ActiveDirectoryService
 import org.dallasmakerspace.core.LoggerFactory
@@ -46,7 +48,9 @@ constructor(
         dbMembers
             .map { it.username }
             .chunked(AD_READ_BATCH_SIZE)
-            .map { chunk -> activeDirectoryService.getMembersByUsernameList(chunk) }
+            .map { chunk ->
+              withContext(Dispatchers.IO) { activeDirectoryService.getMembersByUsernameList(chunk) }
+            }
             .fold(mutableMapOf<String, ADUser?>()) { acc, map ->
               acc.putAll(map)
               acc

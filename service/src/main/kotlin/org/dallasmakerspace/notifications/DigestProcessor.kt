@@ -4,6 +4,8 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
@@ -125,9 +127,9 @@ constructor(
 
     eligible.forEach { repository.markSending(it.id) }
     val recipientEmail =
-        activeDirectoryService
-            .getMembersByUsernameList(listOf(memberUsername))[memberUsername]
-            ?.mail
+        withContext(Dispatchers.IO) {
+          activeDirectoryService.getMembersByUsernameList(listOf(memberUsername))[memberUsername]?.mail
+        }
     when (val result = attemptSend(memberUsername, recipientEmail, eligible)) {
       is SendResult.Success -> {
         eligible.forEach { repository.markSent(it.id, result.providerId, now) }

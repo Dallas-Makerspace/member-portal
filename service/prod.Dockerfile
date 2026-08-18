@@ -23,4 +23,6 @@ USER appuser
 EXPOSE 8081
 
 # Command to run the application
-CMD ["java", "-jar", "app.jar"]
+# -Dnetworkaddress.cache.ttl=5: short DNS cache TTL for this long-lived JVM - matches
+# ui/prod.Dockerfile (see its comment for why).
+CMD ["java", "-Dnetworkaddress.cache.ttl=5", "-Dnetworkaddress.cache.negative.ttl=0", "-jar", "app.jar"]

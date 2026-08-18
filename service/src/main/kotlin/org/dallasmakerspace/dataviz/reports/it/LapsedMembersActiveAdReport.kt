@@ -1,6 +1,8 @@
 package org.dallasmakerspace.dataviz.reports.it
 
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -32,8 +34,8 @@ constructor(
   override suspend fun getData(params: Map<String, List<String>>): DataVizResponse {
     val startTime = System.currentTimeMillis()
 
-    // Query all AD users with badges
-    val allAdUsers = adClient.getAllActiveUsersWithBadges()
+    // LDAP is blocking - scoped to Dispatchers.IO like other AD calls on this shared route.
+    val allAdUsers = withContext(Dispatchers.IO) { adClient.getAllActiveUsersWithBadges() }
 
     // Filter for users with badge "0000000" and enabled accounts
     val lapsedMembers =

@@ -12,9 +12,11 @@ import io.ktor.server.resources.post
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.writeStringUtf8
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.askai.AskAiService
@@ -266,7 +268,10 @@ fun Application.configureRouting() {
 
         /** Badge operations - get badge from Active Directory * */
         get<Members.DMSMember.BadgeAD> { badgeRequest ->
-          val badge = memberService.getBadgeFromActiveDirectory(badgeRequest.parent.username)
+          val badge =
+              withContext(Dispatchers.IO) {
+                memberService.getBadgeFromActiveDirectory(badgeRequest.parent.username)
+              }
           call.respond(
               ApiResponse(
                   Status.SUCCESS,
@@ -384,7 +389,7 @@ fun Application.configureRouting() {
 
           // Update AD
           try {
-            memberService.updateBadgeInAD(username, paddedBadge)
+            withContext(Dispatchers.IO) { memberService.updateBadgeInAD(username, paddedBadge) }
           } catch (e: Exception) {
             log.error("Failed to update badge for $username", e)
             return@post call.respond(
@@ -543,7 +548,9 @@ fun Application.configureRouting() {
       authorize(Permission.MANAGE_GROUPS) {
         patch<Groups.DMSGroup.Add> { groupRequested ->
           val actorUsername = call.request.headers["X-Actor-Username"]
-          val isInfra = actorUsername?.let { memberService.isUserInInfraGroup(it) } ?: false
+          val isInfra =
+              actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
+                  ?: false
           if (!configOverrideService.get(ConfigRegistry.GROUP_MEMBER_MANAGEMENT_ENABLED, isInfra)) {
             call.respond(
                 HttpStatusCode.Forbidden,
@@ -563,7 +570,9 @@ fun Application.configureRouting() {
 
         delete<Groups.DMSGroup.Add> { groupRequested ->
           val actorUsername = call.request.headers["X-Actor-Username"]
-          val isInfra = actorUsername?.let { memberService.isUserInInfraGroup(it) } ?: false
+          val isInfra =
+              actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
+                  ?: false
           if (!configOverrideService.get(ConfigRegistry.GROUP_MEMBER_MANAGEMENT_ENABLED, isInfra)) {
             call.respond(
                 HttpStatusCode.Forbidden,
@@ -650,7 +659,7 @@ fun Application.configureRouting() {
       /** Badge lookup operations * */
       authorize(Permission.MANAGE_BADGES) {
         get<BadgeLookup> {
-          val member = memberService.getMemberByBadgeNumber(it.badgeNumber)
+          val member = withContext(Dispatchers.IO) { memberService.getMemberByBadgeNumber(it.badgeNumber) }
           call.respond(ApiResponse(Status.SUCCESS, "Member ${member.username}", member))
         }
       }

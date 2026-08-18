@@ -1,6 +1,8 @@
 package org.dallasmakerspace.members
 
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.ActiveDirectoryService
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.models.DMSGroup
@@ -15,9 +17,9 @@ constructor(
 ) {
   private val log = loggerFactory.create(javaClass)
 
-  fun getAllGroups(): List<DMSGroup> {
-    // Get all groups directly from Active Directory
-    val adGroups = activeDirectoryService.getAllGroups()
+  suspend fun getAllGroups(): List<DMSGroup> {
+    // LDAP is blocking - scoped to Dispatchers.IO like other AD calls in this codebase.
+    val adGroups = withContext(Dispatchers.IO) { activeDirectoryService.getAllGroups() }
 
     return adGroups.map { adGroup ->
       DMSGroup(
@@ -32,15 +34,15 @@ constructor(
     }
   }
 
-  fun getGroup(groupslug: String): DMSGroup {
+  suspend fun getGroup(groupslug: String): DMSGroup {
     val groupname = Groups.getNameFromSlug(groupslug)
-    val adGroup = activeDirectoryService.getGroup(groupname)
+    val adGroup = withContext(Dispatchers.IO) { activeDirectoryService.getGroup(groupname) }
     return convertAdGroupToDMSGroup(adGroup)
   }
 
-  fun getMultipleGroups(groupslugs: List<String>): List<DMSGroup> {
+  suspend fun getMultipleGroups(groupslugs: List<String>): List<DMSGroup> {
     val groupnames = groupslugs.map { Groups.getNameFromSlug(it) }
-    val adGroups = activeDirectoryService.getMultipleGroups(groupnames)
+    val adGroups = withContext(Dispatchers.IO) { activeDirectoryService.getMultipleGroups(groupnames) }
     return adGroups.map { convertAdGroupToDMSGroup(it) }
   }
 

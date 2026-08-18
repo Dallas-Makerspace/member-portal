@@ -1,6 +1,8 @@
 package org.dallasmakerspace.dataviz.reports.it
 
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import org.dallasmakerspace.activedirectory.IActiveDirectoryClient
@@ -29,8 +31,9 @@ constructor(
     // 1. Query MakerManager for all active users with badges
     val mmBadges = queryMakerManagerBadges()
 
-    // 2. Query Active Directory for all users with badges, then filter for active accounts
-    val allAdUsers = adClient.getAllActiveUsersWithBadges()
+    // 2. Query Active Directory for all users with badges, then filter for active accounts.
+    // LDAP is blocking - scoped to Dispatchers.IO like other AD calls on this shared route.
+    val allAdUsers = withContext(Dispatchers.IO) { adClient.getAllActiveUsersWithBadges() }
     val adBadges =
         allAdUsers.filter { (_, attributes) ->
           val userAccountControl = (attributes["userAccountControl"] as? String)?.toIntOrNull() ?: 0

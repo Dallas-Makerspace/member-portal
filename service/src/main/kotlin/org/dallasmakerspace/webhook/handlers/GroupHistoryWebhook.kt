@@ -3,6 +3,8 @@ package org.dallasmakerspace.webhook.handlers
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.activedirectory.ActiveDirectoryService
@@ -38,7 +40,8 @@ constructor(
 
       // Extract member DN and get the username from Active Directory
       val memberDn = event.Member.Name
-      val adUsers = activeDirectoryService.getMembersByDnList(listOf(memberDn))
+      // LDAP is blocking - scoped to Dispatchers.IO like other AD calls on this shared route.
+      val adUsers = withContext(Dispatchers.IO) { activeDirectoryService.getMembersByDnList(listOf(memberDn)) }
 
       if (adUsers.isEmpty()) {
         return WebhookResult(false, "Could not find user with DN: $memberDn")

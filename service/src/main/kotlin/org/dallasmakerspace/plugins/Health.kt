@@ -7,6 +7,8 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.ADException
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 
@@ -38,7 +40,7 @@ fun Application.configureHealth(activeDirectoryService: IActiveDirectoryService)
       // to prove the backend can serve traffic, without also paying for the WHMCS/MakerManager/DB
       // fan-out that a full member lookup does on every 5s poll.
       try {
-        activeDirectoryService.getMemberByUsername("test")
+        withContext(Dispatchers.IO) { activeDirectoryService.getMemberByUsername("test") }
       } catch (_: ADException) {
         // "test" not found in AD — AD is still reachable, probe passes
       } catch (e: Exception) {

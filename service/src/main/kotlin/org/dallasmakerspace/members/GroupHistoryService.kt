@@ -3,6 +3,8 @@ package org.dallasmakerspace.members
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.toJavaLocalDateTime
 import org.dallasmakerspace.activedirectory.ActiveDirectoryService
 import org.dallasmakerspace.members.db.GroupDAO
@@ -49,7 +51,7 @@ constructor(
   ): Boolean {
     try {
       // Get member username from DN by querying Active Directory
-      val adUsers = activeDirectoryService.getMembersByDnList(listOf(memberDn))
+      val adUsers = withContext(Dispatchers.IO) { activeDirectoryService.getMembersByDnList(listOf(memberDn)) }
       if (adUsers.isEmpty()) {
         logger.error("Could not find user with DN: $memberDn")
         return false
