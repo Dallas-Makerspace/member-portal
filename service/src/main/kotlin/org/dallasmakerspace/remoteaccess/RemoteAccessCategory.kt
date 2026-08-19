@@ -13,14 +13,14 @@ enum class RemoteAccessCategory(
   JUMP_SERVER(
       slug = "jump-server",
       displayName = "Jump Server",
-      description = "Remote access to Windows and Linux virtual machines",
+      description = "Shared workstation(s) with common tools and software",
       connectionIdsConfigKey = ConfigRegistry.REMOTE_ACCESS_JUMP_SERVER_CONNECTION_IDS,
       adGroupConfigKey = ConfigRegistry.REMOTE_ACCESS_JUMP_SERVER_AD_GROUP,
   ),
   MASTERCAM(
       slug = "mastercam",
       displayName = "MasterCam",
-      description = "Remote access to the MasterCam CAD/CAM workstation",
+      description = "MasterCam CAD/CAM workstation",
       connectionIdsConfigKey = ConfigRegistry.REMOTE_ACCESS_MASTERCAM_CONNECTION_IDS,
       adGroupConfigKey = ConfigRegistry.REMOTE_ACCESS_MASTERCAM_AD_GROUP,
   ),

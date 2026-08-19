@@ -38,18 +38,51 @@
         .machine-card-available { border-left-color: #198754; }
         .machine-card-inuse { border-left-color: #dc3545; }
         .machine-card-offline { border-left-color: #adb5bd; }
+        .machine-card-restricted { border-left-color: #fd7e14; }
 
         .status-line { display: flex; align-items: center; gap: 0.4rem; font-weight: 600; font-size: 0.8125rem; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
         .status-dot-free { background-color: #198754; }
         .status-dot-inuse { background-color: #dc3545; }
         .status-dot-offline { background-color: #adb5bd; }
+        .status-dot-restricted { background-color: #fd7e14; }
         .status-text-free { color: #146c43; }
         .status-text-inuse { color: #b02a37; }
         .status-text-offline { color: #6c757d; }
+        .status-text-restricted { color: #b35c00; }
 
         .protocol-icon { font-size: 1.4rem; color: #6c757d; }
-        .category-header { border-left: 4px solid #0b9cc9; padding-left: 0.75rem; }
+
+        /* Guards against the card blowing out sideways: (a) the icon is boxed to exactly its own
+           font-size and clips its content, so if the Material Symbols font hasn't loaded yet and
+           the ligature falls back to literal text ("desktop_windows"), it can't balloon the row;
+           (b) the title is a flex item that would otherwise refuse to shrink below its own text
+           width (flex's default min-width:auto) and overflow the card instead of wrapping. */
+        .material-symbols-outlined {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1em;
+            height: 1em;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .machine-card .card-title { min-width: 0; overflow-wrap: break-word; }
+
+        /* Information hierarchy: page title (plain <h1>, matching every other resource page's
+           convention - no bespoke size/weight override here) > category title > restriction note >
+           cards; categories are separated by an actual <hr> (see markup) rather than a CSS border,
+           so it reads the same in the AJAX-refreshed fragment. */
+        .page-header-block { border-bottom: 1px solid #e9ecef; padding-bottom: 1.5rem; }
+        .category-header { font-size: 1.375rem; font-weight: 700; }
+
+        /* Cards are half the row's width (2-up), like a 12-col grid's col-6, not a fixed pixel
+           size - so they scale with the page instead of shrinking to a cramped fixed width.
+           Single column below the sm breakpoint so cards don't get squeezed on narrow screens. */
+        .machine-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+        @media (min-width: 576px) {
+            .machine-grid { grid-template-columns: repeat(2, 1fr); }
+        }
 
         /* Occupant rows read as one grouped "who's on this machine" unit, distinct from the
            status/action area below it. */
@@ -59,128 +92,143 @@
         .occupant-row dms-member-card { min-width: 0; flex-shrink: 1; overflow: hidden; }
         .occupant-row dms-relative-date { flex-shrink: 0; }
         .occupant-row .kill-btn { margin-left: auto; flex-shrink: 0; }
+
+        /* Keeps the banner and card grid from reading as "a wide page with almost nothing in it"
+           when a category only has 1-2 machines - page-scoped, doesn't touch global.css. */
+        .container { max-width: 960px; }
+
+        /* Bootstrap's default disabled opacity (~0.65) is too low to read comfortably - bump it for
+           this page's informational disabled states (Offline / Already Connected / Locked). */
+        .machine-card .btn-outline-secondary.disabled,
+        .machine-card .btn-outline-secondary:disabled { opacity: .85; }
     </style>
 </head>
 <body>
 <header class="top-nav" th:replace="~{fragments/header :: header}"></header>
 <div class="container pb-5 mt-4">
-    <div class="d-flex align-items-center gap-2 mb-1">
-        <h1 class="mb-0">Remote Access</h1>
-        <span id="refresh-indicator" class="d-none text-muted small d-flex align-items-center gap-1">
-            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            Refreshing&hellip;
-        </span>
+    <div class="page-header-block mb-4">
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h1 class="mb-0">Remote Access</h1>
+            <span id="refresh-indicator" class="d-none text-muted small d-flex align-items-center gap-1">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Refreshing&hellip;
+            </span>
+        </div>
+        <p class="text-muted mb-0">Connect to Dallas Makerspace virtual machines and workstations.</p>
     </div>
-    <p class="text-muted mb-4">Connect to Dallas Makerspace virtual machines and workstations.</p>
 
     <div id="remote-access-categories" th:fragment="categoriesFragment">
         <div th:if="${categories == null || categories.isEmpty()}" class="alert alert-warning">
             No remote access categories are currently configured.
         </div>
 
-        <div th:each="category : ${categories}" class="mb-5">
+        <th:block th:each="category, catStat : ${categories}">
+            <hr th:if="${!catStat.first}" class="my-4"/>
+            <div class="category-block mb-5">
             <h2 class="category-header mb-1" th:text="${category.displayName}">Category</h2>
             <p class="text-muted mb-3" th:text="${category.description}"></p>
 
             <div th:if="${!category.userHasAccess}" class="alert alert-warning d-flex align-items-center mb-3">
                 <span class="material-symbols-outlined me-2">lock</span>
-                <span class="d-flex align-items-center flex-wrap gap-1">
+                <span class="d-flex align-items-center flex-wrap gap-1 fw-medium">
                     Access requires membership in the
                     <dms-group-pill th:attr="name=${category.requiredAdGroup},slug=${category.requiredAdGroupSlug}"></dms-group-pill>
                     group.
                 </span>
             </div>
 
-            <div class="row g-3">
-                <div th:each="machine : ${category.machines}" class="col-sm-6 col-md-4 col-lg-3">
-                    <div class="card machine-card h-100 shadow-sm"
-                         th:classappend="${machine.status == 'AVAILABLE' ? 'machine-card-available' : (machine.status == 'IN_USE' ? 'machine-card-inuse' : 'machine-card-offline')}">
-                        <div class="card-body d-flex flex-column">
-                            <div class="d-flex align-items-start mb-2">
-                                <span class="material-symbols-outlined protocol-icon me-2"
-                                      th:text="${machine.protocol == 'ssh' ? 'terminal' : 'desktop_windows'}">desktop_windows</span>
-                                <h6 class="card-title mb-0 flex-grow-1" th:text="${machine.displayName}">Machine</h6>
-                            </div>
+            <div class="machine-grid">
+                <div th:each="machine : ${category.machines}" class="card machine-card h-100 shadow-sm"
+                     th:classappend="${(category.userHasAccess && machine.status == 'AVAILABLE') ? 'machine-card-available' : ((!category.userHasAccess && machine.status == 'AVAILABLE') ? 'machine-card-restricted' : (machine.status == 'IN_USE' ? 'machine-card-inuse' : 'machine-card-offline'))}">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex align-items-start mb-2">
+                            <span class="material-symbols-outlined protocol-icon me-2"
+                                  th:text="${machine.protocol == 'ssh' ? 'terminal' : 'desktop_windows'}">desktop_windows</span>
+                            <h6 class="card-title mb-0 flex-grow-1" th:text="${machine.displayName}">Machine</h6>
+                        </div>
 
-                            <div class="status-line mb-2">
-                                <span th:if="${machine.status == 'AVAILABLE'}" class="status-dot status-dot-free"></span>
-                                <span th:if="${machine.status == 'IN_USE'}" class="status-dot status-dot-inuse"></span>
-                                <span th:if="${machine.status == 'OFFLINE'}" class="status-dot status-dot-offline"></span>
-                                <span th:if="${machine.status == 'AVAILABLE'}" class="status-text-free">Available</span>
-                                <span th:if="${machine.status == 'IN_USE'}" class="status-text-inuse">Full</span>
-                                <span th:if="${machine.status == 'OFFLINE'}" class="status-text-offline">Offline</span>
-                            </div>
+                        <div class="status-line mb-2">
+                            <span th:if="${category.userHasAccess && machine.status == 'AVAILABLE'}" class="status-dot status-dot-free"></span>
+                            <span th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}" class="status-dot status-dot-restricted"></span>
+                            <span th:if="${machine.status == 'IN_USE'}" class="status-dot status-dot-inuse"></span>
+                            <span th:if="${machine.status == 'OFFLINE'}" class="status-dot status-dot-offline"></span>
+                            <span th:if="${category.userHasAccess && machine.status == 'AVAILABLE'}" class="status-text-free">Available</span>
+                            <span th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}" class="status-text-restricted">Restricted</span>
+                            <span th:if="${machine.status == 'IN_USE'}" class="status-text-inuse">Full</span>
+                            <span th:if="${machine.status == 'OFFLINE'}" class="status-text-offline">Offline</span>
+                        </div>
 
-                            <!-- Current occupant(s) - both Guacamole-routed and direct/bypass RDP
-                                 sessions detected via WinRM, rendered identically (same member card,
-                                 same relative timestamp) since there's nothing route-specific for a
-                                 member to care about here. Only rendered when someone is actually
-                                 connected, so an unoccupied machine looks exactly as simple as before.
-                                 A session only gets a kill button when it has a Guacamole
-                                 activeConnectionId to kill by - a direct/bypass session detected via
-                                 WinRM alone has none. -->
-                            <div th:if="${!machine.sessions.isEmpty()}" class="occupant-list mb-3 small">
-                                <div th:each="sess : ${machine.sessions}" class="occupant-row">
-                                    <dms-member-card th:attr="username=${sess.username}" state="mini"></dms-member-card>
-                                    <dms-relative-date th:attr="timestamp=${sess.sessionStartDisplay}"
-                                                        elapsed
-                                                        class="text-muted"></dms-relative-date>
-                                    <button th:if="${canKillConnections && sess.activeConnectionId != null}"
-                                            th:data-active-connection-id="${sess.activeConnectionId}"
-                                            th:data-occupant="${sess.username}"
-                                            class="btn btn-outline-danger btn-sm kill-btn"
-                                            title="Kill this session">
-                                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">power_off</span>
-                                    </button>
-                                </div>
+                        <!-- Current occupant(s) - both Guacamole-routed and direct/bypass RDP
+                             sessions detected via WinRM, rendered identically (same member card,
+                             same relative timestamp) since there's nothing route-specific for a
+                             member to care about here. Only rendered when someone is actually
+                             connected, so an unoccupied machine looks exactly as simple as before.
+                             A session only gets a kill button when it has a Guacamole
+                             activeConnectionId to kill by - a direct/bypass session detected via
+                             WinRM alone has none. -->
+                        <div th:if="${!machine.sessions.isEmpty()}" class="occupant-list mb-3 small">
+                            <div th:each="sess : ${machine.sessions}" class="occupant-row">
+                                <dms-member-card th:attr="username=${sess.username}" state="mini"></dms-member-card>
+                                <dms-relative-date th:attr="timestamp=${sess.sessionStartDisplay}"
+                                                    elapsed
+                                                    class="text-muted"></dms-relative-date>
+                                <button th:if="${canKillConnections && sess.activeConnectionId != null}"
+                                        th:data-active-connection-id="${sess.activeConnectionId}"
+                                        th:data-occupant="${sess.username}"
+                                        class="btn btn-outline-danger btn-sm kill-btn"
+                                        title="Kill this session">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">power_off</span>
+                                </button>
                             </div>
+                        </div>
 
-                            <div class="mt-auto">
-                                <!-- Offline -->
-                                <button th:if="${machine.status == 'OFFLINE'}"
-                                        class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">cloud_off</span>
-                                    Offline
-                                </button>
-                                <!-- Connectable and user has access (may already have occupants if the
-                                     machine supports multiple concurrent logins). Relabeled
-                                     "Reconnect" when this would resume the user's own Disconnected
-                                     session rather than start a brand new one - see
-                                     RemoteAccessHandler.buildMachineViewModel. -->
-                                <a th:if="${category.userHasAccess && machine.status != 'OFFLINE' && machine.userCanConnect}"
-                                   th:href="'/remote-access/connect/' + ${machine.connectionId}"
-                                   target="_blank"
-                                   class="btn btn-primary btn-sm w-100 remote-access-connect-btn">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
-                                    <span th:text="${machine.resumingOwnSession} ? 'Reconnect' : 'Connect'">Connect</span>
-                                </a>
-                                <!-- Full - danger-tinted (rather than the same gray as Offline) so it
-                                     visually ties back to the red status dot/border instead of reading
-                                     the same as "unreachable". -->
-                                <button th:if="${machine.status == 'IN_USE'}"
-                                        class="btn btn-outline-danger btn-sm w-100" disabled>Full</button>
-                                <!-- Has access but at their personal session limit (machine itself
-                                     still has room, hence not IN_USE) -->
-                                <button th:if="${category.userHasAccess && machine.status == 'AVAILABLE' && !machine.userCanConnect}"
-                                        class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                    Already Connected
-                                </button>
-                                <!-- No access - the reason is shown as visible text below the button,
-                                     not just a hover title, so it's legible on touch devices too. -->
-                                <button th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}"
-                                        class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">lock</span>
-                                    Connect
-                                </button>
-                                <div th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}"
-                                     class="small text-muted text-center mt-1"
-                                     th:text="'Requires: ' + ${category.requiredAdGroup}"></div>
-                            </div>
+                        <div class="mt-auto">
+                            <!-- Offline -->
+                            <button th:if="${machine.status == 'OFFLINE'}"
+                                    class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">cloud_off</span>
+                                Offline
+                            </button>
+                            <!-- Connectable and user has access (may already have occupants if the
+                                 machine supports multiple concurrent logins). Relabeled
+                                 "Reconnect" when this would resume the user's own Disconnected
+                                 session rather than start a brand new one - see
+                                 RemoteAccessHandler.buildMachineViewModel. -->
+                            <a th:if="${category.userHasAccess && machine.status != 'OFFLINE' && machine.userCanConnect}"
+                               th:href="'/remote-access/connect/' + ${machine.connectionId}"
+                               target="_blank"
+                               class="btn btn-primary btn-sm w-100 remote-access-connect-btn">
+                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
+                                <span th:text="${machine.resumingOwnSession} ? 'Reconnect' : 'Connect'">Connect</span>
+                            </a>
+                            <!-- Full - danger-tinted (rather than the same gray as Offline) so it
+                                 visually ties back to the red status dot/border instead of reading
+                                 the same as "unreachable". -->
+                            <button th:if="${machine.status == 'IN_USE'}"
+                                    class="btn btn-outline-danger btn-sm w-100" disabled>Full</button>
+                            <!-- Has access but at their personal session limit (machine itself
+                                 still has room, hence not IN_USE) -->
+                            <button th:if="${category.userHasAccess && machine.status == 'AVAILABLE' && !machine.userCanConnect}"
+                                    class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                Already Connected
+                            </button>
+                            <!-- No access - "Requires: X" is stated once already, in the
+                                 category-level banner above, so it isn't repeated per card.
+                                 The reason is still available on hover/for screen readers via
+                                 title/aria-label. -->
+                            <button th:if="${!category.userHasAccess && machine.status == 'AVAILABLE'}"
+                                    class="btn btn-outline-secondary btn-sm w-100" disabled
+                                    th:title="'Requires membership in ' + ${category.requiredAdGroup}"
+                                    th:aria-label="'Locked - requires membership in ' + ${category.requiredAdGroup}">
+                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">lock</span>
+                                Locked
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        </th:block>
     </div>
 </div>
 
