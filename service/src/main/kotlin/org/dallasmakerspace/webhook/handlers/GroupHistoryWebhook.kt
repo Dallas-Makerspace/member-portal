@@ -9,11 +9,18 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.activedirectory.ActiveDirectoryService
 import org.dallasmakerspace.members.GroupHistoryRepository
+import org.dallasmakerspace.members.IMemberRepository
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.models.ActionType
+import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.WebhookResult
 import org.slf4j.LoggerFactory
+
+// Privileged AD accounts (e.g. adm_jphelps) aren't resolvable as members; this is the observed
+// DMS naming convention for their unprivileged counterpart.
+private const val ADMIN_ACCOUNT_PREFIX = "adm_"
+private const val SYSTEM_ACTOR_USERNAME = "ad-system"
 
 /**
  * Handler for group history events from Active Directory. Processes events related to users being
@@ -24,7 +31,8 @@ class GroupHistoryWebhook
 constructor(
     private val activeDirectoryService: ActiveDirectoryService,
     private val groupHistoryRepository: GroupHistoryRepository,
-    private val memberService: MemberService
+    private val memberService: MemberService,
+    private val memberRepository: IMemberRepository,
 ) : WebhookHandler() {
 
   private val logger = LoggerFactory.getLogger(GroupHistoryWebhook::class.java)
@@ -51,14 +59,7 @@ constructor(
       val actorUsername = event.Subject.UserName
       val groupName = event.TargetGroup.Name
 
-      // Get actor and member IDs from the memberService
-      val actorProfile =
-          try {
-            memberService.getMemberByUsername(actorUsername)
-          } catch (e: Exception) {
-            logger.error("Actor not found: $actorUsername", e)
-            return WebhookResult(false, "Actor not found: $actorUsername")
-          }
+      val actorProfile = resolveActorProfile(actorUsername)
 
       val memberProfile =
           try {
@@ -100,6 +101,28 @@ constructor(
       WebhookResult(false, "Error processing webhook: ${e.message}")
     }
   }
+
+  /**
+   * Resolves the AD actor to a member profile, trying (in order): a direct match, a match on the
+   * unprivileged account if [actorUsername] is a privileged `adm_` account, then a generic system
+   * actor. Never throws - the target member's history must still get recorded even when the actor
+   * can't be attributed to a specific person.
+   */
+  private suspend fun resolveActorProfile(actorUsername: String): DMSMember {
+    val strippedUsername = actorUsername.removePrefix(ADMIN_ACCOUNT_PREFIX)
+    return tryResolveMember(actorUsername)
+        ?: strippedUsername.takeIf { it != actorUsername }?.let { tryResolveMember(it) }
+        ?: memberRepository.getMemberOrInsert(SYSTEM_ACTOR_USERNAME, enabled = false)
+            .also { logger.warn("Actor not found: $actorUsername (or $strippedUsername), using system actor") }
+  }
+
+  @Suppress("TooGenericExceptionCaught", "SwallowedException")
+  private suspend fun tryResolveMember(username: String): DMSMember? =
+      try {
+        memberService.getMemberByUsername(username)
+      } catch (e: Exception) {
+        null
+      }
 }
 
 @Serializable
