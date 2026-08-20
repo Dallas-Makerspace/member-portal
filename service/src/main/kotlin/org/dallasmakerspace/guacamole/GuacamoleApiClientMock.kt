@@ -12,7 +12,11 @@ class GuacamoleApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
   override suspend fun getConnections(): List<GuacamoleConnection> {
     log.info("Mock: getConnections")
     return listOf(
-        GuacamoleConnection(identifier = "1", name = "Mastercam Workstation", protocol = "rdp"),
+        GuacamoleConnection(
+            identifier = "1",
+            name = "MasterCam Workstation (DMS-MS-HAAS-PC-1)",
+            protocol = "rdp",
+        ),
         GuacamoleConnection(identifier = "2", name = "Windows 10 VM 1", protocol = "rdp"),
         GuacamoleConnection(
             identifier = "3",
@@ -25,7 +29,7 @@ class GuacamoleApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
         // host, capacity 2 concurrent sessions total, 1 per user.
         GuacamoleConnection(
             identifier = "5",
-            name = "PRW Jump Server",
+            name = "Jump Server (PRWJUMP)",
             protocol = "rdp",
             attributes = mapOf("max-connections" to "2", "max-connections-per-user" to "1"),
         ),

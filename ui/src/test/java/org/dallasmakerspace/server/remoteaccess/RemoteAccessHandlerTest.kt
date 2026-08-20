@@ -14,7 +14,7 @@ class RemoteAccessHandlerTest {
   ): Map<String, Any?> =
       mapOf(
           "connectionId" to "5",
-          "displayName" to "PRW Jump Server",
+          "displayName" to "Jump Server (PRWJUMP)",
           "protocol" to "rdp",
           "status" to "AVAILABLE",
           "sessions" to sessions,
@@ -39,21 +39,18 @@ class RemoteAccessHandlerTest {
   fun `no sessions produces an empty session list and no occupant block`() {
     val viewModel = buildMachineViewModel(machine(), currentUsername = "jdoe")
 
-    @Suppress("UNCHECKED_CAST")
-    val sessions = viewModel["sessions"] as List<Map<String, Any?>>
+    @Suppress("UNCHECKED_CAST") val sessions = viewModel["sessions"] as List<Map<String, Any?>>
     assertTrue(sessions.isEmpty())
     assertTrue(viewModel["canConnect"] as Boolean)
   }
 
   @Test
   fun `multiple sessions all appear in the view model`() {
-    val raw =
-        listOf(session("jdoe", 1_000L, "active-1"), session("asmith", 2_000L, "active-2"))
+    val raw = listOf(session("jdoe", 1_000L, "active-1"), session("asmith", 2_000L, "active-2"))
 
     val viewModel = buildMachineViewModel(machine(sessions = raw), currentUsername = "jdoe")
 
-    @Suppress("UNCHECKED_CAST")
-    val sessions = viewModel["sessions"] as List<Map<String, Any?>>
+    @Suppress("UNCHECKED_CAST") val sessions = viewModel["sessions"] as List<Map<String, Any?>>
     assertEquals(2, sessions.size)
     assertEquals(setOf("jdoe", "asmith"), sessions.map { it["username"] }.toSet())
   }
@@ -115,7 +112,10 @@ class RemoteAccessHandlerTest {
   @Test
   fun `resumingOwnSession is false for a brand new connection with no prior session at all`() {
     val viewModel =
-        buildMachineViewModel(machine(canConnect = true, maxConnectionsPerUser = 1), currentUsername = "jdoe")
+        buildMachineViewModel(
+            machine(canConnect = true, maxConnectionsPerUser = 1),
+            currentUsername = "jdoe",
+        )
 
     assertTrue(viewModel["canConnect"] as Boolean)
     assertFalse(viewModel["resumingOwnSession"] as Boolean)
@@ -138,7 +138,9 @@ class RemoteAccessHandlerTest {
   fun `global canConnect false always wins regardless of per-user cap`() {
     val viewModel =
         buildMachineViewModel(
-            machine(canConnect = false, maxConnectionsPerUser = 1), currentUsername = "jdoe")
+            machine(canConnect = false, maxConnectionsPerUser = 1),
+            currentUsername = "jdoe",
+        )
 
     assertFalse(viewModel["canConnect"] as Boolean)
   }
@@ -152,8 +154,7 @@ class RemoteAccessHandlerTest {
 
     val viewModel = buildMachineViewModel(machine(sessions = raw), currentUsername = "jdoe")
 
-    @Suppress("UNCHECKED_CAST")
-    val sessions = viewModel["sessions"] as List<Map<String, Any?>>
+    @Suppress("UNCHECKED_CAST") val sessions = viewModel["sessions"] as List<Map<String, Any?>>
     assertEquals(1, sessions.size)
     assertEquals(null, sessions.single()["activeConnectionId"])
   }

@@ -36,7 +36,15 @@ class RemoteAccessServiceTest {
     // spy(), not a plain instance, so individual tests can stub probeConnectivity directly instead
     // of depending on a real socket connection to a real host (unavailable in CI, and prone to
     // colliding with whatever's already bound to well-known ports like 3389 on a dev machine).
-    service = spy(RemoteAccessService(guacamoleApiClient, winRmClient, configOverrideService, loggerFactory))
+    service =
+        spy(
+            RemoteAccessService(
+                guacamoleApiClient,
+                winRmClient,
+                configOverrideService,
+                loggerFactory,
+            )
+        )
 
     runBlocking {
       whenever(configOverrideService.get(RemoteAccessCategory.JUMP_SERVER.connectionIdsConfigKey))
@@ -65,10 +73,12 @@ class RemoteAccessServiceTest {
     whenever(guacamoleApiClient.getActiveConnections()).thenReturn(sessions.toList())
   }
 
-  /** Stubs the real TCP reachability probe so tests can force a non-blank hostname (to unlock the
+  /**
+   * Stubs the real TCP reachability probe so tests can force a non-blank hostname (to unlock the
    * WinRM check, which is skipped for blank hostnames) without depending on a real, reachable
    * network host - unavailable in CI and prone to colliding with whatever's already bound to
-   * well-known ports like 3389 on a dev machine. */
+   * well-known ports like 3389 on a dev machine.
+   */
   private fun stubReachable() = runBlocking {
     // doReturn(), not whenever().thenReturn() - the latter calls through to the real (spied)
     // method during stub setup, and the real probeConnectivity NPEs on the null that Mockito's
@@ -85,11 +95,14 @@ class RemoteAccessServiceTest {
   private fun jumpServerMachine(categories: List<RemoteAccessCategoryDTO>) =
       categories.first { it.slug == "jump-server" }.machines.first { it.connectionId == "5" }
 
-  /** Guacamole exposes capacity as string attributes, not top-level fields - see GuacamoleConnection. */
+  /**
+   * Guacamole exposes capacity as string attributes, not top-level fields - see
+   * GuacamoleConnection.
+   */
   private fun prwJump(maxConnections: Int? = 2, maxConnectionsPerUser: Int? = 1) =
       GuacamoleConnection(
           identifier = "5",
-          name = "PRW Jump Server",
+          name = "Jump Server (PRWJUMP)",
           protocol = "rdp",
           attributes =
               buildMap {
@@ -98,7 +111,8 @@ class RemoteAccessServiceTest {
               },
       )
 
-  private val mastercam = GuacamoleConnection("1", "Mastercam Workstation", "rdp")
+  private val mastercam =
+      GuacamoleConnection("1", "MasterCam Workstation (DMS-MS-HAAS-PC-1)", "rdp")
 
   @Test
   fun `machine with zero sessions is AVAILABLE with an empty session list`() = runBlocking {
@@ -208,7 +222,8 @@ class RemoteAccessServiceTest {
                 listOf(
                     WinRmRdpSession("mrogers", 1_000L, isActive = true),
                     WinRmRdpSession("bwayne", 2_000L, isActive = true),
-                ))
+                )
+            )
 
         val machine = jumpServerMachine(service.getCategories())
 
@@ -255,7 +270,8 @@ class RemoteAccessServiceTest {
                 listOf(
                     WinRmRdpSession("jdoe", 1_000L, isActive = true),
                     WinRmRdpSession("jdoe", 5_000L, isActive = true),
-                ))
+                )
+            )
 
         val machine = jumpServerMachine(service.getCategories())
 
@@ -312,7 +328,8 @@ class RemoteAccessServiceTest {
 
     service.getCategories()
 
-    org.mockito.kotlin.verify(winRmClient, org.mockito.kotlin.never())
+    org.mockito.kotlin
+        .verify(winRmClient, org.mockito.kotlin.never())
         .getRdpLogonSessions(org.mockito.kotlin.any())
     Unit
   }
@@ -326,7 +343,8 @@ class RemoteAccessServiceTest {
     val machine = jumpServerMachine(service.getCategories())
 
     assertTrue(machine.sessions.isEmpty())
-    org.mockito.kotlin.verify(winRmClient, org.mockito.kotlin.never())
+    org.mockito.kotlin
+        .verify(winRmClient, org.mockito.kotlin.never())
         .getRdpLogonSessions(org.mockito.kotlin.any())
     Unit
   }
