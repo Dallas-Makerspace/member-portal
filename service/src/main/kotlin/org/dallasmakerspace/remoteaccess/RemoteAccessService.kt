@@ -212,20 +212,31 @@ constructor(
   // internal + open so tests can spy() and stub this one collaborator, avoiding real socket I/O
   // (and the well-known-port bind conflicts that come with it - e.g. 3389 is often already bound
   // by a local RDP-related service on a Windows dev machine even though it's free on CI runners).
+  //
+  // Retries once on failure: production logs showed ~6% of probes taking 2000-2200ms (i.e.
+  // hitting PROBE_TIMEOUT_MS) against machines that were reachable on every surrounding request -
+  // a transient connect stall, not a real outage - which was enough to flip a reachable machine to
+  // OFFLINE for a single page load until the next poll self-corrected it. A single retry absorbs
+  // that class of blip; a machine that's actually down still fails both attempts.
   internal open suspend fun probeConnectivity(hostname: String, protocol: String): Boolean {
     val host = hostname
     if (host.isBlank()) return true
     val port = if (protocol == "rdp") PORT_RDP else PORT_SSH
-    return withContext(Dispatchers.IO) {
-      try {
-        Socket().use { socket ->
-          socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS)
-          true
-        }
-      } catch (e: Exception) {
-        log.debug("VM ({}:{}) unreachable: {}", host, port, e.message)
-        false
-      }
-    }
+    return attemptConnect(host, port) || attemptConnect(host, port)
   }
+
+  // internal + open for the same reason as probeConnectivity above - lets tests verify the retry
+  // itself (one failure followed by one success still reports reachable) without real socket I/O.
+  internal open suspend fun attemptConnect(host: String, port: Int): Boolean =
+      withContext(Dispatchers.IO) {
+        try {
+          Socket().use { socket ->
+            socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS)
+            true
+          }
+        } catch (e: Exception) {
+          log.debug("VM ({}:{}) unreachable: {}", host, port, e.message)
+          false
+        }
+      }
 }

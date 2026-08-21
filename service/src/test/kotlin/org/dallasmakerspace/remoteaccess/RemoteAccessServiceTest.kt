@@ -211,6 +211,38 @@ class RemoteAccessServiceTest {
   }
 
   @Test
+  fun `probe retries once after a transient connect failure before reporting reachable`() =
+      runBlocking {
+        // Production logs showed single connect attempts occasionally hitting PROBE_TIMEOUT_MS
+        // against machines reachable on every surrounding request - a transient blip, not a real
+        // outage. Fail-then-succeed here mirrors that: the retry should absorb it.
+        doReturn(false, true)
+            .whenever(service)
+            .attemptConnect(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        mockConnections(prwJump(), mastercam)
+        mockActiveConnections()
+        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
+
+        val machine = jumpServerMachine(service.getCategories())
+
+        assertEquals(MachineStatus.AVAILABLE, machine.status)
+      }
+
+  @Test
+  fun `probe reports OFFLINE only when both attempts fail`() = runBlocking {
+    doReturn(false, false)
+        .whenever(service)
+        .attemptConnect(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    mockConnections(prwJump(), mastercam)
+    mockActiveConnections()
+    whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
+
+    val machine = jumpServerMachine(service.getCategories())
+
+    assertEquals(MachineStatus.OFFLINE, machine.status)
+  }
+
+  @Test
   fun `direct RDP session detected via WinRM alone surfaces with real identity and can reach capacity`() =
       runBlocking {
         stubReachable()
