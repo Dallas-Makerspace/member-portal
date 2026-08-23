@@ -20,10 +20,11 @@
  * - Multi-select with removable chips (Gmail-style)
  * - Keyboard navigation (arrow keys, Enter, Escape, Backspace)
  * - Submits selected usernames via POST to `add-endpoint`
- * - Success/error message display
+ * - Inline validation messages (disabled/already-added member picks, unresolved search text)
  * - Dispatches `dms-picker-add-success` / `dms-picker-add-error` CustomEvents so a host page can
- *   hook additional behavior (e.g. updating in place instead of reloading) without this
- *   component needing to know what that behavior is
+ *   show its own success/error notification (e.g. a toast) and hook additional behavior (e.g.
+ *   updating in place instead of reloading) — this component does not display the add-request
+ *   outcome itself, so a host page MUST listen for both events to give the user any feedback
  * - Reloads the page on successful add unless `reload-on-success="false"`
  */
 
@@ -291,16 +292,32 @@ class DmsMemberPicker extends HTMLElement {
           line-height: 1.4;
         }
 
-        .success-message {
-          color: #28a745;
-        }
-
         .error-message {
           color: #dc3545;
         }
 
         .hint-message {
           color: #5f6368;
+        }
+
+        @media (max-width: 575.98px) {
+          .input-container {
+            padding: 8px 10px;
+          }
+
+          .search-input {
+            font-size: 16px; /* also prevents iOS Safari auto-zoom on focus */
+            padding: 8px 0;
+          }
+
+          .add-button {
+            flex: 1 1 100%;
+            margin-left: 0;
+            margin-top: 6px;
+            min-height: 44px;
+            padding: 10px 14px;
+            font-size: 14px;
+          }
         }
       </style>
 
@@ -675,9 +692,36 @@ class DmsMemberPicker extends HTMLElement {
     const addButton = this.shadowRoot.querySelector('.add-button');
     const statusMessage = this.shadowRoot.querySelector('.status-message');
 
+    // Cache the button's natural (labelled) width once, so the spinner swap below never causes
+    // it to shrink - measured lazily rather than on every click to avoid a repeat forced reflow.
+    if (this._addButtonWidth === undefined) {
+      this._addButtonWidth = addButton.getBoundingClientRect().width;
+    }
+
     addButton.disabled = true;
+    addButton.style.minWidth = this._addButtonWidth + 'px';
+    addButton.setAttribute('aria-busy', 'true');
+    addButton.textContent = '';
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm';
+    spinner.setAttribute('role', 'status');
+    spinner.setAttribute('aria-hidden', 'true');
+    addButton.appendChild(spinner);
+    const srLabel = document.createElement('span');
+    srLabel.className = 'visually-hidden';
+    srLabel.textContent = 'Adding members…';
+    addButton.appendChild(srLabel);
     statusMessage.className = 'status-message';
     statusMessage.textContent = '';
+
+    // Restores the button's label/width and re-enables it iff there's still a selection to
+    // submit - callers don't need to separately repeat the disabled-state check.
+    const restoreAddButton = () => {
+      addButton.removeAttribute('aria-busy');
+      addButton.textContent = this.addButtonLabel;
+      addButton.style.minWidth = '';
+      addButton.disabled = this.selectedMembers.length === 0;
+    };
 
     const usernames = this.selectedMembers.map(m => m.username);
 
@@ -691,18 +735,20 @@ class DmsMemberPicker extends HTMLElement {
       });
 
       if (response.ok) {
-        statusMessage.className = 'status-message success-message';
-        statusMessage.textContent = 'Members added successfully!';
         this.dispatchEvent(new CustomEvent('dms-picker-add-success', {
-          detail: { usernames },
+          detail: { usernames, reloading: this.reloadOnSuccess },
           bubbles: true,
           composed: true,
         }));
         if (this.reloadOnSuccess) {
-          // Reload page after 800ms
-          setTimeout(() => {
-            window.location.reload();
-          }, 800);
+          window.location.reload();
+        } else {
+          // Update the duplicate-add guard so these usernames read as already-added rather than
+          // staying eligible to be picked (and re-submitted) again in this same session.
+          this.existingUsernames = [...this.existingUsernames, ...usernames];
+          this.selectedMembers = [];
+          this.updateSelectedChips();
+          restoreAddButton();
         }
       } else {
         let errorText = 'Failed to add members';
@@ -710,9 +756,7 @@ class DmsMemberPicker extends HTMLElement {
           const errorData = await response.json();
           errorText = errorData.message || errorData.error || errorText;
         } catch {}
-        statusMessage.className = 'status-message error-message';
-        statusMessage.textContent = errorText;
-        addButton.disabled = this.selectedMembers.length === 0;
+        restoreAddButton();
         this.dispatchEvent(new CustomEvent('dms-picker-add-error', {
           detail: { error: errorText },
           bubbles: true,
@@ -721,9 +765,7 @@ class DmsMemberPicker extends HTMLElement {
       }
     } catch (error) {
       console.error('Error adding members:', error);
-      statusMessage.className = 'status-message error-message';
-      statusMessage.textContent = 'Error: ' + error.message;
-      addButton.disabled = this.selectedMembers.length === 0;
+      restoreAddButton();
       this.dispatchEvent(new CustomEvent('dms-picker-add-error', {
         detail: { error: error.message },
         bubbles: true,

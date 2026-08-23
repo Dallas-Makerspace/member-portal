@@ -20,6 +20,7 @@
 </head>
 <body>
 <header class="top-nav" th:replace="~{fragments/header :: header}"></header>
+<th:block th:replace="~{fragments/toast :: toast}"></th:block>
 <div class="container pb-8">
     <div class="row">
         <div class="col-md-4">
@@ -249,23 +250,56 @@ document.addEventListener('click', function(e) {
     const username = btn.dataset.username;
     const groupSlug = btn.dataset.groupSlug;
     if (!confirm('Remove ' + username + ' from this group?')) return;
+    const icon = btn.querySelector('.material-symbols-outlined');
     btn.disabled = true;
-    btn.querySelector('.material-symbols-outlined').textContent = 'hourglass_empty';
+    btn.setAttribute('aria-busy', 'true');
+    icon.style.display = 'none';
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm';
+    spinner.setAttribute('role', 'status');
+    spinner.setAttribute('aria-hidden', 'true');
+    btn.appendChild(spinner);
+    const srLabel = document.createElement('span');
+    srLabel.className = 'visually-hidden';
+    srLabel.textContent = 'Removing member…';
+    btn.appendChild(srLabel);
+    const restoreIcon = function() {
+        btn.removeAttribute('aria-busy');
+        srLabel.remove();
+        spinner.remove();
+        icon.style.display = '';
+    };
     fetch('/groups/' + groupSlug + '/members/' + username, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
     }).then(function(r) {
-        if (r.ok) { window.location.reload(); }
+        if (r.ok) {
+            showToastAfterReload('Member removed from group.');
+            window.location.reload();
+        }
         else { r.text().then(function(t) {
-            alert('Failed to remove member: ' + t);
+            showToast('Failed to remove member: ' + t, 'danger');
             btn.disabled = false;
-            btn.querySelector('.material-symbols-outlined').textContent = 'delete';
+            restoreIcon();
         }); }
     }).catch(function(err) {
-        alert('Error: ' + err);
+        showToast('Error: ' + err, 'danger');
         btn.disabled = false;
-        btn.querySelector('.material-symbols-outlined').textContent = 'delete';
+        restoreIcon();
     });
+});
+
+document.addEventListener('dms-picker-add-success', function(e) {
+    const n = e.detail.usernames.length;
+    const message = n > 1 ? 'Members added successfully!' : 'Member added successfully!';
+    if (e.detail.reloading) {
+        showToastAfterReload(message);
+    } else {
+        showToast(message);
+    }
+});
+document.addEventListener('dms-picker-add-error', function(e) {
+    showToast(e.detail.error || 'Failed to add members.', 'danger');
 });
 </script>
 </body>

@@ -61,6 +61,7 @@ function getPWAContext() {
 
 document.addEventListener("DOMContentLoaded", (event) => {
     printDMSItBanner();
+    consumePendingToast();
     // Hide toast after 20 seconds. Only affects the legacy #liveToast and a server-rendered
     // #dmsToast (marked via data-server-rendered) - never a JS-fired showToast(), which manages
     // its own ~5s auto-hide.
@@ -308,6 +309,46 @@ function showToast(message, type = 'success') {
     el.className = 'toast align-items-center border-0 text-bg-' + type;
     delete el.dataset.serverRendered;
     bootstrap.Toast.getOrCreateInstance(el, { delay: 5000, autohide: true }).show();
+}
+
+const PENDING_TOAST_KEY = 'dms_pending_toast';
+
+/**
+ * Stash a toast to show after the *next* page load instead of right now - use this immediately
+ * before a client-triggered `window.location.reload()` (same URL, no server redirect) so the
+ * toast appears once the reloaded page's UI already reflects the change, rather than flashing on
+ * the stale pre-reload page. Call showToast() directly when nothing is about to reload.
+ * For a server-driven redirect-after-POST instead, use the model's `toast_message` variable
+ * (see fragments/toast.html) - that flows through the server render, not sessionStorage.
+ * Consumed once by consumePendingToast() on the next DOMContentLoaded, wherever that lands; if
+ * that page doesn't include the toast fragment, the message is dropped rather than shown later.
+ * @param {string} message
+ * @param {'success'|'danger'|'warning'|'info'} [type='success']
+ */
+function showToastAfterReload(message, type = 'success') {
+    try {
+        sessionStorage.setItem(PENDING_TOAST_KEY, JSON.stringify({ message, type }));
+    } catch (e) {
+        // sessionStorage unavailable (e.g. private browsing) - the toast is simply skipped.
+    }
+}
+
+// Show + clear any toast stashed by showToastAfterReload() before this page load.
+function consumePendingToast() {
+    let pending;
+    try {
+        pending = sessionStorage.getItem(PENDING_TOAST_KEY);
+        if (pending) sessionStorage.removeItem(PENDING_TOAST_KEY);
+    } catch (e) {
+        return;
+    }
+    if (!pending) return;
+    try {
+        const { message, type } = JSON.parse(pending);
+        showToast(message, type);
+    } catch (e) {
+        console.error('Failed to parse pending toast:', e);
+    }
 }
 
 /**
