@@ -117,6 +117,15 @@
         <p class="text-muted mb-0">Connect to Dallas Makerspace virtual machines and workstations.</p>
     </div>
 
+    <!-- Shown when a background refresh finds the session has expired (see refreshCategories()
+         below) - status below may be stale until the user reloads. -->
+    <div id="session-expired-banner" class="alert alert-warning alert-dismissible d-none mb-4" role="alert">
+        <span class="material-symbols-outlined align-middle me-1" style="font-size:1.1rem;">warning</span>
+        Your session has expired, so machine/session status below may be out of date.
+        <a href="#" id="session-expired-reload" class="alert-link">Reload the page</a> to continue.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
     <div id="remote-access-categories" th:fragment="categoriesFragment">
         <div th:if="${categories == null || categories.isEmpty()}" class="alert alert-warning">
             No remote access categories are currently configured.
@@ -169,9 +178,11 @@
                         <div th:if="${!machine.sessions.isEmpty()}" class="occupant-list mb-3 small">
                             <div th:each="sess : ${machine.sessions}" class="occupant-row">
                                 <dms-member-card th:attr="username=${sess.username}" state="mini"></dms-member-card>
-                                <dms-relative-date th:attr="timestamp=${sess.sessionStartDisplay}"
+                                <dms-relative-date th:if="${sess.isActive}"
+                                                    th:attr="timestamp=${sess.sessionStartDisplay}"
                                                     elapsed
                                                     class="text-muted"></dms-relative-date>
+                                <span th:unless="${sess.isActive}" class="text-muted">Disconnected</span>
                                 <button th:if="${canKillConnections && sess.activeConnectionId != null}"
                                         th:data-active-connection-id="${sess.activeConnectionId}"
                                         th:data-occupant="${sess.username}"
@@ -198,7 +209,8 @@
                                th:href="'/remote-access/connect/' + ${machine.connectionId}"
                                target="_blank"
                                class="btn btn-primary btn-sm w-100 remote-access-connect-btn">
-                                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">login</span>
+                                <span class="spinner-border spinner-border-sm d-none connect-btn-spinner" role="status" aria-hidden="true"></span>
+                                <span class="material-symbols-outlined connect-btn-icon" style="font-size:1rem;vertical-align:middle">login</span>
                                 <span th:text="${machine.resumingOwnSession} ? 'Reconnect' : 'Connect'">Connect</span>
                             </a>
                             <!-- Full - danger-tinted (rather than the same gray as Offline) so it
@@ -252,12 +264,42 @@
     var refreshIndicator = document.getElementById('refresh-indicator');
     var refreshInFlight = false;
 
+    // Set once a background refresh discovers the SSO session has expired - stops further polling
+    // (there's nothing to refresh until the user reloads) and surfaces session-expired-banner so
+    // stale status isn't shown without explanation. See refreshCategories() below for detection.
+    var sessionExpired = false;
+    var sessionExpiredBanner = document.getElementById('session-expired-banner');
+    var sessionExpiredReload = document.getElementById('session-expired-reload');
+    if (sessionExpiredReload) {
+        sessionExpiredReload.addEventListener('click', function (e) {
+            e.preventDefault();
+            location.reload();
+        });
+    }
+
+    function showSessionExpiredBanner() {
+        sessionExpired = true;
+        clearTimeout(pollTimer);
+        if (sessionExpiredBanner) sessionExpiredBanner.classList.remove('d-none');
+        // No DOM swap follows this (there's nothing fresh to render), so the buttons refreshCategories()
+        // disabled going into this refresh would otherwise stay stuck disabled/spinning forever - polling
+        // is stopped above, so nothing else will ever re-enable them. Connect itself is a plain page
+        // navigation (not fetch), so it still correctly follows the redirect to force re-login.
+        setConnectButtonsDisabled(false);
+    }
+
     // Status checks (TCP + WinRM) can take a couple of seconds, so Connect is disabled for the
-    // duration of a refresh to avoid clicking into a machine whose displayed state is stale.
+    // duration of a refresh to avoid clicking into a machine whose displayed state is stale. Swaps
+    // the button's icon for a spinner too - the top-of-page "Refreshing..." indicator is easy to
+    // miss when the user's attention is on a specific card, so each card gets its own local cue.
     function setConnectButtonsDisabled(disabled) {
         document.querySelectorAll('.remote-access-connect-btn').forEach(function (btn) {
             btn.classList.toggle('disabled', disabled);
             btn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+            var spinner = btn.querySelector('.connect-btn-spinner');
+            var icon = btn.querySelector('.connect-btn-icon');
+            if (spinner) spinner.classList.toggle('d-none', !disabled);
+            if (icon) icon.classList.toggle('d-none', disabled);
         });
     }
 
@@ -268,12 +310,23 @@
         refreshInFlight = true;
         refreshIndicator.classList.remove('d-none');
         setConnectButtonsDisabled(true);
-        return fetch('/remote-access/refresh', {credentials: 'same-origin'})
+        // redirect: 'manual' - AuthenticatedHandler redirects to /login when the SSO session has
+        // expired, and a normal followed fetch() would chase that redirect cross-origin to
+        // Keycloak and blow up with an opaque network error, indistinguishable here from a real
+        // connectivity failure. In manual mode a redirect instead resolves as a same-origin
+        // response with type 'opaqueredirect', so it can be detected and explained instead of
+        // silently leaving stale status on screen.
+        return fetch('/remote-access/refresh', {credentials: 'same-origin', redirect: 'manual'})
             .then(function (r) {
+                if (r.type === 'opaqueredirect') {
+                    showSessionExpiredBanner();
+                    return null;
+                }
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.text();
             })
             .then(function (html) {
+                if (html === null) return true; // session expired - not a failure, just nothing to render
                 // Fresh, already-enabled buttons come in with the new HTML - no need to re-enable.
                 document.getElementById('remote-access-categories').outerHTML = html;
                 lastLoad = Date.now();
@@ -308,6 +361,7 @@
 
     function schedulePoll() {
         clearTimeout(pollTimer);
+        if (sessionExpired) return; // nothing to poll for until the user reloads
         if (document.visibilityState !== 'visible') return; // paused - resumed by handleBecameActive
         pollTimer = setTimeout(runScheduledPoll, pollIntervalMs);
     }
@@ -335,6 +389,7 @@
     // only window focus/blur. Listening to both is what makes "the user came back" reliable.
     function handleBecameActive() {
         if (document.visibilityState !== 'visible') return;
+        if (sessionExpired) return; // banner already told the user to reload; nothing more to do
         if (Date.now() - lastLoad > 2000) {
             refreshCategories();
         }
@@ -370,8 +425,18 @@
         var who = btn.dataset.occupant || 'this user';
         if (!confirm('Force disconnect ' + who + ' from this machine?')) return;
         btn.disabled = true;
-        fetch('/remote-access/disconnect/' + id, {method: 'POST', credentials: 'same-origin'})
-            .then(function () { refreshCategories(); })
+        // redirect: 'manual' - same reasoning as refreshCategories() above: an expired session
+        // redirects to /login, and letting fetch() chase that cross-origin to Keycloak surfaces as
+        // an opaque network error instead of something actionable.
+        fetch('/remote-access/disconnect/' + id, {method: 'POST', credentials: 'same-origin', redirect: 'manual'})
+            .then(function (r) {
+                if (r.type === 'opaqueredirect') {
+                    showSessionExpiredBanner();
+                    return;
+                }
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                refreshCategories();
+            })
             .catch(function (e) { alert('Failed: ' + e); btn.disabled = false; });
     });
 </script>

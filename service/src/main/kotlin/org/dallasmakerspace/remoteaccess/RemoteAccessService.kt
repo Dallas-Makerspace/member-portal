@@ -155,13 +155,17 @@ constructor(
           )
         }
     val sessions = guacSessions + reconcileDirectSessions(guacSessions, probeResult?.winRmSessions)
+    // Windows doesn't cap the number of Disconnected sessions a machine can hold (quser will
+    // happily show several) - only genuinely Active ones compete for the connection slots that
+    // maxConnections is actually limiting.
+    val activeSessionCount = sessions.count { it.isActive }
     // null/0 means unlimited.
     val maxConnections = conn.maxConnections?.takeIf { it > 0 }
-    val hasCapacity = maxConnections == null || sessions.size < maxConnections
+    val hasCapacity = maxConnections == null || activeSessionCount < maxConnections
     val status =
         when {
           !reachable -> MachineStatus.OFFLINE
-          sessions.isNotEmpty() && !hasCapacity -> MachineStatus.IN_USE
+          activeSessionCount > 0 && !hasCapacity -> MachineStatus.IN_USE
           else -> MachineStatus.AVAILABLE
         }
     return RemoteAccessMachineDTO(
@@ -193,10 +197,29 @@ constructor(
   ): List<RemoteAccessSessionDTO> {
     if (winRmSessions.isNullOrEmpty()) return emptyList()
     val remainingGuacByUsername = guacSessions.groupingBy { it.username }.eachCount().toMutableMap()
-    return winRmSessions.mapNotNull { winRmSession ->
-      val remaining = remainingGuacByUsername[winRmSession.username] ?: 0
-      if (remaining > 0) {
-        remainingGuacByUsername[winRmSession.username] = remaining - 1
+    // A Guacamole session is always Active, so when a username has more WinRM entries than known
+    // Guacamole sessions, a Disconnected entry is absorbed into that "already known" count before
+    // an Active one is - processed in isActive-ascending order rather than quser's arbitrary
+    // iteration order. Without this, buildMachineDto's activeSessionCount could silently undercount
+    // real capacity: e.g. one Guacamole session for "jdoe" plus a stale Disconnected WinRM entry AND
+    // a genuinely second Active one for "jdoe" - if the Active entry happened to be absorbed instead
+    // of the Disconnected one, the real second occupied slot would vanish from the count entirely.
+    val absorbedIndices =
+        winRmSessions
+            .withIndex()
+            .sortedBy { (_, session) -> session.isActive }
+            .mapNotNull { (index, session) ->
+              val remaining = remainingGuacByUsername[session.username] ?: 0
+              if (remaining > 0) {
+                remainingGuacByUsername[session.username] = remaining - 1
+                index
+              } else {
+                null
+              }
+            }
+            .toSet()
+    return winRmSessions.withIndex().mapNotNull { (index, winRmSession) ->
+      if (index in absorbedIndices) {
         null // already represented by a known Guacamole session for this user
       } else {
         RemoteAccessSessionDTO(

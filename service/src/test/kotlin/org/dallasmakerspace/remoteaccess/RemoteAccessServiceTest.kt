@@ -314,24 +314,117 @@ class RemoteAccessServiceTest {
       }
 
   @Test
-  fun `a Disconnected direct RDP session propagates isActive=false, not the machine's overall status`() =
+  fun `a Disconnected direct RDP session propagates isActive=false and does not count toward capacity`() =
       runBlocking {
         // Regression test for a real production scenario: a member's RDP client closed without
-        // logging off (quser reports Disc, not Active) - the session still occupies a real slot
-        // (machine-wide status/capacity is unaffected, still IN_USE), but RemoteAccessSessionDTO
-        // must carry isActive=false so the UI layer can let that SAME member reconnect to
-        // themselves instead of being told "Already Connected" forever.
+        // logging off (quser reports Disc, not Active). Windows itself doesn't cap the number of
+        // Disconnected sessions a machine can hold, so a Disconnected session shouldn't occupy one
+        // of the machine's limited connection slots either - the machine stays AVAILABLE, and
+        // RemoteAccessSessionDTO carries isActive=false so the UI layer can let that SAME member
+        // reconnect to themselves instead of being told "Already Connected" forever.
         stubReachable()
         mockConnections(prwJump(maxConnections = 1), mastercam)
         mockActiveConnections() // no Guacamole session - this member is only visible via WinRM
-        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("prwjump.dms.local")
-        whenever(winRmClient.getRdpLogonSessions("prwjump.dms.local"))
-            .thenReturn(listOf(WinRmRdpSession("mandarlimaye", 1_000L, isActive = false)))
+        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("test-jump-host.example")
+        whenever(winRmClient.getRdpLogonSessions("test-jump-host.example"))
+            .thenReturn(listOf(WinRmRdpSession("kjones", 1_000L, isActive = false)))
+
+        val machine = jumpServerMachine(service.getCategories())
+
+        assertEquals(MachineStatus.AVAILABLE, machine.status)
+        assertTrue(machine.canConnect)
+        assertFalse(machine.sessions.single().isActive)
+      }
+
+  @Test
+  fun `a machine with only Disconnected sessions is not IN_USE even beyond maxConnections`() =
+      runBlocking {
+        // Two Disconnected sessions on a machine capped at 1 - Windows doesn't limit Disconnected
+        // session count, so this must stay AVAILABLE rather than IN_USE.
+        stubReachable()
+        mockConnections(prwJump(maxConnections = 1), mastercam)
+        mockActiveConnections()
+        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("test-jump-host.example")
+        whenever(winRmClient.getRdpLogonSessions("test-jump-host.example"))
+            .thenReturn(
+                listOf(
+                    WinRmRdpSession("kjones", 1_000L, isActive = false),
+                    WinRmRdpSession("asmith", 2_000L, isActive = false),
+                )
+            )
+
+        val machine = jumpServerMachine(service.getCategories())
+
+        assertEquals(MachineStatus.AVAILABLE, machine.status)
+        assertTrue(machine.canConnect)
+        assertEquals(2, machine.sessions.size)
+      }
+
+  @Test
+  fun `an Active session still reaches capacity alongside a Disconnected one that doesn't count`() =
+      runBlocking {
+        // maxConnections=1: one Disconnected (doesn't count) + one Active (does count) should
+        // still fill the machine's single real slot.
+        stubReachable()
+        mockConnections(prwJump(maxConnections = 1), mastercam)
+        mockActiveConnections()
+        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("test-jump-host.example")
+        whenever(winRmClient.getRdpLogonSessions("test-jump-host.example"))
+            .thenReturn(
+                listOf(
+                    WinRmRdpSession("kjones", 1_000L, isActive = false),
+                    WinRmRdpSession("asmith", 2_000L, isActive = true),
+                )
+            )
 
         val machine = jumpServerMachine(service.getCategories())
 
         assertEquals(MachineStatus.IN_USE, machine.status)
-        assertFalse(machine.sessions.single().isActive)
+        assertFalse(machine.canConnect)
+        assertEquals(2, machine.sessions.size)
+      }
+
+  @Test
+  fun `a stale Disconnected WinRM entry for an already-known user doesn't hide a genuine second Active session`() =
+      runBlocking {
+        // Regression test: guacSessions reconciliation must not undercount capacity depending on
+        // quser's arbitrary iteration order. Two distinct real logons for "jdoe" here - the
+        // Guacamole-routed one (Active) and a separate genuinely Active direct RDP login - plus a
+        // stale Disconnected quser entry left over from an earlier abandoned session. Regardless of
+        // which order WinRM reports the two extra "jdoe" entries in, the Disconnected one (not the
+        // Active one) must be the one absorbed into the "already known via Guacamole" slot, so both
+        // real occupied slots (Guacamole + the second Active login) still count toward capacity.
+        stubReachable()
+        mockConnections(prwJump(maxConnections = 2), mastercam)
+        mockActiveConnections(GuacamoleActiveConnection("active-1", "5", "jdoe", 1_000L))
+        whenever(guacamoleApiClient.getConnectionHostname("5")).thenReturn("test-jump-host.example")
+
+        // Disconnected entry listed BEFORE the Active one.
+        whenever(winRmClient.getRdpLogonSessions("test-jump-host.example"))
+            .thenReturn(
+                listOf(
+                    WinRmRdpSession("jdoe", 500L, isActive = false),
+                    WinRmRdpSession("jdoe", 2_000L, isActive = true),
+                )
+            )
+        val machineDisconnectedFirst = jumpServerMachine(service.getCategories())
+        assertEquals(MachineStatus.IN_USE, machineDisconnectedFirst.status)
+        assertFalse(machineDisconnectedFirst.canConnect)
+        assertEquals(2, machineDisconnectedFirst.sessions.count { it.isActive })
+
+        // Same two entries, order reversed - Active listed BEFORE the Disconnected one. Must
+        // produce the identical result; this is the ordering that previously undercounted capacity.
+        whenever(winRmClient.getRdpLogonSessions("test-jump-host.example"))
+            .thenReturn(
+                listOf(
+                    WinRmRdpSession("jdoe", 2_000L, isActive = true),
+                    WinRmRdpSession("jdoe", 500L, isActive = false),
+                )
+            )
+        val machineActiveFirst = jumpServerMachine(service.getCategories())
+        assertEquals(MachineStatus.IN_USE, machineActiveFirst.status)
+        assertFalse(machineActiveFirst.canConnect)
+        assertEquals(2, machineActiveFirst.sessions.count { it.isActive })
       }
 
   @Test

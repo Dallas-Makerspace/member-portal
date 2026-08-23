@@ -289,6 +289,15 @@ CONVERT_TZ(timestamp_column, '+00:00', 'America/Chicago')
 
 See `GroupHistoryMapping.kt` for Kotlin example and `CalendarRepository.kt` for raw SQL example.
 
+## Test Data & Fixtures
+
+**Never use real data in code, comments, or tests** - no real hostnames, machine names, IP
+addresses, AD/DNS domains, member names, emails, or other identifying values from actual DMS
+infrastructure or membership. Use obviously fake placeholders instead (e.g. `test-jump-host`,
+`workstation-1.example.internal`, `jdoe`/`asmith`-style fake usernames). This applies even when
+copying the shape of an existing test - don't propagate a real-looking value just because a
+neighboring test already uses one.
+
 ## External Integrations
 
 - **Active Directory/LDAP** - User authentication and group management

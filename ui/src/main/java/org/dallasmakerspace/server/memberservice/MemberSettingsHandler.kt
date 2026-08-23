@@ -83,7 +83,7 @@ constructor(
     if (session.isSettingsUpdateSuccess) {
       log.info("Setting toast for successful settings update")
       call.sessions.set(session.copy(isSettingsUpdateSuccess = false))
-      jsonMap["toast_message"] = "Communication preference updated."
+      jsonMap["toast_message"] = "Contact preference updated."
     }
 
     call.respond(ThymeleafContent("settings", jsonMap))

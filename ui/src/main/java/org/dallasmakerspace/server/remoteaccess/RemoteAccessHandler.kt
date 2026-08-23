@@ -46,6 +46,10 @@ fun buildMachineViewModel(
             "activeConnectionId" to (sess["activeConnectionId"] as? String),
             "username" to (sess["username"] as? String ?: ""),
             "sessionStartDisplay" to epochMsToChicagoDisplay(startEpochMs),
+            // Same permissive-default reasoning as ownActiveSessionCount below - absent key means
+            // Active. Surfaced to the template so a Disconnected occupant shows "Disconnected"
+            // instead of a live elapsed timer that's no longer tracking a real session.
+            "isActive" to ((sess["isActive"] as? Boolean) != false),
         )
       }
 
