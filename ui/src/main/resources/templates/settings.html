@@ -33,7 +33,7 @@
             <!-- Communication Preferences card -->
             <div class="dms-card shadow-sm mt-3">
                 <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Communication Preference</h4>
+                    <h4 class="card-title mt-3 mb-4 dms-card-title">Contact Preference</h4>
                     <span th:if="${!is_self}" class="text-sm text-danger">[Member View for testing -
                         Infra only]</span>
 
@@ -133,22 +133,7 @@
         </div>
     </div>
 
-    <!-- Bootstrap Toast for success messages -->
-    <div th:if="${toast_message}"
-         id="liveToast"
-         class="toast align-items-center text-bg-success border-0 show"
-         role="alert"
-         aria-live="assertive"
-         aria-atomic="true">
-        <div class="d-flex">
-            <div class="toast-body" th:text="|${toast_message}|"></div>
-            <button
-                    type="button"
-                    class="btn-close btn-close-white me-2 m-auto"
-                    data-bs-dismiss="toast"
-                    aria-label="Close"></button>
-        </div>
-    </div>
+    <th:block th:replace="~{fragments/toast :: toast}"></th:block>
 </div>
 
 <!-- Bootstrap JS -->
