@@ -1,7 +1,6 @@
 package org.dallasmakerspace.askai.openrouter
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
@@ -14,6 +13,7 @@ import kotlinx.serialization.json.Json
 import okio.IOException
 import org.dallasmakerspace.askai.AbstractLlmClient
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.models.SearchResult
 import org.dallasmakerspace.models.TokenUsage
@@ -39,7 +39,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   private val model: String by lazy { appConfig.requireStringProperty("app.openrouter.model") }
 
   private val client: HttpClient by lazy {
-    HttpClient(CIO) {
+    HttpClient(DmsHttpEngine) {
       install(HttpTimeout) {
         requestTimeoutMillis = REQUEST_TIMEOUT_MS
         connectTimeoutMillis = REQUEST_TIMEOUT_MS
@@ -53,7 +53,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   }
 
   private val streamingClient: HttpClient by lazy {
-    HttpClient(CIO) {
+    HttpClient(DmsHttpEngine) {
       install(HttpTimeout) {
         requestTimeoutMillis = Long.MAX_VALUE
         connectTimeoutMillis = REQUEST_TIMEOUT_MS

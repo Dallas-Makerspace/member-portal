@@ -12,7 +12,7 @@ import org.dallasmakerspace.guacamole.IGuacamoleApiClient
 @Module
 class GuacamoleModule {
 
-  // GuacamoleApiClient builds its own HttpClient(CIO) — without @Singleton here, Dagger built a
+  // GuacamoleApiClient builds its own HttpClient(...) — without @Singleton here, Dagger built a
   // brand-new one for every injection site (same bug found and fixed for AD's LDAP pool).
   @Provides
   @Singleton

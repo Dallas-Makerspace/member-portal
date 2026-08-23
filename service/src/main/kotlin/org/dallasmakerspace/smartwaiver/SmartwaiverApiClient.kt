@@ -1,7 +1,6 @@
 package org.dallasmakerspace.smartwaiver
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.logging.DEFAULT
 import io.ktor.client.plugins.logging.LogLevel
@@ -22,8 +21,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
+import okhttp3.Dispatcher
 import okio.IOException
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 
 private const val SMARTWAIVER_BASE_URL = "https://api.smartwaiver.com/v4"
@@ -50,8 +51,18 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   private val smartwaiverDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
   private fun getClient() =
-      HttpClient(CIO) {
-        engine { maxConnectionsCount = 100 }
+      HttpClient(DmsHttpEngine) {
+        engine {
+          config {
+            // All calls hit the same host - maxRequestsPerHost must rise too, or OkHttp's default
+            // of 5 throttles the parallel page-fetch below regardless of maxRequests.
+            dispatcher(
+                Dispatcher().apply {
+                  maxRequests = 100
+                  maxRequestsPerHost = 100
+                })
+          }
+        }
         install(HttpTimeout) {
           requestTimeoutMillis = REQUEST_TIMEOUT_MS
           connectTimeoutMillis = REQUEST_TIMEOUT_MS

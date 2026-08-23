@@ -1,7 +1,6 @@
 package org.dallasmakerspace.server.plugins
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.http.*
 import io.ktor.serialization.gson.*
 import io.ktor.serialization.jackson.*
@@ -17,6 +16,7 @@ import kotlin.collections.listOf
 import kotlin.collections.set
 import org.dallasmakerspace.server.auth.OAuthSettings
 import org.dallasmakerspace.server.auth.getOAuthSettings
+import org.dallasmakerspace.server.common.DmsHttpEngine
 import org.dallasmakerspace.server.di.AppComponentHolder
 import org.dallasmakerspace.server.routes.RouteFactory
 
@@ -63,7 +63,7 @@ fun Application.configureHttp() {
 }
 
 private fun getHttpClient(): HttpClient {
-  return HttpClient(CIO) {
+  return HttpClient(DmsHttpEngine) {
     install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) { gson { jackson {} } }
   }
 }

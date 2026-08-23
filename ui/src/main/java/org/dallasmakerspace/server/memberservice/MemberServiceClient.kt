@@ -1,7 +1,7 @@
 package org.dallasmakerspace.server.memberservice
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -18,6 +18,7 @@ import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.models.FeaturedProject
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.DMSHttpClient
+import org.dallasmakerspace.server.common.DmsHttpEngine
 import org.dallasmakerspace.server.common.HttpException
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.models.EventSummary
@@ -127,8 +128,7 @@ constructor(
       sessionId: String?
   ): List<Map<String, String?>> {
     val apiHeaders = getApiHeaders(sessionId)
-    val historyMap =
-        dmsHttpClient.get("$baseUrl/groups/$groupSlug/settings/history", apiHeaders)
+    val historyMap = dmsHttpClient.get("$baseUrl/groups/$groupSlug/settings/history", apiHeaders)
     val data = historyMap["data"] as List<*>? ?: return emptyList()
     return data.mapNotNull { entry ->
       (entry as? Map<*, *>)?.mapKeys { it.key.toString() }?.mapValues { it.value?.toString() }
@@ -949,7 +949,7 @@ constructor(
       username: String?,
       isPreview: Boolean = false,
   ): ShortLinkResult {
-    val client = HttpClient(CIO) { followRedirects = false }
+    val client = HttpClient(DmsHttpEngine) { followRedirects = false }
     val apiHeaders = getApiHeaders(sessionId, username)
     val url = if (isPreview) "$baseUrl/go/$path?preview=true" else "$baseUrl/go/$path"
     return try {
@@ -1023,12 +1023,10 @@ constructor(
       if (forceRefresh) append("&refresh=true")
     }
     val client =
-        HttpClient(CIO) {
-          engine {
-            endpoint {
-              requestTimeout = SSE_TIMEOUT_MS
-              connectTimeout = 10_000
-            }
+        HttpClient(DmsHttpEngine) {
+          install(HttpTimeout) {
+            requestTimeoutMillis = SSE_TIMEOUT_MS
+            connectTimeoutMillis = 10_000
           }
         }
     client.use {

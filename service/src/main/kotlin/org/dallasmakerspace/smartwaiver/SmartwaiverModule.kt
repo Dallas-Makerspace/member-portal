@@ -9,7 +9,7 @@ import org.dallasmakerspace.core.LoggerFactory
 @Module
 class SmartwaiverModule {
 
-  // SmartwaiverApiClient builds its own HttpClient(CIO) — without @Singleton here, Dagger built a
+  // SmartwaiverApiClient builds its own HttpClient(...) — without @Singleton here, Dagger built a
   // brand-new one for every injection site (same bug found and fixed for AD's LDAP pool).
   @Provides
   @Singleton

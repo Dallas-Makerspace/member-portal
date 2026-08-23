@@ -39,7 +39,7 @@ dependencies {
   implementation("io.ktor:ktor-utils:$ktorVersion")
   // Ktor client packages used for making HTTP requests
   implementation("io.ktor:ktor-client-core:$ktorVersion")
-  implementation("io.ktor:ktor-client-cio:$ktorVersion")
+  implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
   implementation("io.ktor:ktor-client-json:$ktorVersion")
   implementation("io.ktor:ktor-client-logging:$ktorVersion")
   implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")

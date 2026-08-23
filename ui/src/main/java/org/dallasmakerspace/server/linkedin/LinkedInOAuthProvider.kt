@@ -2,7 +2,6 @@ package org.dallasmakerspace.server.linkedin
 
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
@@ -11,6 +10,7 @@ import io.ktor.serialization.jackson.*
 import java.net.URLEncoder
 import javax.inject.Inject
 import org.dallasmakerspace.server.common.AppConfig
+import org.dallasmakerspace.server.common.DmsHttpEngine
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 
 /**
@@ -22,7 +22,8 @@ class LinkedInOAuthProvider
 constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) {
   private val log = loggerFactory.create(javaClass)
 
-  private fun getHttpClient() = HttpClient(CIO) { install(ContentNegotiation) { jackson {} } }
+  private fun getHttpClient() =
+      HttpClient(DmsHttpEngine) { install(ContentNegotiation) { jackson {} } }
 
   private val clientId: String
     get() = appConfig.requireStringProperty("app.linkedin.client-id")

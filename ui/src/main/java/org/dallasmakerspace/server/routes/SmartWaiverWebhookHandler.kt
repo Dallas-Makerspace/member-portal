@@ -1,7 +1,6 @@
 package org.dallasmakerspace.server.routes
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -15,6 +14,7 @@ import javax.inject.Inject
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.server.common.AppConfig
+import org.dallasmakerspace.server.common.DmsHttpEngine
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 
 class SmartWaiverWebhookHandler
@@ -26,7 +26,7 @@ constructor(
   private val log = loggerFactory.create(javaClass)
   private val expectedToken = appConfig.requireStringProperty("app.smartwaiver.webhook-token")
   private val serviceUrl = appConfig.requireStringProperty("app.member-service.url")
-  private val client = HttpClient(CIO)
+  private val client = HttpClient(DmsHttpEngine)
 
   @Suppress("TooGenericExceptionCaught")
   override suspend fun handle(call: ApplicationCall) {

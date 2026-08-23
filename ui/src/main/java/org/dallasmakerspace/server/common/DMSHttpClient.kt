@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
@@ -13,8 +13,11 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.jackson.*
 import io.ktor.util.*
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 
 @Singleton
@@ -34,13 +37,18 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
   // every authenticated page load had a multi-second floor regardless of how little work it
   // actually did. HttpTimeout lets each call still override the timeout per-request.
   private val client =
-      HttpClient(CIO) {
+      HttpClient(DmsHttpEngine) {
         engine {
-          endpoint {
-            keepAliveTime = 10_000
-            maxConnectionsPerRoute = 100
-            connectTimeout = 10_000
-            connectAttempts = 2
+          config {
+            connectTimeout(10, TimeUnit.SECONDS)
+            retryOnConnectionFailure(true) // closest OkHttp equivalent to CIO's connectAttempts=2
+            dispatcher(
+                Dispatcher().apply {
+                  maxRequests = 200
+                  maxRequestsPerHost = 100
+                })
+            connectionPool(
+                ConnectionPool(maxIdleConnections = 100, keepAliveDuration = 10, TimeUnit.SECONDS))
           }
         }
         install(HttpTimeout) { requestTimeoutMillis = DEFAULT_TIMEOUT_MS }
@@ -130,7 +138,8 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
           try {
             if (body.contains("message")) {
               val json = objectMapper.readValue(body, Map::class.java)
-              (json["message"] as? String) ?: "Failed to patch $url; Status: ${resp.status} Response: $body"
+              (json["message"] as? String)
+                  ?: "Failed to patch $url; Status: ${resp.status} Response: $body"
             } else {
               "Failed to patch $url; Status: ${resp.status} Response: $body"
             }

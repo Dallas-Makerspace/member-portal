@@ -1,7 +1,6 @@
 package org.dallasmakerspace.notifications.channels
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
@@ -20,6 +19,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.Notification
@@ -175,7 +175,7 @@ constructor(
      * Builds the shared SparkPost HTTP client (10s connect, 30s request, no body logging - PII).
      */
     fun createClient(): HttpClient =
-        HttpClient(CIO) {
+        HttpClient(DmsHttpEngine) {
           install(HttpTimeout) {
             requestTimeoutMillis = REQUEST_TIMEOUT_MS
             connectTimeoutMillis = CONNECT_TIMEOUT_MS

@@ -1,7 +1,6 @@
 package org.dallasmakerspace.askai.confluence
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
@@ -12,6 +11,7 @@ import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import okio.IOException
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 
 private const val REQUEST_TIMEOUT_MS = 30000L
@@ -35,7 +35,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IC
   private val authHeader: String by lazy { "Bearer $apiToken" }
 
   private fun getClient() =
-      HttpClient(CIO) {
+      HttpClient(DmsHttpEngine) {
         install(HttpTimeout) {
           requestTimeoutMillis = REQUEST_TIMEOUT_MS
           connectTimeoutMillis = REQUEST_TIMEOUT_MS

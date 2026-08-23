@@ -1,7 +1,6 @@
 package org.dallasmakerspace.doorcontroller
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.network.sockets.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -12,6 +11,7 @@ import java.io.Closeable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 
 /**
@@ -38,7 +38,7 @@ class HttpRfidClient(
 ) : Closeable {
   private val log = loggerFactory.create(HttpRfidClient::class.java)
   private val httpClient =
-      HttpClient(CIO) {
+      HttpClient(DmsHttpEngine) {
         install(HttpTimeout) {
           connectTimeoutMillis = connectTimeoutSeconds * 1000L
           requestTimeoutMillis = requestTimeoutSeconds * 1000L

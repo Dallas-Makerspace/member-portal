@@ -1,7 +1,6 @@
 package org.dallasmakerspace.guacamole
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
@@ -15,6 +14,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 
 private const val TOKEN_CACHE_TTL_MS = 5 * 60 * 1000L
@@ -34,7 +34,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IG
   private val baseUrl: String by lazy { appConfig.requireStringProperty("app.guacamole.base-url") }
 
   private fun newClient() =
-      HttpClient(CIO) {
+      HttpClient(DmsHttpEngine) {
         install(HttpTimeout) {
           requestTimeoutMillis = 10_000
           connectTimeoutMillis = 5_000

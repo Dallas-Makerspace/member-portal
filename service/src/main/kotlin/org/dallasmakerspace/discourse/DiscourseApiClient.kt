@@ -1,7 +1,6 @@
 package org.dallasmakerspace.discourse
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
@@ -12,6 +11,7 @@ import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import okio.IOException
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 
 private const val DISCOURSE_BASE_URL = "https://talk.dallasmakerspace.org"
@@ -28,7 +28,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
   }
 
   private fun getClient() =
-      HttpClient(CIO) {
+      HttpClient(DmsHttpEngine) {
         install(HttpTimeout) {
           requestTimeoutMillis = 10_000
           connectTimeoutMillis = 5_000
