@@ -372,20 +372,33 @@ a.dms-facepile-item:focus-visible {
     object-fit: cover;
 }
 
-/* Overflow indicator: one merged stadium-shaped pill continuing the stack (not two separate
-   discs), so there's no seam where circles would otherwise overlap. width:auto + min-width
-   lets it grow for 3-digit counts instead of clipping the text. */
+/* Overflow indicator: two overlapping circles continuing the stack, rather than one pill, so
+   the shape reads as "more avatars" not a button. Each circle is drawn as a pair of stacked
+   radial-gradient backgrounds (gray fill over a slightly larger white ring) instead of a real
+   border, so the fill/ring are a true union with no seam line where the two circles cross.
+   width:auto + min-width lets it grow for 3-digit counts instead of clipping the text. */
 .dms-facepile-more {
+    position: relative;
     width: auto;
-    min-width: 78px;                           /* ~ two 44px circles overlapped by 10px */
+    min-width: 78px;                           /* two 44px circles overlapped by 10px */
     height: 44px;
     padding: 0 14px;
-    border-radius: 22px;
-    background: #e9ecef;
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-image:
+        radial-gradient(circle 20px at 22px center, #e9ecef 20px, transparent 21px),
+        radial-gradient(circle 20px at calc(100% - 22px) center, #e9ecef 20px, transparent 21px),
+        radial-gradient(circle 22px at 22px center, #fff 22px, transparent 23px),
+        radial-gradient(circle 22px at calc(100% - 22px) center, #fff 22px, transparent 23px),
+        radial-gradient(circle 23px at 22px center, rgba(0, 0, 0, 0.06) 23px, transparent 24px),
+        radial-gradient(circle 23px at calc(100% - 22px) center, rgba(0, 0, 0, 0.06) 23px, transparent 24px);
+    box-shadow: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 18px;
     font-weight: 700;
     line-height: 1;
     color: #6c757d;
@@ -396,11 +409,17 @@ a.dms-facepile-item:focus-visible {
 @media (max-width: 575.98px) {
     .dms-facepile-item { width: 38px; height: 38px; margin-left: -8px; }
     .dms-facepile-more {
-        min-width: 68px;
+        min-width: 68px;                       /* two 38px circles overlapped by 8px */
         height: 38px;
         padding: 0 10px;
-        border-radius: 19px;
         font-size: 12px;
+        background-image:
+            radial-gradient(circle 17px at 19px center, #e9ecef 17px, transparent 18px),
+            radial-gradient(circle 17px at calc(100% - 19px) center, #e9ecef 17px, transparent 18px),
+            radial-gradient(circle 19px at 19px center, #fff 19px, transparent 20px),
+            radial-gradient(circle 19px at calc(100% - 19px) center, #fff 19px, transparent 20px),
+            radial-gradient(circle 20px at 19px center, rgba(0, 0, 0, 0.06) 20px, transparent 21px),
+            radial-gradient(circle 20px at calc(100% - 19px) center, rgba(0, 0, 0, 0.06) 20px, transparent 21px);
     }
 }
 
