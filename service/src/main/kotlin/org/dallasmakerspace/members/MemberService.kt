@@ -1120,10 +1120,11 @@ constructor(
       actorUsername: String?,
   ): ScannerStatusResponse? {
     val mmUsers = makerManagerDataService.getAllUsers()
-    val mmUser = mmUsers.find { it.username == username } ?: return null
+    val mmUser = mmUsers.find { it.username.equals(username, ignoreCase = true) } ?: return null
+    val canonicalUsername = mmUser.username
 
-    val whmcsStatus = computeWhmcsStatus(username)
-    val dbMember = memberRepository.getMembersByUsernames(listOf(username))[username]
+    val whmcsStatus = computeWhmcsStatus(canonicalUsername)
+    val dbMember = memberRepository.getMembersByUsernames(listOf(canonicalUsername))[canonicalUsername]
 
     val isPrivileged =
         actorUsername != null &&
@@ -1133,7 +1134,7 @@ constructor(
             }
 
     return ScannerStatusResponse(
-        username = username,
+        username = canonicalUsername,
         firstName = mmUser.firstName,
         lastName = mmUser.lastName,
         isActive = mmUser.adActive,
