@@ -219,6 +219,10 @@ div.error-details > p { color: #c1c1c1; }
 .featured-scroll-btn--right { right: 8px; }
 @media (max-width: 768px) {
     .featured-scroll-btn { display: none; }
+    .featured-projects-track-wrap::before,
+    .featured-projects-track-wrap::after {
+        display: none;
+    }
 }
 
 .featured-projects-row {
