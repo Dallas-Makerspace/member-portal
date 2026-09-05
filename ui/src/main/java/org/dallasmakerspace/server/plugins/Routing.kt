@@ -47,6 +47,9 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.PROFILE_DEBUG_INFO.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.PROFILE_KIOSK_WAIVER_PHOTOS.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.PROFILE_TOTAL_ACTIVE_TIME.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

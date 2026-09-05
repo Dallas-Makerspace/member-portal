@@ -179,6 +179,9 @@ fun Application.configureRouting() {
       AppComponentHolder.instance.getGroupSettingsService()
     }
     val featureFlagService by lazy { AppComponentHolder.instance.getFeatureFlagService() }
+    val memberWaiverPhotosService by lazy {
+      AppComponentHolder.instance.getMemberWaiverPhotosService()
+    }
 
     get("/") {
       call.respondText(
@@ -316,6 +319,17 @@ fun Application.configureRouting() {
                   Status.SUCCESS,
                   "Recent badge swipes for ${request.parent.username}",
                   swipes,
+              ))
+        }
+
+        /** Kiosk-captured Smartwaiver photos for every waiver tied to a member's email - infra only */
+        get<Members.DMSMember.KioskWaiverPhotos> { request ->
+          val waivers = memberWaiverPhotosService.getKioskPhotosForMember(request.parent.username)
+          call.respond(
+              ApiResponse(
+                  Status.SUCCESS,
+                  "Kiosk waiver photos for ${request.parent.username}",
+                  waivers,
               ))
         }
 

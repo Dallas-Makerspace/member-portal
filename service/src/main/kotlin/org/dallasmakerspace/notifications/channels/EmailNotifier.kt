@@ -51,7 +51,6 @@ private fun wrapHtml(bodyHtml: String): String {
           <div style="text-align:center;margin-top:20px;font-size:13px;color:#888888;">
             Manage your notification preferences at
             <a href="$PROFILE_MANAGEMENT_URL" style="color:#888888;">your DMS profile</a>.
-            <br><br>&copy; $year Dallas Makerspace
           </div>
         </div>
       </body>
@@ -90,7 +89,8 @@ constructor(
     val to =
         recipientEmail
             ?: return SendResult.PermanentFailure(
-                "No email address on file for ${notification.memberUsername}")
+                "No email address on file for ${notification.memberUsername}"
+            )
     return sendEmail(to, notification.subject, notification.body ?: notification.subject)
   }
 
@@ -112,7 +112,7 @@ constructor(
       to: String,
       subject: String,
       text: String,
-      html: String = text
+      html: String = text,
   ): SendResult {
     val request =
         SparkPostTransmission(
@@ -122,9 +122,11 @@ constructor(
                     from = SparkPostFrom(name = fromName, email = fromEmail),
                     subject = subject,
                     text = appendTextFooter(text),
-                    html = wrapHtml(html)),
+                    html = wrapHtml(html),
+                ),
             options =
-                SparkPostOptions(sandbox = false, openTracking = false, clickTracking = false))
+                SparkPostOptions(sandbox = false, openTracking = false, clickTracking = false),
+        )
 
     return try {
       val response =
@@ -139,7 +141,8 @@ constructor(
               json.decodeFromString(SparkPostTransmissionResult.serializer(), response.bodyAsText())
           if (result.results.totalRejectedRecipients > 0) {
             SendResult.PermanentFailure(
-                "SparkPost rejected ${result.results.totalRejectedRecipients} of 1 recipients")
+                "SparkPost rejected ${result.results.totalRejectedRecipients} of 1 recipients"
+            )
           } else {
             SendResult.Success(result.results.id)
           }
@@ -152,12 +155,15 @@ constructor(
         HttpStatusCode.Unauthorized,
         HttpStatusCode.Forbidden,
         HttpStatusCode.NotFound,
-        HttpStatusCode.UnprocessableEntity, ->
+        HttpStatusCode.UnprocessableEntity,
+        ->
             SendResult.PermanentFailure(
-                "SparkPost ${response.status.value}: ${truncate(response.bodyAsText())}")
+                "SparkPost ${response.status.value}: ${truncate(response.bodyAsText())}"
+            )
         else ->
             SendResult.TransientFailure(
-                "SparkPost ${response.status.value}: ${truncate(response.bodyAsText())}")
+                "SparkPost ${response.status.value}: ${truncate(response.bodyAsText())}"
+            )
       }
     } catch (e: Exception) {
       SendResult.TransientFailure("SparkPost request failed: ${e.message}")

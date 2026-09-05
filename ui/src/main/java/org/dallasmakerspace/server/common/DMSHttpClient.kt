@@ -41,6 +41,13 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
         engine {
           config {
             connectTimeout(10, TimeUnit.SECONDS)
+            // OkHttp's own default readTimeout is 10s — well below the 120s this client actually
+            // intends to allow (see HttpTimeout/DEFAULT_TIMEOUT_MS below). Without raising it here,
+            // any downstream call that legitimately takes longer than 10s to respond (e.g. a slow
+            // backend query) fails at the engine level before Ktor's own timeout ever gets a chance
+            // to apply.
+            readTimeout(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            writeTimeout(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             retryOnConnectionFailure(true) // closest OkHttp equivalent to CIO's connectAttempts=2
             dispatcher(
                 Dispatcher().apply {

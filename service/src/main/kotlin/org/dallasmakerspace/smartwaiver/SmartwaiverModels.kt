@@ -96,3 +96,31 @@ data class SmartwaiverFullWaiverResponse(
     val type: String? = null,
     val waiver: SmartwaiverFullWaiver? = null,
 )
+
+@Serializable
+data class SmartwaiverPhotoEntry(
+    val type: String? = null,
+    val date: String? = null,
+    val tag: String? = null,
+    val fileType: String? = null,
+    val photoId: String? = null,
+    val photo: String? = null, // base64 JPEG, no data-URI prefix
+)
+
+@Serializable
+data class SmartwaiverWaiverPhotos(
+    val waiverId: String? = null,
+    val templateId: String? = null,
+    val createdOn: String? = null,
+    val title: String? = null,
+    val photos: List<SmartwaiverPhotoEntry> = emptyList(),
+)
+
+@Serializable
+data class SmartwaiverPhotosResponse(
+    val version: Int? = null,
+    val id: String? = null,
+    val ts: String? = null,
+    val type: String? = null,
+    val photos: SmartwaiverWaiverPhotos? = null,
+)

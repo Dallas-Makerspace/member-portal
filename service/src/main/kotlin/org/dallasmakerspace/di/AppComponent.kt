@@ -66,6 +66,8 @@ interface AppComponent {
 
   fun getMemberService(): MemberService
 
+  fun getMemberWaiverPhotosService(): org.dallasmakerspace.smartwaiver.MemberWaiverPhotosService
+
   fun getActiveDirectoryService(): org.dallasmakerspace.activedirectory.IActiveDirectoryService
 
   fun getGroupService(): GroupService

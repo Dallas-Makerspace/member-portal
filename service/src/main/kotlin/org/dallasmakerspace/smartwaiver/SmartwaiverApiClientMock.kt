@@ -28,6 +28,11 @@ private const val MOCK_DAYS_5 = 5L
 private const val MOCK_DAYS_6 = 6L
 private const val MOCK_TEMPLATE_ID = "tmpl-1"
 private const val MOCK_WAIVER_TITLE = "DMS Waiver"
+// Minimal valid 1x1 pixel JPEG, used as placeholder mock photo data.
+private const val MOCK_JPEG_BASE64 =
+    "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJ" +
+        "DQ0MDhAQEBAQCg0NEBAQEBAQEBD/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAv/EABQQAQAAAAAA" +
+        "AAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
 
 @Singleton
 class SmartwaiverApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
@@ -114,6 +119,50 @@ class SmartwaiverApiClientMock @Inject constructor(loggerFactory: LoggerFactory)
     )
   }
 
+  override suspend fun getWaiversByName(firstName: String, lastName: String): List<SmartwaiverSummary> {
+    log.info("Mock: Fetching waivers for name")
+    val today = LocalDate.now()
+    val email = "$firstName.$lastName@example.com".lowercase()
+    return listOf(
+        w(today, 0, "10:15:00", firstName, lastName, email),
+        w(today, MOCK_DAYS_3, "14:20:00", firstName, lastName, email),
+    )
+  }
+
+  override suspend fun getWaiverPhotos(waiverId: String): List<SmartwaiverPhotoEntry> {
+    log.info("Mock: Fetching photos for waiver $waiverId")
+    return listOf(
+        SmartwaiverPhotoEntry(
+            type = "kiosk",
+            date = "2024-01-01 10:00:00",
+            tag =
+                "Photo captured when the participant clicked on the Continue button immediately " +
+                    "after selecting if an Adult or Minor(s) would be participating in the activity",
+            fileType = "jpg",
+            photoId = "mock-photo-$waiverId-1",
+            photo = MOCK_JPEG_BASE64,
+        ),
+        SmartwaiverPhotoEntry(
+            type = "kiosk",
+            date = "2024-01-01 10:00:05",
+            tag = "Photo captured when the first participant accepted their signature",
+            fileType = "jpg",
+            photoId = "mock-photo-$waiverId-2",
+            photo = MOCK_JPEG_BASE64,
+        ),
+        SmartwaiverPhotoEntry(
+            type = "kiosk",
+            date = "2024-01-01 10:00:10",
+            tag =
+                "Photo captured when the participant signing the waiver checked the Electronic " +
+                    "Signature Consent box",
+            fileType = "jpg",
+            photoId = "mock-photo-$waiverId-3",
+            photo = MOCK_JPEG_BASE64,
+        ),
+    )
+  }
+
   private fun w(
       today: LocalDate,
       daysAgo: Long,
@@ -123,7 +172,7 @@ class SmartwaiverApiClientMock @Inject constructor(loggerFactory: LoggerFactory)
       email: String,
   ) =
       SmartwaiverSummary(
-          waiverId = "mock-$firstName-$lastName",
+          waiverId = "mock-$firstName-$lastName-$daysAgo",
           templateId = MOCK_TEMPLATE_ID,
           title = MOCK_WAIVER_TITLE,
           createdOn = "${today.minusDays(daysAgo)} $time",

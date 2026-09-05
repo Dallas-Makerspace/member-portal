@@ -872,6 +872,41 @@ constructor(
     }
   }
 
+  suspend fun getKioskWaiverPhotos(
+      username: String,
+      sessionId: String?,
+  ): List<org.dallasmakerspace.models.MemberWaiverPhotos> {
+    // Unlike most methods here, this one does NOT fail-soft to emptyList() on error — an empty
+    // list is a meaningful "no waivers for this email" result in the UI, and silently swallowing
+    // a real HTTP/backend failure into that same empty list would hide the failure from the admin
+    // using this debug tool. Let exceptions propagate; the caller distinguishes failure from
+    // genuine empty results.
+    val apiHeaders = getApiHeaders(sessionId)
+    val result = dmsHttpClient.get("$baseUrl/members/$username/kiosk-waiver-photos", apiHeaders)
+    @Suppress("UNCHECKED_CAST") val waiverList = result["data"] as? List<*> ?: return emptyList()
+    return waiverList.mapNotNull { item ->
+      val waiver = item as? Map<*, *> ?: return@mapNotNull null
+      val photosList = waiver["photos"] as? List<*> ?: emptyList<Any?>()
+      org.dallasmakerspace.models.MemberWaiverPhotos(
+          waiverId = waiver["waiverId"] as? String ?: return@mapNotNull null,
+          firstName = waiver["firstName"] as? String,
+          lastName = waiver["lastName"] as? String,
+          dateCompleted = waiver["dateCompleted"] as? String,
+          photos =
+              photosList.mapNotNull { photoItem ->
+                val photo = photoItem as? Map<*, *> ?: return@mapNotNull null
+                org.dallasmakerspace.models.WaiverPhoto(
+                    photoId = photo["photoId"] as? String,
+                    tag = photo["tag"] as? String,
+                    fileType = photo["fileType"] as? String,
+                    dataBase64 = photo["dataBase64"] as? String,
+                )
+              },
+          emailMatches = waiver["emailMatches"] as? Boolean ?: false,
+      )
+    }
+  }
+
   /**
    * Whether the [key] feature flag is on for [username] (global toggle or per-user/per-group
    * pilot). Fails closed (returns false) on any error, since this gates optional UI, not something

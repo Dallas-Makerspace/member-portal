@@ -8,7 +8,7 @@ import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
 @Serializable
 data class EventAnnouncementData(
     val eventName: String = "",
-    /** Organizer's full display name, e.g. "Jane Phelps". */
+    /** Organizer's full display name, e.g. "Jane Doe". */
     val organizerName: String = "",
     /** Organizer's DMS username, e.g. "jdoe" - links to their member profile. */
     val organizerUsername: String = "",

@@ -40,6 +40,7 @@ import org.dallasmakerspace.server.routes.ProfileDebugInfoHandler
 import org.dallasmakerspace.server.routes.ProfileFeaturedProjectsHandler
 import org.dallasmakerspace.server.routes.ProfileFollowsHandler
 import org.dallasmakerspace.server.routes.ProfileHandler
+import org.dallasmakerspace.server.routes.ProfileKioskWaiverPhotosHandler
 import org.dallasmakerspace.server.routes.ProfileMeHandler
 import org.dallasmakerspace.server.routes.ProfileTotalActiveTimeHandler
 import org.dallasmakerspace.server.routes.ReportHandler
@@ -133,6 +134,15 @@ class RoutesModule {
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
   ): IRouteHandler = ProfileDebugInfoHandler(loggerFactory, userInfoProvider, memberService)
+
+  @IntoMap
+  @Provides
+  @StringKey("/profile/@{preferred_username}/kiosk-waiver-photos")
+  fun providesProfileKioskWaiverPhotosHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberService: MemberService,
+  ): IRouteHandler = ProfileKioskWaiverPhotosHandler(loggerFactory, userInfoProvider, memberService)
 
   @IntoMap
   @Provides

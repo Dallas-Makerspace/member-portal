@@ -44,6 +44,9 @@ object RouteFactory {
             "/profile/@[a-zA-Z0-9_-]*/debug-info".toRegex(),
             "/profile/@{preferred_username}/debug-info")
         .replace(
+            "/profile/@[a-zA-Z0-9_-]*/kiosk-waiver-photos".toRegex(),
+            "/profile/@{preferred_username}/kiosk-waiver-photos")
+        .replace(
             "/short-links/admin".toRegex(), "/short-links/admin") // Admin must come before details
         .replace("/short-links/[0-9]+".toRegex(), "/short-links/{id}")
         .replace("/go/.*".toRegex(), "/go/{path...}")
@@ -81,6 +84,7 @@ object RouteFactory {
     GROUP_SETTINGS("/groups/{group_slug}/settings"),
     SEARCH_PRELOAD("/search-preload"),
     PROFILE_DEBUG_INFO("/profile/@{preferred_username}/debug-info"),
+    PROFILE_KIOSK_WAIVER_PHOTOS("/profile/@{preferred_username}/kiosk-waiver-photos"),
     PROFILE_TOTAL_ACTIVE_TIME("/profile/@{preferred_username}/total-active-time"),
     PROFILE_FEATURED_PROJECTS("/profile/@{preferred_username}/featured-projects"),
     REGISTER_VOTING("/profile/@{preferred_username}/register-voting"),

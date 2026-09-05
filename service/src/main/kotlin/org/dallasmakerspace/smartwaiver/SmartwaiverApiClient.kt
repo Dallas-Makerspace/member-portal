@@ -266,6 +266,96 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
     }
   }
 
+  override suspend fun getWaiversByName(firstName: String, lastName: String): List<SmartwaiverSummary> {
+    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
+    try {
+      val searchMetadata = initiateSearchByName(apiKey, firstName, lastName)
+      if ((searchMetadata.count ?: 0) == 0) return emptyList()
+      val firstPage = fetchSearchResults(apiKey, searchMetadata.guid, 0)
+      return firstPage.searchResults ?: emptyList()
+    } catch (e: IOException) {
+      throw SmartwaiverApiException("Failed to fetch waivers by name", e)
+    } catch (e: kotlinx.serialization.SerializationException) {
+      throw SmartwaiverApiException("Failed to parse waiver response", e)
+    }
+  }
+
+  private suspend fun initiateSearchByName(
+      apiKey: String,
+      firstName: String,
+      lastName: String,
+  ): SmartwaiverSearchMetadata {
+    val url = "$SMARTWAIVER_BASE_URL/search"
+
+    val response =
+        getClient().use {
+          it.request(url) {
+            method = HttpMethod.Get
+            header("sw-api-key", apiKey)
+            parameter("firstName", firstName)
+            parameter("lastName", lastName)
+            parameter("sort", "desc") // Get newest waivers first
+          }
+        }
+
+    return when (response.status) {
+      HttpStatusCode.OK -> {
+        // Not logging the response body here (unlike initiateSearch) — it's a search scoped to one
+        // identifiable person rather than a date-range batch.
+        val responseBody = response.bodyAsText()
+        val searchResponse = json.decodeFromString<SmartwaiverSearchResponse>(responseBody)
+        searchResponse.search
+            ?: throw SmartwaiverApiException("Name search response missing search metadata")
+      }
+      HttpStatusCode.Unauthorized -> {
+        throw SmartwaiverApiException("Unauthorized: Invalid API key")
+      }
+      HttpStatusCode.TooManyRequests -> {
+        throw SmartwaiverApiException("Rate limit exceeded")
+      }
+      else -> {
+        throw SmartwaiverApiException(
+            "Failed to initiate name search: ${response.status} - ${response.bodyAsText()}")
+      }
+    }
+  }
+
+  override suspend fun getWaiverPhotos(waiverId: String): List<SmartwaiverPhotoEntry> {
+    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
+    val url = "$SMARTWAIVER_BASE_URL/waivers/$waiverId/photos"
+
+    val response =
+        getClient().use {
+          it.request(url) {
+            method = HttpMethod.Get
+            header("sw-api-key", apiKey)
+          }
+        }
+
+    return when (response.status) {
+      HttpStatusCode.OK -> {
+        val responseBody = response.bodyAsText()
+        val photosResponse = json.decodeFromString<SmartwaiverPhotosResponse>(responseBody)
+        val photos = photosResponse.photos?.photos ?: emptyList()
+        if (photos.isEmpty()) {
+          val prettyJson = Json { prettyPrint = true; ignoreUnknownKeys = true }
+          log.info(
+              "No photos in response for waiver $waiverId. Raw response:\n" +
+                  prettyJson.encodeToString(
+                      kotlinx.serialization.json.JsonElement.serializer(),
+                      prettyJson.parseToJsonElement(responseBody)))
+        }
+        photos
+      }
+      // Older/non-kiosk waivers may not have this sub-resource — treat as "no photos".
+      HttpStatusCode.NotFound -> emptyList()
+      HttpStatusCode.Unauthorized -> throw SmartwaiverApiException("Unauthorized: Invalid API key")
+      else ->
+          throw SmartwaiverApiException(
+              "Failed to fetch photos for waiver $waiverId: ${response.status} - ${response.bodyAsText()}")
+    }
+  }
+
   private fun parseWaivers(waivers: List<SmartwaiverSummary>): List<WaiverSigningData> {
     return waivers.map { waiver ->
       val createdOn = LocalDateTime.parse(waiver.createdOn, smartwaiverDateFormatter)

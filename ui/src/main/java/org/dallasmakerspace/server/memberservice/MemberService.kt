@@ -313,4 +313,11 @@ constructor(
   ): List<org.dallasmakerspace.models.BadgeSwipeInfo> {
     return memberServiceClient.getRecentBadgeSwipes(username, sessionId)
   }
+
+  suspend fun getKioskWaiverPhotos(
+      username: String,
+      sessionId: String?,
+  ): List<org.dallasmakerspace.models.MemberWaiverPhotos> {
+    return memberServiceClient.getKioskWaiverPhotos(username, sessionId)
+  }
 }
