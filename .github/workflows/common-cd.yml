@@ -120,19 +120,23 @@ jobs:
         continue-on-error: true
         run: docker pull ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
 
+      # exit-code: '1' fails this job (and blocks deploy, via the needs: dependency) on any
+      # CRITICAL/HIGH finding.
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.35.0
-        continue-on-error: true
         with:
           image-ref: ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
+          exit-code: '1'
 
+      # Disabled: this repo is currently private, and code scanning requires GitHub Advanced
+      # Security, which isn't enabled here. Trivy findings now fail the build directly (above)
+      # instead. Re-enable (drop `if: false`) if the repo goes public again.
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
-        if: always() && hashFiles('trivy-results.sarif') != ''
-        continue-on-error: true
+        if: false && always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
 
