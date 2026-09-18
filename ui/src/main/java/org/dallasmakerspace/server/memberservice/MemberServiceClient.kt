@@ -1044,6 +1044,30 @@ constructor(
     }
   }
 
+  suspend fun getBambuStatusSummary(sessionId: String?): Map<String, Any?>? {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/bambu/summary", apiHeaders)
+      @Suppress("UNCHECKED_CAST") (result["data"] as? Map<String, Any?>)
+    } catch (ex: Exception) {
+      log.warn("Failed to get Bambu status summary", ex)
+      null
+    }
+  }
+
+  suspend fun getBambuPrinters(sessionId: String?): List<Map<String, Any?>> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/bambu/printers", apiHeaders)
+      val data = result["data"] as? List<*> ?: return emptyList()
+      @Suppress("UNCHECKED_CAST")
+      data as List<Map<String, Any?>>
+    } catch (ex: Exception) {
+      log.warn("Failed to get Bambu printers", ex)
+      emptyList()
+    }
+  }
+
   suspend fun streamAskAi(
       sessionId: String?,
       username: String?,

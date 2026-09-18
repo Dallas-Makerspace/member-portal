@@ -6,6 +6,7 @@ import dagger.multibindings.IntoMap
 import dagger.multibindings.StringKey
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.chronoring.ChronoRingClient
+import org.dallasmakerspace.server.committees.CommitteePageSectionProvider
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
@@ -289,8 +290,10 @@ class RoutesModule {
   fun providesCommitteeDetailHandler(
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
-      memberService: MemberService
-  ): IRouteHandler = CommitteeDetailHandler(loggerFactory, userInfoProvider, memberService)
+      memberService: MemberService,
+      sectionProviders: Set<@JvmSuppressWildcards CommitteePageSectionProvider>,
+  ): IRouteHandler =
+      CommitteeDetailHandler(loggerFactory, userInfoProvider, memberService, sectionProviders)
 
   @IntoMap
   @Provides
@@ -380,7 +383,8 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
       memberServiceClient: MemberServiceClient,
-  ): IRouteHandler = RemoteAccessRefreshHandler(loggerFactory, userInfoProvider, memberServiceClient)
+  ): IRouteHandler =
+      RemoteAccessRefreshHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
   @IntoMap
   @Provides

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Bambu Printer Status</title>
+</head>
+<body>
+<div th:fragment="content" class="dms-card shadow-sm">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h4 class="card-title mb-0 dms-card-title">Bambu 3D Printer Status</h4>
+            <a href="/committees/3d-fab/printers" class="btn btn-sm btn-outline-primary">
+                View Details
+            </a>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <span class="badge rounded-pill px-3 py-2"
+                  th:classappend="${sectionModel.summary.available > 0} ? 'text-bg-success' : 'text-bg-secondary'">
+                <span th:text="${sectionModel.summary.available}">0</span> available
+            </span>
+            <span class="badge rounded-pill text-bg-primary px-3 py-2">
+                <span th:text="${sectionModel.summary.printing}">0</span> printing
+            </span>
+            <span th:if="${sectionModel.summary.finished > 0}" class="badge rounded-pill text-bg-info px-3 py-2">
+                <span th:text="${sectionModel.summary.finished}">0</span> finished
+            </span>
+            <span th:if="${sectionModel.summary.needsAttention > 0}" class="badge rounded-pill text-bg-danger px-3 py-2">
+                <span th:text="${sectionModel.summary.needsAttention}">0</span> needs attention
+            </span>
+            <span th:if="${sectionModel.summary.offline > 0}" class="badge rounded-pill text-bg-secondary px-3 py-2">
+                <span th:text="${sectionModel.summary.offline}">0</span> offline
+            </span>
+        </div>
+    </div>
+</div>
+</body>
+</html>

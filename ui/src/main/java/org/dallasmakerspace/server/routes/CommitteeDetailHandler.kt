@@ -11,6 +11,7 @@ import org.dallasmakerspace.models.Committee
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.server.auth.UserInfoProvider
+import org.dallasmakerspace.server.committees.CommitteePageSectionProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.models.getSlugFromName
@@ -22,6 +23,7 @@ constructor(
     loggerFactory: LoggerFactory,
     userInfoProvider: UserInfoProvider,
     private val memberService: MemberService,
+    private val sectionProviders: Set<@JvmSuppressWildcards CommitteePageSectionProvider>,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
   private val log = loggerFactory.create(javaClass)
 
@@ -173,6 +175,23 @@ constructor(
             }
             .await()
 
+    // Ask every registered section provider whether it has content for this committee - this is
+    // the only place that touches sectionProviders, so a new committee-specific feature (e.g. the
+    // Bambu status summary) never requires editing this handler or committee-detail.html again.
+    val currentUsername = userInfo["preferred_username"] as? String
+    val sectionsDeferred = async {
+      sectionProviders
+          .filter { it.appliesTo(committee) }
+          .mapNotNull { provider ->
+            try {
+              provider.renderSection(committee, session.sessionId, currentUsername)
+            } catch (e: Exception) {
+              log.warn("Committee page section provider failed: {}", e.message)
+              null
+            }
+          }
+    }
+
     // Enrich events with organizer details
     val upcomingEvents =
         upcomingEventsRaw.map { event ->
@@ -216,6 +235,7 @@ constructor(
             "teacherGroups" to teacherGroupsWithMembers,
             "committeeGroups" to committeeGroups,
             "upcomingEvents" to upcomingEvents,
+            "sections" to sectionsDeferred.await(),
         )
 
     call.respond(ThymeleafContent("committee-detail", jsonMap))

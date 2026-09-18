@@ -117,6 +117,15 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.COMMITTEE_DETAIL.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.BAMBU_PRINTER_STATUS.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.BAMBU_CAMERA_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.BAMBU_MODEL_ICON_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.INTERLOCK_TOOLS.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

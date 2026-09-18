@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en-US" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="initial-scale=1, width=device-width"/>
+
+    <!-- PWA Meta Tags -->
+    <th:block th:replace="~{fragments/pwa-meta :: pwa-meta}"></th:block>
+
+    <link rel="stylesheet" href="/static/styles/global.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0"/>
+    <title>Bambu 3D Printer Status - DMS Member Portal</title>
+    <style>
+        .printer-card { transition: all 0.2s ease; }
+        .printer-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.15) !important; }
+        /* object-fit:contain (not the default fill) - min-height forces a box taller than a narrow
+           phone's width-constrained aspect ratio would naturally give the image, and without
+           object-fit a plain <img> stretches to fill that box rather than letterboxing it. */
+        .camera-modal-img { max-width: 100%; min-height: 320px; max-height: 70vh; background: #000; display: block; object-fit: contain; }
+        /* Sits on top of the (already-visible) placeholder/stale frame while a fresh one loads -
+           same dark-circle treatment as .camera-overlay-btn on the card thumbnails, just bigger and
+           centered, so it doesn't read as a blank/broken screen. */
+        .camera-modal-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: rgba(0,0,0,.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .printer-thumb { height: 140px; object-fit: cover; background: #000; display: block; }
+        .printer-thumb-wrap { line-height: 0; }
+        .camera-overlay-btn {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,.55);
+            border: none;
+        }
+        .camera-overlay-btn:hover { background: rgba(0,0,0,.75); }
+        .camera-overlay-btn .material-symbols-outlined { font-size: 18px; color: #fff; }
+        .model-icon { width: 28px; height: 28px; object-fit: contain; }
+    </style>
+</head>
+<body>
+<header class="top-nav" th:replace="~{fragments/header :: header}"></header>
+
+<div class="container py-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/committees/3d-fab" class="text-muted text-decoration-none">
+                <span class="material-symbols-outlined align-middle">arrow_back</span>
+            </a>
+            <h4 class="mb-0">Bambu 3D Printer Status</h4>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+            <span class="material-symbols-outlined align-middle" style="font-size:16px;">refresh</span>
+            Refresh
+        </button>
+    </div>
+
+    <div th:if="${printers == null or printers.empty}" class="text-center text-muted py-5">
+        No printers reported by Bambuddy right now.
+    </div>
+
+    <div th:unless="${printers == null or printers.empty}">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <div class="input-group" style="max-width: 280px;">
+                <span class="input-group-text bg-white">
+                    <span class="material-symbols-outlined" style="font-size:16px;">search</span>
+                </span>
+                <input type="text" id="printerSearch" class="form-control"
+                       placeholder="Search name, model, job...">
+            </div>
+            <div class="btn-group ms-auto" role="group" aria-label="Filter printers by status">
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-all" value="all" checked>
+                <label class="btn btn-outline-secondary btn-sm" for="filter-all">All</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-printing" value="printing">
+                <label class="btn btn-outline-secondary btn-sm" for="filter-printing">Printing</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-available" value="available">
+                <label class="btn btn-outline-secondary btn-sm" for="filter-available">Available</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-finished" value="finished">
+                <label class="btn btn-outline-secondary btn-sm" for="filter-finished">Finished</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-attention" value="attention">
+                <label class="btn btn-outline-secondary btn-sm" for="filter-attention">Attention</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-offline" value="offline">
+                <label class="btn btn-outline-secondary btn-sm" for="filter-offline">Offline</label>
+            </div>
+        </div>
+
+        <div id="printerEmptyState" class="text-center text-muted py-5" style="display:none;">
+            No printers match your search/filter.
+        </div>
+
+        <div class="row g-3" id="printerGrid">
+            <div class="col-12 col-md-6 col-lg-4 printer-col" th:each="p : ${printers}"
+                 th:attr="data-filter-category=${p.filterCategory},data-search=${p.searchText}">
+                <div class="card printer-card h-100">
+                    <div class="card-header d-flex align-items-center justify-content-between gap-2 py-2">
+                        <span class="fw-semibold" th:text="${p.name}"></span>
+                        <span class="badge" th:classappend="${p.badgeClass}" th:text="${p.stateLabel}"></span>
+                    </div>
+                    <!-- One-shot preview loaded at page render (not polled) - reuses the same
+                         snapshot proxy the camera-icon overlay's modal polls live. Hides itself
+                         (wrapper and all) on error so an unreachable/no-camera printer just shows
+                         no image rather than a broken-image icon. -->
+                    <div th:unless="${p.isOffline}" class="printer-thumb-wrap position-relative">
+                        <img th:attr="src='/bambu-api/printers/' + ${p.id} + '/camera'"
+                             class="printer-thumb w-100" alt=""
+                             onerror="this.closest('.printer-thumb-wrap').style.display='none'">
+                        <button type="button" class="btn rounded-circle camera-overlay-btn camera-btn"
+                                th:attr="data-printer-id=${p.id},data-printer-name=${p.name}"
+                                aria-label="View camera">
+                            <span class="material-symbols-outlined">photo_camera</span>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div th:if="${p.model}" class="d-flex align-items-center gap-2 text-muted small mb-2">
+                            <img th:if="${p.modelIconUrl}" th:attr="src=${p.modelIconUrl}"
+                                 class="model-icon" alt="" onerror="this.style.display='none'">
+                            <span th:text="${p.model}"></span>
+                        </div>
+
+                        <div th:if="${p.isPrinting}">
+                            <div th:if="${p.currentJobName}" class="text-truncate small mb-1" th:text="${p.currentJobName}"></div>
+                            <div th:if="${p.printedByUsername}" class="d-flex align-items-center gap-1 mb-2">
+                                <span>Current print by:</span>
+                                <dms-member-card th:attr="username=${p.printedByUsername}" state="mini"></dms-member-card>
+                            </div>
+                            <div class="progress" style="height: 8px;" th:if="${p.progress != null}">
+                                <div class="progress-bar" role="progressbar"
+                                     th:style="'width:' + ${p.progress} + '%'"
+                                     th:attr="aria-valuenow=${p.progress}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted small mt-1">
+                                <span th:if="${p.progress != null}" th:text="${p.progress} + '%'"></span>
+                                <span th:if="${p.remainingTimeDisplay != ''}">
+                                    <span th:text="${p.remainingTimeDisplay} + ' left'"></span>
+                                    <span th:if="${p.etaDisplay != ''}" th:text="'(ETA ' + ${p.etaDisplay} + ')'"></span>
+                                </span>
+                            </div>
+                            <div th:if="${p.layerDisplay != ''}" class="text-muted small mt-1">
+                                Layer <span th:text="${p.layerDisplay}"></span>
+                            </div>
+                        </div>
+
+                        <div th:if="${p.isIdle}" class="small text-muted">
+                            <span th:if="${p.nextJobName}">Next up: <span th:text="${p.nextJobName}"></span></span>
+                            <span th:unless="${p.nextJobName}">No jobs queued - ready for a print.</span>
+                        </div>
+
+                        <div th:if="${p.state == 'FINISH'}" class="small text-muted">
+                            Print finished - awaiting pickup.
+                            <div th:if="${p.previousPrintedByUsername}" class="d-flex align-items-center gap-1 mt-1">
+                                <span>Previous print by:</span>
+                                <dms-member-card th:attr="username=${p.previousPrintedByUsername}" state="mini"></dms-member-card>
+                            </div>
+                        </div>
+
+                        <div th:if="${p.state == 'FAILED'}" class="small text-danger">
+                            Print failed - needs attention.
+                        </div>
+
+                        <div th:if="${p.isOffline}" class="small text-muted">
+                            Printer is unreachable right now.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Shared camera snapshot modal - one instance, repointed per printer on open -->
+<div class="modal fade" id="bambuCameraModal" tabindex="-1" aria-labelledby="bambuCameraModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bambuCameraModalLabel">Camera</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-0 position-relative">
+                <img id="bambuCameraModalImg" class="camera-modal-img" src="" alt="Printer camera snapshot" style="display:none;">
+                <!-- Plain CSS flex, not Bootstrap's d-flex: d-flex is !important, which would
+                     silently defeat the plain (non-!important) style.display='none' this element
+                     is toggled with in JS below - see .camera-modal-loading. Overlaid on top of the
+                     image above (rather than replacing it) so opening the modal shows the card's
+                     already-loaded snapshot immediately instead of a blank screen while the live
+                     frame loads. -->
+                <div id="bambuCameraModalLoading" class="camera-modal-loading" style="display:none;">
+                    <div class="spinner-border spinner-border-sm text-light" role="status">
+                        <span class="visually-hidden">Loading camera snapshot...</span>
+                    </div>
+                </div>
+                <p id="bambuCameraModalError" class="text-muted small my-3" style="display:none;">
+                    Camera snapshot unavailable.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+<!-- App JS -->
+<script src="/static/js/app.js"></script>
+<!-- Page Loader (REQUIRED for all pages) -->
+<script src="/static/js/dms-page-loader.js" defer></script>
+<script type="module" src="/static/js/dms-member-card.js"></script>
+
+<script>
+(function () {
+    // --- Search + quick-filter over the already-rendered card grid ---
+    const grid = document.getElementById('printerGrid');
+    const emptyState = document.getElementById('printerEmptyState');
+    const searchInput = document.getElementById('printerSearch');
+    const cols = grid ? Array.from(grid.querySelectorAll('.printer-col')) : [];
+
+    function applyFilters() {
+        const query = searchInput.value.trim().toLowerCase();
+        const category = (document.querySelector('input[name="statusFilter"]:checked') || {}).value || 'all';
+        let visibleCount = 0;
+        cols.forEach(function (col) {
+            const matchesCategory = category === 'all' || col.dataset.filterCategory === category;
+            const matchesSearch = !query || col.dataset.search.includes(query);
+            const visible = matchesCategory && matchesSearch;
+            col.style.display = visible ? '' : 'none';
+            if (visible) visibleCount++;
+        });
+        emptyState.style.display = visibleCount === 0 ? '' : 'none';
+        grid.style.display = visibleCount === 0 ? 'none' : '';
+    }
+
+    if (grid) {
+        searchInput.addEventListener('input', applyFilters);
+        document.querySelectorAll('input[name="statusFilter"]').forEach(function (radio) {
+            radio.addEventListener('change', applyFilters);
+        });
+    }
+
+    // --- Camera snapshot modal ---
+    const modalEl = document.getElementById('bambuCameraModal');
+    const modalLoading = document.getElementById('bambuCameraModalLoading');
+    const modalError = document.getElementById('bambuCameraModalError');
+    const modalLabel = document.getElementById('bambuCameraModalLabel');
+    const modal = new bootstrap.Modal(modalEl);
+    let pollTimer = null;
+    let currentPrinterId = null;
+    // The visible <img> is swapped out (never .src-reassigned in place) on every refresh - see
+    // refreshSnapshot() - so this reference is kept current rather than captured once.
+    let imgEl = document.getElementById('bambuCameraModalImg');
+
+    function showLoading() {
+        // Leaves whatever's already in imgEl on screen (the card's placeholder, or the last good
+        // live frame) - the spinner overlays it rather than blanking it out.
+        modalLoading.style.display = '';
+        modalError.style.display = 'none';
+    }
+
+    function refreshSnapshot() {
+        if (!currentPrinterId) return;
+        // Pinned to whichever printer this call was actually issued for - closing the modal (or
+        // switching to another printer) before this request lands must not let it clobber whatever
+        // is on screen by then. Without this, a slow request for printer A that's still in flight
+        // when the user opens printer B's modal would land late and swap B's frame back to A's.
+        const requestPrinterId = currentPrinterId;
+        // A fresh <img> element per request rather than reusing imgEl.src in place: reassigning
+        // .src on the same element leaves the previous frame (or a stale error/loading state) on
+        // screen until the new one decodes - exactly the "shows unavailable for a few seconds"
+        // flash this replaces. Swapping in a new element only touches the DOM once the new image
+        // has actually loaded or actually failed.
+        const next = new Image();
+        next.id = 'bambuCameraModalImg';
+        next.className = imgEl.className;
+        next.alt = imgEl.alt;
+        next.style.display = 'none';
+        next.addEventListener('load', function () {
+            if (requestPrinterId !== currentPrinterId) return; // stale - discard
+            modalLoading.style.display = 'none';
+            modalError.style.display = 'none';
+            next.style.display = '';
+            imgEl.replaceWith(next);
+            imgEl = next;
+        });
+        next.addEventListener('error', function () {
+            if (requestPrinterId !== currentPrinterId) return; // stale - discard
+            modalLoading.style.display = 'none';
+            modalError.style.display = '';
+            imgEl.replaceWith(next);
+            imgEl = next;
+        });
+        next.src = `/bambu-api/printers/${encodeURIComponent(requestPrinterId)}/camera?t=${Date.now()}`;
+    }
+
+    document.querySelectorAll('.camera-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            currentPrinterId = btn.dataset.printerId;
+            modalLabel.textContent = btn.dataset.printerName + ' - Camera';
+            // Seed the modal with the card's own (already-loaded) thumbnail so there's something
+            // to look at while the first live frame loads, instead of a blank screen.
+            const thumb = btn.closest('.printer-thumb-wrap').querySelector('.printer-thumb');
+            imgEl.onerror = function () { imgEl.style.display = 'none'; };
+            imgEl.src = thumb ? thumb.src : '';
+            imgEl.style.display = thumb ? '' : 'none';
+            showLoading();
+            refreshSnapshot();
+            modal.show();
+        });
+    });
+
+    // Poll only while the modal is actually open, mirroring the ref-counted poller pattern used
+    // by dms-timelapse-view.js for the Cameras page.
+    modalEl.addEventListener('shown.bs.modal', function () {
+        pollTimer = setInterval(refreshSnapshot, 5000);
+    });
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        currentPrinterId = null;
+        imgEl.onerror = null;
+        imgEl.src = '';
+        imgEl.style.display = 'none';
+        modalLoading.style.display = 'none';
+    });
+})();
+</script>
+</body>
+</html>

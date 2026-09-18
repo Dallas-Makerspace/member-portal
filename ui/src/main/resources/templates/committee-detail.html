@@ -114,6 +114,13 @@
         </div>
 
         <div class="col-md-8">
+            <!-- Committee-specific contributed sections (e.g. Bambu printer status for 3D Fab) -
+                 generic over whatever CommitteePageSectionProvider beans applied to this committee;
+                 this template never names a specific committee or feature. -->
+            <div th:each="section : ${sections}" th:with="sectionModel=${section.model}" class="mt-4">
+                <div th:insert="~{${section.fragmentName} :: content}"></div>
+            </div>
+
             <!-- Upcoming Classes card -->
             <div class="dms-card shadow-sm mt-4">
                 <div class="card-body">

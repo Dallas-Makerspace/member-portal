@@ -4,6 +4,7 @@ import dagger.Component
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import javax.inject.Singleton
+import org.dallasmakerspace.server.bambustatus.di.BambuStatusModule
 import org.dallasmakerspace.server.di.DiscordModule
 import org.dallasmakerspace.server.di.DiscourseModule
 import org.dallasmakerspace.server.di.LinkedInModule
@@ -50,7 +51,11 @@ object RouteFactory {
             "/short-links/admin".toRegex(), "/short-links/admin") // Admin must come before details
         .replace("/short-links/[0-9]+".toRegex(), "/short-links/{id}")
         .replace("/go/.*".toRegex(), "/go/{path...}")
-        .replace("/committees/[^/]+".toRegex(), "/committees/{committee_slug}")
+        .replace("/bambu-api/printers/[^/]+/camera".toRegex(), "/bambu-api/printers/{id}/camera")
+        .replace("/bambu-api/models/[^/]+/icon".toRegex(), "/bambu-api/models/{model}/icon")
+        // Must come before the generic /committees/{committee_slug} rule below, or that rule's
+        // [^/]+ would swallow "3d-fab" and leave a stray "/printers" behind.
+        .replace("/committees/(?!3d-fab/printers$)[^/]+".toRegex(), "/committees/{committee_slug}")
         .replace("/remote-access/connect/[^/]+".toRegex(), "/remote-access/connect/{connectionId}")
         .replace(
             "/remote-access/disconnect/[^/]+".toRegex(), "/remote-access/disconnect/{connectionId}")
@@ -99,6 +104,9 @@ object RouteFactory {
     SHORT_LINK_REDIRECT("/go/{path...}"),
     COMMITTEES("/committees"),
     COMMITTEE_DETAIL("/committees/{committee_slug}"),
+    BAMBU_PRINTER_STATUS("/committees/3d-fab/printers"),
+    BAMBU_CAMERA_API("/bambu-api/printers/{id}/camera"),
+    BAMBU_MODEL_ICON_API("/bambu-api/models/{model}/icon"),
     INTERLOCK_TOOLS("/interlock-tools"),
     INTERLOCK_CABINETS("/interlock-cabinets"),
     ACTION_TRACK("/api/track"),
@@ -130,7 +138,8 @@ object RouteFactory {
             DiscordModule::class,
             DiscourseModule::class,
             LinkedInModule::class,
-            VoterRegistrationModule::class])
+            VoterRegistrationModule::class,
+            BambuStatusModule::class])
 interface RoutesComponent {
   fun getRoutesMap(): Map<String, IRouteHandler>
 }
