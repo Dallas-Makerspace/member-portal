@@ -24,6 +24,7 @@ import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.apiKey
 import org.dallasmakerspace.auth.authorize
+import org.dallasmakerspace.bambuddy.routing.bambuddyRoutes
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.routing.configRoutes
@@ -1124,6 +1125,10 @@ fun Application.configureRouting() {
       /** Remote Access — Guacamole VM categories and occupancy * */
       val remoteAccessService by lazy { AppComponentHolder.instance.getRemoteAccessService() }
       remoteAccessRoutes(remoteAccessService)
+
+      /** Bambu 3D printer status — Bambuddy summary/detail/camera proxy * */
+      val bambuddyStatusService by lazy { AppComponentHolder.instance.getBambuddyStatusService() }
+      bambuddyRoutes(bambuddyStatusService)
     }
 
     /** Notification REST API (emit, outbox, preferences) * */

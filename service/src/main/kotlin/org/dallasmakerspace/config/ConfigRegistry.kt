@@ -79,6 +79,17 @@ object ConfigRegistry {
           type = ConfigValueType.StringType,
       )
 
+  val BAMBU_STATUS_ENABLED =
+      ConfigKey(
+          key = "bambu-status.enabled",
+          description =
+              "Enable the Bambu 3D printer status summary/detail pages (backed by Bambuddy); can " +
+                  "be piloted for specific members/AD groups before a full rollout",
+          category = "3D Fab",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val WAIVER_REPORT_ALLOWED_USERNAMES =
       ConfigKey(
           key = "waiver-report.allowed-usernames",
@@ -138,6 +149,7 @@ object ConfigRegistry {
           REMOTE_ACCESS_JUMP_SERVER_AD_GROUP,
           REMOTE_ACCESS_MASTERCAM_CONNECTION_IDS,
           REMOTE_ACCESS_MASTERCAM_AD_GROUP,
+          BAMBU_STATUS_ENABLED,
           WAIVER_REPORT_ALLOWED_USERNAMES,
           NOTIFICATIONS_ENABLED,
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,

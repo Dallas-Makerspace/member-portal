@@ -5,6 +5,7 @@ import io.ktor.server.application.*
 import javax.inject.Singleton
 import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.askai.di.AskAiModule
+import org.dallasmakerspace.bambuddy.BambuddyStatusService
 import org.dallasmakerspace.calendar.CalendarService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.FeatureFlagService
@@ -48,6 +49,7 @@ import org.dallasmakerspace.webhook.di.WebhookModule
             CalendarModule::class,
             ConfigModule::class,
             DiscourseModule::class,
+            BambuddyModule::class,
             GuacamoleModule::class,
             WinRmModule::class,
             DoorControllerModule::class,
@@ -109,6 +111,8 @@ interface AppComponent {
   fun getFeatureFlagService(): FeatureFlagService
 
   fun getRemoteAccessService(): RemoteAccessService
+
+  fun getBambuddyStatusService(): BambuddyStatusService
 
   fun getMemberSettingsService(): MemberSettingsService
 
