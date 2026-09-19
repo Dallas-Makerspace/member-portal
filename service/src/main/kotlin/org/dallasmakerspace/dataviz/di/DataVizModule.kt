@@ -13,6 +13,9 @@ import org.dallasmakerspace.dataviz.reports.calendar.GroupCalendarReport
 import org.dallasmakerspace.dataviz.reports.calendar.TopAttendees
 import org.dallasmakerspace.dataviz.reports.calendar.TopOrganizers
 import org.dallasmakerspace.dataviz.reports.groups.GroupHistoryReport
+import org.dallasmakerspace.dataviz.reports.it.AdReplicationFailureTrendReport
+import org.dallasmakerspace.dataviz.reports.it.AdReplicationHealthReport
+import org.dallasmakerspace.dataviz.reports.it.AdReplicationLatencyTrendReport
 import org.dallasmakerspace.dataviz.reports.interlock.CabinetActivityReport
 import org.dallasmakerspace.dataviz.reports.interlock.CabinetDeniedAccessReport
 import org.dallasmakerspace.dataviz.reports.interlock.CabinetInactivityReport
@@ -71,6 +74,9 @@ class DataVizModule {
       lapsedMembersActiveAdReport: LapsedMembersActiveAdReport,
       newMembersReport: NewMembersReport,
       recentSignedWaivers: RecentSignedWaivers,
+      adReplicationHealthReport: AdReplicationHealthReport,
+      adReplicationLatencyTrendReport: AdReplicationLatencyTrendReport,
+      adReplicationFailureTrendReport: AdReplicationFailureTrendReport,
   ): Set<DataVizReport> {
     return setOf(
         visitorsByDayReport,
@@ -103,6 +109,9 @@ class DataVizModule {
         lapsedMembersActiveAdReport,
         newMembersReport,
         recentSignedWaivers,
+        adReplicationHealthReport,
+        adReplicationLatencyTrendReport,
+        adReplicationFailureTrendReport,
     )
   }
 }

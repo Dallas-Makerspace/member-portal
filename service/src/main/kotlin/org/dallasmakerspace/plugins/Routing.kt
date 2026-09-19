@@ -30,6 +30,8 @@ import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.routing.configRoutes
 import org.dallasmakerspace.config.routing.featureFlagRoutes
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.cron.AdReplicationHealthCronJob
+import org.dallasmakerspace.cron.AdReplicationHealthCronJobParams
 import org.dallasmakerspace.cron.DoorSwipesCronJob
 import org.dallasmakerspace.cron.DoorSwipesCronJobParams
 import org.dallasmakerspace.cron.MemberRefreshCronJob
@@ -160,6 +162,9 @@ fun Application.configureRouting() {
     }
     val doorSwipesCronJob: DoorSwipesCronJob by lazy {
       AppComponentHolder.instance.getDoorSwipesCronJob()
+    }
+    val adReplicationHealthCronJob: AdReplicationHealthCronJob by lazy {
+      AppComponentHolder.instance.getAdReplicationHealthCronJob()
     }
     val backfillJob: SmartWaiverBackfillJob by lazy {
       AppComponentHolder.instance.getSmartWaiverBackfillJob()
@@ -708,6 +713,12 @@ fun Application.configureRouting() {
         get("/cron/door-swipes") {
           val params = DoorSwipesCronJobParams()
           val result = doorSwipesCronJob.run(params)
+          call.respond(result)
+        }
+
+        get("/cron/ad-replication-health") {
+          val params = AdReplicationHealthCronJobParams()
+          val result = adReplicationHealthCronJob.run(params)
           call.respond(result)
         }
 

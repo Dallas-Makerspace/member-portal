@@ -14,6 +14,7 @@ import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.DBMasterConnection
 import org.dallasmakerspace.core.DBMemberPortalConnection
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.cron.AdReplicationHealthCronJob
 import org.dallasmakerspace.cron.DoorSwipesCronJob
 import org.dallasmakerspace.cron.MemberRefreshCronJob
 import org.dallasmakerspace.cron.ShowAndTellCronJob
@@ -93,6 +94,8 @@ interface AppComponent {
   fun getDoorControllerService(): DoorControllerService
 
   fun getDoorSwipesCronJob(): DoorSwipesCronJob
+
+  fun getAdReplicationHealthCronJob(): AdReplicationHealthCronJob
 
   fun getSmartWaiverBackfillJob(): SmartWaiverBackfillJob
 

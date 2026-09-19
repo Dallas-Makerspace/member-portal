@@ -1,6 +1,7 @@
 package org.dallasmakerspace.winrm
 
 import java.net.ServerSocket
+import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.test.Test
@@ -160,5 +161,77 @@ class WinRmClientTest {
   @Test
   fun `parseQuserLogonTime returns null, not a crash, for an unrecognized format`() {
     assertNull(newClient().parseQuserLogonTime("not a date at all"))
+  }
+
+  @Test
+  fun `parseReplicationPartnerJson handles a single object (unwrapped by ConvertTo-Json for a one-row result)`() {
+    val stdout =
+        """
+        {
+          "Server": "dc1",
+          "Partner": "CN=NTDS Settings,CN=DC2,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=example,DC=internal",
+          "Partition": "DC=example,DC=internal",
+          "LastReplicationSuccess": "2026-09-19T10:00:00.0000000Z",
+          "LastReplicationAttempt": "2026-09-19T10:00:00.0000000Z",
+          "ConsecutiveReplicationFailures": 0,
+          "LastReplicationResult": 0
+        }
+        """
+            .trimIndent()
+
+    val results = newClient().parseReplicationPartnerJson("dc1", stdout)
+
+    assertEquals(1, results.size)
+    val status = results.single()
+    assertEquals("dc1", status.server)
+    assertEquals("DC2", status.partner)
+    assertEquals(0, status.consecutiveReplicationFailures)
+    assertEquals(Instant.parse("2026-09-19T10:00:00Z"), status.lastReplicationSuccess)
+  }
+
+  @Test
+  fun `parseReplicationPartnerJson handles an array (the multi-partner case)`() {
+    val stdout =
+        """
+        [
+          {
+            "Server": "dc1",
+            "Partner": "CN=NTDS Settings,CN=DC2,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=example,DC=internal",
+            "Partition": "DC=example,DC=internal",
+            "LastReplicationSuccess": "2026-09-19T10:00:00.0000000Z",
+            "LastReplicationAttempt": "2026-09-19T10:00:00.0000000Z",
+            "ConsecutiveReplicationFailures": 0,
+            "LastReplicationResult": 0
+          },
+          {
+            "Server": "dc1",
+            "Partner": "CN=NTDS Settings,CN=DC3,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=example,DC=internal",
+            "Partition": "DC=example,DC=internal",
+            "LastReplicationSuccess": null,
+            "LastReplicationAttempt": "2026-09-19T09:00:00.0000000Z",
+            "ConsecutiveReplicationFailures": 3,
+            "LastReplicationResult": 8524
+          }
+        ]
+        """
+            .trimIndent()
+
+    val results = newClient().parseReplicationPartnerJson("dc1", stdout)
+
+    assertEquals(2, results.size)
+    assertEquals(setOf("DC2", "DC3"), results.map { it.partner }.toSet())
+    val failing = results.single { it.partner == "DC3" }
+    assertEquals(3, failing.consecutiveReplicationFailures)
+    assertNull(failing.lastReplicationSuccess)
+  }
+
+  @Test
+  fun `parseReplicationPartnerJson returns an empty list for blank stdout`() {
+    assertTrue(newClient().parseReplicationPartnerJson("dc1", "").isEmpty())
+  }
+
+  @Test
+  fun `parseReplicationPartnerJson returns an empty list rather than throwing on unparsable JSON`() {
+    assertTrue(newClient().parseReplicationPartnerJson("dc1", "not json at all").isEmpty())
   }
 }

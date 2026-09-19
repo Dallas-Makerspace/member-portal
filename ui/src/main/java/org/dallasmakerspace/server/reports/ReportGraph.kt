@@ -108,6 +108,13 @@ object ReportGraph {
                                     "Members who joined in a given month (Infra/Officers/Board only)",
                                 urlSlug = "new-members",
                             ),
+                            ReportNode(
+                                name = "AD Replication Health",
+                                description =
+                                    "Domain controller replication status, latency, and failure trends " +
+                                        "(Infra only) - sampled periodically via WinRM into Elasticsearch",
+                                urlSlug = "ad-replication-health",
+                            ),
                         ),
                 ),
                 ReportNode(

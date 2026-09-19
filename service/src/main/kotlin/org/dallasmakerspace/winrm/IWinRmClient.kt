@@ -11,6 +11,22 @@ package org.dallasmakerspace.winrm
  */
 data class WinRmRdpSession(val username: String, val logonStartEpochMs: Long, val isActive: Boolean)
 
+/**
+ * One inbound replication link reported by `Get-ADReplicationPartnerMetadata` when run on [server]
+ * - i.e. how up to date [server] is with [partner] for [partition]. [partner] is the partner DC's
+ * short (NetBIOS) name, extracted from the cmdlet's full partner DN. Timestamps are null if the
+ * link has never successfully replicated (a real, if rare, state for a freshly promoted DC).
+ */
+data class WinRmReplicationPartnerStatus(
+    val server: String,
+    val partner: String,
+    val partition: String,
+    val lastReplicationSuccess: java.time.Instant?,
+    val lastReplicationAttempt: java.time.Instant?,
+    val consecutiveReplicationFailures: Int,
+    val lastReplicationResult: Int,
+)
+
 interface IWinRmClient {
   /**
    * All current RDP logon sessions on [hostname], observed via WinRM. This INCLUDES Guacamole's
@@ -27,4 +43,14 @@ interface IWinRmClient {
    * matching this codebase's existing permissive-on-error philosophy for optional signals.
    */
   suspend fun getRdpLogonSessions(hostname: String): List<WinRmRdpSession>?
+
+  /**
+   * Inbound replication status for every partition/partner pair [hostname] (a domain controller)
+   * knows about, via `Get-ADReplicationPartnerMetadata`. Requires the target to have the
+   * ActiveDirectory PowerShell module available, which is standard on any domain controller.
+   *
+   * Returns null if the check could not complete (WinRM unreachable, module missing, auth
+   * failure, timeout, unparsable response) - callers should treat null as "unknown", not "healthy".
+   */
+  suspend fun getReplicationPartnerStatus(hostname: String): List<WinRmReplicationPartnerStatus>?
 }
