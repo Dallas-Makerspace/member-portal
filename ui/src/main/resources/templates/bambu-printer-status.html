@@ -15,7 +15,9 @@
     <title>Bambu 3D Printer Status - DMS Member Portal</title>
     <style>
         .printer-card { transition: all 0.2s ease; }
-        .printer-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.15) !important; }
+        /* Excludes offline cards - an unreachable printer isn't something a member can act on right
+           now, so it shouldn't "pop" on hover the way an actually-usable printer's card does. */
+        .printer-card:not(.printer-card-offline):hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.15) !important; }
         /* object-fit:contain (not the default fill) - min-height forces a box taller than a narrow
            phone's width-constrained aspect ratio would naturally give the image, and without
            object-fit a plain <img> stretches to fill that box rather than letterboxing it. */
@@ -54,6 +56,29 @@
         .camera-overlay-btn:hover { background: rgba(0,0,0,.75); }
         .camera-overlay-btn .material-symbols-outlined { font-size: 18px; color: #fff; }
         .model-icon { width: 28px; height: 28px; object-fit: contain; }
+
+        /* Visual-hierarchy pass: the printer name is the card's one dominant focal point (matches
+           .dms-card-title elsewhere - heavy Outfit - so it reads at a glance across a full grid),
+           the badge sits opposite it so name+status is always the first thing scanned together. */
+        .printer-name { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.05rem; }
+
+        /* Groups "what's happening right now" (job, who queued it, progress) into one visually
+           distinct block instead of a plain run of same-weight text lines - the specific complaint
+           that prompted this pass ("doesn't guide the eye", "jumbled"). */
+        .printer-info-panel {
+            background: #f8f9fa;
+            border: 1px solid rgba(0,0,0,.06);
+            border-radius: 6px;
+            padding: .6rem .75rem;
+        }
+
+        /* A failed print needs to be the first thing a person scanning a large grid catches - a
+           colored edge reads faster than any text label at a glance. */
+        .printer-card-attention { border-left: 4px solid var(--bs-danger); }
+
+        /* An unreachable printer is the least actionable card on the page - visually recede it so
+           it doesn't compete with printers a member could actually walk up to and use. */
+        .printer-card-offline { opacity: .65; }
     </style>
 </head>
 <body>
@@ -114,10 +139,14 @@
         <div class="row g-3" id="printerGrid">
             <div class="col-12 col-md-6 col-lg-4 printer-col" th:each="p : ${printers}"
                  th:attr="data-filter-category=${p.filterCategory},data-search=${p.searchText}">
-                <div class="card printer-card h-100">
+                <div class="card printer-card h-100"
+                     th:classappend="${p.needsAttention} ? 'printer-card-attention' : (${p.isOffline} ? 'printer-card-offline' : '')">
+                    <!-- Zone 1: the one thing every card must communicate at a glance - which
+                         printer, and its status - kept identical in position/weight across every
+                         state so a grid of many cards stays scannable. -->
                     <div class="card-header d-flex align-items-center justify-content-between gap-2 py-2">
-                        <span class="fw-semibold" th:text="${p.name}"></span>
-                        <span class="badge" th:classappend="${p.badgeClass}" th:text="${p.stateLabel}"></span>
+                        <span class="printer-name" th:text="${p.name}"></span>
+                        <span class="badge rounded-pill px-3 py-1" th:classappend="${p.badgeClass}" th:text="${p.stateLabel}"></span>
                     </div>
                     <!-- One-shot preview loaded at page render (not polled) - reuses the same
                          snapshot proxy the camera-icon overlay's modal polls live. Hides itself
@@ -134,16 +163,23 @@
                         </button>
                     </div>
                     <div class="card-body">
+                        <!-- Zone 2 (secondary): model identity - small and muted on purpose, it's
+                             context for the card, not something to compete with the name/badge or
+                             the live photo above for attention. -->
                         <div th:if="${p.model}" class="d-flex align-items-center gap-2 text-muted small mb-2">
                             <img th:if="${p.modelIconUrl}" th:attr="src=${p.modelIconUrl}"
                                  class="model-icon" alt="" onerror="this.style.display='none'">
                             <span th:text="${p.model}"></span>
                         </div>
 
-                        <div th:if="${p.isPrinting}">
-                            <div th:if="${p.currentJobName}" class="text-truncate small mb-1" th:text="${p.currentJobName}"></div>
+                        <!-- Zone 3: everything about "what's happening right now" lives in one
+                             visually grouped block (tinted background) - job name, who's running it,
+                             and progress/ETA/layer as a single glanceable cluster, separated from the
+                             model line above by real visual boundary rather than just line breaks. -->
+                        <div th:if="${p.isPrinting}" class="printer-info-panel">
+                            <div th:if="${p.currentJobName}" class="text-truncate small fw-semibold mb-2" th:text="${p.currentJobName}"></div>
                             <div th:if="${p.printedByUsername}" class="d-flex align-items-center gap-1 mb-2">
-                                <span>Current print by:</span>
+                                <span class="text-muted small">Current print by:</span>
                                 <dms-member-card th:attr="username=${p.printedByUsername}" state="mini"></dms-member-card>
                             </div>
                             <div class="progress" style="height: 8px;" th:if="${p.progress != null}">
@@ -163,21 +199,29 @@
                             </div>
                         </div>
 
-                        <div th:if="${p.isIdle}" class="small text-muted">
+                        <div th:if="${p.isIdle}" class="d-flex align-items-center gap-2 small text-success-emphasis">
+                            <span class="material-symbols-outlined" style="font-size:18px;">check_circle</span>
                             <span th:if="${p.nextJobName}">Next up: <span th:text="${p.nextJobName}"></span></span>
-                            <span th:unless="${p.nextJobName}">No jobs queued - ready for a print.</span>
+                            <span th:unless="${p.nextJobName}">Ready for a print.</span>
                         </div>
 
-                        <div th:if="${p.state == 'FINISH'}" class="small text-muted">
-                            Print finished - awaiting pickup.
-                            <div th:if="${p.previousPrintedByUsername}" class="d-flex align-items-center gap-1 mt-1">
+                        <div th:if="${p.state == 'FINISH'}" class="printer-info-panel">
+                            <div class="small fw-semibold mb-1">Print finished - awaiting pickup.</div>
+                            <div th:if="${p.previousPrintedByUsername}" class="d-flex align-items-center gap-1 text-muted small">
                                 <span>Previous print by:</span>
                                 <dms-member-card th:attr="username=${p.previousPrintedByUsername}" state="mini"></dms-member-card>
                             </div>
                         </div>
 
-                        <div th:if="${p.state == 'FAILED'}" class="small text-danger">
-                            Print failed - needs attention.
+                        <div th:if="${p.state == 'FAILED'}" class="alert alert-danger py-2 px-3 small mb-0">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined" style="font-size:18px;">error</span>
+                                <span>Print failed - needs attention.</span>
+                            </div>
+                            <div th:if="${p.printedByUsername}" class="d-flex align-items-center gap-1 mt-2">
+                                <span>Current print by:</span>
+                                <dms-member-card th:attr="username=${p.printedByUsername}" state="mini"></dms-member-card>
+                            </div>
                         </div>
 
                         <div th:if="${p.isOffline}" class="small text-muted">

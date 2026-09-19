@@ -6,30 +6,63 @@
 </head>
 <body>
 <div th:fragment="content" class="dms-card shadow-sm">
+    <style>
+        .bambu-stat-tile { padding: .6rem .5rem; border-radius: 8px; background: #f8f9fa; text-align: center; }
+        .bambu-stat-tile .bambu-stat-count { font-size: 1.5rem; font-weight: 800; line-height: 1.1; }
+        .bambu-stat-tile .bambu-stat-label { font-size: .75rem; }
+        /* Needs Attention is the one tile a member should act on - tinted background and a colored
+           top edge make it read as "different" even at a glance across the row, not just another
+           same-weight stat next to Printing/Available/Finished. */
+        .bambu-stat-tile-attention { background: #fdecea; border-top: 3px solid var(--bs-danger); }
+    </style>
     <div class="card-body">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <h4 class="card-title mb-0 dms-card-title">Bambu 3D Printer Status</h4>
+        <h4 class="card-title mb-1 dms-card-title">Bambu 3D Printer Status</h4>
+        <p class="text-muted small mb-3">Live status of the 3D Fab print farm, managed through Bambuddy.</p>
+        <!-- Ordered by what a member should notice first: needs-attention (actionable now),
+             printing/available (the two states someone checking this page usually wants), then
+             finished/offline (lower urgency) - rather than an arbitrary left-to-right badge order
+             where "needs attention" could land last. -->
+        <div class="row row-cols-2 row-cols-md-4 g-2">
+            <div class="col" th:if="${sectionModel.summary.needsAttention > 0}">
+                <div class="bambu-stat-tile bambu-stat-tile-attention">
+                    <span class="material-symbols-outlined text-danger" style="font-size:20px;">warning</span>
+                    <div class="bambu-stat-count text-danger" th:text="${sectionModel.summary.needsAttention}">0</div>
+                    <div class="bambu-stat-label text-muted">Needs Attention</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="bambu-stat-tile">
+                    <span class="material-symbols-outlined text-primary" style="font-size:20px;">print</span>
+                    <div class="bambu-stat-count" th:text="${sectionModel.summary.printing}">0</div>
+                    <div class="bambu-stat-label text-muted">Printing</div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="bambu-stat-tile">
+                    <span class="material-symbols-outlined" th:classappend="${sectionModel.summary.available > 0} ? 'text-success' : 'text-muted'" style="font-size:20px;">check_circle</span>
+                    <div class="bambu-stat-count" th:classappend="${sectionModel.summary.available > 0} ? '' : 'text-muted'" th:text="${sectionModel.summary.available}">0</div>
+                    <div class="bambu-stat-label text-muted">Available</div>
+                </div>
+            </div>
+            <div class="col" th:if="${sectionModel.summary.finished > 0}">
+                <div class="bambu-stat-tile">
+                    <span class="material-symbols-outlined text-info" style="font-size:20px;">task_alt</span>
+                    <div class="bambu-stat-count" th:text="${sectionModel.summary.finished}">0</div>
+                    <div class="bambu-stat-label text-muted">Finished</div>
+                </div>
+            </div>
+            <div class="col" th:if="${sectionModel.summary.offline > 0}">
+                <div class="bambu-stat-tile" style="opacity:.7;">
+                    <span class="material-symbols-outlined text-secondary" style="font-size:20px;">wifi_off</span>
+                    <div class="bambu-stat-count text-secondary" th:text="${sectionModel.summary.offline}">0</div>
+                    <div class="bambu-stat-label text-muted">Offline</div>
+                </div>
+            </div>
+        </div>
+        <div class="text-end mt-3">
             <a href="/committees/3d-fab/printers" class="btn btn-sm btn-outline-primary">
                 View Details
             </a>
-        </div>
-        <div class="d-flex flex-wrap gap-2 mt-3">
-            <span class="badge rounded-pill px-3 py-2"
-                  th:classappend="${sectionModel.summary.available > 0} ? 'text-bg-success' : 'text-bg-secondary'">
-                <span th:text="${sectionModel.summary.available}">0</span> available
-            </span>
-            <span class="badge rounded-pill text-bg-primary px-3 py-2">
-                <span th:text="${sectionModel.summary.printing}">0</span> printing
-            </span>
-            <span th:if="${sectionModel.summary.finished > 0}" class="badge rounded-pill text-bg-info px-3 py-2">
-                <span th:text="${sectionModel.summary.finished}">0</span> finished
-            </span>
-            <span th:if="${sectionModel.summary.needsAttention > 0}" class="badge rounded-pill text-bg-danger px-3 py-2">
-                <span th:text="${sectionModel.summary.needsAttention}">0</span> needs attention
-            </span>
-            <span th:if="${sectionModel.summary.offline > 0}" class="badge rounded-pill text-bg-secondary px-3 py-2">
-                <span th:text="${sectionModel.summary.offline}">0</span> offline
-            </span>
         </div>
     </div>
 </div>
