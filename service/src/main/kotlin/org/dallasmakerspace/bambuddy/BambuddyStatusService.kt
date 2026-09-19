@@ -46,9 +46,9 @@ data class BambuPrinterDetailDTO(
     val totalLayers: Int?,
     val currentJobName: String?,
     val nextJobName: String?,
-    // Whoever queued the currently-printing job, from the queue item's created_by_username - null
-    // when not printing or when Bambuddy has no queue record for the current job (e.g. started
-    // directly from the slicer rather than through Bambuddy's queue).
+    // Whoever queued the currently-printing (or just-failed) job, from the queue item's
+    // created_by_username - null when idle/finished/offline, or when Bambuddy has no queue record
+    // for the job (e.g. started directly from the slicer rather than through Bambuddy's queue).
     val printedByUsername: String?,
     // Whoever queued the most recently *completed* job on this printer - only populated in the
     // FINISH state (see NEEDS_ATTENTION_STATES/FINISHED_STATES comment: FINISH means the print sitting
@@ -164,7 +164,10 @@ constructor(
     return snapshot.printers.map { printer ->
       val status = snapshot.statusByPrinterId[printer.id]
       val printerQueue = queueByPrinter[printer.id].orEmpty().sortedBy { it.position }
-      val current = printerQueue.firstOrNull { it.status == "printing" }
+      // "failed" as well as "printing" - a print that just failed transitions its queue item
+      // straight to "failed" (never lingers at "printing"), so this is still the *active* job for
+      // a printer effectively in the FAILED state, not a stale historical one.
+      val current = printerQueue.firstOrNull { it.status == "printing" || it.status == "failed" }
       val next = printerQueue.firstOrNull { it.status == "pending" }
       // Position only orders pending/printing items - completed items need completedAt instead.
       val previous =

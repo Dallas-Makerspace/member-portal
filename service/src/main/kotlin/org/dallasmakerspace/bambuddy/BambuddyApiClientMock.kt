@@ -111,6 +111,16 @@ class BambuddyApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
             createdByUsername = "asmith",
             completedAt = "2026-09-17T12:00:00Z",
         ),
+        // Printer 6 is in FAILED state (see statusByPrinterId above) - demonstrates
+        // printedByUsername surfacing who to notify about the failure.
+        BambuQueueItem(
+            id = 5,
+            printerId = 6,
+            status = "failed",
+            archiveName = "Enclosure lid v2",
+            printTimeSeconds = 3_600,
+            createdByUsername = "jdoe",
+        ),
     )
   }
 

@@ -150,6 +150,28 @@ class BambuddyStatusServiceTest {
   }
 
   @Test
+  fun `getPrinterDetails surfaces who queued the job when it just FAILED`() = runBlocking {
+    // A failed print's queue item moves straight to "failed" - it never lingers at "printing" -
+    // so printedByUsername must also recognize "failed" as the active job, not just "printing".
+    whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
+    stubStatus(1, "FAILED")
+    whenever(bambuddyApiClient.getQueue())
+        .thenReturn(
+            listOf(
+                BambuQueueItem(
+                    id = 1,
+                    printerId = 1,
+                    status = "failed",
+                    archiveName = "Bracket v3",
+                    createdByUsername = "asmith",
+                )))
+
+    val details = service.getPrinterDetails()
+
+    assertEquals("asmith", details[0].printedByUsername)
+  }
+
+  @Test
   fun `getPrinterDetails surfaces who ran the most recently completed job when FINISHed`() =
       runBlocking {
         whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
