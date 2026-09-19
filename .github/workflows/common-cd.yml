@@ -120,8 +120,23 @@ jobs:
         continue-on-error: true
         run: docker pull ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
 
+      # SARIF has no human-readable console output, and the upload-to-GitHub-Security step below is
+      # disabled - so without this, a failure here was undebuggable from the log alone (exit code 1
+      # with zero indication which CVE(s) tripped it). exit-code: '0' - purely informational, the
+      # SARIF run below still does the actual gating.
+      - name: Run Trivy vulnerability scanner (table output for visibility)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
       # exit-code: '1' fails this job (and blocks deploy, via the needs: dependency) on any
-      # CRITICAL/HIGH finding.
+      # CRITICAL/HIGH finding. Findings are already printed above in readable form; this run repeats
+      # the same scan in SARIF form so results can be uploaded to GitHub Security if this repo ever
+      # goes public (see below) - the vulnerability DB was already downloaded by the run above, so
+      # this is fast, not a full second scan.
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.35.0
         with:
