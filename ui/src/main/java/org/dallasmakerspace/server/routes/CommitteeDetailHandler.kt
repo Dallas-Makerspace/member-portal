@@ -41,6 +41,27 @@ constructor(
       return@coroutineScope
     }
 
+    // Ask every registered section provider whether it has content for this committee - this is
+    // the only place that touches sectionProviders, so a new committee-specific feature (e.g. the
+    // Bambu status summary) never requires editing this handler or committee-detail.html again.
+    // Launched first (alongside the group fetches below), not after them - a contributed section
+    // has no dependency on this handler's own group/event data, and launching it late left its own
+    // network round-trip (e.g. Bambuddy's ~600-700ms summary call) purely additive to every
+    // /committees/{slug} page load instead of overlapping with everything else.
+    val currentUsername = userInfo["preferred_username"] as? String
+    val sectionsDeferred = async {
+      sectionProviders
+          .filter { it.appliesTo(committee) }
+          .mapNotNull { provider ->
+            try {
+              provider.renderSection(committee, session.sessionId, currentUsername)
+            } catch (e: Exception) {
+              log.warn("Committee page section provider failed: {}", e.message)
+              null
+            }
+          }
+    }
+
     // Fetch chair groups, teacher groups, and all groups in parallel
     val chairGroupsDeferred = async {
       val uniqueChairGroupSlugs =
@@ -174,23 +195,6 @@ constructor(
               }
             }
             .await()
-
-    // Ask every registered section provider whether it has content for this committee - this is
-    // the only place that touches sectionProviders, so a new committee-specific feature (e.g. the
-    // Bambu status summary) never requires editing this handler or committee-detail.html again.
-    val currentUsername = userInfo["preferred_username"] as? String
-    val sectionsDeferred = async {
-      sectionProviders
-          .filter { it.appliesTo(committee) }
-          .mapNotNull { provider ->
-            try {
-              provider.renderSection(committee, session.sessionId, currentUsername)
-            } catch (e: Exception) {
-              log.warn("Committee page section provider failed: {}", e.message)
-              null
-            }
-          }
-    }
 
     // Enrich events with organizer details
     val upcomingEvents =
