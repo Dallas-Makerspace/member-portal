@@ -120,35 +120,30 @@ jobs:
         continue-on-error: true
         run: docker pull ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
 
-      # SARIF has no human-readable console output, and the upload-to-GitHub-Security step below is
-      # disabled - so without this, a failure here was undebuggable from the log alone (exit code 1
-      # with zero indication which CVE(s) tripped it). exit-code: '0' - purely informational, the
-      # SARIF run below still does the actual gating.
-      - name: Run Trivy vulnerability scanner (table output for visibility)
+      # table format: human-readable in the job log (SARIF has no console output at all), and
+      # exit-code: '1' fails this job (and blocks deploy, via the needs: dependency) directly on any
+      # CRITICAL/HIGH finding.
+      #
+      # This used to be two separate trivy-action runs - this one informational (exit-code 0) plus a
+      # second SARIF-format run that did the actual gating, so findings could also be uploaded to
+      # GitHub Security. That second run started failing in ~150-450ms (a real scan takes ~30s+)
+      # with no findings of its own to show - a trivy-action bug producing SARIF for a clean result,
+      # not a real vulnerability - and was blocking every deploy despite the image being clean (see
+      # the first run's own successful "0 vulnerabilities" summary in the same job). Since SARIF
+      # upload is disabled anyway (below), removed the second run rather than chase that bug and
+      # gate on this run directly.
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
           format: 'table'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
-
-      # exit-code: '1' fails this job (and blocks deploy, via the needs: dependency) on any
-      # CRITICAL/HIGH finding. Findings are already printed above in readable form; this run repeats
-      # the same scan in SARIF form so results can be uploaded to GitHub Security if this repo ever
-      # goes public (see below) - the vulnerability DB was already downloaded by the run above, so
-      # this is fast, not a full second scan.
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.35.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ inputs.image_name }}:latest
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
           exit-code: '1'
 
       # Disabled: this repo is currently private, and code scanning requires GitHub Advanced
       # Security, which isn't enabled here. Trivy findings now fail the build directly (above)
-      # instead. Re-enable (drop `if: false`) if the repo goes public again.
+      # instead. Re-enable (drop `if: false`) if the repo goes public again - re-introduce a
+      # SARIF-format run for this to consume (see git history for the version that had one).
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         if: false && always() && hashFiles('trivy-results.sarif') != ''
