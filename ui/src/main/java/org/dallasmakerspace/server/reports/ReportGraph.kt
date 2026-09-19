@@ -111,8 +111,8 @@ object ReportGraph {
                             ReportNode(
                                 name = "AD Replication Health",
                                 description =
-                                    "Domain controller replication status, latency, and failure trends " +
-                                        "(Infra only) - sampled periodically via WinRM into Elasticsearch",
+                                    "Domain controller replication status, latency, and failure trends - " +
+                                        "sampled periodically via WinRM into Elasticsearch",
                                 urlSlug = "ad-replication-health",
                             ),
                         ),

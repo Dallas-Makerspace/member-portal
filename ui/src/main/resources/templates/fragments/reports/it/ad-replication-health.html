@@ -6,41 +6,33 @@
 </head>
 <body>
 <div th:fragment="report">
-    <!-- Restriction note - ALWAYS shown to all users -->
-    <div class="alert alert-info" role="alert">
-        <strong>Note:</strong> This report is restricted to the IT Infrastructure team.
-    </div>
+    <dms-data-visualizer
+            id="ad-replication-latency-trend"
+            dataUrl="/backend-api/data-viz/ad-replication-latency-trend"
+            renderAs="line"
+            title="Replication Latency (Last 7 Days)"
+            description="Minutes since last successful sync, one line per source-DC/partner-DC pair, hourly buckets (max per bucket - so a real blip isn't smoothed away). A sustained band of elevated latency on one line means that DC is quietly falling behind."
+            yAxisMin="0"
+    ></dms-data-visualizer>
 
-    <!-- Report content - ONLY shown to authorized users -->
-    <div th:if="${isInfraUser}">
-        <dms-data-visualizer
-                id="ad-replication-latency-trend"
-                dataUrl="/backend-api/data-viz/ad-replication-latency-trend"
-                renderAs="line"
-                title="Replication Latency (Last 7 Days)"
-                description="Minutes since last successful sync, one line per source-DC/partner-DC pair, hourly buckets (max per bucket - so a real blip isn't smoothed away). A sustained band of elevated latency on one line means that DC is quietly falling behind."
-                yAxisMin="0"
-        ></dms-data-visualizer>
+    <dms-data-visualizer
+            id="ad-replication-failure-trend"
+            dataUrl="/backend-api/data-viz/ad-replication-failure-trend"
+            renderAs="line"
+            title="Consecutive Replication Failures (Last 7 Days)"
+            description="Consecutive failure count reported by each DC for each partner, one line per pair, hourly buckets. A count that climbs (1 -&gt; 5 -&gt; 12) is escalating and worth investigating now; a single spike back to 0 is usually a transient blip."
+            yAxisMin="0"
+    ></dms-data-visualizer>
 
-        <dms-data-visualizer
-                id="ad-replication-failure-trend"
-                dataUrl="/backend-api/data-viz/ad-replication-failure-trend"
-                renderAs="line"
-                title="Consecutive Replication Failures (Last 7 Days)"
-                description="Consecutive failure count reported by each DC for each partner, one line per pair, hourly buckets. A count that climbs (1 -&gt; 5 -&gt; 12) is escalating and worth investigating now; a single spike back to 0 is usually a transient blip."
-                yAxisMin="0"
-        ></dms-data-visualizer>
-
-        <dms-data-visualizer
-                id="ad-replication-health-visualizer"
-                dataUrl="/backend-api/data-viz/ad-replication-health"
-                renderAs="table"
-                title="Current Snapshot"
-                description="Most recent inbound replication status per domain controller/partner/partition pair, from Elasticsearch (sampled periodically via WinRM by a scheduled cron job - see the two charts above for trends over time)."
-                filterable="true"
-                alwaysShowRawData="true"
-        ></dms-data-visualizer>
-    </div>
+    <dms-data-visualizer
+            id="ad-replication-health-visualizer"
+            dataUrl="/backend-api/data-viz/ad-replication-health"
+            renderAs="table"
+            title="Current Snapshot"
+            description="Most recent inbound replication status per domain controller/partner/partition pair, from Elasticsearch (sampled periodically via WinRM by a scheduled cron job - see the two charts above for trends over time)."
+            filterable="true"
+            alwaysShowRawData="true"
+    ></dms-data-visualizer>
 </div>
 </body>
 </html>
