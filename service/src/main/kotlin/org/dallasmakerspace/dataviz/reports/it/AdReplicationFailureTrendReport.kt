@@ -3,7 +3,9 @@ package org.dallasmakerspace.dataviz.reports.it
 import java.time.Instant
 import javax.inject.Inject
 import org.dallasmakerspace.adreplication.AdReplicationHealthEsRepository
+import org.dallasmakerspace.adreplication.adReplicationKibanaLink
 import org.dallasmakerspace.adreplication.pivotTrend
+import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.dataviz.DataVizReport
 import org.dallasmakerspace.models.DataVizResponse
 
@@ -20,6 +22,7 @@ class AdReplicationFailureTrendReport
 @Inject
 constructor(
     private val esRepository: AdReplicationHealthEsRepository,
+    private val appConfig: AppConfig,
 ) : DataVizReport() {
   override fun getName(): String = "ad-replication-failure-trend"
 
@@ -31,14 +34,14 @@ constructor(
     val (dataItems, dataFields) = pivotTrend(samples) { it.consecutiveReplicationFailures.toLong() }
 
     val timeTaken = System.currentTimeMillis() - startTime
-    val metadata =
-        mapOf(
-            "Generated at" to Instant.now().toString(),
-            "Time taken" to "${timeTaken}ms",
-            "Window" to "${days}d",
-            "Samples" to "${samples.size}",
-            "Source" to "Elasticsearch (member-portal-ad-replication-health)",
-        )
+    val metadata = buildMap {
+      put("Generated at", Instant.now().toString())
+      put("Time taken", "${timeTaken}ms")
+      put("Window", "${days}d")
+      put("Samples", "${samples.size}")
+      put("Source", "Elasticsearch (member-portal-ad-replication-health)")
+      adReplicationKibanaLink(appConfig, days)?.let { put("Kibana", it) }
+    }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
   }

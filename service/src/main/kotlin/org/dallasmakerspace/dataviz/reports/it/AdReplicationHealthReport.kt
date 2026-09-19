@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import org.dallasmakerspace.adreplication.AdReplicationHealthEsRepository
 import org.dallasmakerspace.adreplication.StoredReplicationSample
+import org.dallasmakerspace.adreplication.adReplicationKibanaLink
 import org.dallasmakerspace.adreplication.shortDcName
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.dataviz.DataVizReport
@@ -28,6 +29,10 @@ private const val STALE_LATENCY_MINUTES = 60L
 // How far back to look for "the latest sample per pair" - generous relative to the cron job's
 // expected 15-30 min cadence so one missed/slow run doesn't make a healthy DC look unreachable.
 private const val SNAPSHOT_LOOKBACK_HOURS = 3L
+
+// KibanaLinks' time window is whole days, coarser than SNAPSHOT_LOOKBACK_HOURS - close enough
+// for a "view raw data in Kibana" jump-off link, which isn't meant to match the table exactly.
+private const val SNAPSHOT_KIBANA_WINDOW_DAYS = 1
 
 private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
 private val TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("MM/dd HH:mm", Locale.US)
@@ -81,15 +86,15 @@ constructor(
         latestPerTuple.map { it.toDataItem() } + unreachableDcs.map { unreachableRow(it) }
 
     val timeTaken = System.currentTimeMillis() - startTime
-    val metadata =
-        mapOf(
-            "Generated at" to Instant.now().toString(),
-            "Time taken" to "${timeTaken}ms",
-            "Domain controllers configured" to "${dcHostnames.size}",
-            "Domain controllers reporting" to "${reportingDcs.size}",
-            "Snapshot lookback" to "${SNAPSHOT_LOOKBACK_HOURS}h",
-            "Source" to "Elasticsearch (member-portal-ad-replication-health)",
-        )
+    val metadata = buildMap {
+      put("Generated at", Instant.now().toString())
+      put("Time taken", "${timeTaken}ms")
+      put("Domain controllers configured", "${dcHostnames.size}")
+      put("Domain controllers reporting", "${reportingDcs.size}")
+      put("Snapshot lookback", "${SNAPSHOT_LOOKBACK_HOURS}h")
+      put("Source", "Elasticsearch (member-portal-ad-replication-health)")
+      adReplicationKibanaLink(appConfig, SNAPSHOT_KIBANA_WINDOW_DAYS)?.let { put("Kibana", it) }
+    }
 
     return DataVizResponse(data = dataItems, dataFields = dataFields(), metadata = metadata)
   }

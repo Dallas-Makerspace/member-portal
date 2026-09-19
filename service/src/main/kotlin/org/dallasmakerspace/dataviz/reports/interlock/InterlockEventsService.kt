@@ -14,6 +14,7 @@ import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.logging.ElasticsearchClientManager
+import org.dallasmakerspace.dataviz.KibanaLinks
 import org.dallasmakerspace.di.AppComponentHolder
 
 private const val RESCAN_DEBOUNCE_SECONDS = 30L
@@ -70,19 +71,13 @@ constructor(
       kibanaQueryForTags(tags) + " and message : \"authorized\" and message : \"False\""
 
   /**
-   * Builds a Kibana Discover URL for the given KQL query and time window. Returns null if
-   * `app.kibana.base-url` is not configured.
+   * Builds a Kibana Discover URL for the given KQL query and time window against interlock's own
+   * data view (see [KibanaLinks] for the shared URL-encoding logic this delegates to). Returns
+   * null if `app.kibana.base-url`/`app.kibana.data-view` is not configured.
    */
   fun buildKibanaDiscoverUrl(kql: String, days: Int): String? {
-    val baseUrl = appConfig.getStringProperty("app.kibana.base-url", "").trimEnd('/')
-    if (baseUrl.isBlank()) return null
-    val space = appConfig.getStringProperty("app.kibana.space", "").ifBlank { "default" }
     val dataView = appConfig.getStringProperty("app.kibana.data-view", "").ifBlank { "logs-*" }
-    // Selective encoding: leave RISON syntax chars intact; escape only space and double-quote.
-    val encodedKql = kql.replace(" ", "%20").replace("\"", "%22")
-    return "$baseUrl/s/$space/app/discover#/" +
-        "?_g=(time:(from:now-${days}d,to:now))" +
-        "&_a=(index:'$dataView',query:(language:kuery,query:'$encodedKql'))"
+    return KibanaLinks.buildDiscoverUrl(appConfig, kql, days, dataView)
   }
 
   // ---------------------------------------------------------------------------
