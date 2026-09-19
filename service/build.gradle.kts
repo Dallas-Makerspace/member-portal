@@ -77,10 +77,10 @@ dependencies {
   // (a confirmed, unfixed upstream NTLM bug - see the README for the full story).
   implementation(":winrm-java-2.1.00")
   // AWS Bedrock
-  implementation("software.amazon.awssdk:bedrockruntime:2.28.3")
+  implementation("software.amazon.awssdk:bedrockruntime:2.55.1")
   // Elasticsearch logging
   implementation("co.elastic.clients:elasticsearch-java:8.14.3")
-  implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
+  implementation("com.fasterxml.jackson.core:jackson-databind:2.22.2")
   implementation("com.agido:logback-elasticsearch-appender:3.0.11")
 
   testImplementation("io.ktor:ktor-server-test-host")
