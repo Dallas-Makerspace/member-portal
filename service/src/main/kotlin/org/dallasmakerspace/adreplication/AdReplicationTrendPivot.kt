@@ -53,9 +53,15 @@ fun pivotTrend(
         }
         DataItem(values = values)
       }
+  // name stays the full pairKey (the lookup key into `values`, and the grouping identity), but
+  // label - what the chart legend actually shows - is shortened, so a change here can never
+  // desync a series from its data.
   val dataFields =
       listOf(DataField(name = "Hour", type = DataType.STRING, label = "Hour")) +
-          pairKeys.map { pairKey -> DataField(name = pairKey, type = DataType.NUMBER, label = pairKey) }
+          pairKeys.map { pairKey ->
+            val label = pairKey.split("->").joinToString("->") { shortDcName(it) }
+            DataField(name = pairKey, type = DataType.NUMBER, label = label)
+          }
 
   return dataItems to dataFields
 }

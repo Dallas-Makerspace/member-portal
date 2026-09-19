@@ -132,4 +132,14 @@ class AdReplicationTrendPivotTest {
     assertEquals(emptyList(), items)
     assertEquals(listOf("Hour"), fields.map { it.name })
   }
+
+  @Test
+  fun `pivotTrend shortens the field label for the chart legend but keeps the full pairKey as the lookup name`() {
+    val samples = listOf(sample("2026-09-19T17:00:00Z", "dc1.dms.local->dc3", latencyMinutes = 5))
+
+    val (_, fields) = pivotTrend(samples) { it.latencyMinutes }
+
+    val pairField = fields.single { it.name == "dc1.dms.local->dc3" }
+    assertEquals("DC1->DC3", pairField.label)
+  }
 }

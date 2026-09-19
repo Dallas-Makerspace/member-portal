@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import org.dallasmakerspace.adreplication.AdReplicationHealthEsRepository
 import org.dallasmakerspace.adreplication.StoredReplicationSample
+import org.dallasmakerspace.adreplication.shortDcName
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.dataviz.DataVizReport
 import org.dallasmakerspace.models.DataField
@@ -97,7 +98,7 @@ constructor(
       DataItem(
           values =
               mapOf(
-                  "Source DC" to JsonPrimitive(hostname),
+                  "Source DC" to JsonPrimitive(shortDcName(hostname)),
                   "Partner DC" to JsonPrimitive(""),
                   "Partition" to JsonPrimitive(""),
                   "Last Success" to JsonPrimitive("N/A"),
@@ -120,8 +121,8 @@ constructor(
     return DataItem(
         values =
             mapOf(
-                "Source DC" to JsonPrimitive(server),
-                "Partner DC" to JsonPrimitive(partner),
+                "Source DC" to JsonPrimitive(shortDcName(server)),
+                "Partner DC" to JsonPrimitive(shortDcName(partner)),
                 "Partition" to JsonPrimitive(friendlyPartitionName(partition)),
                 "Last Success" to
                     (lastReplicationSuccess?.let { JsonPrimitive(TIMESTAMP_FORMAT.format(it.atZone(CHICAGO_ZONE))) }
