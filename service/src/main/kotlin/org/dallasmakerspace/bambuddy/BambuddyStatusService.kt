@@ -163,11 +163,24 @@ constructor(
     val queueByPrinter = snapshot.queue.groupBy { it.printerId }
     return snapshot.printers.map { printer ->
       val status = snapshot.statusByPrinterId[printer.id]
+      val state = effectiveState(status)
       val printerQueue = queueByPrinter[printer.id].orEmpty().sortedBy { it.position }
-      // "failed" as well as "printing" - a print that just failed transitions its queue item
-      // straight to "failed" (never lingers at "printing"), so this is still the *active* job for
-      // a printer effectively in the FAILED state, not a stale historical one.
-      val current = printerQueue.firstOrNull { it.status == "printing" || it.status == "failed" }
+      // At most one row per printer is ever "printing", so position ordering is safe here.
+      val activePrint = printerQueue.firstOrNull { it.status == "printing" }
+      // "failed" rows are permanent history, not transient: every failure a printer has ever had
+      // stays in the queue as status="failed" with position=1, so selecting by position returns
+      // the *oldest* failure (potentially months old) and credits the wrong member on every load.
+      // Only consult them when the printer is actually FAILED, and take the newest by completedAt
+      // - the same reasoning as `previous` below.
+      val failedPrint =
+          if (state == "FAILED") {
+            printerQueue
+                .filter { it.status == "failed" && it.completedAt != null }
+                .maxByOrNull { it.completedAt!! }
+          } else {
+            null
+          }
+      val current = activePrint ?: failedPrint
       val next = printerQueue.firstOrNull { it.status == "pending" }
       // Position only orders pending/printing items - completed items need completedAt instead.
       val previous =
@@ -178,7 +191,7 @@ constructor(
           id = printer.id,
           name = printer.name,
           model = printer.model,
-          state = effectiveState(status),
+          state = state,
           progress = status?.progress?.let { Math.round(it).toInt() },
           remainingTimeMinutes = status?.remainingTimeMinutes,
           layerNum = status?.layerNum,

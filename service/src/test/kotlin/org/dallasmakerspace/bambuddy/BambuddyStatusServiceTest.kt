@@ -1,6 +1,7 @@
 package org.dallasmakerspace.bambuddy
 
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.core.LoggerFactory
 import org.junit.Before
@@ -151,8 +152,6 @@ class BambuddyStatusServiceTest {
 
   @Test
   fun `getPrinterDetails surfaces who queued the job when it just FAILED`() = runBlocking {
-    // A failed print's queue item moves straight to "failed" - it never lingers at "printing" -
-    // so printedByUsername must also recognize "failed" as the active job, not just "printing".
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "FAILED")
     whenever(bambuddyApiClient.getQueue())
@@ -164,11 +163,101 @@ class BambuddyStatusServiceTest {
                     status = "failed",
                     archiveName = "Bracket v3",
                     createdByUsername = "asmith",
+                    completedAt = "2026-09-17T12:00:00Z",
                 )))
 
     val details = service.getPrinterDetails()
 
     assertEquals("asmith", details[0].printedByUsername)
+  }
+
+  @Test
+  fun `a printer's old failed jobs never get credited as its current print`() = runBlocking {
+    // "failed" rows are permanent history - every failure a printer has ever had stays in the
+    // queue as status="failed" with position=1. Selecting by position therefore returns the
+    // *oldest* failure, which credited a months-old calibration print's owner as the current
+    // printer on every single page load (reported by the member being wrongly credited).
+    whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
+    stubStatus(1, "RUNNING", currentPrint = "Current.3mf")
+    whenever(bambuddyApiClient.getQueue())
+        .thenReturn(
+            listOf(
+                BambuQueueItem(
+                    id = 1,
+                    printerId = 1,
+                    status = "failed",
+                    archiveName = "Ancient calibration cube.3mf",
+                    position = 1,
+                    createdByUsername = "jdoe",
+                    completedAt = "2026-08-29T18:34:30Z",
+                ),
+                BambuQueueItem(
+                    id = 2,
+                    printerId = 1,
+                    status = "printing",
+                    archiveName = "Current.3mf",
+                    position = 1,
+                    createdByUsername = "asmith",
+                ),
+            ))
+
+    val details = service.getPrinterDetails()
+
+    assertEquals("asmith", details[0].printedByUsername)
+  }
+
+  @Test
+  fun `a FAILED printer credits its most recent failure, not its oldest`() = runBlocking {
+    whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
+    stubStatus(1, "FAILED")
+    whenever(bambuddyApiClient.getQueue())
+        .thenReturn(
+            listOf(
+                BambuQueueItem(
+                    id = 1,
+                    printerId = 1,
+                    status = "failed",
+                    archiveName = "Older.3mf",
+                    position = 1,
+                    createdByUsername = "jdoe",
+                    completedAt = "2026-08-29T18:34:30Z",
+                ),
+                BambuQueueItem(
+                    id = 2,
+                    printerId = 1,
+                    status = "failed",
+                    archiveName = "Newer.3mf",
+                    position = 1,
+                    createdByUsername = "asmith",
+                    completedAt = "2026-09-26T04:13:51Z",
+                ),
+            ))
+
+    val details = service.getPrinterDetails()
+
+    assertEquals("asmith", details[0].printedByUsername)
+  }
+
+  @Test
+  fun `an idle printer with past failures credits nobody as its current print`() = runBlocking {
+    whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
+    stubStatus(1, "IDLE")
+    whenever(bambuddyApiClient.getQueue())
+        .thenReturn(
+            listOf(
+                BambuQueueItem(
+                    id = 1,
+                    printerId = 1,
+                    status = "failed",
+                    archiveName = "Ancient calibration cube.3mf",
+                    position = 1,
+                    createdByUsername = "jdoe",
+                    completedAt = "2026-08-29T18:34:30Z",
+                )))
+
+    val details = service.getPrinterDetails()
+
+    assertNull(details[0].printedByUsername)
   }
 
   @Test
