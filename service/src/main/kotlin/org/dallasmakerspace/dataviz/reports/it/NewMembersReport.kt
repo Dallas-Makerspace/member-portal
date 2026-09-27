@@ -19,6 +19,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 
 private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
@@ -113,7 +114,7 @@ constructor(
             put("displayName", JsonPrimitive(member?.displayName ?: username ?: ""))
             put(
                 "avatarUrl",
-                JsonPrimitive(normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)))
+                JsonPrimitive(normalizeAvatarUrl(member?.displayAvatarUrl(), size = 144)))
           }
 
           val isAddon = row["whmcs_real_user_id"] == null

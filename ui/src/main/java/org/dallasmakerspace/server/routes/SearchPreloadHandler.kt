@@ -5,6 +5,8 @@ import io.ktor.server.application.*
 import io.ktor.server.response.*
 import java.util.concurrent.*
 import javax.inject.Inject
+import org.dallasmakerspace.models.displayAvatarUrl
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -47,15 +49,7 @@ constructor(
       // Process members
       val memberData =
           preloadResponse.members.map {
-            val avatarUrl =
-                it.discourseAvatarUrl
-                    ?.takeIf { url -> url.isNotEmpty() }
-                    ?.let { url ->
-                      when {
-                        url.startsWith("http") -> url
-                        else -> "https://talk.dallasmakerspace.org$url"
-                      }
-                    }
+            val avatarUrl = normalizeAvatarUrl(it.displayAvatarUrl())
             val record =
                 mutableMapOf(
                     "displayName" to it.displayName,

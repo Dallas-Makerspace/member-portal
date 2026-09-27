@@ -20,6 +20,7 @@ import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
 import org.dallasmakerspace.models.Interlocks
 import org.dallasmakerspace.models.Tools
+import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 
 class DeniedAccessReport
@@ -130,7 +131,7 @@ constructor(
                   put("displayName", JsonPrimitive(member?.displayName ?: username))
                   put(
                       "avatarUrl",
-                      JsonPrimitive(normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)))
+                      JsonPrimitive(normalizeAvatarUrl(member?.displayAvatarUrl(), size = 144)))
                 }
               } else {
                 JsonPrimitive("Badge: ${events.maskBadge(badge, isInfra)}")

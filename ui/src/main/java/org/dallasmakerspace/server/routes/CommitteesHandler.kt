@@ -7,6 +7,8 @@ import javax.inject.Inject
 import org.dallasmakerspace.models.Committee
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.DMSGroup
+import org.dallasmakerspace.models.displayAvatarUrl
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
@@ -78,15 +80,7 @@ constructor(
     val group = chairGroupsMap[chairGroupSlug] ?: return emptyList()
 
     return group.members.map { member ->
-      val avatarUrl =
-          member.avatarUrl
-              ?.takeIf { it.isNotEmpty() }
-              ?.let { url ->
-                when {
-                  url.startsWith("//") -> "https:$url"
-                  else -> "https://talk.dallasmakerspace.org$url"
-                }.replace("{size}", "144")
-              } ?: ""
+      val avatarUrl = normalizeAvatarUrl(member.displayAvatarUrl(), size = 144)
 
       mapOf(
           "username" to member.username,

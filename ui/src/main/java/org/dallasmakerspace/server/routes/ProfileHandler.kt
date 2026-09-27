@@ -18,6 +18,7 @@ import kotlinx.datetime.format.byUnicodePattern
 import kotlinx.datetime.toJavaInstant
 import org.dallasmakerspace.models.CommunicationPreference
 import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
@@ -98,7 +99,7 @@ constructor(
     // Await critical result; events still running concurrently
     val requestedMember = memberDeferred.await()
 
-    val avatarUrl = normalizeAvatarUrl(requestedMember.discourseAvatarUrl)
+    val avatarUrl = normalizeAvatarUrl(requestedMember.displayAvatarUrl())
     val now = Instant.now()
     val memberSince = requestedMember.memberSince?.toJavaInstant()
     val memberSinceString = getMemberSinceString(memberSince)
@@ -263,9 +264,9 @@ constructor(
             "username" to username,
             "display_name" to (member?.displayName?.takeIf { it.isNotBlank() } ?: "@$username"),
             "avatar_url" to
-                normalizeAvatarUrl(
-                        member?.avatarUrl ?: member?.discourseAvatarUrl, FACEPILE_AVATAR_SIZE)
-                    .ifEmpty { PROFILE_PIC_FALLBACK },
+                normalizeAvatarUrl(member?.displayAvatarUrl(), FACEPILE_AVATAR_SIZE).ifEmpty {
+                  PROFILE_PIC_FALLBACK
+                },
         )
       }
 

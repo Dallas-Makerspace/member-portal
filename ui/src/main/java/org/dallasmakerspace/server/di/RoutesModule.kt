@@ -12,12 +12,14 @@ import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.memberservice.MemberSettingsHandler
+import org.dallasmakerspace.server.memberservice.ProfilePhotoClient
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessConnectHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessDisconnectHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessRefreshHandler
 import org.dallasmakerspace.server.routes.ActionTrackingHandler
 import org.dallasmakerspace.server.routes.AskAiHandler
+import org.dallasmakerspace.server.routes.AvatarHandler
 import org.dallasmakerspace.server.routes.BackendApiHandler
 import org.dallasmakerspace.server.routes.CabinetsHandler
 import org.dallasmakerspace.server.routes.CamerasApiHandler
@@ -107,6 +109,17 @@ class RoutesModule {
           voterRegistrationManager,
           memberServiceClient,
       )
+
+  @IntoMap
+  @Provides
+  @StringKey("/avatar/@{preferred_username}")
+  fun providesAvatarHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberService: MemberService,
+      profilePhotoClient: ProfilePhotoClient,
+  ): IRouteHandler =
+      AvatarHandler(loggerFactory, userInfoProvider, memberService, profilePhotoClient)
 
   @IntoMap
   @Provides

@@ -9,6 +9,8 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import org.dallasmakerspace.models.displayAvatarUrl
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -241,15 +243,7 @@ constructor(
 
               try {
                 val member = memberService.getMember(username, sessionId)
-                val rawUrl = member.avatarUrl?.takeIf { it.isNotEmpty() }
-                val avatarUrl =
-                    rawUrl?.let { url ->
-                      when {
-                        url.startsWith("https://") -> url
-                        url.startsWith("//") -> "https:$url"
-                        else -> "https://talk.dallasmakerspace.org$url"
-                      }.replace("{size}", "44")
-                    } ?: ""
+                val avatarUrl = normalizeAvatarUrl(member.displayAvatarUrl(), size = 44)
                 val profile =
                     SuggestionsCache.OrganizerProfile(
                         displayName = member.displayName,

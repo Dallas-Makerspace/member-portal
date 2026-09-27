@@ -49,6 +49,11 @@ class AvatarUrlTest {
   }
 
   @Test
+  fun passesThroughOwnAvatarRouteUnchanged() {
+    assertEquals("/avatar/@jdoe?v=123", normalizeAvatarUrl("/avatar/@jdoe?v=123", size = 90))
+  }
+
+  @Test
   fun returnsEmptyStringForNull() {
     assertEquals("", normalizeAvatarUrl(null))
   }

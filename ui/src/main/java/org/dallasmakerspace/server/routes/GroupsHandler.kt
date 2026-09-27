@@ -7,6 +7,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.models.ActorDisplayResolver
+import org.dallasmakerspace.models.displayAvatarUrl
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -92,15 +94,7 @@ constructor(
               .mapValues { (_, events) -> events.maxOf { it.eventTimestamp } }
 
       fun processMember(member: org.dallasmakerspace.models.DMSMember): MutableMap<String, Any?> {
-        val avatarUrl =
-            member.avatarUrl
-                ?.takeIf { it.isNotEmpty() }
-                ?.let { url ->
-                  when {
-                    url.startsWith("//") -> "https:$url"
-                    else -> "https://talk.dallasmakerspace.org$url"
-                  }.replace("{size}", "144")
-                } ?: ""
+        val avatarUrl = normalizeAvatarUrl(member.displayAvatarUrl(), size = 144)
         return mutableMapOf(
             "username" to member.username,
             "displayName" to member.displayName,

@@ -19,6 +19,7 @@ import kotlinx.datetime.Instant
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.members.MemberRepository
 import org.dallasmakerspace.models.FeaturedProject
+import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 
 private const val SHOW_AND_TELL_CATEGORY_SLUG = "show-and-tell"
@@ -236,7 +237,7 @@ constructor(
                   memberDisplayName = member.displayName,
                   memberAvatarUrl =
                       normalizeAvatarUrl(
-                          member.discourseAvatarUrl, size = FEATURED_PROJECT_AVATAR_SIZE),
+                          member.displayAvatarUrl(), size = FEATURED_PROJECT_AVATAR_SIZE),
                   likeCount = post.resolvedLikeCount,
                   discourseTopicUrl =
                       "https://talk.dallasmakerspace.org/t/$slug/$topicId/${post.postNumber}",
@@ -449,7 +450,7 @@ constructor(
                 memberDisplayName = member.displayName,
                 memberAvatarUrl =
                     normalizeAvatarUrl(
-                        member.discourseAvatarUrl, size = FEATURED_PROJECT_AVATAR_SIZE),
+                        member.displayAvatarUrl(), size = FEATURED_PROJECT_AVATAR_SIZE),
                 likeCount = post.resolvedLikeCount,
                 discourseTopicUrl =
                     "https://talk.dallasmakerspace.org/t/${topic.slug}/${topic.id}/${post.postNumber}",

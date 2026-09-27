@@ -1224,7 +1224,7 @@
                     var org = ev.organizer || {};
                     var organizerHtml = '';
                     if (org.username) {
-                        var safeAvatarUrl = (org.avatarUrl && /^https:\/\//i.test(org.avatarUrl)) ? org.avatarUrl : '';
+                        var safeAvatarUrl = org.avatarUrl || '';
                         var avatarHtml = safeAvatarUrl
                             ? '<img src="' + escapeHtml(safeAvatarUrl) + '" class="suggested-event-organizer-avatar" alt="" loading="lazy"/>'
                             : '';

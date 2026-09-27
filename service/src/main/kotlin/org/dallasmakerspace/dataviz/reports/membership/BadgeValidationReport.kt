@@ -10,6 +10,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 
 class BadgeValidationReport
@@ -59,7 +60,7 @@ constructor(
           val username = dataItem.values["username"]?.toString()?.removeSurrounding("\"")
           val member = username?.let { members[it] }
 
-          val avatarUrl = normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)
+          val avatarUrl = normalizeAvatarUrl(member?.displayAvatarUrl(), size = 144)
 
           // Build member JSON object
           val memberJson = buildJsonObject {

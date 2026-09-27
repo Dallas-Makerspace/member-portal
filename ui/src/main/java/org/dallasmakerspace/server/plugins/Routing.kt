@@ -44,6 +44,7 @@ fun Application.configureRouting() {
     authenticate("auth_session") {
       get(RouteFactory.Paths.INDEX.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.PROFILE.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+      get(RouteFactory.Paths.AVATAR.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.PROFILE_DEBUG_INFO.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

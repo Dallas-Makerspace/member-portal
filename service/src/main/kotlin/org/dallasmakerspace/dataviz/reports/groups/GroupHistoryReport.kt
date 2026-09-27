@@ -15,6 +15,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.routing.Groups
 
@@ -87,7 +88,7 @@ constructor(
                     }
                 else -> {
                   val actorAvatarUrl =
-                      normalizeAvatarUrl(actorMember?.discourseAvatarUrl, size = 144)
+                      normalizeAvatarUrl(actorMember?.displayAvatarUrl(), size = 144)
                   buildJsonObject {
                     put("username", JsonPrimitive(record.actorUsername))
                     put("displayName", JsonPrimitive(actorInfo.displayName))
@@ -97,7 +98,7 @@ constructor(
               }
 
           // Build member JSON object
-          val memberAvatarUrl = normalizeAvatarUrl(memberMember?.discourseAvatarUrl, size = 144)
+          val memberAvatarUrl = normalizeAvatarUrl(memberMember?.displayAvatarUrl(), size = 144)
           val memberJson = buildJsonObject {
             put("username", JsonPrimitive(record.memberUsername))
             put("displayName", JsonPrimitive(memberMember?.displayName ?: record.memberUsername))

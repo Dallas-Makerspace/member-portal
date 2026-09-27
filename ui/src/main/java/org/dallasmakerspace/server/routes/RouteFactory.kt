@@ -72,6 +72,7 @@ object RouteFactory {
     PING("/ping"),
     OIDC_CALLBACK("/oidc-callback"),
     PROFILE("/profile/@{preferred_username}"),
+    AVATAR("/avatar/@{preferred_username}"),
     PROFILEME("/profile-me"),
     DISCOURSE_LINK("/link-discourse"),
     DISCOURSE_UNLINK("/unlink-discourse"),

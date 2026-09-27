@@ -10,6 +10,8 @@ import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.models.Committee
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.DMSGroup
+import org.dallasmakerspace.models.displayAvatarUrl
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.committees.CommitteePageSectionProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -200,16 +202,7 @@ constructor(
     val upcomingEvents =
         upcomingEventsRaw.map { event ->
           val organizer = event.organizerUsername?.let { organizerMembers[it] }
-          val avatarUrl =
-              organizer
-                  ?.avatarUrl
-                  ?.takeIf { it.isNotEmpty() }
-                  ?.let { url ->
-                    when {
-                      url.startsWith("//") -> "https:$url"
-                      else -> "https://talk.dallasmakerspace.org$url"
-                    }.replace("{size}", "144")
-                  } ?: ""
+          val avatarUrl = normalizeAvatarUrl(organizer?.displayAvatarUrl(), size = 144)
 
           mapOf(
               "id" to event.id,
@@ -249,15 +242,7 @@ constructor(
       members: List<org.dallasmakerspace.models.DMSMember>
   ): List<Map<String, Any?>> {
     return members.map { member ->
-      val avatarUrl =
-          member.avatarUrl
-              ?.takeIf { it.isNotEmpty() }
-              ?.let { url ->
-                when {
-                  url.startsWith("//") -> "https:$url"
-                  else -> "https://talk.dallasmakerspace.org$url"
-                }.replace("{size}", "144")
-              } ?: ""
+      val avatarUrl = normalizeAvatarUrl(member.displayAvatarUrl(), size = 144)
 
       mapOf(
           "username" to member.username,
@@ -276,15 +261,7 @@ constructor(
     val group = chairGroupsMap[chairGroupSlug] ?: return emptyList()
 
     return group.members.map { member ->
-      val avatarUrl =
-          member.avatarUrl
-              ?.takeIf { it.isNotEmpty() }
-              ?.let { url ->
-                when {
-                  url.startsWith("//") -> "https:$url"
-                  else -> "https://talk.dallasmakerspace.org$url"
-                }.replace("{size}", "144")
-              } ?: ""
+      val avatarUrl = normalizeAvatarUrl(member.displayAvatarUrl(), size = 144)
 
       mapOf(
           "username" to member.username,
