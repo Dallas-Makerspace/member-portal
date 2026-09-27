@@ -61,7 +61,6 @@ class MemberRepository @Inject constructor(loggerFactory: LoggerFactory) : IMemb
           ProfileDAO.find { ProfileTable.username eq username }.firstOrNull()
               ?: throw IllegalArgumentException("Member does not exist in DB: $username")
       existingMember.apply {
-        avatarUrl = member.avatarUrl
         discourseUsername = member.discourseUsername
         discourseAvatarUrl = member.discourseAvatarUrl
         discordUserId = member.discordUserId
@@ -89,7 +88,6 @@ class MemberRepository @Inject constructor(loggerFactory: LoggerFactory) : IMemb
             ProfileDAO.find { ProfileTable.username eq member.username }.firstOrNull()
                 ?: throw IllegalArgumentException("Member does not exist in DB: ${member.username}")
         existingMember.apply {
-          avatarUrl = member.avatarUrl
           isEnabled = member.enabled
           discourseUsername = member.discourseUsername
           discourseAvatarUrl = member.discourseAvatarUrl

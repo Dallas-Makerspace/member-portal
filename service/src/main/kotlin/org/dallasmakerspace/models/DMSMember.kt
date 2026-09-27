@@ -9,7 +9,6 @@ fun daoToProfileModel(dao: ProfileDAO) =
         id = dao.idColumn.value,
         username = dao.id.value,
         enabled = dao.isEnabled,
-        avatarUrl = dao.avatarUrl,
         discourseUsername = dao.discourseUsername,
         discourseAvatarUrl = dao.discourseAvatarUrl,
         discordUserId = dao.discordUserId,

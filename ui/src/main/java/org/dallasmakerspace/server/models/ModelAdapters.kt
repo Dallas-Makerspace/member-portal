@@ -25,7 +25,6 @@ fun dmsMemberFromMap(data: Map<String, Any?>): DMSMember {
       firstName = data["firstName"] as String?,
       lastName = data["lastName"] as String?,
       displayName = data["displayName"] as String?,
-      avatarUrl = data["avatarUrl"] as String?,
       personalEmail = data["personalEmail"] as String?,
       phoneNumber = data["phoneNumber"] as String?,
       badgeNumber = data["badgeNumber"] as String?,
@@ -128,7 +127,6 @@ fun accountFromMap(map: Map<String, Any?>): Account {
 fun dmsMemberToMap(member: DMSMember): Map<String, Any?> {
   return mapOf(
       "username" to member.username,
-      "avatarUrl" to member.avatarUrl,
       "discourseUsername" to member.discourseUsername,
       "discourseAvatarUrl" to member.discourseAvatarUrl,
       "discordUserId" to member.discordUserId,

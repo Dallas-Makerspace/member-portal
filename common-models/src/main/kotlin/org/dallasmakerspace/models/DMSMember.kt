@@ -10,7 +10,6 @@ data class DMSMember(
     var firstName: String? = null,
     var lastName: String? = null,
     var displayName: String? = null,
-    var avatarUrl: String? = null,
     var personalEmail: String? = null,
     var phoneNumber: String? = null,
     var badgeNumber: String? = null,

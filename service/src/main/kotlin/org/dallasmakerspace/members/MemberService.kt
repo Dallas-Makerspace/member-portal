@@ -290,9 +290,6 @@ constructor(
                     members = emptyList(),
                 )
               }
-          if (dbMember.avatarUrl.isNullOrBlank()) {
-            dbMember.avatarUrl = dbMember.discourseAvatarUrl
-          }
 
           dbMember
         }
@@ -454,11 +451,6 @@ constructor(
 
     var propertiesUpdated = false
     // Figure out which properties have been updated by comparing dbMember and memberFromApi.
-    if (dbMember.avatarUrl != memberFromApi.avatarUrl) {
-      log.info(
-          "Avatar URL updated for $username; Old URL: ${dbMember.avatarUrl}; New URL: ${memberFromApi.avatarUrl}")
-      propertiesUpdated = true
-    }
     if (dbMember.discourseUsername != memberFromApi.discourseUsername) {
       log.info(
           "Discourse username updated for $username; Old username: ${dbMember.discourseUsername}; " +
@@ -683,8 +675,9 @@ constructor(
                   firstName = it.givenName,
                   lastName = it.sn,
                   displayName = it.displayName,
-                  avatarUrl = dbMember?.discourseAvatarUrl,
                   discourseUsername = dbMember?.discourseUsername,
+                  discourseAvatarUrl = dbMember?.discourseAvatarUrl,
+                  profilePhotoUrl = dbMember?.profilePhotoUrl,
                   personalEmail = it.mail,
                   phoneNumber = getNormalizedPhoneNumber(it.telephoneNumber, it.sAMAccountName),
                   badgeNumber = it.employeeID,
@@ -742,7 +735,8 @@ constructor(
                           firstName = it.givenName,
                           lastName = it.sn,
                           displayName = it.displayName,
-                          avatarUrl = dbMember?.discourseAvatarUrl,
+                          discourseAvatarUrl = dbMember?.discourseAvatarUrl,
+                          profilePhotoUrl = dbMember?.profilePhotoUrl,
                           discourseUsername = dbMember?.discourseUsername,
                           personalEmail = it.mail,
                           phoneNumber =

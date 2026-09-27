@@ -89,7 +89,6 @@ CREATE TABLE `groups` (
 CREATE TABLE `profile` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT '_id is autoincrement id assigned to a profile, this column is used as Foreign Key in other tables. First 100 are reserved for system profiles. primary key',
   `username` varchar(100) NOT NULL COMMENT 'DMS member username, unique',
-  `avatar_url` varchar(2083) DEFAULT NULL COMMENT 'DMS profile avatar url',
   `discourse_username` varchar(100) DEFAULT NULL COMMENT 'The discourse username associated with the member, unique',
   `discourse_avatar_url` varchar(2083) DEFAULT NULL COMMENT 'Discourse avatar url',
   `discord_userid` varchar(100) DEFAULT NULL COMMENT 'The discord userid associated with the member, unique',

@@ -19,7 +19,6 @@ object ProfileTable : IdTable<String>("profile") {
   val idColumn: Column<EntityID<Int>> = integer("id").autoIncrement().entityId()
   val username: Column<EntityID<String>> = varchar("username", 100).entityId()
   val isEnabled: Column<Boolean> = bool("is_enabled").default(false)
-  val avatarUrl: Column<String?> = varchar("avatar_url", 2083).nullable()
   val discourseUsername: Column<String?> = varchar("discourse_username", 100).nullable()
   val discourseAvatarUrl: Column<String?> = varchar("discourse_avatar_url", 2083).nullable()
   val discordUserId: Column<String?> = varchar("discord_userid", 100).nullable()
@@ -48,7 +47,6 @@ class ProfileDAO(username: EntityID<String>) : Entity<String>(username) {
 
   var idColumn by ProfileTable.idColumn
   var isEnabled by ProfileTable.isEnabled
-  var avatarUrl by ProfileTable.avatarUrl
   var discourseUsername by ProfileTable.discourseUsername
   var discourseAvatarUrl by ProfileTable.discourseAvatarUrl
   var discordUserId by ProfileTable.discordUserId
