@@ -51,6 +51,7 @@ import org.dallasmakerspace.members.GroupSettingsService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.suspendTransaction
+import org.dallasmakerspace.members.routing.profilePhotoRoutes
 import org.dallasmakerspace.models.AskAiFeedbackRequest
 import org.dallasmakerspace.models.AskAiRequest
 import org.dallasmakerspace.models.AskAiStreamResult
@@ -1151,6 +1152,10 @@ fun Application.configureRouting() {
       AppComponentHolder.instance.getProfileSubscriptionService()
     }
     profileSubscriptionRoutes(profileSubscriptionService, featureFlagService)
+
+    /** Upload/remove/serve a member's profile photo * */
+    val profilePhotoService by lazy { AppComponentHolder.instance.getProfilePhotoService() }
+    profilePhotoRoutes(profilePhotoService, featureFlagService, memberService)
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */
     featureFlagRoutes(featureFlagService)

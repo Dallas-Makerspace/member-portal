@@ -78,6 +78,8 @@ dependencies {
   implementation(":winrm-java-2.1.00")
   // AWS Bedrock
   implementation("software.amazon.awssdk:bedrockruntime:2.55.1")
+  // AWS S3 - generic object storage (profile photos, etc.)
+  implementation("software.amazon.awssdk:s3:2.55.1")
   // Elasticsearch logging
   implementation("co.elastic.clients:elasticsearch-java:8.14.3")
   implementation("com.fasterxml.jackson.core:jackson-databind:2.22.2")

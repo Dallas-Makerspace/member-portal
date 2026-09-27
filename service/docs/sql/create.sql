@@ -96,6 +96,8 @@ CREATE TABLE `profile` (
   `discord_username` varchar(100) DEFAULT NULL COMMENT 'The discord username associated with the member',
   `discord_avatar_url` varchar(2083) DEFAULT NULL COMMENT 'Discord avatar url',
   `discord_webhook_id` varchar(100) DEFAULT NULL COMMENT 'Discord webhook ID for server role sync verification',
+  `profile_photo_key` varchar(512) DEFAULT NULL COMMENT 'Object-store key of the member''s uploaded profile photo',
+  `profile_photo_updated_at` datetime DEFAULT NULL COMMENT 'UTC timestamp of the last profile photo upload',
   `attributes` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Misc attributes' CHECK (json_valid(`attributes`)),
   `created` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00' ON UPDATE current_timestamp(),

@@ -1,0 +1,52 @@
+sequenceDiagram
+    actor M as Member
+    participant B as Browser (profile page)
+    participant FD as MediaPipe Face Detector (on-device)
+    participant UI as UI (Ktor)
+    participant S as Service (Ktor)
+    participant OS as IObjectStore (S3ObjectStore)
+    participant S3 as S3 bucket (private)
+    participant DB as MariaDB (profile)
+
+    M->>B: Click camera button
+    B->>M: Menu: Take a selfie / Upload a picture / Remove photo
+    alt Take a selfie
+        M->>B: Take a selfie
+        B->>B: getUserMedia front camera, mirrored preview
+        B->>FD: Lazy-load model, detect on frames (live guidance)
+        M->>B: Capture
+    else Upload a picture
+        M->>B: Choose file
+    end
+    B->>M: Crop and zoom (Cropper.js, pre-positioned on face)
+    M->>B: Next
+    B->>FD: Detect faces on cropped image
+    FD-->>B: Boxes, scores, keypoints
+    B->>B: Run size, centering, pose, lighting, blur checks
+    alt Hard failure
+        B->>M: Suggestion and Try again (no override)
+    else Soft failure
+        B->>M: Suggestion, Try again or Use anyway
+    else Pass
+        B->>M: Preview and Save photo
+    end
+    M->>B: Save photo
+    B->>UI: POST /profile/@username/photo (512px JPEG)
+    UI->>UI: Verify session user is owner, flag enabled
+    UI->>S: PUT /members/username/profile-photo
+    S->>S: Sniff type, size and dimension checks, re-encode (strips EXIF)
+    S->>OS: put profile-photos/username/uuid.jpg
+    OS->>S3: PutObject
+    S->>DB: Update profile_photo_key, profile_photo_updated_at
+    S->>OS: delete previous key (best effort)
+    S-->>UI: 200 photoUrl
+    UI-->>B: 200 photoUrl
+    B->>M: Avatar updates in place
+
+    Note over B,S3: Viewing a photo
+    B->>UI: GET /avatar/@username
+    UI->>S: GET /members/username/profile-photo
+    S->>OS: presignedGetUrl (1h TTL)
+    S-->>UI: 302 presigned URL
+    UI-->>B: 302 presigned URL
+    B->>S3: GET object

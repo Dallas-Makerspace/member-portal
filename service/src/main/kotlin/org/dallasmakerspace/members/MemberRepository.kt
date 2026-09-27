@@ -1,5 +1,8 @@
 package org.dallasmakerspace.members
 
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import javax.inject.Inject
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.members.db.ProfileDAO
@@ -13,6 +16,7 @@ import org.jetbrains.exposed.sql.and
  * Manages member data. Fetches and updates member data. Contains validation and orchestration logic
  * for updating member data.
  */
+@Suppress("TooManyFunctions")
 class MemberRepository @Inject constructor(loggerFactory: LoggerFactory) : IMemberRepository {
   private val log = loggerFactory.create(javaClass)
 
@@ -228,5 +232,30 @@ class MemberRepository @Inject constructor(loggerFactory: LoggerFactory) : IMemb
           .filter { it.discordUserId != null }
           .associateBy { it.discordUserId!! }
     }
+  }
+
+  override suspend fun setProfilePhoto(username: String, key: String, updatedAt: Instant): String? =
+      suspendTransaction {
+        val existing =
+            ProfileDAO.find { ProfileTable.username eq username }.firstOrNull()
+                ?: throw IllegalArgumentException("Member does not exist in DB: $username")
+        val previousKey = existing.profilePhotoKey
+        existing.profilePhotoKey = key
+        existing.profilePhotoUpdatedAt = LocalDateTime.ofInstant(updatedAt, ZoneOffset.UTC)
+        previousKey
+      }
+
+  override suspend fun clearProfilePhoto(username: String): String? = suspendTransaction {
+    val existing =
+        ProfileDAO.find { ProfileTable.username eq username }.firstOrNull()
+            ?: throw IllegalArgumentException("Member does not exist in DB: $username")
+    val previousKey = existing.profilePhotoKey
+    existing.profilePhotoKey = null
+    existing.profilePhotoUpdatedAt = null
+    previousKey
+  }
+
+  override suspend fun getProfilePhotoKey(username: String): String? = suspendTransaction {
+    ProfileDAO.find { ProfileTable.username eq username }.firstOrNull()?.profilePhotoKey
   }
 }

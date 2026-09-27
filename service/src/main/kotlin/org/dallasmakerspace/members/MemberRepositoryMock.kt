@@ -1,12 +1,15 @@
 package org.dallasmakerspace.members
 
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import org.dallasmakerspace.models.DMSMember
 
+@Suppress("TooManyFunctions")
 class MemberRepositoryMock @Inject constructor() : IMemberRepository {
 
   private val store = ConcurrentHashMap(SEED_MEMBERS.associateBy { it.username })
+  private val profilePhotoKeys = ConcurrentHashMap<String, String>()
 
   override suspend fun getMemberOrInsert(username: String, enabled: Boolean?): DMSMember =
       store.getOrPut(username) {
@@ -54,6 +57,25 @@ class MemberRepositoryMock @Inject constructor() : IMemberRepository {
       discordUserIds: List<String>
   ): Map<String, DMSMember> =
       store.values.filter { it.discordUserId in discordUserIds }.associateBy { it.discordUserId!! }
+
+  override suspend fun setProfilePhoto(username: String, key: String, updatedAt: Instant): String? {
+    val existing =
+        store[username] ?: throw IllegalArgumentException("Member does not exist in DB: $username")
+    val previousKey = profilePhotoKeys.put(username, key)
+    store[username] =
+        existing.copy(profilePhotoUrl = "/avatar/@$username?v=${updatedAt.epochSecond}")
+    return previousKey
+  }
+
+  override suspend fun clearProfilePhoto(username: String): String? {
+    val existing =
+        store[username] ?: throw IllegalArgumentException("Member does not exist in DB: $username")
+    val previousKey = profilePhotoKeys.remove(username)
+    store[username] = existing.copy(profilePhotoUrl = null)
+    return previousKey
+  }
+
+  override suspend fun getProfilePhotoKey(username: String): String? = profilePhotoKeys[username]
 
   companion object {
     private val SEED_MEMBERS =

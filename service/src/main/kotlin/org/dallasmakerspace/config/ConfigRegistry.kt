@@ -43,6 +43,17 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val PROFILE_PHOTO_ENABLED =
+      ConfigKey(
+          key = "profile-photo.enabled",
+          description =
+              "Let members upload/take a profile photo from their profile page; can be piloted " +
+                  "for specific members/AD groups before a full rollout",
+          category = "Profile Photo",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val REMOTE_ACCESS_JUMP_SERVER_CONNECTION_IDS =
       ConfigKey(
           key = "remote-access.jump-server.connection-ids",
@@ -154,5 +165,6 @@ object ConfigRegistry {
           NOTIFICATIONS_ENABLED,
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,
           FOLLOW_FEATURE_ENABLED,
+          PROFILE_PHOTO_ENABLED,
       )
 }

@@ -21,8 +21,16 @@ data class DMSMember(
     var discordAvatarUrl: String? = null,
     var discordWebhookId: String? = null,
     var linkedinUsername: String? = null,
+    // Set only by the service from profile.profile_photo_key; not accepted on member update DTOs,
+    // so a member/AD refresh can never clobber it.
+    var profilePhotoUrl: String? = null,
     var memberSince: Instant? = null,
     var enabled: Boolean = false,
     var groups: List<DMSGroup> = emptyList(),
     var accountInfo: AccountInfo? = null,
 )
+
+/**
+ * The avatar to show for this member: an uploaded photo takes precedence over the Discourse avatar.
+ */
+fun DMSMember.displayAvatarUrl(): String? = profilePhotoUrl ?: discourseAvatarUrl

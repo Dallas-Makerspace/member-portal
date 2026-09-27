@@ -4,6 +4,7 @@ import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.multibindings.IntoSet
+import javax.inject.Singleton
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.members.GroupHistoryRepository
@@ -20,8 +21,10 @@ import org.dallasmakerspace.members.MemberRepositoryMock
 import org.dallasmakerspace.members.MemberSettingsRepository
 import org.dallasmakerspace.members.MemberSettingsRepositoryMock
 import org.dallasmakerspace.members.MemberSettingsService
+import org.dallasmakerspace.members.ProfilePhotoService
 import org.dallasmakerspace.members.observers.DiscourseMemberStatusObserver
 import org.dallasmakerspace.members.observers.IMemberPropChangeObserver
+import org.dallasmakerspace.storage.ObjectStoreFactory
 
 @Module
 abstract class MembersModule {
@@ -78,6 +81,16 @@ abstract class MembersModule {
         repository: IGroupSettingsRepository,
         loggerFactory: LoggerFactory,
     ): GroupSettingsService = GroupSettingsService(repository, loggerFactory)
+
+    // Holds an in-memory rate-limit map keyed by username - must stay a single instance.
+    @Provides
+    @Singleton
+    fun provideProfilePhotoService(
+        memberRepository: IMemberRepository,
+        objectStoreFactory: ObjectStoreFactory,
+        loggerFactory: LoggerFactory,
+    ): ProfilePhotoService =
+        ProfilePhotoService(memberRepository, objectStoreFactory, loggerFactory)
 
     private fun useMockServices(appConfig: AppConfig) =
         appConfig.requireBooleanProperty("ktor.development") &&
