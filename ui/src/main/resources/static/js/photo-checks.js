@@ -230,13 +230,19 @@ export function checkFaceGeometry(detection, cropSize) {
     return null;
 }
 
-/** Converts a MediaPipe detection's normalized boundingBox (0..1) to pixel coordinates. */
+/**
+ * Clamps a MediaPipe detection's (already pixel-coordinate) boundingBox to lie fully within the
+ * [cropSize]-square crop, so a region this produces is always safe to index into that crop's
+ * ImageData without reading out of bounds (or wrapping into the next row).
+ */
 export function faceBoxToPixelRegion(detection, cropSize) {
     const box = detection.boundingBox;
+    const x = Math.min(Math.max(0, Math.round(box.originX)), cropSize);
+    const y = Math.min(Math.max(0, Math.round(box.originY)), cropSize);
     return {
-        x: Math.max(0, Math.round(box.originX)),
-        y: Math.max(0, Math.round(box.originY)),
-        width: Math.min(cropSize, Math.round(box.width)),
-        height: Math.min(cropSize, Math.round(box.height)),
+        x,
+        y,
+        width: Math.min(cropSize - x, Math.round(box.width)),
+        height: Math.min(cropSize - y, Math.round(box.height)),
     };
 }
