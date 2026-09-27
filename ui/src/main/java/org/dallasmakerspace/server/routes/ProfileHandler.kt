@@ -18,12 +18,12 @@ import kotlinx.datetime.format.byUnicodePattern
 import kotlinx.datetime.toJavaInstant
 import org.dallasmakerspace.models.CommunicationPreference
 import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
-import org.dallasmakerspace.server.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.models.slug
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.plugins.UserSession

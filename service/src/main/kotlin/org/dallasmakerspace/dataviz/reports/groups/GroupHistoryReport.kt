@@ -15,6 +15,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.routing.Groups
 
 class GroupHistoryReport
@@ -85,7 +86,8 @@ constructor(
                       put("url", JsonPrimitive(actorInfo.link))
                     }
                 else -> {
-                  val actorAvatarUrl = getAvatarUrl(actorMember?.discourseAvatarUrl)
+                  val actorAvatarUrl =
+                      normalizeAvatarUrl(actorMember?.discourseAvatarUrl, size = 144)
                   buildJsonObject {
                     put("username", JsonPrimitive(record.actorUsername))
                     put("displayName", JsonPrimitive(actorInfo.displayName))
@@ -95,7 +97,7 @@ constructor(
               }
 
           // Build member JSON object
-          val memberAvatarUrl = getAvatarUrl(memberMember?.discourseAvatarUrl)
+          val memberAvatarUrl = normalizeAvatarUrl(memberMember?.discourseAvatarUrl, size = 144)
           val memberJson = buildJsonObject {
             put("username", JsonPrimitive(record.memberUsername))
             put("displayName", JsonPrimitive(memberMember?.displayName ?: record.memberUsername))
@@ -156,16 +158,5 @@ constructor(
         )
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
-  }
-
-  private fun getAvatarUrl(discourseAvatarUrl: String?): String {
-    return discourseAvatarUrl
-        ?.takeIf { it.isNotEmpty() }
-        ?.let { url ->
-          when {
-            url.startsWith("//") -> "https:$url"
-            else -> "https://talk.dallasmakerspace.org$url"
-          }.replace("{size}", "144")
-        } ?: ""
   }
 }

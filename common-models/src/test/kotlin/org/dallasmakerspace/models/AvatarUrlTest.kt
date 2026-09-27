@@ -1,4 +1,4 @@
-package org.dallasmakerspace.server.models
+package org.dallasmakerspace.models
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

@@ -17,6 +17,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.smartwaiver.ISmartwaiverApiClient
 
 private const val DEFAULT_DAYS = 0L
@@ -130,17 +131,7 @@ constructor(
     return buildJsonObject {
       put("username", JsonPrimitive(username))
       put("displayName", JsonPrimitive(member?.displayName ?: username))
-      put("avatarUrl", JsonPrimitive(getAvatarUrl(member?.discourseAvatarUrl)))
+      put("avatarUrl", JsonPrimitive(normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)))
     }
   }
-
-  private fun getAvatarUrl(discourseAvatarUrl: String?): String =
-      discourseAvatarUrl
-          ?.takeIf { it.isNotEmpty() }
-          ?.let { url ->
-            when {
-              url.startsWith("//") -> "https:$url"
-              else -> "https://talk.dallasmakerspace.org$url"
-            }.replace("{size}", "144")
-          } ?: ""
 }

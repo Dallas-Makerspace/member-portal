@@ -19,6 +19,7 @@ import kotlinx.datetime.Instant
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.members.MemberRepository
 import org.dallasmakerspace.models.FeaturedProject
+import org.dallasmakerspace.models.normalizeAvatarUrl
 
 private const val SHOW_AND_TELL_CATEGORY_SLUG = "show-and-tell"
 private const val SHOW_AND_TELL_CATEGORY_ID = 49
@@ -30,6 +31,7 @@ private const val USER_ACTIONS_PAGE_SIZE = 30
 private const val USER_ACTIONS_MAX_PAGES = 5
 private const val GLOBAL_POST_IDS_CHUNK_SIZE = 50
 private const val MAX_FETCH_ATTEMPTS = 3
+private const val FEATURED_PROJECT_AVATAR_SIZE = 40
 private const val TIMEOUT_RETRY_DELAY_MS = 3_000L
 
 @Singleton
@@ -232,7 +234,9 @@ constructor(
                   imageUrl = imageUrl,
                   memberUsername = member.username,
                   memberDisplayName = member.displayName,
-                  memberAvatarUrl = resolveAvatarUrl(member.discourseAvatarUrl),
+                  memberAvatarUrl =
+                      normalizeAvatarUrl(
+                          member.discourseAvatarUrl, size = FEATURED_PROJECT_AVATAR_SIZE),
                   likeCount = post.resolvedLikeCount,
                   discourseTopicUrl =
                       "https://talk.dallasmakerspace.org/t/$slug/$topicId/${post.postNumber}",
@@ -339,16 +343,6 @@ constructor(
     return null
   }
 
-  private fun resolveAvatarUrl(raw: String?): String? =
-      raw?.let { url ->
-            when {
-              url.startsWith("//") -> "https:$url"
-              url.startsWith("/") -> "https://talk.dallasmakerspace.org$url"
-              else -> url
-            }
-          }
-          ?.replace("{size}", "40")
-
   /**
    * Single background pass that fetches 2 years of Show & Tell posts and populates both caches:
    * - [cachedProjects] — global top-[MAX_FEATURED_PROJECTS] from the last 30 days (home page)
@@ -453,7 +447,9 @@ constructor(
                 imageUrl = imageUrl,
                 memberUsername = member.username,
                 memberDisplayName = member.displayName,
-                memberAvatarUrl = resolveAvatarUrl(member.discourseAvatarUrl),
+                memberAvatarUrl =
+                    normalizeAvatarUrl(
+                        member.discourseAvatarUrl, size = FEATURED_PROJECT_AVATAR_SIZE),
                 likeCount = post.resolvedLikeCount,
                 discourseTopicUrl =
                     "https://talk.dallasmakerspace.org/t/${topic.slug}/${topic.id}/${post.postNumber}",

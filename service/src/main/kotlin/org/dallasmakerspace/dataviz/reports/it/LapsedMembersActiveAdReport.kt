@@ -17,6 +17,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.normalizeAvatarUrl
 
 class LapsedMembersActiveAdReport
 @Inject
@@ -98,16 +99,7 @@ constructor(
                   ?.let { whmcsId -> whmcsAccountStatuses[whmcsId]?.timeline?.lastOrNull() }
                   ?.let { it.type == TimelineEntryType.ACTIVE && it.endDate == null } ?: false
 
-          val avatarUrl =
-              member
-                  ?.discourseAvatarUrl
-                  ?.takeIf { it.isNotEmpty() }
-                  ?.let { url ->
-                    when {
-                      url.startsWith("//") -> "https:$url"
-                      else -> "https://talk.dallasmakerspace.org$url"
-                    }.replace("{size}", "144")
-                  } ?: ""
+          val avatarUrl = normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)
 
           // Build member JSON object
           val memberJson = buildJsonObject {

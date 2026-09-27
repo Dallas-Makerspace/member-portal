@@ -20,6 +20,7 @@ import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
 import org.dallasmakerspace.models.Interlocks
+import org.dallasmakerspace.models.normalizeAvatarUrl
 
 class CabinetDeniedAccessReport
 @Inject
@@ -127,7 +128,9 @@ constructor(
                 buildJsonObject {
                   put("username", JsonPrimitive(username))
                   put("displayName", JsonPrimitive(member?.displayName ?: username))
-                  put("avatarUrl", JsonPrimitive(events.getAvatarUrl(member?.discourseAvatarUrl)))
+                  put(
+                      "avatarUrl",
+                      JsonPrimitive(normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)))
                 }
               } else {
                 JsonPrimitive("Badge: ${events.maskBadge(badge, isInfra)}")

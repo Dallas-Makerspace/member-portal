@@ -14,6 +14,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.normalizeAvatarUrl
 
 class BadgeSwipesReport
 @Inject
@@ -56,7 +57,9 @@ constructor(
                 buildJsonObject {
                   put("username", JsonPrimitive(username))
                   put("displayName", JsonPrimitive(member?.displayName ?: username))
-                  put("avatarUrl", JsonPrimitive(getAvatarUrl(member?.discourseAvatarUrl)))
+                  put(
+                      "avatarUrl",
+                      JsonPrimitive(normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)))
                 }
               } else {
                 // For badge swipes with no associated member, show card number
@@ -120,16 +123,5 @@ constructor(
     LIMIT 5000
     """
         .trimIndent()
-  }
-
-  private fun getAvatarUrl(discourseAvatarUrl: String?): String {
-    return discourseAvatarUrl
-        ?.takeIf { it.isNotEmpty() }
-        ?.let { url ->
-          when {
-            url.startsWith("//") -> "https:$url"
-            else -> "https://talk.dallasmakerspace.org$url"
-          }.replace("{size}", "144")
-        } ?: ""
   }
 }

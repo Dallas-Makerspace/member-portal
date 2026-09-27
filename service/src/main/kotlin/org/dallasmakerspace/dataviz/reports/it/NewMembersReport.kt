@@ -19,6 +19,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.normalizeAvatarUrl
 
 private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
 private val UTC_ZONE = ZoneOffset.UTC
@@ -110,7 +111,9 @@ constructor(
           val memberJson = buildJsonObject {
             put("username", JsonPrimitive(username ?: ""))
             put("displayName", JsonPrimitive(member?.displayName ?: username ?: ""))
-            put("avatarUrl", JsonPrimitive(getAvatarUrl(member?.discourseAvatarUrl)))
+            put(
+                "avatarUrl",
+                JsonPrimitive(normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)))
           }
 
           val isAddon = row["whmcs_real_user_id"] == null
@@ -162,14 +165,4 @@ constructor(
         metadata = metadata,
     )
   }
-
-  private fun getAvatarUrl(discourseAvatarUrl: String?): String =
-      discourseAvatarUrl
-          ?.takeIf { it.isNotEmpty() }
-          ?.let { url ->
-            when {
-              url.startsWith("//") -> "https:$url"
-              else -> "https://talk.dallasmakerspace.org$url"
-            }.replace("{size}", "144")
-          } ?: ""
 }

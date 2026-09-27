@@ -21,7 +21,6 @@ private const val RESCAN_DEBOUNCE_SECONDS = 30L
 private const val ES_INDEX = "not-john-index"
 private const val ES_MAX_HITS = 10_000
 private const val ES_LAST_EVENT_LOOKBACK_DAYS = 365
-private const val AVATAR_SIZE = "144"
 private const val MIN_BADGE_LEN_FOR_PARTIAL_MASK = 4
 
 data class EsEvent(val host: String, val timestamp: String, val message: String)
@@ -330,20 +329,5 @@ constructor(
     if (isDevelopment) return badge // no masking in development mode
     if (badge.length <= MIN_BADGE_LEN_FOR_PARTIAL_MASK) return "*".repeat(badge.length)
     return badge.take(2) + "*".repeat(badge.length - 4) + badge.takeLast(2)
-  }
-
-  // ---------------------------------------------------------------------------
-  // Avatar URL helper
-  // ---------------------------------------------------------------------------
-
-  fun getAvatarUrl(discourseAvatarUrl: String?): String {
-    return discourseAvatarUrl
-        ?.takeIf { it.isNotEmpty() }
-        ?.let { url ->
-          when {
-            url.startsWith("//") -> "https:$url"
-            else -> "https://talk.dallasmakerspace.org$url"
-          }.replace("{size}", AVATAR_SIZE)
-        } ?: ""
   }
 }

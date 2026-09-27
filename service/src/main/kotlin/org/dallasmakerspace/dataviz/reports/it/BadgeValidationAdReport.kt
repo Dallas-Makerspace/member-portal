@@ -12,6 +12,7 @@ import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
+import org.dallasmakerspace.models.normalizeAvatarUrl
 
 class BadgeValidationAdReport
 @Inject
@@ -60,16 +61,7 @@ constructor(
           val badgeNumber = attributes["employeeID"] as? String ?: ""
           val member = members[username]
 
-          val avatarUrl =
-              member
-                  ?.discourseAvatarUrl
-                  ?.takeIf { it.isNotEmpty() }
-                  ?.let { url ->
-                    when {
-                      url.startsWith("//") -> "https:$url"
-                      else -> "https://talk.dallasmakerspace.org$url"
-                    }.replace("{size}", "144")
-                  } ?: ""
+          val avatarUrl = normalizeAvatarUrl(member?.discourseAvatarUrl, size = 144)
 
           // Build member JSON object
           val memberJson = buildJsonObject {
