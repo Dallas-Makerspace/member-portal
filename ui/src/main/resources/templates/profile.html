@@ -209,9 +209,15 @@
 
                 <div class="card-body pt-0">
                     <div class="text-center">
-                        <img th:src="${avatar_url != '' ? avatar_url : '../static/images/profile-pic-not-set.svg'}"
-                             class="profile-avatar rounded-circle"
-                             alt="Profile Avatar">
+                        <span class="position-relative d-inline-block">
+                            <img th:src="${avatar_url != '' ? avatar_url : '../static/images/profile-pic-not-set.svg'}"
+                                 id="profileAvatarImg"
+                                 class="profile-avatar rounded-circle"
+                                 alt="Profile Avatar">
+                            <th:block th:if="${profile_photo_enabled and (is_self == 'true' or can_moderate_photo)}">
+                                <div th:replace="~{fragments/profile-photo :: profile-photo-controls}"></div>
+                            </th:block>
+                        </span>
                         <h4 class="mt-3 mb-0 dms-card-title" th:text="${name}"></h4>
                         <p class="text-muted" th:text="'@' + ${preferred_username}"></p>
                         <th:block th:if="${follow_feature_enabled}">
@@ -823,6 +829,8 @@
 <script src="../static/js/dms-page-loader.js" defer></script>
 <script type="module" src="../static/js/dms-group-pill.js"></script>
 <script type="module" src="../static/js/dms-relative-date.js"></script>
+<script type="module" th:if="${profile_photo_enabled and (is_self == 'true' or can_moderate_photo)}"
+        src="../static/js/profile-photo.js"></script>
 
 <!-- LinkedIn Modal Script -->
 <script th:if="${is_self and !linkedin_username}">

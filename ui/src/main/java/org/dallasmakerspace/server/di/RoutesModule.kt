@@ -45,6 +45,7 @@ import org.dallasmakerspace.server.routes.ProfileFollowsHandler
 import org.dallasmakerspace.server.routes.ProfileHandler
 import org.dallasmakerspace.server.routes.ProfileKioskWaiverPhotosHandler
 import org.dallasmakerspace.server.routes.ProfileMeHandler
+import org.dallasmakerspace.server.routes.ProfilePhotoHandler
 import org.dallasmakerspace.server.routes.ProfileTotalActiveTimeHandler
 import org.dallasmakerspace.server.routes.ReportHandler
 import org.dallasmakerspace.server.routes.ScannerHandler
@@ -120,6 +121,15 @@ class RoutesModule {
       profilePhotoClient: ProfilePhotoClient,
   ): IRouteHandler =
       AvatarHandler(loggerFactory, userInfoProvider, memberService, profilePhotoClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/profile/@{preferred_username}/photo")
+  fun providesProfilePhotoHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      profilePhotoClient: ProfilePhotoClient,
+  ): IRouteHandler = ProfilePhotoHandler(loggerFactory, userInfoProvider, profilePhotoClient)
 
   @IntoMap
   @Provides

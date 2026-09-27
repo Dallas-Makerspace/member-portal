@@ -114,6 +114,12 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.PROFILE_FOLLOWS.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      post(RouteFactory.Paths.PROFILE_PHOTO.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      delete(RouteFactory.Paths.PROFILE_PHOTO.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.COMMITTEES.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.COMMITTEE_DETAIL.path) {
         RouteFactory.getHandler(call)?.handleBase(call)

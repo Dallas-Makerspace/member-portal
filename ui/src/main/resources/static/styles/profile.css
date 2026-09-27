@@ -432,3 +432,77 @@
         gap: 22px;
     }
 }
+
+/* Profile photo camera button + upload modal (see fragments/profile-photo.html) */
+.profile-photo-btn {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.profile-photo-btn > .material-symbols-outlined {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: #f1f3f5;
+    color: #495057;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    font-size: 18px;
+}
+
+.profile-photo-btn:hover > .material-symbols-outlined,
+.profile-photo-btn:focus-visible > .material-symbols-outlined {
+    background-color: #e9ecef;
+}
+
+.profile-photo-status {
+    min-height: 1.5em;
+    font-size: 0.9rem;
+    color: #6c757d;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.profile-photo-video-wrap,
+.profile-photo-crop-wrap {
+    max-width: 320px;
+    margin: 0 auto;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#profilePhotoVideo {
+    width: 100%;
+    display: block;
+    transform: scaleX(-1); /* mirrored preview, matching a selfie camera app */
+}
+
+.profile-photo-crop-wrap {
+    height: 320px;
+}
+
+#profilePhotoCropImage {
+    display: block;
+    max-width: 100%;
+}
+
+.profile-photo-preview {
+    width: 160px;
+    height: 160px;
+    object-fit: cover;
+    border: 3px solid white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}

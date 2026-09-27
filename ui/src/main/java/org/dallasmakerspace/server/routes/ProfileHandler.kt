@@ -46,6 +46,7 @@ constructor(
     private val EVENT_INPUT_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     private val EVENT_OUTPUT_FORMATTER = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy 'at' h:mm a")
     private const val FOLLOW_FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
+    private const val PROFILE_PHOTO_FEATURE_FLAG_KEY = "profile-photo.enabled"
     private const val FACEPILE_LIMIT = 5
     private const val FACEPILE_AVATAR_SIZE = 90
     private const val PROFILE_PIC_FALLBACK = "/static/images/profile-pic-not-set.svg"
@@ -95,6 +96,11 @@ constructor(
         memberServiceClient.isFeatureEnabled(FOLLOW_FEATURE_FLAG_KEY, it, session.sessionId)
       } ?: false
     }
+    val profilePhotoEnabledDeferred = async {
+      currentUsername?.let {
+        memberServiceClient.isFeatureEnabled(PROFILE_PHOTO_FEATURE_FLAG_KEY, it, session.sessionId)
+      } ?: false
+    }
 
     // Await critical result; events still running concurrently
     val requestedMember = memberDeferred.await()
@@ -139,6 +145,9 @@ constructor(
         .firstOrNull { group -> group.name == voterRegistrationManager.getVotingMembersGroupName() }
         ?.apply { jsonMap["is_voting_member"] = "true" }
     jsonMap["is_self"] = isSelf.toString()
+    jsonMap["profile_photo_enabled"] = profilePhotoEnabledDeferred.await()
+    jsonMap["has_uploaded_photo"] = requestedMember.profilePhotoUrl != null
+    jsonMap["can_moderate_photo"] = canManageMembers && !isSelf
     val communicationPreference = settingsDeferred.await().get("communication_preference") ?: ""
     jsonMap["communication_preference"] = communicationPreference
     if (isSelfOrAdmin || communicationPreference == CommunicationPreference.EMAIL.name) {

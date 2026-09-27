@@ -97,6 +97,7 @@ object RouteFactory {
     UNREGISTER_VOTING("/profile/@{preferred_username}/unregister-voting"),
     PROFILE_SETTINGS("/profile/@{preferred_username}/settings"),
     PROFILE_FOLLOWS("/profile/@{preferred_username}/follows"),
+    PROFILE_PHOTO("/profile/@{preferred_username}/photo"),
     REPORT("/reports/{path...}"),
     BACKEND_API("/backend-api/{path...}"),
     SHORT_LINKS("/short-links"),

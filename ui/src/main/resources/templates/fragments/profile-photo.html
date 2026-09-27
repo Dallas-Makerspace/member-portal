@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Camera button + action menu + upload/crop/validate modal for the profile avatar. Included from
+  profile.html only when profile-photo.enabled is on for the viewer and they're either looking at
+  their own profile (upload/selfie/remove) or an Infrastructure admin viewing someone else's
+  (remove only, for moderation). All the actual work happens in static/js/profile-photo.js.
+-->
+<th:block th:fragment="profile-photo-controls">
+    <div class="dropdown profile-photo-controls">
+        <button type="button"
+                id="profilePhotoBtn"
+                class="profile-photo-btn"
+                aria-label="Update profile photo"
+                th:attr="data-username=${preferred_username},data-can-upload=${!can_moderate_photo}"
+                data-bs-toggle="dropdown"
+                aria-expanded="false">
+            <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profilePhotoBtn">
+            <li th:unless="${can_moderate_photo}">
+                <a class="dropdown-item" href="#" id="profilePhotoTakeSelfie" data-action="camera">Take a selfie</a>
+            </li>
+            <li th:unless="${can_moderate_photo}">
+                <a class="dropdown-item" href="#" id="profilePhotoUpload" data-action="upload">Upload a picture</a>
+            </li>
+            <li th:if="${has_uploaded_photo}">
+                <a class="dropdown-item text-danger" href="#" id="profilePhotoRemove" data-action="remove">Remove photo</a>
+            </li>
+        </ul>
+        <input type="file" id="profilePhotoFileInput" accept="image/jpeg,image/png,image/webp" class="d-none">
+    </div>
+
+    <div class="modal fade" id="profilePhotoModal" tabindex="-1" data-bs-backdrop="static"
+         aria-labelledby="profilePhotoModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="profilePhotoModalLabel">Update profile photo</h5>
+                    <button type="button" class="btn-close" id="profilePhotoModalClose" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="profilePhotoStatus" class="profile-photo-status" aria-live="polite"></div>
+
+                    <div id="profilePhotoCameraStep" class="profile-photo-step d-none">
+                        <div class="profile-photo-video-wrap">
+                            <video id="profilePhotoVideo" autoplay playsinline muted></video>
+                        </div>
+                        <div id="profilePhotoCameraError" class="alert alert-warning d-none mt-2"></div>
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-primary" id="profilePhotoCaptureBtn">Capture</button>
+                        </div>
+                    </div>
+
+                    <div id="profilePhotoCropStep" class="profile-photo-step d-none">
+                        <div class="profile-photo-crop-wrap">
+                            <img id="profilePhotoCropImage" alt="">
+                        </div>
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-secondary" id="profilePhotoCropBackBtn">Back</button>
+                            <button type="button" class="btn btn-primary" id="profilePhotoCropNextBtn">Next</button>
+                        </div>
+                    </div>
+
+                    <div id="profilePhotoCheckingStep" class="profile-photo-step d-none text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Checking...</span>
+                        </div>
+                        <p class="mt-2">Checking your photo...</p>
+                    </div>
+
+                    <div id="profilePhotoResultStep" class="profile-photo-step d-none text-center">
+                        <img id="profilePhotoPreviewImg" class="profile-photo-preview rounded-circle" alt="Preview">
+                        <p id="profilePhotoResultMessage" class="mt-3"></p>
+                        <div id="profilePhotoResultActions">
+                            <button type="button" class="btn btn-primary" id="profilePhotoSaveBtn">Save photo</button>
+                            <button type="button" class="btn btn-outline-secondary" id="profilePhotoRetryBtn">Try
+                                again
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-link text-muted d-none mt-1"
+                                id="profilePhotoUseAnywayBtn">Use anyway
+                        </button>
+                    </div>
+
+                    <div id="profilePhotoSavingStep" class="profile-photo-step d-none text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Saving...</span>
+                        </div>
+                        <p class="mt-2">Saving your photo...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</th:block>
+</body>
+</html>
