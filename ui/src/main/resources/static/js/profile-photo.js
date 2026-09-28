@@ -51,6 +51,12 @@ function initProfilePhoto(username, canUpload) {
     let mediaStream = null;
     let liveGuidanceTimer = null;
     let lastCroppedCanvas = null;
+    let source = null; // 'camera' | 'file'
+    // Bumped when the modal closes, so async work started by an earlier flow can tell it's stale.
+    let flowId = 0;
+
+    const captureBtn = document.getElementById('profilePhotoCaptureBtn');
+    const cropBackBtn = document.getElementById('profilePhotoCropBackBtn');
 
     function setStatus(message) {
         statusEl.textContent = message || '';
@@ -72,7 +78,10 @@ function initProfilePhoto(username, canUpload) {
     }
 
     modalEl.addEventListener('hidden.bs.modal', () => {
+        flowId++;
         stopCamera();
+        lastCroppedCanvas = null;
+        source = null;
         if (cropperInstance) {
             cropperInstance.destroy();
             cropperInstance = null;
@@ -147,7 +156,10 @@ function initProfilePhoto(username, canUpload) {
 
     async function removePhoto(e) {
         e.preventDefault();
-        if (!confirm('Remove your profile photo? Your Discourse avatar will be shown instead.')) return;
+        const prompt = canUpload
+            ? 'Remove your profile photo? Your Discourse avatar will be shown instead.'
+            : `Remove @${username}'s profile photo? Their Discourse avatar will be shown instead.`;
+        if (!confirm(prompt)) return;
         try {
             const response = await fetch(`/profile/@${username}/photo`, { method: 'DELETE' });
             const body = await response.json().catch(() => ({}));
@@ -167,27 +179,44 @@ function initProfilePhoto(username, canUpload) {
     // ---- Camera flow ----
 
     async function openCameraFlow() {
+        const myFlow = flowId;
+        source = 'camera';
+        stopCamera();
         modal.show();
         showStep('camera');
         setStatus('');
         const errorEl = document.getElementById('profilePhotoCameraError');
         errorEl.classList.add('d-none');
+        captureBtn.classList.remove('d-none');
+        captureBtn.disabled = true;
         const video = document.getElementById('profilePhotoVideo');
 
+        let stream;
         try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({
+            stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
             });
         } catch (e) {
+            if (myFlow !== flowId) return;
             errorEl.textContent =
                 "We couldn't access your camera. Check your browser's camera permission, or upload a picture instead.";
             errorEl.classList.remove('d-none');
+            captureBtn.classList.add('d-none');
             return;
         }
+        // The modal was closed while the permission prompt was up - don't leave the camera on.
+        if (myFlow !== flowId) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+        }
+        mediaStream = stream;
+        video.onloadeddata = () => {
+            captureBtn.disabled = false;
+        };
         video.srcObject = mediaStream;
 
         const detector = await getFaceDetector();
-        if (detector && mediaStream) {
+        if (detector && mediaStream === stream && myFlow === flowId) {
             liveGuidanceTimer = setInterval(() => {
                 if (video.readyState < 2) return;
                 const detections = detectFaces(detector, video);
@@ -209,8 +238,9 @@ function initProfilePhoto(username, canUpload) {
         return '';
     }
 
-    document.getElementById('profilePhotoCaptureBtn').addEventListener('click', () => {
+    captureBtn.addEventListener('click', () => {
         const video = document.getElementById('profilePhotoVideo');
+        if (!mediaStream || !video.videoWidth) return;
         const canvas = document.createElement('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -227,6 +257,7 @@ function initProfilePhoto(username, canUpload) {
     // ---- File flow ----
 
     async function openFileFlow(file) {
+        source = 'file';
         modal.show();
         openCropFlow(file);
     }
@@ -234,10 +265,18 @@ function initProfilePhoto(username, canUpload) {
     // ---- Crop flow ----
 
     async function openCropFlow(fileOrBlob) {
+        const myFlow = flowId;
+        lastCroppedCanvas = null;
+        if (cropperInstance) {
+            cropperInstance.destroy();
+            cropperInstance = null;
+        }
+        cropBackBtn.textContent = source === 'camera' ? 'Retake' : 'Cancel';
         showStep('crop');
         setStatus('Loading...');
 
         const bitmap = await decodeToBitmap(fileOrBlob);
+        if (myFlow !== flowId) return;
         if (!bitmap) {
             showResult({ passed: false, hard: true, message: "We couldn't read that file. Try a JPEG or PNG photo." });
             return;
@@ -257,6 +296,7 @@ function initProfilePhoto(username, canUpload) {
               });
 
         const [Cropper] = await Promise.all([loadCropper(), imgLoaded]);
+        if (myFlow !== flowId) return;
 
         if (cropperInstance) cropperInstance.destroy();
         cropperInstance = new Cropper(img, {
@@ -289,9 +329,12 @@ function initProfilePhoto(username, canUpload) {
         }
     }
 
-    document.getElementById('profilePhotoCropBackBtn').addEventListener('click', () => {
-        stopCamera();
-        modal.hide();
+    cropBackBtn.addEventListener('click', () => {
+        if (source === 'camera') {
+            openCameraFlow();
+        } else {
+            modal.hide();
+        }
     });
 
     document.getElementById('profilePhotoCropNextBtn').addEventListener('click', async () => {
@@ -349,13 +392,23 @@ function initProfilePhoto(username, canUpload) {
         setStatus('');
         const preview = document.getElementById('profilePhotoPreviewImg');
         if (lastCroppedCanvas) preview.src = lastCroppedCanvas.toDataURL('image/jpeg', 0.85);
+        preview.classList.toggle('d-none', !lastCroppedCanvas);
         document.getElementById('profilePhotoResultMessage').textContent = message || 'Looks good!';
         document.getElementById('profilePhotoSaveBtn').classList.toggle('d-none', !passed);
         document.getElementById('profilePhotoUseAnywayBtn').classList.toggle('d-none', passed || hard);
     }
 
+    // Back to the crop if there is one (it still has its Retake/Cancel), else restart the source.
     document.getElementById('profilePhotoRetryBtn').addEventListener('click', () => {
-        modal.hide();
+        if (cropperInstance) {
+            setStatus('');
+            showStep('crop');
+        } else if (source === 'camera') {
+            openCameraFlow();
+        } else {
+            fileInput.value = '';
+            fileInput.click();
+        }
     });
 
     document.getElementById('profilePhotoSaveBtn').addEventListener('click', () => savePhoto(false));
