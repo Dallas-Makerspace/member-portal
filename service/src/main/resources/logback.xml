@@ -83,7 +83,12 @@
         </headers>
     </appender>
 
-    <if condition='property("io.ktor.development").equalsIgnoreCase("true")'>
+    <!-- Elastic logging is normally tied to io.ktor.development (off in dev, on when mocks are
+         disabled to mimic prod). ENV_ELASTIC_LOGGING_ENABLED is a separate, explicit opt-out for
+         local runs that need real backends (DEV_MODE=false) without also spamming the shared ES
+         cluster - defaults to "true" so it changes nothing unless a local .env sets it to false. -->
+    <property name="elasticLoggingEnabled" value="${ENV_ELASTIC_LOGGING_ENABLED:-true}"/>
+    <if condition='property("io.ktor.development").equalsIgnoreCase("true") || !property("elasticLoggingEnabled").equalsIgnoreCase("true")'>
         <then>
             <root level="${ENV_LOG_LEVEL:-debug}">
                 <appender-ref ref="COLOR"/>
