@@ -1,6 +1,5 @@
 package org.dallasmakerspace.models
 
-import java.time.ZoneOffset
 import org.dallasmakerspace.members.db.ProfileDAO
 
 /** Converter function to create a DMSMember from a ProfileDAO. */
@@ -16,10 +15,10 @@ fun daoToProfileModel(dao: ProfileDAO) =
         discordAvatarUrl = dao.discordAvatarUrl,
         discordWebhookId = dao.discordWebhookId,
         linkedinUsername = dao.linkedinUsername,
-        profilePhotoUrl = profilePhotoUrl(dao))
+        profilePhotoUrl = dao.profilePhotoKey?.let { profilePhotoUrl(dao.id.value, it) })
 
-private fun profilePhotoUrl(dao: ProfileDAO): String? {
-  if (dao.profilePhotoKey == null) return null
-  val version = dao.profilePhotoUpdatedAt?.toInstant(ZoneOffset.UTC)?.epochSecond ?: 0L
-  return "/avatar/@${dao.id.value}?v=$version"
-}
+private const val HEX_RADIX = 16
+
+/** Versioned by the storage key (new per upload), so the immutable-cached URL changes every time. */
+fun profilePhotoUrl(username: String, key: String): String =
+    "/avatar/@$username?v=${key.hashCode().toUInt().toString(HEX_RADIX)}"

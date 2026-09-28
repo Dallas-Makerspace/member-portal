@@ -97,6 +97,23 @@ class ProfilePhotoServiceTest {
   }
 
   @Test
+  fun `save rejects oversized declared dimensions without decoding the pixels`() = runBlocking {
+    val error =
+        assertFailsWith<ProfilePhotoValidationException> {
+          service.save("jdoe", pngWithDeclaredSize(pngBytes(300, 300), 60_000, 60_000))
+        }
+    assertTrue(error.message!!.contains("too large"))
+  }
+
+  @Test
+  fun `save returns a different photo URL for each upload`() = runBlocking {
+    whenever(repo.setProfilePhoto(eq("jdoe"), any(), any())).thenReturn(null)
+    val first = service.save("jdoe", jpegBytes(300, 300))
+    val second = service.save("jdoe", jpegBytes(300, 300))
+    assertTrue(first != second)
+  }
+
+  @Test
   fun `save rejects a body larger than the upload limit`() = runBlocking {
     assertFailsWith<ProfilePhotoValidationException> {
       service.save("jdoe", ByteArray(3 * 1024 * 1024))
@@ -149,13 +166,28 @@ class ProfilePhotoServiceTest {
   }
 }
 
-private fun jpegBytes(width: Int, height: Int): ByteArray {
+private fun jpegBytes(width: Int, height: Int): ByteArray = imageBytes(width, height, "jpg")
+
+private fun pngBytes(width: Int, height: Int): ByteArray = imageBytes(width, height, "png")
+
+private fun imageBytes(width: Int, height: Int, format: String): ByteArray {
   val image = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
   val graphics = image.createGraphics()
   graphics.color = Color.BLUE
   graphics.fillRect(0, 0, width, height)
   graphics.dispose()
   val output = ByteArrayOutputStream()
-  ImageIO.write(image, "jpg", output)
+  ImageIO.write(image, format, output)
   return output.toByteArray()
+}
+
+/** Rewrites a PNG's IHDR width/height (and its CRC) - a tiny file claiming a huge canvas. */
+private fun pngWithDeclaredSize(png: ByteArray, width: Int, height: Int): ByteArray {
+  val patched = png.copyOf()
+  val buffer = java.nio.ByteBuffer.wrap(patched)
+  buffer.putInt(16, width)
+  buffer.putInt(20, height)
+  val crc = java.util.zip.CRC32().apply { update(patched, 12, 17) }
+  buffer.putInt(29, crc.value.toInt())
+  return patched
 }

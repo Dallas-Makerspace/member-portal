@@ -4,6 +4,7 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.profilePhotoUrl
 
 @Suppress("TooManyFunctions")
 class MemberRepositoryMock @Inject constructor() : IMemberRepository {
@@ -62,8 +63,7 @@ class MemberRepositoryMock @Inject constructor() : IMemberRepository {
     val existing =
         store[username] ?: throw IllegalArgumentException("Member does not exist in DB: $username")
     val previousKey = profilePhotoKeys.put(username, key)
-    store[username] =
-        existing.copy(profilePhotoUrl = "/avatar/@$username?v=${updatedAt.epochSecond}")
+    store[username] = existing.copy(profilePhotoUrl = profilePhotoUrl(username, key))
     return previousKey
   }
 

@@ -26,6 +26,7 @@ import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.core.appLogger
 import org.dallasmakerspace.members.MemberService
+import org.dallasmakerspace.members.PHOTO_TOO_LARGE_MESSAGE
 import org.dallasmakerspace.members.ProfilePhotoRateLimitedException
 import org.dallasmakerspace.members.ProfilePhotoService
 import org.dallasmakerspace.members.ProfilePhotoValidationException
@@ -82,7 +83,7 @@ private suspend fun handleUpload(
   if (contentLength != null && contentLength > MAX_UPLOAD_BYTES) {
     return call.respond(
         HttpStatusCode.PayloadTooLarge,
-        ApiResponse(Status.ERROR, "Photo must be $MAX_UPLOAD_BYTES bytes or smaller", null))
+        ApiResponse(Status.ERROR, PHOTO_TOO_LARGE_MESSAGE, null))
   }
   if (call.request.headers["X-Validation-Override"] == "true") {
     log.info("$actor saved a profile photo that failed client-side validation (override)")
@@ -95,7 +96,7 @@ private suspend fun handleUpload(
   if (bytes == null) {
     return call.respond(
         HttpStatusCode.PayloadTooLarge,
-        ApiResponse(Status.ERROR, "Photo must be $MAX_UPLOAD_BYTES bytes or smaller", null))
+        ApiResponse(Status.ERROR, PHOTO_TOO_LARGE_MESSAGE, null))
   }
   try {
     val photoUrl = service.save(username, bytes)

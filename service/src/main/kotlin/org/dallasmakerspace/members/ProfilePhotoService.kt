@@ -17,6 +17,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.models.profilePhotoUrl
 import org.dallasmakerspace.storage.ObjectKey
 import org.dallasmakerspace.storage.ObjectStoreFactory
 import org.dallasmakerspace.storage.StorageNamespace
@@ -31,6 +32,7 @@ private const val JPEG_QUALITY = 0.85f
 private const val RATE_LIMIT_UPLOADS_PER_WINDOW = 10
 private const val RATE_LIMIT_WINDOW_HOURS = 24L
 private val RATE_LIMIT_WINDOW: Duration = Duration.ofHours(RATE_LIMIT_WINDOW_HOURS)
+const val PHOTO_TOO_LARGE_MESSAGE = "Photo must be 2 MB or smaller"
 
 /**
  * Thrown when an uploaded image fails a validation rule; [message] is safe to show to the member.
@@ -64,7 +66,7 @@ constructor(
   suspend fun save(username: String, bytes: ByteArray): String {
     checkRateLimit(username)
     if (bytes.size > MAX_UPLOAD_BYTES) {
-      throw ProfilePhotoValidationException("Photo must be $MAX_UPLOAD_BYTES bytes or smaller")
+      throw ProfilePhotoValidationException(PHOTO_TOO_LARGE_MESSAGE)
     }
     val reencoded = withContext(Dispatchers.IO) { decodeValidateAndReencode(bytes) }
 
@@ -85,7 +87,7 @@ constructor(
         }
     deleteIfPresent(previousKey)
     recordUpload(username)
-    return "/avatar/@$username?v=${updatedAt.epochSecond}"
+    return profilePhotoUrl(username, key.value)
   }
 
   suspend fun remove(username: String) {
@@ -113,8 +115,7 @@ constructor(
         }
     if (recent != null && recent.size >= RATE_LIMIT_UPLOADS_PER_WINDOW) {
       throw ProfilePhotoRateLimitedException(
-          "$username has uploaded a profile photo $RATE_LIMIT_UPLOADS_PER_WINDOW times in the last" +
-              " ${RATE_LIMIT_WINDOW.toHours()}h")
+          "You've changed your profile photo too many times today. Please try again tomorrow.")
     }
   }
 
@@ -129,10 +130,7 @@ constructor(
 
   private fun decodeValidateAndReencode(bytes: ByteArray): ByteArray {
     requireJpegOrPng(bytes)
-    val image = decodeImage(bytes)
-    requireValidDimensions(image)
-    requireSquareAspectRatio(image)
-    return reencode(image)
+    return reencode(decodeValidated(bytes))
   }
 
   private fun requireJpegOrPng(bytes: ByteArray) {
@@ -141,25 +139,45 @@ constructor(
     }
   }
 
-  private fun decodeImage(bytes: ByteArray): BufferedImage =
-      runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }.getOrNull()
-          ?: throw ProfilePhotoValidationException("Could not read this file as an image")
+  // Checks dimensions from the header before decoding pixels, so a small file declaring a huge
+  // canvas (decompression bomb) is rejected without allocating it.
+  @Suppress("ThrowsCount")
+  private fun decodeValidated(bytes: ByteArray): BufferedImage {
+    val input =
+        ImageIO.createImageInputStream(ByteArrayInputStream(bytes)) ?: throw unreadableImage()
+    input.use {
+      val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: throw unreadableImage()
+      try {
+        reader.input = input
+        val (width, height) =
+            runCatching { reader.getWidth(0) to reader.getHeight(0) }.getOrNull()
+                ?: throw unreadableImage()
+        requireValidDimensions(width, height)
+        requireSquareAspectRatio(width, height)
+        return runCatching { reader.read(0) }.getOrNull() ?: throw unreadableImage()
+      } finally {
+        reader.dispose()
+      }
+    }
+  }
 
-  private fun requireValidDimensions(image: BufferedImage) {
-    if (image.width < MIN_DIMENSION || image.height < MIN_DIMENSION) {
+  private fun unreadableImage() = ProfilePhotoValidationException("Could not read this file as an image")
+
+  private fun requireValidDimensions(width: Int, height: Int) {
+    if (width < MIN_DIMENSION || height < MIN_DIMENSION) {
       throw ProfilePhotoValidationException(
           "Photo is too small (minimum ${MIN_DIMENSION}x$MIN_DIMENSION)")
     }
-    if (image.width > MAX_DIMENSION || image.height > MAX_DIMENSION) {
+    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
       throw ProfilePhotoValidationException(
           "Photo is too large (maximum ${MAX_DIMENSION}x$MAX_DIMENSION)")
     }
   }
 
-  private fun requireSquareAspectRatio(image: BufferedImage) {
-    val aspectRatio = image.width.toDouble() / image.height.toDouble()
+  private fun requireSquareAspectRatio(width: Int, height: Int) {
+    val aspectRatio = width.toDouble() / height.toDouble()
     if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) {
-      throw ProfilePhotoValidationException("Photo must be square (client should have cropped it)")
+      throw ProfilePhotoValidationException("Photo must be square")
     }
   }
 

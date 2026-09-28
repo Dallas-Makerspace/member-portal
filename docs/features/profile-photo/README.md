@@ -311,9 +311,10 @@ Requirements:
 - On `404` (or any error), `AvatarHandler` falls back to a redirect to the member's Discourse avatar
   (`normalizeAvatarUrl(member.discourseAvatarUrl)`) or the placeholder SVG, so every consumer (profile, facepile,
   future pages) can point at one `/avatar/@{username}` URL regardless of which source the photo actually comes from.
-- Cache headers use an immutable, `?v={updatedAtEpoch}`-style cache-busting URL so the underlying bytes never change
-  under a cached URL. (Cache-busting query param wiring into `displayAvatarUrl()`/callers is a **Future Work** item —
-  today's implementation relies on the key changing per upload rather than a `?v=` query string on every call site.)
+  The member lookup for that fallback only happens when there's no photo to stream.
+- The service responds with `Cache-Control: private, max-age=31536000, immutable`, so every `profilePhotoUrl` it
+  hands out carries a `?v=` derived from the storage key (`profilePhotoUrl(username, key)` in `DMSMemberMapping.kt`).
+  The key is a new UUID per upload, so the URL changes on every upload - even two within the same second.
 
 ### Avatar precedence
 
