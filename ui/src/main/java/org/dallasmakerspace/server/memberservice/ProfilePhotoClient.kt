@@ -31,8 +31,11 @@ import org.dallasmakerspace.server.common.logging.LoggerFactory
 private const val REQUEST_TIMEOUT_MS = 10_000L
 private const val CONNECT_TIMEOUT_MS = 5_000L
 
-/** Result of [ProfilePhotoClient.upload]. Exactly one of [photoUrl]/[errorMessage] is set. */
-data class ProfilePhotoUploadResult(
+/**
+ * Result of [ProfilePhotoClient.upload]/[ProfilePhotoClient.remove]. [errorMessage] is set only on
+ * failure; [photoUrl] only on a successful upload.
+ */
+data class ProfilePhotoResult(
     val statusCode: Int,
     val photoUrl: String? = null,
     val errorMessage: String? = null,
@@ -70,7 +73,12 @@ constructor(
         install(ContentNegotiation) { jackson {} }
       }
 
-  suspend fun streamOrRedirect(username: String, fallbackUrl: String, call: ApplicationCall) {
+  /** [fallbackUrl] is only resolved when there's no photo to stream, since it costs a lookup. */
+  suspend fun streamOrRedirect(
+      username: String,
+      call: ApplicationCall,
+      fallbackUrl: suspend () -> String,
+  ) {
     try {
       http
           .prepareGet("$baseUrl/members/$username/profile-photo") {
@@ -78,7 +86,7 @@ constructor(
           }
           .execute { response ->
             if (!response.status.isSuccess()) {
-              call.respondRedirect(fallbackUrl)
+              call.respondRedirect(fallbackUrl())
               return@execute
             }
             val contentType = response.contentType() ?: ContentType.Image.JPEG
@@ -96,7 +104,7 @@ constructor(
           }
     } catch (e: Exception) {
       log.warn("Failed to proxy profile photo for $username: ${e.message}")
-      call.respondRedirect(fallbackUrl)
+      if (!call.response.isCommitted) call.respondRedirect(fallbackUrl())
     }
   }
 
@@ -106,7 +114,7 @@ constructor(
       bytes: ByteArray,
       override: Boolean,
       sessionId: String?,
-  ): ProfilePhotoUploadResult {
+  ): ProfilePhotoResult {
     val response =
         try {
           http.put("$baseUrl/members/$username/profile-photo") {
@@ -119,33 +127,46 @@ constructor(
           }
         } catch (e: Exception) {
           log.warn("Failed to upload profile photo for $username: ${e.message}")
-          return ProfilePhotoUploadResult(
+          return ProfilePhotoResult(
               statusCode = HTTP_BAD_GATEWAY,
               errorMessage = "Failed to upload photo. Please try again.")
         }
     val (message, photoUrl) = parseApiResponse(response)
     return if (response.status.isSuccess()) {
-      ProfilePhotoUploadResult(statusCode = response.status.value, photoUrl = photoUrl)
+      ProfilePhotoResult(statusCode = response.status.value, photoUrl = photoUrl)
     } else {
-      ProfilePhotoUploadResult(
+      ProfilePhotoResult(
           statusCode = response.status.value, errorMessage = message ?: "Failed to upload photo.")
     }
   }
 
-  /** Removes [username]'s profile photo, acting as [actorUsername] (self, or an Infra admin). */
-  suspend fun remove(username: String, actorUsername: String, sessionId: String?): Boolean {
-    return try {
-      val response =
+  /**
+   * Removes [username]'s profile photo, acting as [actorUsername] (self, or an Infra admin). On
+   * failure, [ProfilePhotoResult.errorMessage] carries the service's own reason and status.
+   */
+  @Suppress("ReturnCount")
+  suspend fun remove(
+      username: String,
+      actorUsername: String,
+      sessionId: String?
+  ): ProfilePhotoResult {
+    val response =
+        try {
           http.delete("$baseUrl/members/$username/profile-photo") {
             authHeaders.forEach { (k, v) -> header(k, v) }
             header("X-Username", actorUsername)
             sessionId?.let { header("X-Request-Id", it) }
           }
-      response.status.isSuccess()
-    } catch (e: Exception) {
-      log.warn("Failed to remove profile photo for $username: ${e.message}")
-      false
-    }
+        } catch (e: Exception) {
+          log.warn("Failed to remove profile photo for $username: ${e.message}")
+          return ProfilePhotoResult(
+              statusCode = HTTP_BAD_GATEWAY,
+              errorMessage = "Failed to remove photo. Please try again.")
+        }
+    if (response.status.isSuccess()) return ProfilePhotoResult(response.status.value)
+    val (message, _) = parseApiResponse(response)
+    return ProfilePhotoResult(
+        statusCode = response.status.value, errorMessage = message ?: "Failed to remove photo.")
   }
 
   private suspend fun parseApiResponse(response: HttpResponse): Pair<String?, String?> {

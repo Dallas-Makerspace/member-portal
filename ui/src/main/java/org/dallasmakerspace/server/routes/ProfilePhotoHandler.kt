@@ -96,7 +96,7 @@ constructor(
     if (oversized) {
       call.respond(
           HttpStatusCode.PayloadTooLarge,
-          PhotoResponse(false, "Photo must be $MAX_UPLOAD_BYTES bytes or smaller"))
+          PhotoResponse(false, "Photo must be 2 MB or smaller"))
       return
     }
     val bytes = photoBytes
@@ -131,12 +131,12 @@ constructor(
             ?: return call.respond(
                 HttpStatusCode.BadRequest, PhotoResponse(false, "No acting user"))
 
-    val removed = profilePhotoClient.remove(username, actor, session.sessionId)
-    if (removed) {
+    val result = profilePhotoClient.remove(username, actor, session.sessionId)
+    if (result.errorMessage == null) {
       call.respond(HttpStatusCode.OK, PhotoResponse(true, "Profile photo removed"))
     } else {
       call.respond(
-          HttpStatusCode.InternalServerError, PhotoResponse(false, "Failed to remove photo"))
+          HttpStatusCode.fromValue(result.statusCode), PhotoResponse(false, result.errorMessage))
     }
   }
 

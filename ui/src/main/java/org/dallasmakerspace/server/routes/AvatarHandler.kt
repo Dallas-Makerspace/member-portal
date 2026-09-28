@@ -36,15 +36,15 @@ constructor(
       return
     }
 
-    val discourseAvatarUrl =
-        try {
-          memberService.getMember(username, session.sessionId).discourseAvatarUrl
-        } catch (e: Exception) {
-          log.warn("Failed to look up $username for avatar fallback: ${e.message}")
-          null
-        }
-    val fallbackUrl = normalizeAvatarUrl(discourseAvatarUrl).ifEmpty { PROFILE_PIC_FALLBACK }
-
-    profilePhotoClient.streamOrRedirect(username, fallbackUrl, call)
+    profilePhotoClient.streamOrRedirect(username, call) {
+      val discourseAvatarUrl =
+          try {
+            memberService.getMember(username, session.sessionId).discourseAvatarUrl
+          } catch (e: Exception) {
+            log.warn("Failed to look up $username for avatar fallback: ${e.message}")
+            null
+          }
+      normalizeAvatarUrl(discourseAvatarUrl).ifEmpty { PROFILE_PIC_FALLBACK }
+    }
   }
 }
