@@ -54,4 +54,5 @@ jobs:
       package_name: member-portal/service
       container_name: member-profile-service
       additional_networks: guacamole_guacamole_net
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit

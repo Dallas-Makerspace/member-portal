@@ -39,6 +39,15 @@ on:
         required: false
         type: string
         default: ''
+      checkout_ref:
+        description: >-
+          Commit SHA to build from. Callers triggered by workflow_run must pass
+          github.event.workflow_run.head_sha explicitly - actions/checkout with no ref, inside a
+          workflow_call nested under a workflow_run trigger, does not reliably resolve to that
+          commit (it can silently build an older master state), which is how a service image once
+          shipped without a common-models change that had already landed on master.
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -62,6 +71,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.checkout_ref }}
 
       - name: Make gradlew executable
         run: chmod +x gradlew

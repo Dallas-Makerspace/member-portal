@@ -53,4 +53,5 @@ jobs:
       image_name: dallas-makerspace/member-portal/ui
       package_name: member-portal/ui
       container_name: member-profile-ui
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
