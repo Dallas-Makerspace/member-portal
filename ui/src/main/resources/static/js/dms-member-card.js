@@ -331,6 +331,9 @@ class DmsMemberCard extends LitElement {
 
     _resolveAvatarUrl(url) {
         if (!url) return null;
+        // An uploaded profile photo is already a same-origin path (/avatar/@username?v=...) -
+        // pass it through unchanged rather than prefixing it onto the Discourse host below.
+        if (url.startsWith('/avatar/')) return url;
         const absolute = url.startsWith('//')
             ? `https:${url}`
             : url.startsWith('/')
@@ -340,7 +343,9 @@ class DmsMemberCard extends LitElement {
     }
 
     _renderAvatar() {
-        const url = this._resolveAvatarUrl(this._memberData?.avatarUrl);
+        // Uploaded photo takes precedence over the Discourse avatar - avatarUrl was removed from
+        // the API response when the dead DB column it came from was dropped.
+        const url = this._resolveAvatarUrl(this._memberData?.profilePhotoUrl ?? this._memberData?.discourseAvatarUrl);
         if (url) {
             return html`<img src="${url}" alt="${this._getDisplayName()}" loading="lazy">`;
         }
