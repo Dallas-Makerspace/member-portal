@@ -66,13 +66,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # Enable Gradle caching for faster builds
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
+          # No cache here - gradle/actions/setup-gradle below already manages the Gradle Home
+          # cache. Enabling both caused a stale common-models classes.jar to end up bundled into
+          # service-all.jar next to freshly-compiled service classes (NoSuchMethodError on
+          # displayAvatarUrl in prod), most likely from the two actions racing/conflicting over the
+          # same ~/.gradle directory.
+          cache: ''
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
