@@ -5,10 +5,8 @@ import java.net.HttpURLConnection
 import org.dallasmakerspace.server.di.AppComponentHolder
 
 class ElasticsearchAuth : Authentication {
-  private val appConfig = AppComponentHolder.instance.getAppConfig()
-  private val apiKey = appConfig.requireStringProperty("app.logging.elastic-api-key")
-
   override fun addAuth(urlConnection: HttpURLConnection, body: String) {
+    val apiKey = AppComponentHolder.instance.getAppConfig().requireStringProperty("app.logging.elastic-api-key")
     urlConnection.setRequestProperty("Authorization", "ApiKey $apiKey")
   }
 }
