@@ -50,14 +50,26 @@ waiver photos, report exports, event images, etc.).
 
 ## Current State
 
-- `profile.html` renders `<img class="profile-avatar rounded-circle">` (100×100, white border, drop shadow) from
-  `avatar_url`, falling back to `static/images/profile-pic-not-set.svg`.
-- `ProfileHandler` builds `avatar_url` from `discourseAvatarUrl` only. The facepile already prefers
-  `member.avatarUrl ?: member.discourseAvatarUrl`.
-- `profile.avatar_url` (`varchar(2083)`, nullable) already exists in `ProfileTable` and is unused by the profile page.
-- The service already depends on the AWS SDK v2 (`bedrockruntime`) and authenticates with
-  `DefaultCredentialsProvider` using `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from the environment. There is no
-  S3 client in the codebase today.
+**Implemented** (Steps 1–6 and 8 of the build; see [Implementation Phases](#implementation-phases)):
+
+- `profile.html` renders `<img class="profile-avatar rounded-circle" id="profileAvatarImg">` (100×100, white border,
+  drop shadow) from `avatar_url`, falling back to `static/images/profile-pic-not-set.svg`.
+- `DMSMember.displayAvatarUrl()` (in `common-models`, shared by `service` and `ui`) is the single precedence rule:
+  **uploaded photo → Discourse avatar**. Every avatar read site (`ProfileHandler`, its facepile, the dataviz reports,
+  `FeaturedProjectsService`, and the five UI handlers that render avatars in committees/groups/search/suggested-events)
+  goes through it. The old `avatar_url` DB column and `DMSMember` field this doc originally described as a third,
+  higher-priority source turned out to be dead in production (0/5601 rows populated) and were dropped entirely.
+- Discourse-avatar-URL normalization (absolute/protocol-relative/relative path handling, `{size}` substitution) is
+  centralized as `normalizeAvatarUrl()`, also in `common-models` — previously reimplemented, inconsistently, in about
+  a dozen places.
+- The service depends on AWS SDK v2 for both `bedrockruntime` and now `s3`, authenticating with
+  `DefaultCredentialsProvider` using `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from the environment (same vars,
+  shared across both integrations).
+- The camera button, crop flow, client-side validation (including MediaPipe face detection), and the upload/remove
+  backend are all built — see the sections below, which describe the shipped behavior, not just the original plan.
+
+**Not yet done** (Step 7): the Playwright e2e test, and the operational rollout itself (nothing here is live -
+`profile-photo.enabled` defaults off, and the DB migration/S3 bucket haven't been applied in any real environment).
 
 ## User Experience
 
@@ -80,8 +92,8 @@ Clicking the button opens a Bootstrap dropdown anchored to the button:
 | ⬆️ Upload a picture | Always | Opens the native file picker |
 | 🗑️ Remove photo | Member currently has an uploaded photo | Confirm, then delete |
 
-On mobile, "Upload a picture" uses `<input type="file" accept="image/jpeg,image/png,image/webp">` (no `capture`
-attribute, so the OS offers both library and camera).
+On mobile, "Upload a picture" uses `<input type="file" accept="image/jpeg,image/png">` (no `capture` attribute, so the
+OS offers both library and camera).
 
 ### 3. Take a selfie (camera modal)
 
@@ -194,15 +206,18 @@ Client (before upload):
 - Canvas export naturally drops EXIF (including GPS) and applies EXIF orientation already honored by
   `createImageBitmap(file, { imageOrientation: "from-image" })`.
 
-Server (authoritative):
+Server (authoritative), in `ProfilePhotoService`:
 
-- Accept `multipart/form-data` with a single `photo` part; reject > **2 MB** with `413`.
-- Sniff magic bytes; accept JPEG/PNG/WebP only regardless of the declared `Content-Type` (`415` otherwise).
-- Decode with ImageIO (add the TwelveMonkeys WebP plugin if WebP is accepted), reject if either dimension < 256 or
-  > 4096, or if not ~square (aspect within 0.95–1.05).
+- The UI reads the browser's `multipart/form-data` `photo` part (bounded read, rejecting > **2 MB**) and forwards the
+  raw bytes to the service as a `PUT` body; the service itself does no multipart parsing.
+- Sniff magic bytes; accept **JPEG/PNG only** regardless of the declared `Content-Type` (`415` otherwise) — the client
+  always exports JPEG, so there was no need for a WebP decoder.
+- Decode with ImageIO, reject if either dimension < 256 or > 4096, or if not ~square (aspect within 0.95–1.05).
 - **Re-encode** to 512×512 JPEG (q=0.85). This strips all metadata (GPS, device info) and neutralizes polyglot/malformed
   files. Only the re-encoded bytes are stored.
 - Decoding/encoding is blocking — run on `Dispatchers.IO`.
+- In-memory rate limit: 10 saves per member per 24h, tracked with an atomic `ConcurrentHashMap.compute` (a
+  `computeIfAbsent`-then-`add` version had a race under concurrent uploads from the same user).
 
 ## Storage & Serving
 
@@ -271,28 +286,42 @@ Requirements:
 
 - Keys are **immutable and unique per upload**: `profile-photos/{username}/{uuid}.jpg`. A new upload never overwrites
   the previous object, so CDN/browser caches never serve a stale image under a changed URL.
-- Store the **key**, not a URL, in the DB. Add a `profile_photo_key varchar(512) null` column to `profile` (keep the
-  existing `avatar_url` column untouched to avoid colliding with its current facepile usage), plus
-  `profile_photo_updated_at datetime null` (UTC).
+- Store the **key**, not a URL, in the DB: `ProfileTable`/`ProfileDAO` have `profile_photo_key varchar(512) null` and
+  `profile_photo_updated_at datetime null` (UTC). ALTERs are in `service/docs/sql/profile-photo-migration.sql`
+  (not yet applied to prod).
+- There is no `avatar_url` column anymore — it was dropped as a separate cleanup step once it was confirmed unused (0
+  of 5601 prod rows populated) and every read site had moved to `DMSMember.displayAvatarUrl()`. See
+  [Current State](#current-state).
 - On successful save: write new object → update DB row → best-effort delete of the previous object (a failed delete is
-  logged, not surfaced; versioning/lifecycle cleans up).
+  logged, not surfaced; versioning/lifecycle cleans up). If the DB write fails after the object upload succeeds, the
+  newly-uploaded (now-orphaned) object is deleted too.
 - On remove: clear the DB columns, then delete the object.
 
 ### Serving
 
-- The bucket stays private. The browser loads the photo from a **stable UI URL**: `GET /avatar/@{username}` (optionally
-  `?v={updatedAtEpoch}` for cache-busting and `&s=100|256|512` reserved for future sizes).
-- The UI calls the service, which returns a **302 redirect to a presigned S3 GET URL** (TTL 1 hour). Response has
-  `Cache-Control: private, max-age=3000` so the browser reuses the redirect well within the URL's validity.
-- Members without an uploaded photo: `/avatar/@{username}` 302s to their Discourse avatar or the placeholder SVG, so
-  every consumer (profile, facepile, future pages) can use one URL.
-- Requires an authenticated session (same as the profile page).
+- The bucket stays private, and the browser **never talks to S3 directly** — photos are streamed byte-for-byte through
+  the app, the same shape as the existing `BambuCameraProxyClient` binary proxy. No presigned URLs are used for
+  serving (`presignedGetUrl` on `IObjectStore` exists for future use, e.g. `Future Work`'s direct-to-S3 uploads, but
+  isn't called anywhere in this feature).
+- Stable UI URL: `GET /avatar/@{username}` (`AvatarHandler`, session-authenticated). It calls
+  `ProfilePhotoClient.streamOrRedirect`, which requests `GET /members/{username}/profile-photo` from the service and
+  streams the response bytes straight through with the service's `Content-Type`/`Cache-Control` headers.
+- The service's `GET /members/{username}/profile-photo` returns the raw JPEG bytes with `200`, or `404` if the member
+  has no uploaded photo. It is not gated by the feature flag.
+- On `404` (or any error), `AvatarHandler` falls back to a redirect to the member's Discourse avatar
+  (`normalizeAvatarUrl(member.discourseAvatarUrl)`) or the placeholder SVG, so every consumer (profile, facepile,
+  future pages) can point at one `/avatar/@{username}` URL regardless of which source the photo actually comes from.
+- Cache headers use an immutable, `?v={updatedAtEpoch}`-style cache-busting URL so the underlying bytes never change
+  under a cached URL. (Cache-busting query param wiring into `displayAvatarUrl()`/callers is a **Future Work** item —
+  today's implementation relies on the key changing per upload rather than a `?v=` query string on every call site.)
 
 ### Avatar precedence
 
-Everywhere an avatar is shown: **uploaded photo → Discourse avatar → `profile-pic-not-set.svg`**. Update
-`ProfileHandler` (profile header and `buildFacepile`) and any other `normalizeAvatarUrl` call sites to use the new
-resolution.
+Everywhere an avatar is shown: **uploaded photo → Discourse avatar → `profile-pic-not-set.svg`**, via the shared
+`DMSMember.displayAvatarUrl()` extension in `common-models` (`profilePhotoUrl ?: discourseAvatarUrl`) piped through
+`normalizeAvatarUrl()`. This is wired into `ProfileHandler` (header + facepile), the service dataviz reports,
+`FeaturedProjectsService`, and the UI's committee/group/search/suggested-events handlers — see
+[Current State](#current-state).
 
 ## API
 
@@ -300,21 +329,22 @@ Service (`X-Api-Key` / `X-Api-Client` auth, like other routes):
 
 | Method | Path | Body / Response |
 | --- | --- | --- |
-| `PUT` | `/members/{username}/profile-photo` | multipart `photo`, optional form field `validationOverride=true` → `200 { "photoUrl": "/avatar/@{username}?v=…", "updatedAt": "…" }` |
-| `DELETE` | `/members/{username}/profile-photo` | `204` |
-| `GET` | `/members/{username}/profile-photo` | `302` to presigned URL, or `404` if none |
+| `PUT` | `/members/{username}/profile-photo` | Raw `image/jpeg`/`image/png` body (no multipart); `X-Validation-Override: true` header when the member used "Use anyway" → `200` `ApiResponse` with `photoUrl`, or `413`/`415`/`429` on rejection |
+| `DELETE` | `/members/{username}/profile-photo` | `200` `ApiResponse`; allowed for the actor themself or an Infrastructure-group actor |
+| `GET` | `/members/{username}/profile-photo` | Raw photo bytes, `200`, or `404` if none — **not** a redirect |
 
 UI (session auth). The UI has no general CSRF protection today; these routes must at minimum require a same-origin
 `Origin`/`Referer` header and rely on the session cookie's `SameSite=Lax`:
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/profile/@{username}/photo` | Only when session user == `{username}`; proxies to service `PUT` |
+| `POST` | `/profile/@{username}/photo` | Only when session user == `{username}`; multipart `photo` part (+ optional `override=true` form field), proxies to service `PUT` |
 | `DELETE` | `/profile/@{username}/photo` | Self, or Infrastructure admin (moderation) |
 | `GET` | `/avatar/@{username}` | Stable image URL described above |
 
-Authorization is enforced in the UI handler **and** re-checked in the service using the `X-Username` header the UI
-already sends (see `ProfileSubscriptionRoutes.actorUsername()`).
+Both `POST`/`DELETE` in `ProfilePhotoHandler` reject the request with `403` unless the `Origin` (or `Referer`) header's
+host matches the `Host` header — the app's only CSRF defense, since there's no framework-level protection. Authorization
+is enforced in the UI handler **and** re-checked in the service using the `X-Username` header the UI already sends.
 
 Rate limiting: max **10 uploads per member per 24h** (in-memory counter per service instance is fine for v1); `429`
 with "You've changed your photo a lot today — try again tomorrow."
@@ -329,7 +359,7 @@ with "You've changed your photo a lot today — try again tomorrow."
 ## Feature Flag & Rollout
 
 ```kotlin
-val PROFILE_PHOTO_UPLOAD_ENABLED =
+val PROFILE_PHOTO_ENABLED =
     ConfigKey(
         key = "profile-photo.enabled",
         description = "Let members upload/take a profile photo from their profile page",
@@ -365,9 +395,10 @@ val PROFILE_PHOTO_UPLOAD_ENABLED =
   (production already is; `localhost` works for dev).
 - **Accessibility:** modal focus trap, all controls keyboard operable, validation messages in an `aria-live="polite"`
   region, sufficient contrast on the camera button over any photo.
-- **Templates:** any new template/fragment follows the required script includes (Bootstrap bundle, `app.js`,
-  `dms-page-loader.js`). Prefer a Thymeleaf fragment `fragments/profile-photo-modal.html` + `static/js/profile-photo.js`
-  over growing `profile.html` further.
+- **Templates:** the camera button, dropdown, and modal live in `fragments/profile-photo.html`, included from
+  `profile.html` rather than growing it further. Logic lives in `static/js/profile-photo.js` (orchestration) and
+  `static/js/photo-checks.js` (pure, unit-tested validation functions), following the required script includes
+  (Bootstrap bundle, `app.js`, `dms-page-loader.js`).
 
 ## Acceptance Criteria
 
@@ -376,26 +407,45 @@ val PROFILE_PHOTO_UPLOAD_ENABLED =
    Infrastructure admin, in which case only "Remove photo" is offered there).
 3. "Take a selfie" shows a mirrored live preview with live guidance; denying camera permission shows the fallback
    message with an "Upload instead" option.
-4. "Upload a picture" accepts JPEG/PNG/WebP and rejects other types with a friendly message.
+4. "Upload a picture" accepts JPEG/PNG and rejects other types with a friendly message.
 5. A dark selfie shows "Face a light source like a window and try again"; a photo with two people is rejected with no
    override; a slightly off-center photo can be saved via "Use anyway".
 6. After saving, the new photo appears immediately on my profile and in facepiles on other pages after refresh; the
    stored object is 512×512 JPEG with no EXIF.
 7. "Remove photo" reverts to my Discourse avatar (or the placeholder).
-8. The S3 bucket is not publicly readable; direct object URLs without a presigned signature return 403.
+8. The S3 bucket is not publicly readable; an unsigned direct object URL returns 403 (the app itself never generates
+   presigned URLs for this feature — it always streams through the service).
 9. `runAll` with mock services works end-to-end without AWS credentials (in-memory store).
 10. `IObjectStore` has contract tests; profile-photo routes have tests for authz (self vs other vs admin), size/type
     rejection, and replace/delete of prior objects. Detekt and existing tests pass.
 
 ## Implementation Phases
 
-1. **Storage component:** `storage/` package, `S3ObjectStore`, `InMemoryObjectStore`, DI, config, contract tests.
-   Provision bucket + IAM policy. (No user-visible change — safe to land on `master` alone.)
-2. **Backend profile photo:** DB migration, service endpoints, image re-encode, `/avatar/@{username}`, avatar
-   precedence in `ProfileHandler`.
-3. **UI:** camera button + menu, upload path, Cropper.js crop, non-ML checks, save/remove — behind the flag.
-4. **ML validation:** MediaPipe Face Detector lazy load, checks 3–8, live selfie guidance, tuning via pilot.
-5. **Rollout:** pilot → tune → enable.
+Built as 8 small commits on `master`, each independently verified (compile, tests, detekt/ktfmt) before moving on:
+
+1. **Generic object store** (`org.dallasmakerspace.storage`): `IObjectStore`, `S3ObjectStore`, `InMemoryObjectStore`,
+   `ObjectKey`, `NamespacedObjectStore`/`StorageNamespace`, `StorageModule` DI, contract tests. No user-visible change.
+2. **Profile photo backend:** `profile_photo_key`/`profile_photo_updated_at` columns, `ProfilePhotoService`
+   (validate/re-encode/rate-limit), `ProfilePhotoRoutes` (`PUT`/`DELETE`/`GET`), `PROFILE_PHOTO_ENABLED` flag.
+3. **Centralize avatar normalization:** moved `normalizeAvatarUrl()` into `common-models`, deleted ~a dozen duplicate
+   (one buggy) reimplementations across dataviz reports and `FeaturedProjectsService`. Not originally planned as its
+   own phase — pulled out once the duplication was found while starting phase 4, so phase 4 had one function to call.
+4. **Avatar precedence everywhere:** `DMSMember.displayAvatarUrl()`, `AvatarHandler` + `ProfilePhotoClient`
+   (streaming), and switching every remaining read site (profile, committees, groups, search, suggested-events) onto
+   it.
+5. **UI upload flow:** `ProfilePhotoHandler`, `profile-photo.html` fragment (button/menu/modal), `profile-photo.js`
+   (camera capture, Cropper.js crop, save/remove), `photo-checks.js` (non-ML checks: resolution, lighting, blur).
+6. **MediaPipe face validation:** lazy-loaded `@mediapipe/tasks-vision` + self-hosted BlazeFace model, face-geometry
+   checks (size/centering/yaw), live selfie guidance, crop pre-positioning on the detected face. Combined into one
+   commit with phase 5 (both were built and reviewed together).
+7. **Not yet done:** Playwright e2e test; this doc update.
+8. **Drop `avatar_url`:** removed the dead DB column, `DMSMember` field, and repository copy logic, once phase 4 had
+   moved every reader off it and prod was confirmed to have it NULL everywhere. Kept as a separate, low-priority
+   cleanup commit rather than folded into phase 4.
+
+Rollout (user-side, not yet done): run `service/docs/sql/profile-photo-migration.sql` against prod → provision the S3
+bucket/IAM policy → set `OBJECT_STORE_BUCKET`/`OBJECT_STORE_REGION` on docker-h0 → deploy → pilot via
+`enabledGroupNames: ["Infrastructure"]` → tune thresholds from override-rate data in Kibana → `enabled = true`.
 
 ## Future Work
 
@@ -410,7 +460,8 @@ val PROFILE_PHOTO_UPLOAD_ENABLED =
 
 1. Should the uploaded photo override Discourse everywhere immediately, or should members opt in to "use this photo
    on the forum too" once Discourse sync exists?
-2. Is Infrastructure the right group for moderation, or should it be a dedicated moderator AD group?
+2. ~~Is Infrastructure the right group for moderation, or should it be a dedicated moderator AD group?~~ **Resolved:**
+   Infrastructure (`Permission.MANAGE_MEMBERS`) — implemented as-is, no dedicated group.
 3. Should front-desk/staff tools show this photo for member identification? If so, do we require a photo refresh
    cadence or block overrides of soft failures?
 4. Retention: keep noncurrent versions 30 days — acceptable, or should removed photos be purged immediately?

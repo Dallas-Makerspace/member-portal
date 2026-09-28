@@ -214,7 +214,7 @@
                                  id="profileAvatarImg"
                                  class="profile-avatar rounded-circle"
                                  alt="Profile Avatar">
-                            <th:block th:if="${profile_photo_enabled and (is_self == 'true' or can_moderate_photo)}">
+                            <th:block th:if="${profile_photo_enabled and (is_self == 'true' or (can_moderate_photo and has_uploaded_photo))}">
                                 <div th:replace="~{fragments/profile-photo :: profile-photo-controls}"></div>
                             </th:block>
                         </span>
@@ -829,7 +829,7 @@
 <script src="../static/js/dms-page-loader.js" defer></script>
 <script type="module" src="../static/js/dms-group-pill.js"></script>
 <script type="module" src="../static/js/dms-relative-date.js"></script>
-<script type="module" th:if="${profile_photo_enabled and (is_self == 'true' or can_moderate_photo)}"
+<script type="module" th:if="${profile_photo_enabled and (is_self == 'true' or (can_moderate_photo and has_uploaded_photo))}"
         src="../static/js/profile-photo.js"></script>
 
 <!-- LinkedIn Modal Script -->

@@ -246,11 +246,17 @@ function initProfilePhoto(username, canUpload) {
         const objectUrl = URL.createObjectURL(fileOrBlob);
         const img = document.getElementById('profilePhotoCropImage');
         img.src = objectUrl;
+        // Check `complete` right after setting src (synchronously, before any await) - a tiny blob
+        // image can finish loading before an async gap like `loadCropper()`'s network fetch, and an
+        // img that's already `complete` never fires another 'load' event, which would hang this
+        // forever if we only ever attached an onload handler.
+        const imgLoaded = img.complete
+            ? Promise.resolve()
+            : new Promise((resolve) => {
+                  img.onload = resolve;
+              });
 
-        const Cropper = await loadCropper();
-        await new Promise((resolve) => {
-            img.onload = resolve;
-        });
+        const [Cropper] = await Promise.all([loadCropper(), imgLoaded]);
 
         if (cropperInstance) cropperInstance.destroy();
         cropperInstance = new Cropper(img, {

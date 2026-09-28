@@ -43,10 +43,17 @@ sequenceDiagram
     UI-->>B: 200 photoUrl
     B->>M: Avatar updates in place
 
-    Note over B,S3: Viewing a photo
+    Note over B,S3: Viewing a photo (streamed through the app, not a redirect)
     B->>UI: GET /avatar/@username
     UI->>S: GET /members/username/profile-photo
-    S->>OS: presignedGetUrl (1h TTL)
-    S-->>UI: 302 presigned URL
-    UI-->>B: 302 presigned URL
-    B->>S3: GET object
+    alt Photo exists
+        S->>OS: get profile-photos/username/uuid.jpg
+        OS->>S3: GetObject
+        S3-->>OS: bytes
+        OS-->>S: bytes
+        S-->>UI: 200 image bytes
+        UI-->>B: 200 image bytes (streamed)
+    else No uploaded photo
+        S-->>UI: 404
+        UI-->>B: 302 to Discourse avatar or placeholder SVG
+    end
