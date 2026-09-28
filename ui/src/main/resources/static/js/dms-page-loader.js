@@ -114,8 +114,10 @@
         // Listen for navigation events
         document.addEventListener('click', (e) => {
             // Check if the click is on a link that leads to a different page
+            if (e.defaultPrevented) return;
             const link = e.target.closest('a');
-            if (link && link.href && !link.href.startsWith('#') &&
+            const rawHref = link && link.getAttribute('href');
+            if (link && link.href && rawHref && !rawHref.startsWith('#') &&
             !link.href.startsWith('javascript:') &&
             link.hostname === window.location.hostname &&
             !e.ctrlKey && !e.metaKey) {
