@@ -28,10 +28,14 @@
             border-top-right-radius: inherit;
         }
 
+        .profile-avatar-wrap {
+            margin-top: -50px;
+        }
+
         .profile-avatar {
+            display: block; /* so the wrapper is exactly the avatar's box, for the camera button */
             width: 100px;
             height: 100px;
-            margin-top: -50px;
             border: 3px solid white; /* White border */
             background-color: white; /* White background */
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Drop shadow */
@@ -209,7 +213,7 @@
 
                 <div class="card-body pt-0">
                     <div class="text-center">
-                        <span class="position-relative d-inline-block">
+                        <span class="profile-avatar-wrap position-relative d-inline-block">
                             <img th:src="${avatar_url != '' ? avatar_url : '../static/images/profile-pic-not-set.svg'}"
                                  id="profileAvatarImg"
                                  class="profile-avatar rounded-circle"

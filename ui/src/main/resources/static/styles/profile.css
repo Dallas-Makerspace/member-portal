@@ -433,13 +433,16 @@
     }
 }
 
-/* Profile photo camera button + upload modal (see fragments/profile-photo.html). Positioned like
-   Facebook's: centered on the circle's bottom rim, slightly right of center, so roughly half the
-   badge hangs below the avatar rather than tucked into the corner. */
+/* Profile photo camera button + upload modal (see fragments/profile-photo.html). Centered on the
+   avatar circle's rim at 45° bottom-right: 50% + 50% * cos(45°). */
+.dropdown.profile-photo-controls {
+    position: static; /* anchor the button to .profile-avatar-wrap, not this zero-height div */
+}
+
 .profile-photo-btn {
     position: absolute;
-    left: 82%;
-    top: 88%;
+    left: 85.355%;
+    top: 85.355%;
     transform: translate(-50%, -50%);
     width: 44px;
     height: 44px;
