@@ -2,18 +2,27 @@ package org.dallasmakerspace.notifications.di
 
 import dagger.Module
 import dagger.Provides
+import dagger.multibindings.IntoMap
 import dagger.multibindings.IntoSet
 import io.ktor.client.HttpClient
 import javax.inject.Named
 import javax.inject.Singleton
+import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.notifications.Channel
+import org.dallasmakerspace.notifications.channels.ChannelKey
 import org.dallasmakerspace.notifications.channels.EmailNotifier
 import org.dallasmakerspace.notifications.channels.MockNotifier
 import org.dallasmakerspace.notifications.channels.Notifier
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
 import org.dallasmakerspace.notifications.templates.SystemTestTemplate
 
+/**
+ * Notification pipeline wiring. To add a delivery channel, contribute another
+ * `@Provides @Singleton @IntoMap @ChannelKey(Channel.X)` notifier; channels with no notifier are
+ * rejected at create time and hidden from preferences.
+ */
 @Module
 object NotificationsModule {
 
@@ -27,21 +36,25 @@ object NotificationsModule {
   @IntoSet
   fun provideSystemTestTemplate(): NotificationTemplate<*> = SystemTestTemplate()
 
-  /** The single active notifier: mocked in development, real (SparkPost) otherwise. */
+  /** Email notifier: mocked in development, SparkPost otherwise. */
   @Provides
   @Singleton
-  fun provideNotifier(
+  @IntoMap
+  @ChannelKey(Channel.EMAIL)
+  fun provideEmailNotifier(
       appConfig: AppConfig,
       loggerFactory: LoggerFactory,
       @Named("sparkpost") sparkPostClient: HttpClient,
+      activeDirectoryService: IActiveDirectoryService,
   ): Notifier =
       if (useMockServices(appConfig)) {
-        MockNotifier(loggerFactory)
+        MockNotifier(loggerFactory, Channel.EMAIL)
       } else {
-        EmailNotifier(appConfig, loggerFactory, sparkPostClient)
+        EmailNotifier(appConfig, loggerFactory, sparkPostClient, activeDirectoryService)
       }
 
   @Provides
+  @Singleton
   @Named("sparkpost")
   fun provideSparkPostClient(): HttpClient = EmailNotifier.createClient()
 

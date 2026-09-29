@@ -6,17 +6,18 @@ import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.notifications.Channel
-import org.dallasmakerspace.notifications.CreateNotificationRequest
+import org.dallasmakerspace.notifications.FanOutResult
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
-import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.junit.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.argThat
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
-import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -63,51 +64,55 @@ class CalendarEventWebhookTest {
       """
           .trimIndent()
 
+  private val payload = argumentCaptor<String>()
+  private val dedupe = argumentCaptor<(String) -> String?>()
+
+  private suspend fun givenFanOut(result: FanOutResult) {
+    whenever(
+            mockNotifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any()))
+        .thenReturn(result)
+  }
+
+  private suspend fun verifyFanOut(followers: List<String>) {
+    verify(mockNotifications)
+        .createForMembers(
+            eq(followers),
+            eq(FollowingTopic),
+            eq("event-announcement"),
+            payload.capture(),
+            eq(Channel.EMAIL),
+            dedupe.capture())
+  }
+
   @Test
-  fun `handleWebhook should notify every follower with the resolved organizer name`() =
+  fun `handleWebhook should fan out to every follower with the resolved organizer name`() =
       runBlocking {
         whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice", "bob"))
         whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
             .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
-        whenever(mockNotifications.create(any())).thenReturn(mock())
+        givenFanOut(FanOutResult(created = 2, duplicates = 0, failed = 0))
 
         val result = handler.handleWebhook(requestBody())
 
         assertTrue(result.success)
         assertTrue(result.message.contains("Notified 2 of 2"))
-        verify(mockNotifications)
-            .create(
-                argThat<CreateNotificationRequest> {
-                  memberUsername == "alice" &&
-                      topic == EventAnnouncementTopic &&
-                      templateName == "event-announcement" &&
-                      channel == Channel.EMAIL &&
-                      dedupeKey == "event-announcement-12345-alice" &&
-                      payload!!.contains("\"organizerName\":\"Jane Doe\"") &&
-                      payload!!.contains("\"organizerUsername\":\"jdoe\"") &&
-                      payload!!.contains("Mon Aug 10")
-                })
-        verify(mockNotifications)
-            .create(
-                argThat<CreateNotificationRequest> { dedupeKey == "event-announcement-12345-bob" })
-        Unit
+        verifyFanOut(listOf("alice", "bob"))
+        assertTrue(payload.lastValue.contains("\"organizerName\":\"Jane Doe\""))
+        assertTrue(payload.lastValue.contains("\"organizerUsername\":\"jdoe\""))
+        assertTrue(payload.lastValue.contains("Mon Aug 10"))
+        assertEquals("event-announcement-12345-alice", dedupe.lastValue("alice"))
       }
 
   @Test
   fun `handleWebhook should fall back to username when AD has no display name`() = runBlocking {
     whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
-    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
-        .thenReturn(mapOf("jdoe" to null))
-    whenever(mockNotifications.create(any())).thenReturn(mock())
+    whenever(mockAd.getMembersByUsernameList(listOf("jdoe"))).thenReturn(mapOf("jdoe" to null))
+    givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
 
     handler.handleWebhook(requestBody())
 
-    verify(mockNotifications)
-        .create(
-            argThat<CreateNotificationRequest> {
-              payload!!.contains("\"organizerName\":\"jdoe\"")
-            })
-    Unit
+    verifyFanOut(listOf("alice"))
+    assertTrue(payload.lastValue.contains("\"organizerName\":\"jdoe\""))
   }
 
   @Test
@@ -118,32 +123,24 @@ class CalendarEventWebhookTest {
 
     assertTrue(result.success)
     assertTrue(result.message.contains("No followers"))
-    verify(mockNotifications, never()).create(any())
+    verify(mockNotifications, never())
+        .createForMembers(any(), any(), any(), anyOrNull(), any(), any())
     Unit
   }
 
   @Test
-  fun `handleWebhook should continue notifying remaining followers when one create fails`() =
-      runBlocking {
-        whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice", "bob"))
-        whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
-            .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
-        whenever(
-                mockNotifications.create(
-                    argThat<CreateNotificationRequest> { memberUsername == "alice" }))
-            .thenThrow(IllegalStateException("Unknown member username: alice"))
-        whenever(
-                mockNotifications.create(
-                    argThat<CreateNotificationRequest> { memberUsername == "bob" }))
-            .thenReturn(mock())
+  fun `handleWebhook should report duplicates and failures from the fan-out`() = runBlocking {
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice", "bob", "carol"))
+    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
+    givenFanOut(FanOutResult(created = 1, duplicates = 1, failed = 1))
 
-        val result = handler.handleWebhook(requestBody())
+    val result = handler.handleWebhook(requestBody())
 
-        assertTrue(result.success)
-        assertTrue(result.message.contains("Notified 1 of 2"))
-        verify(mockNotifications, times(2)).create(any())
-        Unit
-      }
+    assertTrue(result.success)
+    assertTrue(result.message.contains("Notified 1 of 3"))
+    assertTrue(result.message.contains("duplicates=1, failed=1"))
+  }
 
   @Test
   fun `handleWebhook should reject malformed json`() = runBlocking {
@@ -159,7 +156,8 @@ class CalendarEventWebhookTest {
     assertTrue(result.success)
     assertTrue(result.message.contains("Ignoring event_type=event.updated"))
     verify(mockSubscriptions, never()).getFollowers(any())
-    verify(mockNotifications, never()).create(any())
+    verify(mockNotifications, never())
+        .createForMembers(any(), any(), any(), anyOrNull(), any(), any())
     Unit
   }
 
@@ -168,15 +166,14 @@ class CalendarEventWebhookTest {
     whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
     whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
         .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
-    whenever(mockNotifications.create(any())).thenReturn(mock())
+    givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
 
     handler.handleWebhook(
         requestBody(eventStart = "2026-08-11T00:00:00", eventStartTimezone = "UTC"))
 
     // 2026-08-11T00:00:00 UTC is 2026-08-10 19:00 Central (UTC-5 in August).
-    verify(mockNotifications)
-        .create(argThat<CreateNotificationRequest> { payload!!.contains("Mon Aug 10") })
-    Unit
+    verifyFanOut(listOf("alice"))
+    assertTrue(payload.lastValue.contains("Mon Aug 10"))
   }
 
   @Test

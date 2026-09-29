@@ -14,13 +14,18 @@ import org.dallasmakerspace.notifications.NotificationPreference
 import org.dallasmakerspace.notifications.NotificationStatus
 import org.dallasmakerspace.notifications.NotificationSuppression
 import org.dallasmakerspace.notifications.NotificationTopic
+import org.dallasmakerspace.notifications.UnknownTopic
 import org.dallasmakerspace.notifications.templates.TemplateRegistry
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.or
@@ -97,64 +102,160 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
       e.message?.contains("Duplicate") == true || e.message?.contains("unique") == true
 
   suspend fun getByDedupeKey(dedupeKey: String): Notification? = suspendTransaction {
-    NotificationsTable.select { NotificationsTable.dedupeKey eq dedupeKey }
+    toNotifications(
+            NotificationsTable.select { NotificationsTable.dedupeKey eq dedupeKey }.limit(1).toList())
         .firstOrNull()
-        ?.let { toNotification(it) }
-  }
-
-  suspend fun getById(id: Long): Notification? = suspendTransaction {
-    NotificationsTable.select { NotificationsTable.idColumn eq id }
-        .firstOrNull()
-        ?.let { toNotification(it) }
-  }
-
-  /** Looks up the notification a provider event refers to (e.g. SparkPost `transmission_id`). */
-  suspend fun getByProviderId(providerId: String): Notification? = suspendTransaction {
-    NotificationsTable.select { NotificationsTable.providerId eq providerId }
-        .firstOrNull()
-        ?.let { toNotification(it) }
-  }
-
-  /** Rows the worker may attempt now: QUEUED or FAILED with no delay or an elapsed delay. */
-  suspend fun getPending(limit: Int, now: LocalDateTime): List<Notification> = suspendTransaction {
-    val rows =
-        NotificationsTable.select {
-              (NotificationsTable.status inList
-                  listOf(NotificationStatus.QUEUED.name, NotificationStatus.FAILED.name)) and
-                  (NotificationsTable.nextAttemptAt.isNull() or
-                      (NotificationsTable.nextAttemptAt lessEq now))
-            }
-            .orderBy(NotificationsTable.id to SortOrder.ASC)
-            .limit(limit)
-            .toList()
-    toNotifications(rows)
   }
 
   /**
-   * Rows awaiting digest delivery, oldest first (stable digest order). Optionally restricted to one
-   * [Aggregation] (e.g. DAILY vs WEEKLY when schedules differ).
+   * Every notification a provider event refers to (e.g. SparkPost `transmission_id`). A digest is
+   * one transmission covering several rows, so this can return more than one.
    */
-  suspend fun getInDigest(limit: Int, aggregation: Aggregation? = null): List<Notification> =
+  suspend fun getAllByProviderId(providerId: String): List<Notification> = suspendTransaction {
+    toNotifications(
+        NotificationsTable.select { NotificationsTable.providerId eq providerId }.toList())
+  }
+
+  /**
+   * Usernames of up to [limit] members with an immediate row due now: QUEUED past its hold window
+   * or FAILED past its retry delay. [onlyUsernames] restricts the query (e.g. to pilot testers) so
+   * other members' rows can't fill the batch and starve eligible ones.
+   */
+  suspend fun getMembersWithDueImmediate(
+      limit: Int,
+      now: LocalDateTime,
+      onlyUsernames: Set<String>? = null,
+  ): List<String> = suspendTransaction {
+    val profileIds = onlyUsernames?.let(::resolveProfileIds)
+    if (profileIds != null && profileIds.isEmpty()) return@suspendTransaction emptyList()
+    val ids =
+        NotificationsTable.slice(NotificationsTable.profileId)
+            .select {
+              val due = dueImmediateCondition(now)
+              if (profileIds == null) due
+              else due and (NotificationsTable.profileId inList profileIds)
+            }
+            .withDistinct()
+            .orderBy(NotificationsTable.profileId to SortOrder.ASC)
+            .limit(limit)
+            .map { it[NotificationsTable.profileId] }
+    ProfileResolver.resolveUsernames(ids).values.toList()
+  }
+
+  /**
+   * The burst to send for [memberUsername] now: every QUEUED row (including ones still inside
+   * their hold window, which join the burst early) plus FAILED rows whose retry is due, oldest
+   * first.
+   */
+  suspend fun getImmediateBurst(memberUsername: String, now: LocalDateTime): List<Notification> =
       suspendTransaction {
-        val conditions = buildList {
-          add(NotificationsTable.status eq NotificationStatus.IN_DIGEST.name)
-          aggregation?.let { add(NotificationsTable.aggregation eq it.name) }
-        }
+        val resolvedProfileId =
+            ProfileResolver.findProfileId(memberUsername) ?: return@suspendTransaction emptyList()
         val rows =
-            NotificationsTable.select { conditions.reduce { acc, cond -> acc and cond } }
+            NotificationsTable.select {
+                  (NotificationsTable.profileId eq resolvedProfileId) and
+                      ((NotificationsTable.status eq NotificationStatus.QUEUED.name) or
+                          ((NotificationsTable.status eq NotificationStatus.FAILED.name) and
+                              dueCondition(now)))
+                }
                 .orderBy(NotificationsTable.id to SortOrder.ASC)
-                .limit(limit)
                 .toList()
         toNotifications(rows)
       }
 
-  suspend fun markSending(id: Long) {
-    suspendTransaction {
-      NotificationsTable.update({ NotificationsTable.idColumn eq id }) {
-        it[status] = NotificationStatus.SENDING.name
-        it[updatedAt] = LocalDateTime.now(utcZone)
+  private fun dueCondition(now: LocalDateTime) =
+      NotificationsTable.nextAttemptAt.isNull() or (NotificationsTable.nextAttemptAt lessEq now)
+
+  private fun dueImmediateCondition(now: LocalDateTime) =
+      (NotificationsTable.status inList
+          listOf(NotificationStatus.QUEUED.name, NotificationStatus.FAILED.name)) and
+          dueCondition(now)
+
+  /**
+   * Usernames of up to [limit] members with at least one digest row whose delivery window has
+   * arrived. Selecting members first (rather than a row batch) guarantees a member's due rows are
+   * never split across two digest emails.
+   */
+  suspend fun getMembersWithDueDigests(
+      limit: Int,
+      now: LocalDateTime,
+      onlyUsernames: Set<String>? = null,
+  ): List<String> = suspendTransaction {
+    val profileIds = onlyUsernames?.let(::resolveProfileIds)
+    if (profileIds != null && profileIds.isEmpty()) return@suspendTransaction emptyList()
+    val ids =
+        NotificationsTable.slice(NotificationsTable.profileId)
+            .select {
+              val due = dueDigestCondition(now)
+              if (profileIds == null) due
+              else due and (NotificationsTable.profileId inList profileIds)
+            }
+            .withDistinct()
+            .orderBy(NotificationsTable.profileId to SortOrder.ASC)
+            .limit(limit)
+            .map { it[NotificationsTable.profileId] }
+    ProfileResolver.resolveUsernames(ids).values.toList()
+  }
+
+  /** All of [memberUsername]'s digest rows whose delivery window has arrived, oldest first. */
+  suspend fun getDueDigestRows(memberUsername: String, now: LocalDateTime): List<Notification> =
+      suspendTransaction {
+        val resolvedProfileId =
+            ProfileResolver.findProfileId(memberUsername) ?: return@suspendTransaction emptyList()
+        val rows =
+            NotificationsTable.select {
+                  (NotificationsTable.profileId eq resolvedProfileId) and dueDigestCondition(now)
+                }
+                .orderBy(NotificationsTable.id to SortOrder.ASC)
+                .toList()
+        toNotifications(rows)
       }
-    }
+
+  private fun dueDigestCondition(now: LocalDateTime) =
+      (NotificationsTable.status eq NotificationStatus.IN_DIGEST.name) and dueCondition(now)
+
+  /**
+   * Atomically moves [id] to SENDING if it is still in one of [fromStatuses]. Returns false when
+   * another worker (e.g. an overlapping instance during a deploy) already claimed it, so a row is
+   * never sent twice.
+   */
+  suspend fun claim(id: Long, fromStatuses: Collection<NotificationStatus>): Boolean =
+      suspendTransaction {
+        NotificationsTable.update({
+          (NotificationsTable.idColumn eq id) and
+              (NotificationsTable.status inList fromStatuses.map { it.name })
+        }) {
+          it[status] = NotificationStatus.SENDING.name
+          it[updatedAt] = LocalDateTime.now(utcZone)
+        } > 0
+      }
+
+  /**
+   * Recovers rows stuck in SENDING since before [staleBefore] (the process died mid-send): digest
+   * rows go back to IN_DIGEST, everything else to FAILED, both due immediately. Returns the count.
+   */
+  suspend fun requeueStaleSending(staleBefore: LocalDateTime): Int = suspendTransaction {
+    val now = LocalDateTime.now(utcZone)
+    fun stale() =
+        (NotificationsTable.status eq NotificationStatus.SENDING.name) and
+            (NotificationsTable.updatedAt less staleBefore)
+    val digest =
+        NotificationsTable.update({
+          stale() and (NotificationsTable.aggregation neq Aggregation.IMMEDIATE.name)
+        }) {
+          it[status] = NotificationStatus.IN_DIGEST.name
+          it[nextAttemptAt] = now
+          it[lastError] = STALE_SENDING_ERROR
+          it[updatedAt] = now
+        }
+    val immediate =
+        NotificationsTable.update({ stale() }) {
+          it[status] = NotificationStatus.FAILED.name
+          it[nextAttemptAt] = now
+          it[lastError] = STALE_SENDING_ERROR
+          it[updatedAt] = now
+        }
+    digest + immediate
   }
 
   suspend fun markSent(id: Long, providerId: String?, sentAt: LocalDateTime) {
@@ -163,6 +264,7 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
         it[status] = NotificationStatus.SENT.name
         it[this.providerId] = providerId
         it[this.sentAt] = sentAt
+        it[lastError] = null
         it[updatedAt] = sentAt
       }
     }
@@ -170,74 +272,82 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
 
   /** Records a transient failure; the row becomes eligible for retry at [nextAttemptAt]. */
   suspend fun markFailed(id: Long, error: String, nextAttemptAt: LocalDateTime) {
+    transition(id, NotificationStatus.FAILED, error, nextAttemptAt, incrementAttempts = true)
+    log.warn("Notification $id marked FAILED: $error")
+  }
+
+  /**
+   * Records a transient digest failure: the row stays IN_DIGEST (so the retry is still a digest,
+   * never an individual email) and becomes due again at [nextAttemptAt].
+   */
+  suspend fun markDigestRetry(id: Long, error: String, nextAttemptAt: LocalDateTime) {
+    transition(id, NotificationStatus.IN_DIGEST, error, nextAttemptAt, incrementAttempts = true)
+    log.warn("Digest notification $id will retry at $nextAttemptAt: $error")
+  }
+
+  /** Records a permanent failure (bad recipient, auth, or retries exhausted). */
+  suspend fun markDeadLetter(id: Long, error: String) {
+    transition(id, NotificationStatus.DEAD_LETTER, error, null, incrementAttempts = true)
+    log.warn("Notification $id marked DEAD_LETTER: $error")
+  }
+
+  /**
+   * Defers an immediate notification to the [aggregation] digest due at [deliverAt] (e.g.
+   * per-member daily cap reached). The row's aggregation is rewritten so it reflects how the
+   * notification was actually delivered.
+   */
+  suspend fun markInDigest(
+      id: Long,
+      reason: String,
+      aggregation: Aggregation,
+      deliverAt: LocalDateTime,
+  ) {
+    transition(
+        id, NotificationStatus.IN_DIGEST, reason, deliverAt, incrementAttempts = false, aggregation)
+    log.info("Notification $id moved to $aggregation digest due $deliverAt: $reason")
+  }
+
+  @Suppress("LongParameterList")
+  private suspend fun transition(
+      id: Long,
+      newStatus: NotificationStatus,
+      error: String?,
+      nextAttemptAt: LocalDateTime?,
+      incrementAttempts: Boolean,
+      newAggregation: Aggregation? = null,
+  ) {
     suspendTransaction {
-      val currentAttempts =
-          NotificationsTable.select { NotificationsTable.idColumn eq id }
-              .first()[NotificationsTable.attempts]
       NotificationsTable.update({ NotificationsTable.idColumn eq id }) {
-        it[status] = NotificationStatus.FAILED.name
-        it[attempts] = currentAttempts + 1
+        it[status] = newStatus.name
+        newAggregation?.let { agg -> it[aggregation] = agg.name }
+        if (incrementAttempts) {
+          with(SqlExpressionBuilder) { it.update(attempts, attempts + 1) }
+        }
         it[this.nextAttemptAt] = nextAttemptAt
         it[lastError] = error
         it[updatedAt] = LocalDateTime.now(utcZone)
       }
     }
-    log.warn("Notification $id marked FAILED: $error")
   }
 
-  /** Records a permanent failure (bad recipient, auth, or retries exhausted). */
-  suspend fun markDeadLetter(id: Long, error: String) {
-    suspendTransaction {
-      val currentAttempts =
-          NotificationsTable.select { NotificationsTable.idColumn eq id }
-              .first()[NotificationsTable.attempts]
-      NotificationsTable.update({ NotificationsTable.idColumn eq id }) {
-        it[status] = NotificationStatus.DEAD_LETTER.name
-        it[attempts] = currentAttempts + 1
-        it[lastError] = error
-        it[updatedAt] = LocalDateTime.now(utcZone)
-      }
-    }
-    log.warn("Notification $id marked DEAD_LETTER: $error")
-  }
-
-  /** Records that the notification was deliberately not sent (e.g. disabled preference). */
-  suspend fun markSkipped(id: Long, reason: String) {
-    suspendTransaction {
-      NotificationsTable.update({ NotificationsTable.idColumn eq id }) {
-        it[status] = NotificationStatus.SKIPPED.name
-        it[lastError] = reason
-        it[updatedAt] = LocalDateTime.now(utcZone)
-      }
-    }
-    log.info("Notification $id marked SKIPPED: $reason")
-  }
-
-  /** Defers an immediate notification to the next digest (e.g. per-member daily cap reached). */
-  suspend fun markInDigest(id: Long, reason: String) {
-    suspendTransaction {
-      NotificationsTable.update({ NotificationsTable.idColumn eq id }) {
-        it[status] = NotificationStatus.IN_DIGEST.name
-        it[lastError] = reason
-        it[updatedAt] = LocalDateTime.now(utcZone)
-      }
-    }
-    log.info("Notification $id moved to IN_DIGEST: $reason")
-  }
-
-  /** Counts immediate-channel notifications sent for a member since [since] (UTC). */
-  suspend fun countImmediateSentSince(memberUsername: String, since: LocalDateTime): Long =
+  /**
+   * Immediate emails (not rows) sent to a member since [since] (UTC): a combined burst counts once,
+   * since the rows it contained share one provider id.
+   */
+  suspend fun countImmediateEmailsSince(memberUsername: String, since: LocalDateTime): Int =
       suspendTransaction {
         val resolvedProfileId =
-            ProfileResolver.findProfileId(memberUsername) ?: return@suspendTransaction 0L
-        NotificationsTable.select {
+            ProfileResolver.findProfileId(memberUsername) ?: return@suspendTransaction 0
+        NotificationsTable.slice(NotificationsTable.idColumn, NotificationsTable.providerId)
+            .select {
               (NotificationsTable.profileId eq resolvedProfileId) and
                   (NotificationsTable.aggregation eq Aggregation.IMMEDIATE.name) and
                   (NotificationsTable.status eq NotificationStatus.SENT.name) and
-                  (NotificationsTable.sentAt.isNotNull() and
-                      (NotificationsTable.sentAt greaterEq since))
+                  (NotificationsTable.sentAt greaterEq since)
             }
-            .count()
+            .map { it[NotificationsTable.providerId] ?: "row-${it[NotificationsTable.idColumn].value}" }
+            .distinct()
+            .size
       }
 
   /** Marks a notification read, but only if it belongs to [memberUsername]. */
@@ -356,10 +466,20 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
             }
       }
 
-  /** Appends a suppression record (bounce or unsubscribe, mirrored from the provider). */
+  /**
+   * Records a suppression (bounce or unsubscribe, mirrored from the provider); a member already
+   * suppressed for [reason] is left as-is so repeated bounces don't pile up rows.
+   */
   suspend fun insertSuppression(memberUsername: String, email: String?, reason: String) {
     suspendTransaction {
       val resolvedProfileId = ProfileResolver.requireProfileId(memberUsername)
+      val exists =
+          NotificationSuppressionsTable.select {
+                (NotificationSuppressionsTable.profileId eq resolvedProfileId) and
+                    (NotificationSuppressionsTable.reason eq reason)
+              }
+              .any()
+      if (exists) return@suspendTransaction
       NotificationSuppressionsTable.insert {
         it[profileId] = resolvedProfileId
         it[this.email] = email
@@ -385,13 +505,16 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
     }
   }
 
-  /** Resolves a stored topic key back to its [NotificationTopic] instance; crashes loudly on data
-   *  corruption (an unknown key means the row predates that topic's producer, or the producer was
-   *  removed), matching the enum-`valueOf`-throws behavior this replaces. */
-  private fun resolveTopic(key: String) =
-      requireNotNull(templateRegistry.findTopic(key)) {
-        "Unknown notification topic '$key' in stored row"
-      }
+  /**
+   * Resolves a stored topic key back to its [NotificationTopic]. A key whose producer was removed
+   * maps to [UnknownTopic] rather than throwing, so one orphaned row can't wedge the worker loop
+   * or break a member's notifications page.
+   */
+  private fun resolveTopic(key: String): NotificationTopic =
+      templateRegistry.findTopic(key) ?: UnknownTopic(key)
+
+  private fun resolveProfileIds(usernames: Set<String>): List<Int> =
+      usernames.mapNotNull { ProfileResolver.findProfileId(it) }
 
   private fun toPreference(memberUsername: String, row: ResultRow): NotificationPreference =
       NotificationPreference(
@@ -404,15 +527,6 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
                 Aggregation.valueOf(name)
               },
       )
-
-  private fun toNotification(row: ResultRow): Notification {
-    val profileId = row[NotificationsTable.profileId]
-    val memberUsername =
-        requireNotNull(ProfileResolver.findUsername(profileId)) {
-          "Notification references unknown profile_id $profileId"
-        }
-    return toNotification(row, memberUsername)
-  }
 
   private fun toNotification(row: ResultRow, memberUsername: String): Notification =
       Notification(
@@ -435,4 +549,8 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
           readAt = row[NotificationsTable.readAt],
           createdAt = row[NotificationsTable.createdAt],
       )
+
+  private companion object {
+    const val STALE_SENDING_ERROR = "Recovered after a send was interrupted; retrying"
+  }
 }

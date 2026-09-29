@@ -1,5 +1,6 @@
 package org.dallasmakerspace.notifications.templates
 
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.Test
 
@@ -18,6 +19,16 @@ class EventAnnouncementTemplateTest {
   @Test
   fun `subject should include the organizer's full name`() {
     assertTrue(template.renderSubject(data()).contains("Jane Doe"))
+  }
+
+  @Test
+  fun `subject should include the start time so repeat sessions are distinguishable`() {
+    assertEquals(
+        "New event from Jane Doe: Intro to Laser Cutting (Mon Aug 10 7:00 PM)",
+        template.renderSubject(data()))
+    assertEquals(
+        "New event from Jane Doe: Intro to Laser Cutting",
+        template.renderSubject(data().copy(eventStart = "")))
   }
 
   @Test

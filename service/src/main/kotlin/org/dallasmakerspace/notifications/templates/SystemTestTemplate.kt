@@ -21,5 +21,5 @@ class SystemTestTemplate :
 
   override fun renderText(data: SystemTestData): String = data.message
 
-  override fun renderHtml(data: SystemTestData): String = "<p>${data.message}</p>"
+  override fun renderHtml(data: SystemTestData): String = "<p>${escapeHtml(data.message)}</p>"
 }

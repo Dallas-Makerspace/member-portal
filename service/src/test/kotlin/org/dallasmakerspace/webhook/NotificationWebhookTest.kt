@@ -12,7 +12,7 @@ import org.dallasmakerspace.notifications.CreateNotificationRequest
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.dallasmakerspace.webhook.handlers.NotificationWebhook
 import org.junit.Test
@@ -30,7 +30,7 @@ class NotificationWebhookTest {
       Notification(
           id = 42,
           memberUsername = "jdoe",
-          topic = EventAnnouncementTopic,
+          topic = FollowingTopic,
           channel = Channel.EMAIL,
           aggregation = Aggregation.IMMEDIATE,
           templateName = "event-announcement",
@@ -50,7 +50,7 @@ class NotificationWebhookTest {
   @Test
   fun `handleWebhook should create notification on valid payload`() = runBlocking {
     val notificationService = mock<NotificationService>()
-    whenever(notificationService.findTopic("EVENT_ANNOUNCEMENT")).thenReturn(EventAnnouncementTopic)
+    whenever(notificationService.findTopic("EVENT_ANNOUNCEMENT")).thenReturn(FollowingTopic)
     whenever(notificationService.create(any())).thenReturn(createdNotification())
     val handler = NotificationWebhook(notificationService)
 
@@ -74,7 +74,7 @@ class NotificationWebhookTest {
         .create(
             argThat<CreateNotificationRequest> {
               memberUsername == "jdoe" &&
-                  topic == EventAnnouncementTopic &&
+                  topic == FollowingTopic &&
                   templateName == "event-announcement" &&
                   channel == Channel.EMAIL &&
                   dedupeKey == "solder-night-2026-08-02"

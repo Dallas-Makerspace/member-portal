@@ -15,14 +15,16 @@ import io.ktor.http.contentType
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.Channel
-import org.dallasmakerspace.notifications.Notification
 
 private const val SPARKPOST_TRANSMISSIONS_URL = "https://api.sparkpost.com/api/v1/transmissions"
 private const val LOGO_URL = "https://dallasmakerspace.org/wp-content/uploads/56_wide2.png"
@@ -34,12 +36,23 @@ private const val PROFILE_MANAGEMENT_URL = "https://members.dallasmakerspace.org
  * - not a SparkPost-hosted unsubscribe link). Applied once per email at send time so digest emails
  *   (which concatenate several already-rendered fragments) get exactly one shell, not one per item.
  */
-private fun wrapHtml(bodyHtml: String): String {
+internal fun wrapHtml(bodyHtml: String): String {
   val year = java.time.Year.now().value
   return """
       <!doctype html>
       <html lang="en">
-      <head><meta charset="UTF-8"><title>Dallas Makerspace</title></head>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Dallas Makerspace</title>
+        <style>
+          @media only screen and (max-width: 540px) {
+            .dms-col { display: block !important; width: 100% !important; max-width: 100% !important; }
+            .dms-thumb { width: 100% !important; height: 200px !important; }
+            .dms-text { padding-left: 0 !important; padding-top: 12px !important; }
+          }
+        </style>
+      </head>
       <body style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:22px;background-color:#ffffff;color:#333333;margin:0;padding:0;">
         <div style="margin:0 auto;max-width:600px;padding:30px;">
           <div style="text-align:center;margin-bottom:20px;">
@@ -65,7 +78,8 @@ private fun appendTextFooter(text: String): String =
 
 /**
  * Email notifier that delivers via the SparkPost REST transmissions API. See
- * `service/docs/sparkpost-contract.md` for the validated API contract.
+ * `service/docs/sparkpost-contract.md` for the validated API contract. Resolves the recipient's
+ * address from Active Directory at send time so address changes apply to queued notifications.
  */
 @Singleton
 class EmailNotifier
@@ -74,6 +88,7 @@ constructor(
     appConfig: AppConfig,
     loggerFactory: LoggerFactory,
     @Named("sparkpost") private val client: HttpClient,
+    private val activeDirectoryService: IActiveDirectoryService,
 ) : Notifier {
   private val log = loggerFactory.create(javaClass)
   private val json = Json { ignoreUnknownKeys = true }
@@ -84,35 +99,29 @@ constructor(
 
   override val channel: Channel = Channel.EMAIL
 
-  @Suppress("TooGenericExceptionCaught") // Catch-all: any provider/network error is transient.
-  override suspend fun send(notification: Notification, recipientEmail: String?): SendResult {
+  override val supportsDigest: Boolean = true
+
+  override suspend fun send(memberUsername: String, message: OutgoingMessage): SendResult {
     val to =
-        recipientEmail
-            ?: return SendResult.PermanentFailure(
-                "No email address on file for ${notification.memberUsername}"
-            )
-    return sendEmail(to, notification.subject, notification.body ?: notification.subject)
+        resolveEmail(memberUsername)
+            ?: return SendResult.PermanentFailure("No email address on file for $memberUsername")
+    return sendEmail(to, message.subject, message.text, message.html)
   }
 
-  override suspend fun sendDigest(
-      memberUsername: String,
-      recipientEmail: String?,
-      subject: String,
-      textBody: String,
-      htmlBody: String,
-  ): SendResult {
-    val to =
-        recipientEmail
-            ?: return SendResult.PermanentFailure("No email address on file for $memberUsername")
-    return sendEmail(to, subject, textBody, htmlBody)
-  }
+  private suspend fun resolveEmail(memberUsername: String): String? =
+      withContext(Dispatchers.IO) {
+        activeDirectoryService
+            .getMembersByUsernameList(listOf(memberUsername))[memberUsername]
+            ?.mail
+            ?.takeIf { it.isNotBlank() }
+      }
 
   @Suppress("TooGenericExceptionCaught") // Catch-all: any provider/network error is transient.
   private suspend fun sendEmail(
       to: String,
       subject: String,
       text: String,
-      html: String = text,
+      html: String,
   ): SendResult {
     val request =
         SparkPostTransmission(

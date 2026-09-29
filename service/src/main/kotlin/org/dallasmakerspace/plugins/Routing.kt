@@ -68,8 +68,8 @@ import org.dallasmakerspace.shortlinks.RedirectResult
 import org.dallasmakerspace.shortlinks.ShortLinksService
 import org.dallasmakerspace.webhook.WebhookRouter
 
-/** Shared secret guarding the /webhook/notifications endpoint (X-Webhook-Token header). */
-private const val NOTIFICATIONS_WEBHOOK_TOKEN = "dev-insecure-webhook-token-change-in-prod"
+/** Dev-only default for `app.notifications.webhook-token`; rejected outside development. */
+private const val DEV_NOTIFICATIONS_WEBHOOK_TOKEN = "dev-insecure-webhook-token-change-in-prod"
 
 @Suppress("LongMethod")
 fun Application.configureRouting() {
@@ -147,6 +147,16 @@ fun Application.configureRouting() {
         delay(pollIntervalMs)
       }
     }
+  }
+
+  val notificationsWebhookToken =
+      appConfig.requireStringProperty("app.notifications.webhook-token").takeIf {
+        it.isNotBlank() &&
+            (it != DEV_NOTIFICATIONS_WEBHOOK_TOKEN ||
+                appConfig.requireBooleanProperty("ktor.development"))
+      }
+  if (notificationsWebhookToken == null) {
+    log.warn("NOTIFICATIONS_WEBHOOK_TOKEN not set; /webhook/notifications will reject all calls")
   }
 
   routing {
@@ -1169,7 +1179,8 @@ fun Application.configureRouting() {
       val body = call.receiveText()
 
       if (path == "notifications" &&
-          call.request.headers["X-Webhook-Token"] != NOTIFICATIONS_WEBHOOK_TOKEN) {
+          (notificationsWebhookToken == null ||
+              call.request.headers["X-Webhook-Token"] != notificationsWebhookToken)) {
         call.respond(
             HttpStatusCode.Unauthorized,
             ApiResponse(Status.ERROR, "Invalid or missing webhook token", null))

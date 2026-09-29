@@ -31,4 +31,16 @@ interface NotificationTopic {
    */
   val visibleInPreferences: Boolean
     get() = false
+
+  /** Subject for one email combining [count] (> 1) notifications of this topic. */
+  fun combinedSubject(count: Int): String = "$count new updates: $displayName"
+}
+
+/**
+ * Stand-in for a stored topic key whose producer/template no longer exists, so rows written by a
+ * since-removed feature still load (and can be listed or dead-lettered) instead of throwing.
+ */
+data class UnknownTopic(override val key: String) : NotificationTopic {
+  override val displayName: String
+    get() = key
 }

@@ -14,6 +14,7 @@ import org.dallasmakerspace.auth.authorize
 import org.dallasmakerspace.notifications.Aggregation
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.CreateNotificationRequest
+import org.dallasmakerspace.notifications.DigestSchedule
 import org.dallasmakerspace.notifications.MemberPreferenceView
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
@@ -35,6 +36,8 @@ data class NotificationView(
     val providerId: String?,
     val lastError: String?,
     val sentAt: String?,
+    /** For IN_DIGEST rows, when the digest is due; for FAILED rows, the next retry. */
+    val nextAttemptAt: String?,
     val createdAt: String?,
 ) {
   companion object {
@@ -52,6 +55,7 @@ data class NotificationView(
             providerId = notification.providerId,
             lastError = notification.lastError,
             sentAt = notification.sentAt?.toString(),
+            nextAttemptAt = notification.nextAttemptAt?.toString(),
             createdAt = notification.createdAt.toString(),
         )
   }
@@ -66,6 +70,7 @@ data class PreferenceView(
     val enabled: Boolean,
     val aggregationOverride: String?,
     val effectiveAggregation: String,
+    val digestSupported: Boolean,
     /** Mirrors [org.dallasmakerspace.notifications.NotificationTopic.visibleInPreferences] - the
      * topic's own say on whether it's ready to be offered as a toggle, so callers don't need their
      * own list of what's WIP. */
@@ -85,6 +90,13 @@ data class CreateNotificationRequestBody(
     val payload: String? = null,
     val channel: Channel = Channel.EMAIL,
     val dedupeKey: String? = null,
+)
+
+/** A member's delivery status: suppression (e.g. hard bounce) and when digests go out. */
+data class DeliveryStatusView(
+    val suppressed: Boolean,
+    val suppressionReason: String?,
+    val digestSchedule: String,
 )
 
 /** Request body for PUT /notifications/preferences/{username}. */
@@ -107,6 +119,7 @@ private fun Route.protectedNotificationRoutes(notificationService: NotificationS
     listNotificationsRoute(notificationService)
     getPreferencesRoute(notificationService)
     updatePreferenceRoute(notificationService)
+    deliveryStatusRoute(notificationService)
   }
 }
 
@@ -120,14 +133,18 @@ private fun Route.emitNotificationRoute(notificationService: NotificationService
                 HttpStatusCode.BadRequest,
                 ApiResponse(Status.ERROR, "Invalid topic: ${body.topic}", null))
     val created =
-        notificationService.create(
-            CreateNotificationRequest(
-                memberUsername = body.memberUsername,
-                topic = topic,
-                templateName = body.templateName,
-                payload = body.payload,
-                channel = body.channel,
-                dedupeKey = body.dedupeKey))
+        try {
+          notificationService.create(
+              CreateNotificationRequest(
+                  memberUsername = body.memberUsername,
+                  topic = topic,
+                  templateName = body.templateName,
+                  payload = body.payload,
+                  channel = body.channel,
+                  dedupeKey = body.dedupeKey))
+        } catch (e: IllegalArgumentException) {
+          return@post call.respondBadRequest(e.message ?: "Invalid notification request")
+        }
     call.respond(
         ApiResponse(
             Status.SUCCESS, "Notification ${created.id} created", NotificationView.from(created)))
@@ -204,12 +221,35 @@ private fun Route.updatePreferenceRoute(notificationService: NotificationService
               }
         }
     val view =
-        notificationService.setPreference(username, topic, channel, body.enabled, aggregation)
+        try {
+          notificationService.setPreference(username, topic, channel, body.enabled, aggregation)
+        } catch (e: IllegalArgumentException) {
+          return@put call.respondBadRequest(e.message ?: "Invalid preference")
+        }
     call.respond(
         ApiResponse(
             Status.SUCCESS,
             "Preference updated for $username/${topic.key}/${channel.name}",
             view.toView(),
+        ))
+  }
+}
+
+/** Whether a member's notifications are suppressed, plus the digest schedule for help text. */
+private fun Route.deliveryStatusRoute(notificationService: NotificationService) {
+  get("/notifications/status/{username}") {
+    val username =
+        call.parameters["username"] ?: return@get call.respondBadRequest("Username required")
+    val suppression = notificationService.getSuppression(username)
+    call.respond(
+        ApiResponse(
+            Status.SUCCESS,
+            "Delivery status for $username",
+            DeliveryStatusView(
+                suppressed = suppression != null,
+                suppressionReason = suppression?.reason,
+                digestSchedule = DigestSchedule.DESCRIPTION,
+            ),
         ))
   }
 }
@@ -223,6 +263,7 @@ private fun MemberPreferenceView.toView(): PreferenceView =
         enabled = enabled,
         aggregationOverride = aggregationOverride?.name,
         effectiveAggregation = effectiveAggregation.name,
+        digestSupported = digestSupported,
         visibleInPreferences = topic.visibleInPreferences,
     )
 

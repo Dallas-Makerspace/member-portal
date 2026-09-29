@@ -7,14 +7,13 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.notifications.Channel
-import org.dallasmakerspace.notifications.CreateNotificationRequest
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
-import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.templates.EventAnnouncementData
+import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.WebhookResult
 import org.dallasmakerspace.webhook.models.CalendarEventWebhookEnvelope
@@ -75,32 +74,26 @@ constructor(
 
     val payload =
         json.encodeToString(
-            EventAnnouncementPayload.serializer(),
-            EventAnnouncementPayload(
+            EventAnnouncementData.serializer(),
+            EventAnnouncementData(
                 eventName = event.name,
                 organizerName = resolveOrganizerName(event.organizerUsername),
                 organizerUsername = event.organizerUsername,
                 eventStart = formatEventStart(event.eventStart, event.eventStartTimezone),
                 eventUrl = event.url))
 
-    var sent = 0
-    for (follower in followers) {
-      try {
-        notificationService.create(
-            CreateNotificationRequest(
-                memberUsername = follower,
-                topic = EventAnnouncementTopic,
-                templateName = "event-announcement",
-                payload = payload,
-                channel = Channel.EMAIL,
-                dedupeKey = "event-announcement-${event.id}-$follower"))
-        sent++
-      } catch (e: Exception) {
-        logger.error("Failed to create event-announcement notification for $follower", e)
-      }
-    }
+    val result =
+        notificationService.createForMembers(
+            memberUsernames = followers,
+            topic = FollowingTopic,
+            templateName = "event-announcement",
+            payload = payload,
+            channel = Channel.EMAIL,
+            dedupeKey = { follower -> "event-announcement-${event.id}-$follower" })
     return WebhookResult(
-        true, "Notified $sent of ${followers.size} follower(s) of ${event.organizerUsername}")
+        true,
+        "Notified ${result.created} of ${followers.size} follower(s) of ${event.organizerUsername}" +
+            " (duplicates=${result.duplicates}, failed=${result.failed})")
   }
 
   /**
@@ -140,12 +133,3 @@ constructor(
         raw
       }
 }
-
-@Serializable
-private data class EventAnnouncementPayload(
-    val eventName: String,
-    val organizerName: String,
-    val organizerUsername: String,
-    val eventStart: String,
-    val eventUrl: String,
-)

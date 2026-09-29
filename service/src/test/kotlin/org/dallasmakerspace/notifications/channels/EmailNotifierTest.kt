@@ -7,19 +7,14 @@ import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-import java.time.LocalDateTime
-import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import org.dallasmakerspace.activedirectory.ADUser
+import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
-import org.dallasmakerspace.notifications.Aggregation
-import org.dallasmakerspace.notifications.Channel
-import org.dallasmakerspace.notifications.Notification
-import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -47,29 +42,29 @@ class EmailNotifierTest {
         .thenReturn("DMS Notifications")
   }
 
-  private fun notification() =
-      Notification(
-          id = 1L,
-          memberUsername = "jdoe",
-          topic = SystemTopic,
-          channel = Channel.EMAIL,
-          aggregation = Aggregation.IMMEDIATE,
-          templateName = "system-test",
-          payload = null,
-          subject = "Test subject",
-          body = "Test body",
-          status = NotificationStatus.QUEUED,
-          attempts = 0,
-          nextAttemptAt = null,
-          dedupeKey = null,
-          providerId = null,
-          lastError = null,
-          sentAt = null,
-          readAt = null,
-          createdAt = LocalDateTime.now(ZoneId.of("UTC")))
+  private val message =
+      OutgoingMessage(subject = "Test subject", text = "Test text", html = "<p>Test body</p>")
 
-  private fun notifier(engine: MockEngine): EmailNotifier =
-      EmailNotifier(mockAppConfig, mockLoggerFactory, HttpClient(engine))
+  private fun notifier(engine: MockEngine, email: String? = "jdoe@example.com"): EmailNotifier {
+    val activeDirectory = mock<IActiveDirectoryService>()
+    whenever(activeDirectory.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to email?.let(::adUser)))
+    return EmailNotifier(mockAppConfig, mockLoggerFactory, HttpClient(engine), activeDirectory)
+  }
+
+  private fun adUser(email: String) =
+      ADUser(
+          sAMAccountName = "jdoe",
+          mail = email,
+          givenName = "Jane",
+          sn = "Doe",
+          telephoneNumber = null,
+          employeeID = null,
+          displayName = "Jane Doe",
+          objectGuid = "guid",
+          whenCreated = null,
+          enabled = true,
+          groups = emptyList())
 
   @Test
   fun `send should post transmission and return success with provider id`() = runBlocking {
@@ -82,7 +77,7 @@ class EmailNotifierTest {
           headersOf(HttpHeaders.ContentType, "application/json"))
     }
 
-    val result = notifier(engine).send(notification(), "jdoe@example.com")
+    val result = notifier(engine).send("jdoe", message)
 
     assertIs<SendResult.Success>(result)
     assertEquals("txn-1", result.providerId)
@@ -106,7 +101,7 @@ class EmailNotifierTest {
           headersOf(HttpHeaders.ContentType, "application/json"))
     }
 
-    notifier(engine).send(notification(), "jdoe@example.com")
+    notifier(engine).send("jdoe", message)
 
     val body = capturedRequest!!.body.toByteArray().decodeToString()
     assertTrue(body.contains("\"open_tracking\":false"))
@@ -125,20 +120,39 @@ class EmailNotifierTest {
               headersOf(HttpHeaders.ContentType, "application/json"))
         }
 
-        notifier(engine).send(notification(), "jdoe@example.com")
+        notifier(engine).send("jdoe", message)
 
         val body = capturedRequest!!.body.toByteArray().decodeToString()
-        assertTrue(body.contains("Test body"))
+        assertTrue(body.contains("<p>Test body</p>"))
         assertTrue(body.contains("dallasmakerspace.org/wp-content/uploads/56_wide2.png"))
         assertTrue(body.contains("https://members.dallasmakerspace.org/profile-me"))
         assertTrue(!body.contains("/notifications/unsubscribe"))
       }
 
   @Test
+  fun `send should keep the text part free of html`() = runBlocking {
+    var capturedRequest: io.ktor.client.request.HttpRequestData? = null
+    val engine = MockEngine { request ->
+      capturedRequest = request
+      respond(
+          """{"results":{"total_rejected_recipients":0,"total_accepted_recipients":1,"id":"txn-1"}}""",
+          HttpStatusCode.OK,
+          headersOf(HttpHeaders.ContentType, "application/json"))
+    }
+
+    notifier(engine).send("jdoe", message)
+
+    val body = capturedRequest!!.body.toByteArray().decodeToString()
+    val text = Regex("\"text\":\"(.*?)\",\"html\"").find(body)!!.groupValues[1]
+    assertTrue(text.startsWith("Test text"))
+    assertTrue(!text.contains("<p>"))
+  }
+
+  @Test
   fun `send should return permanent failure when recipient email missing`() = runBlocking {
     val engine = MockEngine { error("request should not have been made") }
 
-    val result = notifier(engine).send(notification(), null)
+    val result = notifier(engine, email = null).send("jdoe", message)
 
     assertIs<SendResult.PermanentFailure>(result)
     assertTrue(result.reason.contains("No email address"))
@@ -150,7 +164,7 @@ class EmailNotifierTest {
       respond("""{"errors":[{"message":"bad request"}]}""", HttpStatusCode.BadRequest)
     }
 
-    val result = notifier(engine).send(notification(), "jdoe@example.com")
+    val result = notifier(engine).send("jdoe", message)
 
     assertIs<SendResult.PermanentFailure>(result)
     assertTrue(result.reason.contains("400"))
@@ -162,7 +176,7 @@ class EmailNotifierTest {
       respond("""{"errors":[{"message":"rate limited"}]}""", HttpStatusCode.TooManyRequests)
     }
 
-    val result = notifier(engine).send(notification(), "jdoe@example.com")
+    val result = notifier(engine).send("jdoe", message)
 
     assertIs<SendResult.TransientFailure>(result)
     assertTrue(result.reason.contains("429"))
@@ -174,7 +188,7 @@ class EmailNotifierTest {
       respond("""{"errors":[{"message":"boom"}]}""", HttpStatusCode.InternalServerError)
     }
 
-    val result = notifier(engine).send(notification(), "jdoe@example.com")
+    val result = notifier(engine).send("jdoe", message)
 
     assertIs<SendResult.TransientFailure>(result)
     assertTrue(result.reason.contains("500"))
@@ -189,7 +203,7 @@ class EmailNotifierTest {
           headersOf(HttpHeaders.ContentType, "application/json"))
     }
 
-    val result = notifier(engine).send(notification(), "jdoe@example.com")
+    val result = notifier(engine).send("jdoe", message)
 
     assertIs<SendResult.PermanentFailure>(result)
     assertTrue(result.reason.contains("rejected"))

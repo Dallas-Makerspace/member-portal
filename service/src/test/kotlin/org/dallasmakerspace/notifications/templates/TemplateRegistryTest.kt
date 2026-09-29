@@ -6,7 +6,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.KSerializer
 import org.dallasmakerspace.notifications.NotificationTopic
-import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.junit.Test
 
@@ -43,7 +43,7 @@ class TemplateRegistryTest {
   fun `topics is derived from the registered templates' own topics`() {
     val registry = TemplateRegistry(setOf(EventAnnouncementTemplate(), SystemTestTemplate()))
 
-    assertEquals(setOf(EventAnnouncementTopic, SystemTopic), registry.topics)
+    assertEquals(setOf(FollowingTopic, SystemTopic), registry.topics)
   }
 
   @Test
@@ -57,7 +57,7 @@ class TemplateRegistryTest {
   fun `findTopic resolves a registered topic by key`() {
     val registry = TemplateRegistry(setOf(EventAnnouncementTemplate(), SystemTestTemplate()))
 
-    assertEquals(EventAnnouncementTopic, registry.findTopic("EVENT_ANNOUNCEMENT"))
+    assertEquals(FollowingTopic, registry.findTopic("EVENT_ANNOUNCEMENT"))
     assertEquals(SystemTopic, registry.findTopic("SYSTEM"))
   }
 

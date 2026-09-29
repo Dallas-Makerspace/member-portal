@@ -131,10 +131,11 @@ object ConfigRegistry {
       ConfigKey(
           key = "notifications.per-member-immediate-daily-cap",
           description =
-              "Max immediate notifications a member receives per day; beyond this they degrade " +
-                  "to the daily digest (0 = unlimited)",
+              "Safety valve: max immediate emails (a combined burst counts once) a member " +
+                  "receives per Central-time day; the email that reaches it tells the member, and " +
+                  "anything after goes to the next daily digest (0 = unlimited)",
           category = "Notifications",
-          defaultValue = 5,
+          defaultValue = 15,
           type = ConfigValueType.IntType,
       )
 

@@ -27,7 +27,7 @@ import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.dallasmakerspace.plugins.ApiResponse
 import org.dallasmakerspace.plugins.Status
@@ -49,7 +49,7 @@ class NotificationRoutesTest {
     // The emit/PUT-preferences routes both resolve a topic string via
     // notificationService.findTopic(...) (mockService is a bare mock, so this must be stubbed for
     // any test that expects a route to get past topic resolution).
-    whenever(mockService.findTopic("EVENT_ANNOUNCEMENT")).thenReturn(EventAnnouncementTopic)
+    whenever(mockService.findTopic("EVENT_ANNOUNCEMENT")).thenReturn(FollowingTopic)
     whenever(mockService.findTopic("SYSTEM")).thenReturn(SystemTopic)
   }
 
@@ -191,18 +191,19 @@ class NotificationRoutesTest {
       whenever(
               mockService.setPreference(
                   eq("jdoe"),
-                  eq(EventAnnouncementTopic),
+                  eq(FollowingTopic),
                   eq(Channel.EMAIL),
                   eq(false),
                   eq(null)))
           .thenReturn(
               org.dallasmakerspace.notifications.MemberPreferenceView(
                   memberUsername = "jdoe",
-                  topic = EventAnnouncementTopic,
+                  topic = FollowingTopic,
                   channel = Channel.EMAIL,
                   enabled = false,
                   aggregationOverride = null,
-                  effectiveAggregation = Channel.EMAIL.defaultAggregation))
+                  effectiveAggregation = Channel.EMAIL.defaultAggregation,
+                  digestSupported = true))
     }
 
     val response =
@@ -217,7 +218,7 @@ class NotificationRoutesTest {
     verify(mockService)
         .setPreference(
             eq("jdoe"),
-            eq(EventAnnouncementTopic),
+            eq(FollowingTopic),
             eq(Channel.EMAIL),
             eq(false),
             eq(null))

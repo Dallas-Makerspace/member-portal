@@ -1,7 +1,7 @@
 package org.dallasmakerspace.notifications.channels
 
+import dagger.MapKey
 import org.dallasmakerspace.notifications.Channel
-import org.dallasmakerspace.notifications.Notification
 
 /** Outcome of a send attempt, classified for the worker's retry/backoff logic. */
 sealed interface SendResult {
@@ -15,28 +15,28 @@ sealed interface SendResult {
   data class PermanentFailure(val reason: String) : SendResult
 }
 
-/** Delivers a notification over a single channel (email in v1; SMS/Discord/Discourse later). */
+/** Fully rendered content handed to a [Notifier]; the notifier applies its own shell/footer. */
+data class OutgoingMessage(
+    val subject: String,
+    val text: String,
+    val html: String,
+)
+
+/**
+ * Delivers messages over a single [Channel]. Each implementation is contributed to the
+ * `Map<Channel, Notifier>` multibinding with `@IntoMap @ChannelKey(...)` (see NotificationsModule)
+ * and resolves its own recipient address (email, phone, Discord id, ...) from the member username,
+ * so the worker and digest processor stay channel-agnostic.
+ */
 interface Notifier {
   val channel: Channel
 
-  /**
-   * Attempts to send [notification]. [recipientEmail] is the resolved email address for the EMAIL
-   * channel (null for other channels or when no address is on file).
-   */
-  suspend fun send(notification: Notification, recipientEmail: String?): SendResult
+  /** Whether several notifications may be combined into one [send] (daily/weekly digests). */
+  val supportsDigest: Boolean
+    get() = false
 
-  /**
-   * Attempts to send a digest email containing multiple notifications to [memberUsername].
-   * [recipientEmail] is the resolved email address for the EMAIL channel.
-   *
-   * Channels that do not support digests keep the default (permanent failure).
-   */
-  suspend fun sendDigest(
-      memberUsername: String,
-      recipientEmail: String?,
-      subject: String,
-      textBody: String,
-      htmlBody: String,
-  ): SendResult =
-      SendResult.PermanentFailure("Digest delivery is not supported on the $channel channel")
+  suspend fun send(memberUsername: String, message: OutgoingMessage): SendResult
 }
+
+/** Dagger map key binding a [Notifier] to the [Channel] it delivers. */
+@MapKey annotation class ChannelKey(val value: Channel)

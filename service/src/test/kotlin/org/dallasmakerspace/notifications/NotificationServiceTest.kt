@@ -3,17 +3,24 @@ package org.dallasmakerspace.notifications
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
+import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.notifications.channels.MockNotifier
+import org.dallasmakerspace.notifications.channels.Notifier
+import org.dallasmakerspace.notifications.channels.NotifierRegistry
+import org.dallasmakerspace.notifications.channels.OutgoingMessage
+import org.dallasmakerspace.notifications.channels.SendResult
 import org.dallasmakerspace.notifications.db.NotificationsRepository
 import org.dallasmakerspace.notifications.templates.EventAnnouncementTemplate
 import org.dallasmakerspace.notifications.templates.SystemTestTemplate
 import org.dallasmakerspace.notifications.templates.TemplateRegistry
-import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.notifications.topics.SystemTopic
 import org.junit.Before
 import org.junit.Test
@@ -21,6 +28,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.slf4j.Logger
@@ -50,9 +58,22 @@ class NotificationServiceTest {
     }
 
     templateRegistry = TemplateRegistry(setOf(EventAnnouncementTemplate(), SystemTestTemplate()))
-    service =
-        NotificationService(
-            mockRepository, templateRegistry, mockActiveDirectoryService, mockLoggerFactory)
+    service = newService(mapOf(Channel.EMAIL to MockNotifier(mockLoggerFactory)))
+  }
+
+  private fun newService(notifiers: Map<Channel, Notifier>) =
+      NotificationService(
+          mockRepository,
+          templateRegistry,
+          NotifierRegistry(notifiers),
+          mockActiveDirectoryService,
+          AppConfig(),
+          mockLoggerFactory)
+
+  /** A channel notifier that can't batch digests. */
+  private class NoDigestNotifier(override val channel: Channel) : Notifier {
+    override suspend fun send(memberUsername: String, message: OutgoingMessage) =
+        SendResult.Success(null)
   }
 
   private fun adUser(enabled: Boolean) =
@@ -89,6 +110,7 @@ class NotificationServiceTest {
     assertEquals(Channel.EMAIL, result.channel)
     assertEquals(Aggregation.IMMEDIATE, result.aggregation)
     assertEquals(NotificationStatus.QUEUED, result.status)
+    assertEquals(result.createdAt.plusMinutes(5), result.nextAttemptAt, "held for the burst window")
     assertEquals("dedupe-1", result.dedupeKey)
     assertTrue(result.subject.isNotBlank())
     assertTrue(result.body!!.isNotBlank())
@@ -181,6 +203,70 @@ class NotificationServiceTest {
 
     assertEquals(Aggregation.DAILY, result.aggregation)
     assertEquals(NotificationStatus.IN_DIGEST, result.status)
+    val dueAt = assertNotNull(result.nextAttemptAt)
+    assertTrue(dueAt.isAfter(result.createdAt), "digest rows wait for their delivery window")
+  }
+
+  @Test
+  fun `create should deliver immediately when the channel cannot batch digests`() = runBlocking {
+    service = newService(mapOf(Channel.EMAIL to NoDigestNotifier(Channel.EMAIL)))
+    whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.EMAIL))
+        .thenReturn(
+            NotificationPreference("jdoe", SystemTopic, Channel.EMAIL, true, Aggregation.WEEKLY))
+
+    val result = service.create(createRequest())
+
+    assertEquals(Aggregation.IMMEDIATE, result.aggregation)
+    assertEquals(NotificationStatus.QUEUED, result.status)
+  }
+
+  @Test
+  fun `create should reject a channel with no notifier`() = runBlocking {
+    assertFailsWith<IllegalArgumentException> {
+      service.create(createRequest().copy(channel = Channel.SMS))
+    }
+    verify(mockRepository, never()).create(any())
+    Unit
+  }
+
+  @Test
+  fun `createForMembers should check membership once and skip existing dedupe keys`() =
+      runBlocking {
+        whenever(mockActiveDirectoryService.getMembersByUsernameList(listOf("jdoe", "asmith")))
+            .thenReturn(mapOf("jdoe" to adUser(enabled = true), "asmith" to adUser(enabled = false)))
+        whenever(mockRepository.getByDedupeKey("k-jdoe")).thenReturn(null)
+        whenever(mockRepository.getByDedupeKey("k-asmith"))
+            .thenReturn(existingNotification(providerId = null))
+
+        val result =
+            service.createForMembers(
+                memberUsernames = listOf("jdoe", "asmith", "jdoe"),
+                topic = SystemTopic,
+                templateName = "system-test",
+                payload = """{"message":"hi"}""",
+                dedupeKey = { "k-$it" })
+
+        assertEquals(FanOutResult(created = 1, duplicates = 1, failed = 0), result)
+        verify(mockActiveDirectoryService, times(1)).getMembersByUsernameList(any())
+        verify(mockRepository, times(1)).create(any())
+        Unit
+      }
+
+  @Test
+  fun `createForMembers should keep going when one recipient fails`() = runBlocking {
+    whenever(mockActiveDirectoryService.getMembersByUsernameList(listOf("jdoe", "asmith")))
+        .thenReturn(mapOf("jdoe" to adUser(enabled = true), "asmith" to adUser(enabled = true)))
+    whenever(mockRepository.getSuppression("jdoe")).thenThrow(IllegalStateException("db down"))
+
+    val result =
+        service.createForMembers(
+            memberUsernames = listOf("jdoe", "asmith"),
+            topic = SystemTopic,
+            templateName = "system-test",
+            payload = null)
+
+    assertEquals(FanOutResult(created = 1, duplicates = 0, failed = 1), result)
   }
 
   @Test
@@ -256,7 +342,9 @@ class NotificationServiceTest {
 
     val views = service.getPreferences("jdoe")
 
-    assertEquals(templateRegistry.topics.size * Channel.entries.size, views.size)
+    // Only channels with a notifier (EMAIL here) are offered.
+    assertEquals(templateRegistry.topics.size, views.size)
+    assertTrue(views.all { it.channel == Channel.EMAIL && it.digestSupported })
     assertTrue(views.all { it.enabled })
     views.forEach { view ->
       assertEquals(view.channel.defaultAggregation, view.effectiveAggregation)
@@ -272,7 +360,7 @@ class NotificationServiceTest {
             listOf(
                 NotificationPreference(
                     memberUsername = "jdoe",
-                    topic = EventAnnouncementTopic,
+                    topic = FollowingTopic,
                     channel = Channel.EMAIL,
                     enabled = false,
                     aggregation = Aggregation.DAILY)))
@@ -280,13 +368,13 @@ class NotificationServiceTest {
     val views = service.getPreferences("jdoe")
 
     val overridden =
-        views.single { it.topic == EventAnnouncementTopic && it.channel == Channel.EMAIL }
+        views.single { it.topic == FollowingTopic && it.channel == Channel.EMAIL }
     assertEquals(false, overridden.enabled)
     assertEquals(Aggregation.DAILY, overridden.aggregationOverride)
     assertEquals(Aggregation.DAILY, overridden.effectiveAggregation)
     assertTrue(
         views
-            .filter { !(it.topic == EventAnnouncementTopic && it.channel == Channel.EMAIL) }
+            .filter { !(it.topic == FollowingTopic && it.channel == Channel.EMAIL) }
             .all { it.enabled })
     Unit
   }
@@ -333,17 +421,20 @@ class NotificationServiceTest {
   @Test
   fun `recordDelivery should mark the matching notification sent`() = runBlocking {
     val sentAt = LocalDateTime.of(2026, 8, 2, 12, 0)
-    whenever(mockRepository.getByProviderId("txn-1")).thenReturn(existingNotification("txn-1"))
+    whenever(mockRepository.getAllByProviderId("txn-1"))
+        .thenReturn(
+            listOf(existingNotification("txn-1"), existingNotification("txn-1").copy(id = 100L)))
 
     service.recordDelivery("txn-1", sentAt)
 
     verify(mockRepository).markSent(99L, "txn-1", sentAt)
+    verify(mockRepository).markSent(100L, "txn-1", sentAt)
     Unit
   }
 
   @Test
   fun `recordDelivery should ignore unknown provider id`() = runBlocking {
-    whenever(mockRepository.getByProviderId("unknown")).thenReturn(null)
+    whenever(mockRepository.getAllByProviderId("unknown")).thenReturn(emptyList())
 
     service.recordDelivery("unknown", LocalDateTime.now())
 
@@ -353,19 +444,23 @@ class NotificationServiceTest {
 
   @Test
   fun `recordBounce should dead-letter the notification and suppress the member`() = runBlocking {
-    whenever(mockRepository.getByProviderId("txn-2"))
-        .thenReturn(existingNotification(providerId = "txn-2"))
+    whenever(mockRepository.getAllByProviderId("txn-2"))
+        .thenReturn(
+            listOf(
+                existingNotification(providerId = "txn-2"),
+                existingNotification(providerId = "txn-2").copy(id = 100L)))
 
     service.recordBounce("txn-2", "jdoe@example.com", "Mailbox does not exist")
 
-    verify(mockRepository).markDeadLetter(99L, "SparkPost bounce: Mailbox does not exist")
-    verify(mockRepository).insertSuppression("jdoe", "jdoe@example.com", "BOUNCE")
+    verify(mockRepository).markDeadLetter(99L, "Email bounced: Mailbox does not exist")
+    verify(mockRepository).markDeadLetter(100L, "Email bounced: Mailbox does not exist")
+    verify(mockRepository, times(1)).insertSuppression("jdoe", "jdoe@example.com", "BOUNCE")
     Unit
   }
 
   @Test
   fun `recordBounce should ignore unknown provider id`() = runBlocking {
-    whenever(mockRepository.getByProviderId("unknown")).thenReturn(null)
+    whenever(mockRepository.getAllByProviderId("unknown")).thenReturn(emptyList())
 
     service.recordBounce("unknown", "jdoe@example.com", "reason")
 
@@ -376,8 +471,8 @@ class NotificationServiceTest {
 
   @Test
   fun `recordEngagement should not change notification status`() = runBlocking {
-    whenever(mockRepository.getByProviderId("txn-3"))
-        .thenReturn(existingNotification(providerId = "txn-3"))
+    whenever(mockRepository.getAllByProviderId("txn-3"))
+        .thenReturn(listOf(existingNotification(providerId = "txn-3")))
 
     service.recordEngagement("txn-3", "click")
 

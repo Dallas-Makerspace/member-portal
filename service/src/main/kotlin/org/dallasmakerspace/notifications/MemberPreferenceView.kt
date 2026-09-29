@@ -12,4 +12,6 @@ data class MemberPreferenceView(
     /** Member aggregation override; null = use the channel default. */
     val aggregationOverride: Aggregation?,
     val effectiveAggregation: Aggregation,
+    /** Whether the channel can batch notifications into daily/weekly digests. */
+    val digestSupported: Boolean,
 )

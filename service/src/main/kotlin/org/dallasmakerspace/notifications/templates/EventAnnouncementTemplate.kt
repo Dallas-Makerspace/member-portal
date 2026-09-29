@@ -2,7 +2,7 @@ package org.dallasmakerspace.notifications.templates
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import org.dallasmakerspace.notifications.topics.EventAnnouncementTopic
+import org.dallasmakerspace.notifications.topics.FollowingTopic
 
 /** Template data for an event announcement (organizer-following feature). */
 @Serializable
@@ -21,12 +21,14 @@ data class EventAnnouncementData(
 class EventAnnouncementTemplate :
     NotificationTemplate<EventAnnouncementData>(
         name = "event-announcement",
-        topic = EventAnnouncementTopic,
+        topic = FollowingTopic,
     ) {
   override val serializer: KSerializer<EventAnnouncementData> = EventAnnouncementData.serializer()
 
+  /** Includes the start time so repeat sessions of the same class are distinguishable. */
   override fun renderSubject(data: EventAnnouncementData): String =
-      "New event from ${data.organizerName}: ${data.eventName}"
+      "New event from ${data.organizerName}: ${data.eventName}" +
+          if (data.eventStart.isNotBlank()) " (${data.eventStart})" else ""
 
   override fun renderText(data: EventAnnouncementData): String = buildString {
     appendLine("${organizerLabel(data)} posted a new event:")
