@@ -11,7 +11,7 @@ loops in the service deliver them.
    - `QUEUED`: immediate delivery, held for 5 minutes (`worker.hold-seconds`) so a burst goes
      out as one email.
    - `IN_DIGEST`: `next_attempt_at` is set to the next digest window (`DigestSchedule`: daily at
-     8 AM Central, weekly on Mondays at 8 AM).
+     8 AM Central, weekly on Fridays at 8 AM).
    - `SKIPPED` / `SUPPRESSED`: stored but not sent, so they still show in the member's inbox.
 2. **`NotificationWorker`** (every 5s) handles immediate delivery. Once a member's earliest held
    row is due, it atomically claims *all* of that member's queued rows and sends them as one email

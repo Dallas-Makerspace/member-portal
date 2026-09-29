@@ -16,10 +16,10 @@ object DigestSchedule {
   private val CENTRAL = ZoneId.of("America/Chicago")
   private const val SEND_HOUR = 8
   private val SEND_TIME: LocalTime = LocalTime.of(SEND_HOUR, 0)
-  private val WEEKLY_DAY = DayOfWeek.MONDAY
+  private val WEEKLY_DAY = DayOfWeek.FRIDAY
 
   /** Human-readable summary of the windows, for UI help text. */
-  const val DESCRIPTION = "Daily digests go out at 8 AM; weekly digests on Mondays at 8 AM (Central)."
+  const val DESCRIPTION = "Daily digests go out at 8 AM; weekly digests on Fridays at 8 AM (Central)."
 
   /** Next delivery window (UTC) strictly after [nowUtc] for [aggregation]; null for IMMEDIATE. */
   fun nextDelivery(aggregation: Aggregation, nowUtc: LocalDateTime): LocalDateTime? {

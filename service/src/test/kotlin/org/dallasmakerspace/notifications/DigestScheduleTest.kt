@@ -24,15 +24,15 @@ class DigestScheduleTest {
   }
 
   @Test
-  fun `weekly digest is due the next Monday morning`() {
+  fun `weekly digest is due the next Friday morning`() {
     // 2026-08-12 is a Wednesday.
     assertEquals(
-        LocalDateTime.of(2026, 8, 17, 13, 0),
+        LocalDateTime.of(2026, 8, 14, 13, 0),
         DigestSchedule.nextDelivery(Aggregation.WEEKLY, LocalDateTime.of(2026, 8, 12, 12, 0)))
-    // Monday after the window rolls to the following Monday.
+    // Friday after the window rolls to the following Friday.
     assertEquals(
-        LocalDateTime.of(2026, 8, 24, 13, 0),
-        DigestSchedule.nextDelivery(Aggregation.WEEKLY, LocalDateTime.of(2026, 8, 17, 14, 0)))
+        LocalDateTime.of(2026, 8, 21, 13, 0),
+        DigestSchedule.nextDelivery(Aggregation.WEEKLY, LocalDateTime.of(2026, 8, 14, 14, 0)))
   }
 
   @Test
