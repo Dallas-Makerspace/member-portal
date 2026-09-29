@@ -6,9 +6,11 @@ import dagger.multibindings.ElementsIntoSet
 import dagger.multibindings.IntoSet
 import org.dallasmakerspace.notifications.templates.EventAnnouncementTemplate
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
+import org.dallasmakerspace.notifications.templates.ProjectPostTemplate
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.handlers.ActivityLogWebhook
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
+import org.dallasmakerspace.webhook.handlers.DiscoursePostWebhook
 import org.dallasmakerspace.webhook.handlers.GroupHistoryWebhook
 import org.dallasmakerspace.webhook.handlers.NotificationWebhook
 import org.dallasmakerspace.webhook.handlers.SmartWaiverWebhook
@@ -19,12 +21,17 @@ class WebhookModule {
   /**
    * CalendarEventWebhook is the real producer for EVENT_ANNOUNCEMENT - this registration is what
    * makes that topic exist at all (TemplateRegistry derives known topics from registered
-   * templates) and marks it visible in Notification Preferences (EventAnnouncementTopic.
+   * templates) and marks it visible in Notification Preferences (FollowingTopic.
    * visibleInPreferences = true). Return type must stay the explicit `NotificationTemplate<*>`.
    */
   @Provides
   @IntoSet
   fun provideEventAnnouncementTemplate(): NotificationTemplate<*> = EventAnnouncementTemplate()
+
+  /** Produced by [DiscoursePostWebhook] when a member posts a Show & Tell project. */
+  @Provides
+  @IntoSet
+  fun provideProjectPostTemplate(): NotificationTemplate<*> = ProjectPostTemplate()
 
   @Provides
   @ElementsIntoSet
@@ -35,6 +42,7 @@ class WebhookModule {
       notificationWebhook: NotificationWebhook,
       sparkPostWebhook: SparkPostWebhook,
       calendarEventWebhook: CalendarEventWebhook,
+      discoursePostWebhook: DiscoursePostWebhook,
   ): Set<WebhookHandler> {
     return setOf(
         groupHistoryWebhook,
@@ -42,6 +50,7 @@ class WebhookModule {
         smartWaiverWebhook,
         notificationWebhook,
         sparkPostWebhook,
-        calendarEventWebhook)
+        calendarEventWebhook,
+        discoursePostWebhook)
   }
 }

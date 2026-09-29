@@ -57,6 +57,7 @@ import org.dallasmakerspace.server.routes.ShortLinkRedirectHandler
 import org.dallasmakerspace.server.routes.ShortLinksAdminHandler
 import org.dallasmakerspace.server.routes.ShortLinksHandler
 import org.dallasmakerspace.server.routes.SmartWaiverWebhookHandler
+import org.dallasmakerspace.server.routes.DiscourseWebhookHandler
 import org.dallasmakerspace.server.routes.SparkPostWebhookHandler
 import org.dallasmakerspace.server.routes.SuggestedEventsHandler
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
@@ -478,6 +479,14 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       appConfig: AppConfig,
   ): IRouteHandler = SparkPostWebhookHandler(loggerFactory, appConfig)
+
+  @IntoMap
+  @Provides
+  @StringKey("/webhook/discourse")
+  fun providesDiscourseWebhookHandler(
+      loggerFactory: LoggerFactory,
+      appConfig: AppConfig,
+  ): IRouteHandler = DiscourseWebhookHandler(loggerFactory, appConfig)
 
   @IntoMap
   @Provides

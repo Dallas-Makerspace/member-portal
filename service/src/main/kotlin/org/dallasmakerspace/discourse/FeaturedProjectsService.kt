@@ -22,10 +22,7 @@ import org.dallasmakerspace.models.FeaturedProject
 import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 
-private const val SHOW_AND_TELL_CATEGORY_SLUG = "show-and-tell"
-private const val SHOW_AND_TELL_CATEGORY_ID = 49
 private const val MAX_FEATURED_PROJECTS = 10
-private const val MIN_IMAGE_WIDTH = 300
 private const val TOPIC_FETCH_DELAY_MS = 500L
 private const val DISCOURSE_REPLY_ACTION = 5
 private const val USER_ACTIONS_PAGE_SIZE = 30
@@ -62,12 +59,6 @@ constructor(
   // after retries — so a transient Discourse hiccup degrades to "yesterday's data" for that
   // topic instead of dropping all of its images from the cache.
   private val topicSnapshotCache = ConcurrentHashMap<Int, DiscourseTopicDetails>()
-
-  // Capture each full <img ...> tag so we can inspect width and src together
-  private val imgTagRegex = Regex("""<img([^>]+)>""")
-  private val srcAttrRegex = Regex("""src="([^"]+)"""")
-  private val largeSrcAttrRegex = Regex("""data-large-src="([^"]+)"""")
-  private val widthAttrRegex = Regex("""width="(\d+)"""")
 
   /** Returns the global top-10 featured projects (home page). Always instant — reads from cache. */
   fun getFeaturedProjects(): List<FeaturedProject> {
@@ -170,7 +161,8 @@ constructor(
         for (action in actions) {
           val actionTime = runCatching { Instant.parse(action.createdAt) }.getOrNull()
           if (actionTime != null && actionTime < twoYearsAgo) break@outer
-          if (action.categoryId == SHOW_AND_TELL_CATEGORY_ID && action.postNumber != 1) {
+          if (action.categoryId == ShowAndTellRules.CATEGORY_ID &&
+              ShowAndTellRules.isProjectPost(action.postNumber)) {
             showAndTellActions.add(action)
           }
         }
@@ -218,11 +210,11 @@ constructor(
         }
 
         for (post in topicPosts.postStream.posts) {
-          val imageUrl = extractLargeImageUrl(post.cooked)
+          val imageUrl = ShowAndTellRules.extractLargeImageUrl(post.cooked)
           if (imageUrl == null) {
             log.debug(
                 "[live/$dmsUsername] Topic $topicId post ${post.id} (postNumber=${post.postNumber}): " +
-                    "no qualifying image (requires width>=${MIN_IMAGE_WIDTH}px) — skipping")
+                    "no qualifying image (requires a large image) — skipping")
             continue
           }
           log.debug(
@@ -239,8 +231,7 @@ constructor(
                       normalizeAvatarUrl(
                           member.displayAvatarUrl(), size = FEATURED_PROJECT_AVATAR_SIZE),
                   likeCount = post.resolvedLikeCount,
-                  discourseTopicUrl =
-                      "https://talk.dallasmakerspace.org/t/$slug/$topicId/${post.postNumber}",
+                  discourseTopicUrl = ShowAndTellRules.postUrl(slug, topicId, post.postNumber),
                   createdAt = post.createdAt,
               ))
         }
@@ -303,6 +294,14 @@ constructor(
     return null
   }
 
+  /**
+   * Drops [dmsUsername]'s cached profile projects so the next profile view refetches them (e.g.
+   * after a webhook reports a new Show & Tell post).
+   */
+  fun invalidateMember(dmsUsername: String) {
+    memberLiveCache.remove(dmsUsername)
+  }
+
   private fun isTimeout(e: Throwable): Boolean =
       e is HttpRequestTimeoutException || e.cause is HttpRequestTimeoutException
 
@@ -318,30 +317,6 @@ constructor(
         }
       }
     }
-  }
-
-  /**
-   * Finds the first large image URL from Discourse's rendered HTML. Prefers `data-large-src`
-   * (full-resolution Discourse upload) over `src`. Skips images whose `width` attribute is below
-   * [MIN_IMAGE_WIDTH] (filters out emojis, avatars, inline icons).
-   */
-  private fun extractLargeImageUrl(cooked: String): String? {
-    for (match in imgTagRegex.findAll(cooked)) {
-      val attrs = match.groupValues[1]
-      val width = widthAttrRegex.find(attrs)?.groupValues?.get(1)?.toIntOrNull()
-      if (width != null && width < MIN_IMAGE_WIDTH) continue
-      val url =
-          largeSrcAttrRegex.find(attrs)?.groupValues?.get(1)
-              ?: srcAttrRegex.find(attrs)?.groupValues?.get(1)
-              ?: continue
-      if (url.isBlank()) continue
-      return when {
-        url.startsWith("//") -> "https:$url"
-        url.startsWith("/") -> "https://talk.dallasmakerspace.org$url"
-        else -> url
-      }
-    }
-    return null
   }
 
   /**
@@ -364,8 +339,8 @@ constructor(
                 async {
                   runCatching {
                         discourseApiClient.getCategoryTopics(
-                            SHOW_AND_TELL_CATEGORY_SLUG,
-                            SHOW_AND_TELL_CATEGORY_ID,
+                            ShowAndTellRules.CATEGORY_SLUG,
+                            ShowAndTellRules.CATEGORY_ID,
                             page = 0,
                         )
                       }
@@ -374,8 +349,8 @@ constructor(
                 async {
                   runCatching {
                         discourseApiClient.getCategoryTopics(
-                            SHOW_AND_TELL_CATEGORY_SLUG,
-                            SHOW_AND_TELL_CATEGORY_ID,
+                            ShowAndTellRules.CATEGORY_SLUG,
+                            ShowAndTellRules.CATEGORY_ID,
                             page = 1,
                         )
                       }
@@ -389,7 +364,7 @@ constructor(
 
       val matchingTopics =
           allTopics.filter { topic ->
-            topic.title.startsWith("Show and Tell") &&
+            ShowAndTellRules.isProjectTopic(topic.title) &&
                 runCatching { Instant.parse(topic.createdAt) }
                     .getOrNull()
                     ?.let { it >= topicCutoff } == true
@@ -417,9 +392,10 @@ constructor(
       val allCandidatePosts =
           topicDetails.flatMap { (topic, details) ->
             details.postStream.posts
-                .filter { post -> post.postNumber != 1 }
+                .filter { post -> ShowAndTellRules.isProjectPost(post.postNumber) }
                 .mapNotNull { post ->
-                  val imageUrl = extractLargeImageUrl(post.cooked) ?: return@mapNotNull null
+                  val imageUrl =
+                      ShowAndTellRules.extractLargeImageUrl(post.cooked) ?: return@mapNotNull null
                   Triple(topic, post, imageUrl)
                 }
           }
@@ -452,8 +428,7 @@ constructor(
                     normalizeAvatarUrl(
                         member.displayAvatarUrl(), size = FEATURED_PROJECT_AVATAR_SIZE),
                 likeCount = post.resolvedLikeCount,
-                discourseTopicUrl =
-                    "https://talk.dallasmakerspace.org/t/${topic.slug}/${topic.id}/${post.postNumber}",
+                discourseTopicUrl = ShowAndTellRules.postUrl(topic.slug, topic.id, post.postNumber),
                 createdAt = post.createdAt,
             )
 
