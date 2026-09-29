@@ -30,32 +30,48 @@
                 </a>
             </div>
 
-            <!-- Following card -->
-            <div class="dms-card shadow-sm mt-3" id="following">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">
-                        Following (<span th:text="${#lists.size(following)}"></span>)
-                    </h4>
-                    <div th:if="${#lists.isEmpty(following)}" class="text-muted">
-                        <span th:text="'@' + ${preferred_username}"></span> isn't following anyone.
-                    </div>
-                    <div th:each="username : ${following}" class="mb-2">
-                        <dms-member-card th:attr="username=${username}" state="mini"></dms-member-card>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Followers card -->
-            <div class="dms-card shadow-sm mt-4" id="followers">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">
-                        Followers (<span th:text="${#lists.size(followers)}"></span>)
-                    </h4>
-                    <div th:if="${#lists.isEmpty(followers)}" class="text-muted">
-                        No one follows <span th:text="'@' + ${preferred_username}"></span> yet.
-                    </div>
-                    <div th:each="username : ${followers}" class="mb-2">
-                        <dms-member-card th:attr="username=${username}" state="mini"></dms-member-card>
+            <div class="dms-card shadow-sm mt-3">
+                <div class="card-body">
+                    <h4 class="card-title mt-3 mb-3 dms-card-title"
+                        th:text="${is_self} ? 'Your follows' : 'Follows for @' + ${preferred_username}"></h4>
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="following-tab" data-bs-toggle="tab"
+                                    data-bs-target="#following" type="button" role="tab"
+                                    aria-controls="following" aria-selected="true">
+                                Following
+                                <span class="badge bg-primary ms-1" th:text="${#lists.size(following)}"></span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="followers-tab" data-bs-toggle="tab"
+                                    data-bs-target="#followers" type="button" role="tab"
+                                    aria-controls="followers" aria-selected="false">
+                                Followers
+                                <span class="badge bg-secondary ms-1" th:text="${#lists.size(followers)}"></span>
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="following" role="tabpanel"
+                             aria-labelledby="following-tab">
+                            <div th:if="${#lists.isEmpty(following)}" class="text-muted py-2">
+                                <span th:if="${is_self}">You aren't following anyone yet. Follow a member from their profile to get notified when they post an event or a project.</span>
+                                <span th:unless="${is_self}">@<span th:text="${preferred_username}"></span> isn't following anyone yet.</span>
+                            </div>
+                            <th:block th:unless="${#lists.isEmpty(following)}">
+                                <div th:replace="~{fragments/member-grid :: member-grid(${following}, false, null)}"></div>
+                            </th:block>
+                        </div>
+                        <div class="tab-pane fade" id="followers" role="tabpanel" aria-labelledby="followers-tab">
+                            <div th:if="${#lists.isEmpty(followers)}" class="text-muted py-2">
+                                <span th:if="${is_self}">No one is following you yet.</span>
+                                <span th:unless="${is_self}">No one follows @<span th:text="${preferred_username}"></span> yet.</span>
+                            </div>
+                            <th:block th:unless="${#lists.isEmpty(followers)}">
+                                <div th:replace="~{fragments/member-grid :: member-grid(${followers}, false, null)}"></div>
+                            </th:block>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -72,5 +88,22 @@
 <!-- Page Loader (REQUIRED for all pages) -->
 <script src="/static/js/dms-page-loader.js" defer></script>
 <script type="module" src="/static/js/dms-member-card.js"></script>
+<style>
+.dms-card .nav-tabs .nav-link { color: #6c757d; }
+.dms-card .nav-tabs .nav-link.active { color: #0b9cc9; }
+</style>
+<script>
+    // Deep links (/follows#followers) open the matching tab, and switching tabs updates the hash.
+    (function () {
+        const tabFor = { '#following': 'following-tab', '#followers': 'followers-tab' };
+        const initial = tabFor[window.location.hash];
+        if (initial) bootstrap.Tab.getOrCreateInstance(document.getElementById(initial)).show();
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function (btn) {
+            btn.addEventListener('shown.bs.tab', function () {
+                history.replaceState(null, '', btn.getAttribute('data-bs-target'));
+            });
+        });
+    })();
+</script>
 </body>
 </html>

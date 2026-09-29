@@ -326,6 +326,42 @@ div.error-details > p { color: #c1c1c1; }
     50%       { background-color: #ececec; }
 }
 
+/* Member grid: shared list of mini member cards (fragments/member-grid.html) */
+.dms-member-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.dms-member-grid-item {
+    position: relative;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.dms-member-grid-item-muted {
+    opacity: 0.65;
+}
+
+.dms-member-grid-item .dms-remove-member-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    line-height: 1;
+    color: #adb5bd;
+    background: none;
+    border: none;
+}
+
+.dms-member-grid-item .dms-remove-member-btn:hover,
+.dms-member-grid-item .dms-remove-member-btn:focus-visible {
+    color: #dc3545;
+}
+
 /* Facepile: overlapping avatar stack (profile Follows card) */
 .dms-facepile {
     display: flex;

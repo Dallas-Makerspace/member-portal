@@ -13,8 +13,9 @@ import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.plugins.AuthException
 
 /**
- * Full following/followers listing for a member. The only entry point is the "+N" overflow link
- * on the profile page's facepile - there's no nav/menu link to this page anywhere else.
+ * Full following/followers listing for a member, reached from the profile page's Follows card
+ * (section headings and the facepile's "+N" overflow link). Rendered with the same member grid
+ * as group member lists.
  *
  * Unlike the notifications page, there's no self-or-admin guard: follower lists are public (an
  * earlier, intentional product decision), so this is reachable for any username the same way the
@@ -55,8 +56,10 @@ constructor(
     val model =
         mapOf(
             "preferred_username" to requestedUsername,
-            "following" to followingDeferred.await(),
-            "followers" to followersDeferred.await(),
+            "is_self" to (requestedUsername == currentUsername),
+            // Shape expected by fragments/member-grid (items exposing `username`).
+            "following" to followingDeferred.await().map { mapOf("username" to it) },
+            "followers" to followersDeferred.await().map { mapOf("username" to it) },
         )
     call.respond(ThymeleafContent("follows", model))
   }

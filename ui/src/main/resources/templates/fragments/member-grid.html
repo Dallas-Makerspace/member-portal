@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Shared member list: a responsive grid of mini dms-member-card tiles (group members, followers,
+  following). Pages using it must load /static/js/dms-member-card.js.
+   - members:        list of objects/maps exposing `username`
+   - muted:          true to dim every tile (e.g. inactive members)
+   - removeGroupSlug: when non-null, each tile gets a group "remove member" button
+                     (.dms-remove-member-btn; the page wires the click handler)
+-->
+<div th:fragment="member-grid(members, muted, removeGroupSlug)" class="dms-member-grid">
+    <div th:each="member : ${members}" class="dms-member-grid-item"
+         th:classappend="${muted} ? 'dms-member-grid-item-muted' : ''">
+        <button th:if="${removeGroupSlug != null}"
+                type="button"
+                class="dms-remove-member-btn btn btn-sm p-0"
+                th:attr="data-username=${member.username},data-group-slug=${removeGroupSlug},aria-label='Remove @' + ${member.username}"
+                title="Remove member">
+            <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+        </button>
+        <dms-member-card th:attr="username=${member.username}" state="mini"></dms-member-card>
+    </div>
+</div>
+</body>
+</html>

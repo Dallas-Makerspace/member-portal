@@ -171,23 +171,9 @@
                             <div class="tab-pane fade"
                                  th:classappend="${members != null ? 'show active' : ''}"
                                  id="active-members" role="tabpanel" aria-labelledby="active-tab">
-                                <div th:if="${members != null}" class="member-list"
-                                     style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-                                    <div th:each="member : ${members}" class="member-item"
-                                         style="padding: 10px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; overflow: hidden; position: relative;">
-                                        <button th:if="${canManageMembers}"
-                                                class="dms-remove-member-btn btn btn-sm p-0"
-                                                th:attr="data-username=${member.username},data-group-slug=${slug}"
-                                                title="Remove member"
-                                                style="position: absolute; top: 6px; right: 6px; color: #adb5bd; background: none; border: none; line-height: 1; z-index: 1;">
-                                            <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
-                                        </button>
-                                        <dms-member-card
-                                                th:attr="username=${member.username}"
-                                                state="mini">
-                                        </dms-member-card>
-                                    </div>
-                                </div>
+                                <th:block th:if="${members != null}">
+                                    <div th:replace="~{fragments/member-grid :: member-grid(${members}, false, ${canManageMembers ? slug : null})}"></div>
+                                </th:block>
                                 <div th:unless="${members != null}" class="text-muted py-2">
                                     No active members in this group.
                                 </div>
@@ -202,16 +188,7 @@
                                  th:classappend="${members == null ? 'show active' : ''}"
                                  id="inactive-members" role="tabpanel" aria-labelledby="inactive-tab"
                                  th:if="${inactiveMembers != null}">
-                                <div class="member-list"
-                                     style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-                                    <div th:each="member : ${inactiveMembers}" class="member-item"
-                                         style="padding: 10px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; overflow: hidden; position: relative; opacity: 0.65;">
-                                        <dms-member-card
-                                                th:attr="username=${member.username}"
-                                                state="mini">
-                                        </dms-member-card>
-                                    </div>
-                                </div>
+                                <div th:replace="~{fragments/member-grid :: member-grid(${inactiveMembers}, true, null)}"></div>
                             </div>
                         </div>
                     </div>
@@ -238,10 +215,6 @@
 <style>
 .dms-card .nav-tabs .nav-link { color: #6c757d; }
 .dms-card .nav-tabs .nav-link.active { color: #0b9cc9; }
-</style>
-<style th:if="${canManageMembers}">
-.dms-remove-member-btn:hover { color: #dc3545 !important; }
-.dms-remove-member-btn:hover .material-symbols-outlined { color: #dc3545; }
 </style>
 <script th:if="${canManageMembers}">
 document.addEventListener('click', function(e) {

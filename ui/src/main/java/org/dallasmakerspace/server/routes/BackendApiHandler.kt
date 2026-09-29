@@ -21,6 +21,28 @@ private val bodyGson: Gson =
     GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create()
 private val bodyMapType = object : TypeToken<Map<String, Any?>>() {}.type
 
+/**
+ * Service path prefixes the generic proxy must never forward. The service authorizes these by the
+ * UI's own API credentials, not the end user, so proxying them would let any member read other
+ * members' notifications, emit emails to anyone, or trigger webhook fan-outs. The UI reaches them
+ * only through dedicated, user-checked handlers.
+ */
+private val BLOCKED_PREFIXES = setOf("notifications", "webhook")
+
+/** First path segment after normalizing encoding and dot/empty segments, lowercased. */
+internal fun proxiedRootSegment(path: String): String? {
+  val decoded = runCatching { java.net.URLDecoder.decode(path.substringBefore('?'), "UTF-8") }
+      .getOrDefault(path)
+  val segments = decoded.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
+  if (segments.any { it == ".." }) return null
+  return segments.firstOrNull()?.lowercase()
+}
+
+internal fun isProxyAllowed(path: String): Boolean {
+  val root = proxiedRootSegment(path) ?: return false
+  return root !in BLOCKED_PREFIXES
+}
+
 class BackendApiHandler(
     loggerFactory: LoggerFactory,
     userInfoProvider: UserInfoProvider,
@@ -31,6 +53,10 @@ class BackendApiHandler(
     val queryString = call.request.queryString()
     val fullPath = if (queryString.isNotEmpty()) "$path?$queryString" else path
     val username = userInfo["preferred_username"] as? String
+    if (!isProxyAllowed(path)) {
+      call.respond(HttpStatusCode.Forbidden)
+      return
+    }
 
     val result =
         when (call.request.httpMethod) {

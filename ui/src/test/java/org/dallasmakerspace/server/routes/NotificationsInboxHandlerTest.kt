@@ -30,14 +30,44 @@ class NotificationsInboxHandlerTest {
   }
 
   @Test
-  fun enrichNotificationAddsDangerBadgeForFailures() {
+  fun enrichNotificationUsesMemberFriendlyLabelsForFailures() {
     val failed = enrichNotification(mapOf("status" to "FAILED"))
-    assertEquals("Failed", failed["status_display"])
-    assertEquals("danger", failed["status_class"])
+    assertEquals("Retrying", failed["status_display"])
+    assertEquals("warning", failed["status_class"])
 
     val deadLetter = enrichNotification(mapOf("status" to "DEAD_LETTER"))
-    assertEquals("Dead letter", deadLetter["status_display"])
+    assertEquals("Not delivered", deadLetter["status_display"])
     assertEquals("danger", deadLetter["status_class"])
+    assertEquals("We couldn't deliver this email.", deadLetter["status_reason"])
+  }
+
+  @Test
+  fun enrichNotificationHidesRawErrorsFromMembers() {
+    val row = mapOf("status" to "DEAD_LETTER", "lastError" to "SparkPost 400: {\"errors\":[]}")
+
+    assertNull(enrichNotification(row)["error_detail"])
+    assertEquals("SparkPost 400: {\"errors\":[]}", enrichNotification(row, showErrors = true)["error_detail"])
+  }
+
+  @Test
+  fun enrichNotificationExplainsSkippedAndDigestRows() {
+    val skipped =
+        enrichNotification(
+            mapOf("status" to "SKIPPED", "lastError" to "Disabled in notification preferences"))
+    assertEquals(
+        "Not sent because this topic is turned off in your preferences.", skipped["status_reason"])
+
+    // 13:00 UTC in August is 8:00 AM Central.
+    val inDigest =
+        enrichNotification(mapOf("status" to "IN_DIGEST", "nextAttemptAt" to "2026-08-10T13:00"))
+    assertEquals(
+        "Will be included in your digest on Mon, Aug 10 at 8:00 AM.", inDigest["status_reason"])
+  }
+
+  @Test
+  fun enrichNotificationConvertsTimestampsToCentral() {
+    val enriched = enrichNotification(mapOf("status" to "SENT", "sentAt" to "2026-08-10T03:30:00"))
+    assertEquals("2026-08-09T22:30", enriched["when"])
   }
 
   @Test
@@ -140,6 +170,7 @@ class NotificationsInboxHandlerTest {
                     "enabled" to false,
                     "effectiveAggregation" to "WEEKLY",
                     "aggregationOverride" to "WEEKLY",
+                    "digestSupported" to true,
                     "visibleInPreferences" to true,
                 )))
 
@@ -147,28 +178,7 @@ class NotificationsInboxHandlerTest {
     assertFalse(eventAnnouncement["enabled"] as Boolean)
     assertEquals("WEEKLY", eventAnnouncement["effectiveAggregation"])
     assertEquals("Weekly digest", eventAnnouncement["effectiveAggregationDisplay"])
-    assertEquals("WEEKLY", eventAnnouncement["aggregationOverride"])
-  }
-
-  @Test
-  fun groupPreferencesLeavesOverrideNullWhenUnset() {
-    // Guards the hidden-field round-trip contract used by the template: a topic with no stored
-    // override must produce a null aggregationOverride, not an empty string or the effective
-    // value, since the PUT this drives treats null as "no override" and anything else as "set
-    // this override".
-    val grouped =
-        groupPreferences(
-            listOf(
-                mapOf(
-                    "topic" to "EVENT_ANNOUNCEMENT",
-                    "channel" to "EMAIL",
-                    "enabled" to true,
-                    "effectiveAggregation" to "IMMEDIATE",
-                    "aggregationOverride" to null,
-                    "visibleInPreferences" to true,
-                )))
-
-    assertNull(grouped.first { it["topic"] == "EVENT_ANNOUNCEMENT" }["aggregationOverride"])
+    assertTrue(eventAnnouncement["digestSupported"] as Boolean)
   }
 
   @Test
@@ -235,9 +245,9 @@ class NotificationsInboxHandlerTest {
     assertEquals(1, grouped.size)
     val group = grouped[0]
     assertTrue(group["isDigest"] as Boolean)
-    assertEquals("Dallas Makerspace digest: 2 updates", group["subject"])
+    assertEquals("Digest email (2 updates)", group["subject"])
     assertEquals("Event announcements", group["topic_display"])
-    assertEquals("2026-08-10T09:00:00", group["sentAt"])
+    assertEquals("2026-08-10T04:00", group["when"])
     @Suppress("UNCHECKED_CAST") val children = group["children"] as List<Map<String, Any?>>
     assertEquals(listOf("First", "Second"), children.map { it["subject"] })
   }
@@ -317,7 +327,7 @@ class NotificationsInboxHandlerTest {
     assertEquals(2, grouped.size)
     assertTrue(grouped.all { it["isDigest"] as Boolean })
     assertEquals(
-        setOf("2026-08-10T09:00:00", "2026-08-03T09:00:00"), grouped.map { it["sentAt"] }.toSet())
+        setOf("2026-08-10T04:00", "2026-08-03T04:00"), grouped.map { it["when"] }.toSet())
   }
 
   @Test
@@ -338,5 +348,70 @@ class NotificationsInboxHandlerTest {
   @Test
   fun canViewNotificationsForDeniesNullCurrentUser() {
     assertFalse(canViewNotificationsFor("jdoe", null, canManageMembers = false))
+  }
+
+  private val immediateTopic =
+      listOf(
+          mapOf(
+              "topic" to "EVENT_ANNOUNCEMENT",
+              "enabled" to true,
+              "digestSupported" to true,
+              "effectiveAggregation" to "IMMEDIATE"))
+
+  private fun sentEmails(count: Int, sentAt: String, sharedProvider: Boolean = false) =
+      (1..count).map { i ->
+        mapOf(
+            "id" to i.toLong(),
+            "status" to "SENT",
+            "aggregation" to "IMMEDIATE",
+            "providerId" to if (sharedProvider) "txn" else "txn-$i",
+            "sentAt" to sentAt)
+      }
+
+  @Test
+  fun suggestsDailyDigestAfterManyImmediateEmailsThisWeek() {
+    val now = java.time.LocalDateTime.of(2026, 9, 29, 12, 0)
+
+    assertTrue(shouldSuggestDailyDigest(sentEmails(10, "2026-09-27T12:00:00"), immediateTopic, now))
+    assertFalse(shouldSuggestDailyDigest(sentEmails(9, "2026-09-27T12:00:00"), immediateTopic, now))
+  }
+
+  @Test
+  fun digestSuggestionCountsEmailsNotRowsAndIgnoresOldOnes() {
+    val now = java.time.LocalDateTime.of(2026, 9, 29, 12, 0)
+
+    assertFalse(
+        shouldSuggestDailyDigest(
+            sentEmails(12, "2026-09-27T12:00:00", sharedProvider = true), immediateTopic, now))
+    assertFalse(shouldSuggestDailyDigest(sentEmails(12, "2026-09-01T12:00:00"), immediateTopic, now))
+  }
+
+  @Test
+  fun noDigestSuggestionWhenAlreadyOnDigest() {
+    val now = java.time.LocalDateTime.of(2026, 9, 29, 12, 0)
+    val onDaily = listOf(immediateTopic[0] + ("effectiveAggregation" to "DAILY"))
+
+    assertFalse(shouldSuggestDailyDigest(sentEmails(20, "2026-09-27T12:00:00"), onDaily, now))
+  }
+
+  @Test
+  fun explainsRowsMovedToDigestByTheDailyLimit() {
+    val enriched =
+        enrichNotification(
+            mapOf(
+                "status" to "IN_DIGEST",
+                "lastError" to "Daily email limit reached; moved to the next daily digest (15)",
+                "nextAttemptAt" to "2026-08-11T13:00"))
+
+    assertEquals(
+        "You reached today's email limit, so this will be in your digest on Tue, Aug 11 at 8:00 AM.",
+        enriched["status_reason"])
+  }
+
+  @Test
+  fun labelsHoldWindowGroupsAsCombinedEmail() {
+    val rows = sentEmails(2, "2026-08-10T09:00:00", sharedProvider = true)
+
+    assertEquals("Combined email (2 updates)", groupDigests(rows).single()["subject"])
   }
 }

@@ -230,10 +230,10 @@
                                         class="btn btn-sm"
                                         th:classappend="${is_following == 'true'} ? 'btn-outline-secondary' : 'btn-primary'"
                                         th:text="${is_following == 'true'} ? 'Unfollow' : 'Follow'"
-                                        th:attr="data-username=${preferred_username},data-following=${is_following}">
+                                        th:attr="data-username=${preferred_username},data-following=${is_following},data-viewer=${viewer_username}">
                                 </button>
                                 <p class="text-muted small mt-2 mb-0 mx-auto" style="max-width: 220px;">
-                                    Get notified when they post new events or projects
+                                    Get notified when they post an event or a project
                                 </p>
                             </div>
                         </th:block>
@@ -722,14 +722,19 @@
                 <div class="card-body pt-0 pb-4">
                     <h4 class="card-title mt-3 mb-4 dms-card-title">Follows</h4>
 
-                    <div th:if="${following_count == 0 and followers_count == 0}">
-                        <span th:if="${is_self}">You aren't following anyone, and no one's following you yet. Follow an organizer to get notified when they post a new event.</span>
+                    <div id="followsEmpty" th:hidden="${following_count > 0 or followers_count > 0}"
+                         th:attr="data-following-count=${following_count}">
+                        <span th:if="${is_self}">You aren't following anyone, and no one's following you yet. Follow a member to get notified when they post an event or a project.</span>
                         <span th:unless="${is_self}">Not following anyone, and no followers yet.</span>
                     </div>
 
-                    <div th:if="${following_count > 0}" th:classappend="${followers_count > 0} ? 'mb-4' : ''">
-                        <h6 class="text-muted mb-2">Following
-                            (<span id="followingCount" th:text="${following_count}"></span>)</h6>
+                    <div th:if="${following_count > 0}" class="mb-4">
+                        <h6 class="mb-2">
+                            <a class="text-muted text-decoration-none"
+                               th:href="'/profile/@' + ${preferred_username} + '/follows#following'">
+                                Following (<span th:text="${following_count}"></span>)
+                            </a>
+                        </h6>
                         <div class="dms-facepile">
                             <a th:each="m : ${following_facepile}" class="dms-facepile-item"
                                th:href="'/profile/@' + ${m['username']}" th:title="${m['display_name']}">
@@ -743,12 +748,19 @@
                         </div>
                     </div>
 
-                    <div th:if="${followers_count > 0}">
-                        <h6 class="text-muted mb-2">Followers
-                            (<span id="followersCount" th:text="${followers_count}"></span>)</h6>
-                        <div class="dms-facepile">
+                    <!-- Always rendered (hidden when empty) so following/unfollowing can update it in place. -->
+                    <div id="followersSection" th:hidden="${followers_count == 0}">
+                        <h6 class="mb-2">
+                            <a class="text-muted text-decoration-none"
+                               th:href="'/profile/@' + ${preferred_username} + '/follows#followers'">
+                                Followers (<span id="followersCount" th:text="${followers_count}"></span>)
+                            </a>
+                        </h6>
+                        <div class="dms-facepile" id="followersFacepile"
+                             th:attr="data-overflow-href='/profile/@' + ${preferred_username} + '/follows#followers'">
                             <a th:each="m : ${followers_facepile}" class="dms-facepile-item"
-                               th:href="'/profile/@' + ${m['username']}" th:title="${m['display_name']}">
+                               th:href="'/profile/@' + ${m['username']}" th:title="${m['display_name']}"
+                               th:attr="data-username=${m['username']}">
                                 <img class="dms-facepile-avatar" th:src="${m['avatar_url']}"
                                      th:alt="${m['display_name']}" loading="lazy">
                             </a>
@@ -758,6 +770,17 @@
                                th:title="'View all ' + ${followers_count} + ' followers'"></a>
                         </div>
                     </div>
+
+                    <!-- The viewer's own avatar, inserted into the followers facepile when they follow. -->
+                    <template id="viewerFacepileItem" th:if="${viewer_facepile_item != null}">
+                        <a class="dms-facepile-item"
+                           th:href="'/profile/@' + ${viewer_facepile_item['username']}"
+                           th:title="${viewer_facepile_item['display_name']}"
+                           th:attr="data-username=${viewer_facepile_item['username']}">
+                            <img class="dms-facepile-avatar" th:src="${viewer_facepile_item['avatar_url']}"
+                                 th:alt="${viewer_facepile_item['display_name']}" loading="lazy">
+                        </a>
+                    </template>
                 </div>
             </div>
         </div>
@@ -1332,18 +1355,53 @@
     (function() {
         'use strict';
 
+        const FACEPILE_LIMIT = 5;
         const followBtn = document.getElementById('followBtn');
         if (!followBtn) return;
 
-        function bumpFollowerCount(delta) {
-            // Only the count is adjusted here - re-rendering the facepile itself would need the
-            // viewer's own display name and normalized avatar URL, which this page doesn't have
-            // client-side. Left one avatar stale for the rest of the session; corrects itself on
-            // the next page load.
-            const el = document.getElementById('followersCount');
-            if (!el) return; // Followers section is absent entirely when the count was zero.
-            const next = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
-            el.textContent = String(next);
+        // Keeps the Follows card in sync with the viewer's follow state without a reload: the
+        // viewer's own avatar is added to (or removed from) the front of the followers facepile,
+        // spilling into / draining the "+N" overflow pill as needed.
+        function updateFollowersCard(nowFollowing) {
+            const section = document.getElementById('followersSection');
+            const pile = document.getElementById('followersFacepile');
+            const countEl = document.getElementById('followersCount');
+            const empty = document.getElementById('followsEmpty');
+            const viewerTemplate = document.getElementById('viewerFacepileItem');
+            if (!section || !pile || !countEl) return;
+
+            const count = Math.max(0, (parseInt(countEl.textContent, 10) || 0) + (nowFollowing ? 1 : -1));
+            countEl.textContent = String(count);
+            let more = pile.querySelector('.dms-facepile-more');
+            const avatars = () => pile.querySelectorAll('.dms-facepile-item:not(.dms-facepile-more)');
+            const setOverflow = (n) => {
+                if (n <= 0) { if (more) more.remove(); more = null; return; }
+                if (!more) {
+                    more = document.createElement('a');
+                    more.className = 'dms-facepile-item dms-facepile-more';
+                    more.href = pile.dataset.overflowHref;
+                    pile.appendChild(more);
+                }
+                more.textContent = '+' + n;
+                more.title = 'View all ' + count + ' followers';
+            };
+            const overflow = more ? (parseInt(more.textContent.replace('+', ''), 10) || 0) : 0;
+
+            if (nowFollowing && viewerTemplate) {
+                pile.prepend(viewerTemplate.content.firstElementChild.cloneNode(true));
+                const shown = avatars();
+                if (shown.length > FACEPILE_LIMIT) {
+                    shown[shown.length - 1].remove();
+                    setOverflow(overflow + 1);
+                }
+            } else if (!nowFollowing) {
+                const mine = pile.querySelector('[data-username="' + followBtn.dataset.viewer + '"]');
+                if (mine) mine.remove(); else setOverflow(overflow - 1);
+            }
+            if (more) more.title = 'View all ' + count + ' followers';
+
+            section.hidden = count === 0;
+            if (empty) empty.hidden = count > 0 || Number(empty.dataset.followingCount) > 0;
         }
 
         followBtn.addEventListener('click', async function() {
@@ -1355,7 +1413,7 @@
 
             try {
                 const response = await fetch(`/backend-api/members/${username}/follow`, { method });
-                const result = await response.json();
+                const result = await response.json().catch(() => ({}));
 
                 if (response.ok && result.status === 'SUCCESS') {
                     const nowFollowing = !wasFollowing;
@@ -1363,9 +1421,9 @@
                     followBtn.textContent = nowFollowing ? 'Unfollow' : 'Follow';
                     followBtn.classList.toggle('btn-primary', !nowFollowing);
                     followBtn.classList.toggle('btn-outline-secondary', nowFollowing);
-                    bumpFollowerCount(nowFollowing ? 1 : -1);
+                    updateFollowersCard(nowFollowing);
                     showToast(nowFollowing
-                        ? `You're now following @${username}.`
+                        ? `You're following @${username}. You'll be notified when they post an event or a project.`
                         : `You unfollowed @${username}.`);
                 } else {
                     showToast(result.message || 'Could not update follow status.', 'danger');

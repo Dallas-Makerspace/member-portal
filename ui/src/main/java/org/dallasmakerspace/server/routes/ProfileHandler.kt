@@ -209,12 +209,18 @@ constructor(
       jsonMap["followers_overflow"] = (followers.size - FACEPILE_LIMIT).coerceAtLeast(0)
       // Only the <=5 avatars actually rendered per row are fetched (<=10 usernames total) - the
       // facepile isn't meant to represent the full lists, just a preview of them.
-      val shown = (following.take(FACEPILE_LIMIT) + followers.take(FACEPILE_LIMIT)).distinct()
+      // The viewer is included so the follow button can add their avatar to the facepile in place.
+      val viewer = currentUsername?.takeIf { !isSelf }
+      val shown =
+          (following.take(FACEPILE_LIMIT) + followers.take(FACEPILE_LIMIT) + listOfNotNull(viewer))
+              .distinct()
       val members = memberServiceClient.getMembersByUsernames(shown, session.sessionId)
       jsonMap["following_facepile"] = buildFacepile(following, members)
       jsonMap["followers_facepile"] = buildFacepile(followers, members)
-      if (!isSelf) {
-        jsonMap["is_following"] = (currentUsername in followers).toString()
+      if (viewer != null) {
+        jsonMap["is_following"] = (viewer in followers).toString()
+        jsonMap["viewer_username"] = viewer
+        jsonMap["viewer_facepile_item"] = buildFacepile(listOf(viewer), members).single()
       }
     }
 

@@ -1135,6 +1135,22 @@ constructor(
     }
   }
 
+  /** Suppression state and digest schedule for [username]; empty map if unavailable. */
+  suspend fun getNotificationDeliveryStatus(
+      username: String,
+      sessionId: String?,
+  ): Map<String, Any?> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/notifications/status/$username", apiHeaders)
+      @Suppress("UNCHECKED_CAST")
+      (result["data"] as? Map<String, Any?>) ?: emptyMap()
+    } catch (ex: Exception) {
+      log.warn("Failed to get notification delivery status for: $username", ex)
+      emptyMap()
+    }
+  }
+
   suspend fun updateNotificationPreference(
       username: String,
       sessionId: String?,
