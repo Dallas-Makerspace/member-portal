@@ -259,7 +259,7 @@ constructor(
     } else if (session.isSettingsUpdateSuccess) {
       log.info("Setting toast message for ${requestedMember.username} successful settings update")
       call.sessions.set(session.copy(isSettingsUpdateSuccess = false))
-      jsonMap["toast_message"] = "Communication preference updated."
+      jsonMap["toast_message"] = "Contact preference updated."
     }
   }
 

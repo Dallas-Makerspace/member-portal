@@ -47,8 +47,9 @@ constructor(
       memberService.updateMemberSettings(
           requestedUsername, currentUsername, communicationPreference, session.sessionId)
 
+      // The profile shows the "updated" toast (see ProfileHandler.setToastMessage).
       call.sessions.set(session.copy(isSettingsUpdateSuccess = true))
-      call.respondRedirect("/profile/@$requestedUsername/settings", permanent = false)
+      call.respondRedirect("/profile/@$requestedUsername", permanent = false)
       return
     }
 
