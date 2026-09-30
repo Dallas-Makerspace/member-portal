@@ -199,7 +199,7 @@ function initProfilePhoto(username, canUpload) {
         } catch (e) {
             if (myFlow !== flowId) return;
             errorEl.textContent =
-                "We couldn't access your camera. Check your browser's camera permission, or upload a picture instead.";
+                "We couldn't access your camera. Check your browser's camera permission, or choose a photo instead.";
             errorEl.classList.remove('d-none');
             captureBtn.classList.add('d-none');
             return;

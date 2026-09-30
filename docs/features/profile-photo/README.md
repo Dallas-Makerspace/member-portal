@@ -89,10 +89,10 @@ Clicking the button opens a Bootstrap dropdown anchored to the button:
 | Item | Shown when | Action |
 | --- | --- | --- |
 | 📷 Take a selfie | Browser exposes `navigator.mediaDevices.getUserMedia` | Opens the camera modal |
-| ⬆️ Upload a picture | Always | Opens the native file picker |
+| ⬆️ Choose a photo | Always | Opens the native file picker |
 | 🗑️ Remove photo | Member currently has an uploaded photo | Confirm, then delete |
 
-On mobile, "Upload a picture" uses `<input type="file" accept="image/jpeg,image/png">` (no `capture` attribute, so the
+On mobile, "Choose a photo" uses `<input type="file" accept="image/jpeg,image/png">` (no `capture` attribute, so the
 OS offers both library and camera).
 
 ### 3. Take a selfie (camera modal)
@@ -106,7 +106,7 @@ OS offers both library and camera).
 - "Capture" freezes the frame (un-mirrored in the saved image) → goes to the crop step.
 - Camera stream is stopped (`track.stop()`) whenever the modal closes, on any path.
 - Permission denied / no camera / insecure context: show an inline message ("We couldn't access your camera. Check
-  your browser's camera permission, or upload a picture instead.") with an "Upload instead" button.
+  your browser's camera permission, or choose a photo instead.") with an "Upload instead" button.
 
 ### 4. Crop & zoom
 
@@ -408,7 +408,7 @@ val PROFILE_PHOTO_ENABLED =
    Infrastructure admin, in which case only "Remove photo" is offered there).
 3. "Take a selfie" shows a mirrored live preview with live guidance; denying camera permission shows the fallback
    message with an "Upload instead" option.
-4. "Upload a picture" accepts JPEG/PNG and rejects other types with a friendly message.
+4. "Choose a photo" accepts JPEG/PNG and rejects other types with a friendly message.
 5. A dark selfie shows "Face a light source like a window and try again"; a photo with two people is rejected with no
    override; a slightly off-center photo can be saved via "Use anyway".
 6. After saving, the new photo appears immediately on my profile and in facepiles on other pages after refresh; the

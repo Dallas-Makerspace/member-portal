@@ -23,7 +23,7 @@
                 <a class="dropdown-item" href="#" id="profilePhotoTakeSelfie" data-action="camera">Take a selfie</a>
             </li>
             <li th:unless="${can_moderate_photo}">
-                <a class="dropdown-item" href="#" id="profilePhotoUpload" data-action="upload">Upload a picture</a>
+                <a class="dropdown-item" href="#" id="profilePhotoUpload" data-action="upload">Choose a photo</a>
             </li>
             <li th:if="${has_uploaded_photo}">
                 <a class="dropdown-item text-danger" href="#" id="profilePhotoRemove" data-action="remove">Remove photo</a>
