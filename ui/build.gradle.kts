@@ -42,7 +42,7 @@ dependencies {
   implementation("org.jetbrains.kotlinx", "kotlinx-serialization-json", kotlinxVersion)
   // Elasticsearch logging
   implementation("co.elastic.clients:elasticsearch-java:8.14.3")
-  implementation("com.fasterxml.jackson.core:jackson-databind:2.22.2")
+  implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
   implementation("com.agido:logback-elasticsearch-appender:3.0.11")
 
   testImplementation("org.mockito:mockito-core:4.11.0")
