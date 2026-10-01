@@ -203,7 +203,7 @@ constructor(
   }
 
   suspend fun getSearchPreloads(sessionId: String?): SearchPreloadResponse = coroutineScope {
-    val overallTimeoutMs = 15_000L
+    val overallTimeoutMs = 90_000L
 
     withTimeout(overallTimeoutMs) {
       val apiHeaders = getApiHeaders(sessionId)
@@ -211,7 +211,7 @@ constructor(
       // Fetch members then groups with per-request timeouts
       val members =
           try {
-            withTimeout(12_000L) {
+            withTimeout(45_000L) {
               val userMap = dmsHttpClient.get("$baseUrl/members", apiHeaders)
               val data =
                   userMap["data"] as List<*>?
@@ -230,7 +230,7 @@ constructor(
 
       val groups =
           try {
-            withTimeout(12_000L) {
+            withTimeout(45_000L) {
               val groupMap = dmsHttpClient.get("$baseUrl/groups", apiHeaders)
               val data =
                   groupMap["data"] as List<*>?
