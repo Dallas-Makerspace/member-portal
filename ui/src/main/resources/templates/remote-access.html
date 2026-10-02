@@ -95,7 +95,7 @@
 
         /* Keeps the banner and card grid from reading as "a wide page with almost nothing in it"
            when a category only has 1-2 machines - page-scoped, doesn't touch global.css. */
-        .container { max-width: 960px; }
+        .ra-content { max-width: 960px; }
 
         /* Bootstrap's default disabled opacity (~0.65) is too low to read comfortably - bump it for
            this page's informational disabled states (Offline / Already Connected / Locked). */
@@ -105,7 +105,7 @@
 </head>
 <body>
 <header class="top-nav" th:replace="~{fragments/header :: header}"></header>
-<div class="container pb-5 mt-4">
+<div class="container ra-content pb-5 mt-4">
     <div class="page-header-block mb-4">
         <div class="d-flex align-items-center gap-2 mb-1">
             <h1 class="mb-0">Remote Access</h1>
