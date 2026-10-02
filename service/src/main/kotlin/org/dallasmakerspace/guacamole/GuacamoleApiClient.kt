@@ -81,11 +81,22 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IG
     return token
   }
 
+  private suspend fun authorized(
+      request: suspend (client: HttpClient, token: String) -> HttpResponse
+  ): HttpResponse {
+    val response = newClient().use { request(it, getToken()) }
+    if (response.status != HttpStatusCode.Unauthorized &&
+        response.status != HttpStatusCode.Forbidden) {
+      return response
+    }
+    tokenCache.set(null)
+    return newClient().use { request(it, getToken()) }
+  }
+
   override suspend fun getConnections(): List<GuacamoleConnection> {
-    val token = getToken()
     try {
       val response =
-          newClient().use { client ->
+          authorized { client, token ->
             client.get("$baseUrl/api/session/data/postgresql/connections") {
               header("Guacamole-Token", token)
             }
@@ -105,10 +116,9 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IG
   }
 
   override suspend fun getActiveConnections(): List<GuacamoleActiveConnection> {
-    val token = getToken()
     try {
       val response =
-          newClient().use { client ->
+          authorized { client, token ->
             client.get("$baseUrl/api/session/data/postgresql/activeConnections") {
               header("Guacamole-Token", token)
             }
@@ -130,10 +140,9 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IG
   }
 
   override suspend fun getConnectionHostname(id: String): String {
-    val token = getToken()
     try {
       val response =
-          newClient().use { client ->
+          authorized { client, token ->
             client.get("$baseUrl/api/session/data/postgresql/connections/$id/parameters") {
               header("Guacamole-Token", token)
             }
@@ -151,9 +160,8 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IG
   }
 
   override suspend fun killActiveConnection(identifier: String) {
-    val token = getToken()
     val response =
-        newClient().use { client ->
+        authorized { client, token ->
           client.delete("$baseUrl/api/session/data/postgresql/activeConnections/$identifier") {
             header("Guacamole-Token", token)
           }
