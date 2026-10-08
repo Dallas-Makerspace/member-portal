@@ -41,7 +41,8 @@
                     <div th:if="${canManageGroupSettings}" class="mt-3">
                         <a th:href="'/groups/' + ${slug} + '/settings'"
                            class="btn btn-outline-secondary btn-sm">
-                            <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">settings</span>
+                            <span class="material-symbols-outlined align-middle"
+                                  style="font-size: 1rem;">settings</span>
                             Settings
                         </a>
                     </div>
@@ -51,7 +52,7 @@
             <!-- Administrators card -->
             <div class="card shadow-sm overflow-hidden mt-4" th:if="${administrators}">
                 <div class="card-body">
-                    <h5 class="card-title mb-3">Administrators</h5>
+                    <h5 class="card-title mb-3">Group Administrators</h5>
                     <div class="card-text">
                         <ul class="list-unstyled mb-0">
                             <li th:each="admin : ${administrators}" class="mb-2">
@@ -132,9 +133,9 @@
                     <!-- Member management UI - only shown when feature is enabled and user has admin role -->
                     <div th:if="${canManageMembers}" class="mb-3">
                         <dms-member-picker
-                            add-button-label="Add to Group"
-                            search-placeholder="Search for members to add..."
-                            th:attr="add-endpoint='/groups/' + ${slug} + '/members',existing-usernames=${memberUsernamesJson}">
+                                add-button-label="Add to Group"
+                                search-placeholder="Search for members to add..."
+                                th:attr="add-endpoint='/groups/' + ${slug} + '/members',existing-usernames=${memberUsernamesJson}">
                         </dms-member-picker>
                     </div>
                     <div class="card-text" th:if="${members != null or inactiveMembers != null}">
@@ -179,7 +180,8 @@
                                 </div>
                                 <div th:if="${memberlist_incomplete}" class="alert alert-warning mt-3" role="alert">
                                     <strong>⚠️ Note:</strong> Only some of the assigned members are listed above.
-                                    To check if a specific member has been assigned to this group please check the member
+                                    To check if a specific member has been assigned to this group please check the
+                                    member
                                     profile.
                                 </div>
                             </div>
@@ -213,67 +215,67 @@
 <script src="/static/js/dms-member-picker.js" type="module"></script>
 <script src="/static/js/dms-page-loader.js" defer></script>
 <style>
-.dms-card .nav-tabs .nav-link { color: #6c757d; }
-.dms-card .nav-tabs .nav-link.active { color: #0b9cc9; }
+    .dms-card .nav-tabs .nav-link { color: #6c757d; }
+    .dms-card .nav-tabs .nav-link.active { color: #0b9cc9; }
 </style>
 <script th:if="${canManageMembers}">
-document.addEventListener('click', function(e) {
-    const btn = e.target.closest('.dms-remove-member-btn');
-    if (!btn) return;
-    const username = btn.dataset.username;
-    const groupSlug = btn.dataset.groupSlug;
-    if (!confirm('Remove ' + username + ' from this group?')) return;
-    const icon = btn.querySelector('.material-symbols-outlined');
-    btn.disabled = true;
-    btn.setAttribute('aria-busy', 'true');
-    icon.style.display = 'none';
-    const spinner = document.createElement('span');
-    spinner.className = 'spinner-border spinner-border-sm';
-    spinner.setAttribute('role', 'status');
-    spinner.setAttribute('aria-hidden', 'true');
-    btn.appendChild(spinner);
-    const srLabel = document.createElement('span');
-    srLabel.className = 'visually-hidden';
-    srLabel.textContent = 'Removing member…';
-    btn.appendChild(srLabel);
-    const restoreIcon = function() {
-        btn.removeAttribute('aria-busy');
-        srLabel.remove();
-        spinner.remove();
-        icon.style.display = '';
-    };
-    fetch('/groups/' + groupSlug + '/members/' + username, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-    }).then(function(r) {
-        if (r.ok) {
-            showToastAfterReload('Member removed from group.');
-            window.location.reload();
-        }
-        else { r.text().then(function(t) {
-            showToast('Failed to remove member: ' + t, 'danger');
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.dms-remove-member-btn');
+        if (!btn) return;
+        const username = btn.dataset.username;
+        const groupSlug = btn.dataset.groupSlug;
+        if (!confirm('Remove ' + username + ' from this group?')) return;
+        const icon = btn.querySelector('.material-symbols-outlined');
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        icon.style.display = 'none';
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm';
+        spinner.setAttribute('role', 'status');
+        spinner.setAttribute('aria-hidden', 'true');
+        btn.appendChild(spinner);
+        const srLabel = document.createElement('span');
+        srLabel.className = 'visually-hidden';
+        srLabel.textContent = 'Removing member…';
+        btn.appendChild(srLabel);
+        const restoreIcon = function() {
+            btn.removeAttribute('aria-busy');
+            srLabel.remove();
+            spinner.remove();
+            icon.style.display = '';
+        };
+        fetch('/groups/' + groupSlug + '/members/' + username, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(function(r) {
+            if (r.ok) {
+                showToastAfterReload('Member removed from group.');
+                window.location.reload();
+            }
+            else { r.text().then(function(t) {
+                showToast('Failed to remove member: ' + t, 'danger');
+                btn.disabled = false;
+                restoreIcon();
+            }); }
+        }).catch(function(err) {
+            showToast('Error: ' + err, 'danger');
             btn.disabled = false;
             restoreIcon();
-        }); }
-    }).catch(function(err) {
-        showToast('Error: ' + err, 'danger');
-        btn.disabled = false;
-        restoreIcon();
+        });
     });
-});
 
-document.addEventListener('dms-picker-add-success', function(e) {
-    const n = e.detail.usernames.length;
-    const message = n > 1 ? 'Members added successfully!' : 'Member added successfully!';
-    if (e.detail.reloading) {
-        showToastAfterReload(message);
-    } else {
-        showToast(message);
-    }
-});
-document.addEventListener('dms-picker-add-error', function(e) {
-    showToast(e.detail.error || 'Failed to add members.', 'danger');
-});
+    document.addEventListener('dms-picker-add-success', function(e) {
+        const n = e.detail.usernames.length;
+        const message = n > 1 ? 'Members added successfully!' : 'Member added successfully!';
+        if (e.detail.reloading) {
+            showToastAfterReload(message);
+        } else {
+            showToast(message);
+        }
+    });
+    document.addEventListener('dms-picker-add-error', function(e) {
+        showToast(e.detail.error || 'Failed to add members.', 'danger');
+    });
 </script>
 </body>
 </html>
