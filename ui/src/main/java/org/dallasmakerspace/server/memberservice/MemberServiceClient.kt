@@ -1068,6 +1068,34 @@ constructor(
     }
   }
 
+  /** DMS Learn catalog (`learnUrl` + visible `courses`), optionally one committee's; null on error. */
+  suspend fun getMoodleCatalog(sessionId: String?, committeeSlug: String? = null): Map<String, Any?>? {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val query = committeeSlug?.let { "?committee=${java.net.URLEncoder.encode(it, "UTF-8")}" }.orEmpty()
+      val result = dmsHttpClient.get("$baseUrl/moodle/catalog$query", apiHeaders)
+      @Suppress("UNCHECKED_CAST") (result["data"] as? Map<String, Any?>)
+    } catch (ex: Exception) {
+      log.warn("Failed to get DMS Learn catalog", ex)
+      null
+    }
+  }
+
+  /** The member's own DMS Learn enrolments (`courseId`, `progress`, `completed`); empty on error. */
+  suspend fun getMoodleMemberCourses(sessionId: String?, username: String): List<Map<String, Any?>> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId, username)
+      val encoded = java.net.URLEncoder.encode(username, "UTF-8")
+      val result = dmsHttpClient.get("$baseUrl/moodle/members/$encoded/courses", apiHeaders)
+      val data = result["data"] as? List<*> ?: return emptyList()
+      @Suppress("UNCHECKED_CAST")
+      data as List<Map<String, Any?>>
+    } catch (ex: Exception) {
+      log.warn("Failed to get DMS Learn courses for $username", ex)
+      emptyList()
+    }
+  }
+
   suspend fun streamAskAi(
       sessionId: String?,
       username: String?,

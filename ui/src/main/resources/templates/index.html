@@ -73,8 +73,10 @@
 <!-- Suggested Events Widget -->
 <section class="suggested-events-section">
     <div class="container">
-        <div class="suggested-events-header">
-            <h2 class="suggested-events-heading">Suggested Events For You</h2>
+        <div class="suggested-events-header d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-baseline gap-1 mb-3">
+            <h2 id="suggestedEventsHeading" class="suggested-events-heading mb-0">Suggested Events For You</h2>
+            <a href="https://calendar.dallasmakerspace.org/events" class="small text-muted text-decoration-underline align-self-end align-self-sm-auto"
+               target="_blank" rel="noopener">Browse calendar</a>
         </div>
 
         <!-- Shimmer skeleton shown while loading -->
@@ -117,6 +119,68 @@
             right now.</p>
     </div>
 </section>
+
+<!-- Suggested Online Courses (DMS Learn) - hidden unless the moodle.enabled flag is on and there are picks -->
+<section id="suggestedCoursesSection" class="suggested-events-section" style="display:none;">
+    <div class="container">
+        <div class="suggested-events-header d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-baseline gap-1 mb-3">
+            <h2 class="suggested-events-heading mb-0">Suggested Online Courses</h2>
+            <a id="suggestedCoursesBrowse" class="small text-muted text-decoration-underline align-self-end align-self-sm-auto" target="_blank" rel="noopener"
+               style="display:none;">Browse courses</a>
+        </div>
+        <div id="suggestedCoursesContent" class="suggested-events-grid"></div>
+    </div>
+</section>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('/api/suggested-courses')
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res.status); })
+            .then(function (data) {
+                var courses = (data && data.enabled && data.courses) || [];
+                if (courses.length === 0) return;
+                var container = document.getElementById('suggestedCoursesContent');
+                courses.forEach(function (c) {
+                    var card = document.createElement('a');
+                    card.href = (c.url && /^https:\/\//i.test(c.url)) ? c.url : '#';
+                    card.className = 'suggested-event-card';
+                    card.target = '_blank';
+                    card.rel = 'noopener noreferrer';
+                    var meta = [];
+                    if (c.committeeName || c.categoryName) meta.push(c.committeeName || c.categoryName);
+                    if (c.authorName) meta.push(c.authorName);
+                    if (c.inProgress) meta.push(c.progress > 0 ? 'In progress ' + c.progress + '%' : 'Enrolled');
+                    card.innerHTML =
+                        '<div class="suggested-event-date-badge">' +
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="#5b7194" aria-hidden="true">' +
+                        '<path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg>' +
+                        '</div>' +
+                        '<div class="suggested-event-info">' +
+                        '<span class="suggested-event-name">' + escapeCourseHtml(c.name) + '</span>' +
+                        '<span class="suggested-event-meta">' + escapeCourseHtml(meta.join(' • ')) + '</span>' +
+                        '</div>' +
+                        '<span class="suggested-event-chevron">&#8250;</span>';
+                    container.appendChild(card);
+                });
+                var browse = document.getElementById('suggestedCoursesBrowse');
+                if (data.learnUrl && /^https:\/\//i.test(data.learnUrl)) {
+                    browse.href = data.learnUrl;
+                    browse.style.display = '';
+                }
+                document.getElementById('suggestedCoursesSection').style.display = '';
+            })
+            .catch(function () { /* stay hidden */ });
+
+        function escapeCourseHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+    });
+</script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {

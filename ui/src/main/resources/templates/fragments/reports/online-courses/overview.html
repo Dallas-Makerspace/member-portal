@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Online Courses</title>
+</head>
+<body>
+<div th:fragment="report">
+    <div th:unless="${moodleEnabled}" class="alert alert-info">
+        Online course reports aren't enabled for your account yet.
+    </div>
+
+    <th:block th:if="${moodleEnabled}">
+        <div th:if="${queryParams.get('committee') != null and moodleCommittee == null}" class="alert alert-warning">
+            Unknown committee: <span th:text="${queryParams.get('committee')}"></span>
+        </div>
+
+        <!-- Committee scope: reached from the committee page's Online Courses card -->
+        <th:block th:if="${moodleCommittee != null}"
+                  th:with="scope=${'?committee=' + #uris.escapeQueryParam(moodleCommittee.slug)}">
+            <p class="text-muted">
+                <a th:href="'/committees/' + ${moodleCommittee.slug}" th:text="${moodleCommittee.name}"></a>
+                committee courses on DMS Learn ·
+                <a href="/reports/online-courses/overview">All committees</a>
+            </p>
+            <dms-data-visualizer
+                    th:attr="title=${moodleCommittee.name + ': Course Completions by Month'},dataUrl=${'/backend-api/data-viz/moodle-completions-monthly' + scope}"
+                    description="Completions of this committee's online courses in each of the last 24 complete months."
+                    renderAs="line" yAxisMin="0"></dms-data-visualizer>
+            <dms-data-visualizer
+                    th:attr="title=${moodleCommittee.name + ': Completions by Course'},dataUrl=${'/backend-api/data-viz/moodle-courses' + scope}"
+                    description="How often each of this committee's courses is completed; a course nobody has completed recently may be out of date or hard to find."
+                    renderAs="table" filterable="true"></dms-data-visualizer>
+        </th:block>
+
+        <!-- Overall -->
+        <th:block th:if="${queryParams.get('committee') == null}">
+            <dms-data-visualizer
+                    dataUrl="/backend-api/data-viz/moodle-by-committee"
+                    title="Members Trained by Committee (last 12 months)"
+                    description="Members who completed at least one of each committee's online courses in the last 12 months."
+                    renderAs="bar"></dms-data-visualizer>
+            <dms-data-visualizer
+                    dataUrl="/backend-api/data-viz/moodle-completions-monthly"
+                    title="Course Completions by Month"
+                    description="Online course completions in each of the last 24 complete months, and how many members finished their first-ever DMS Learn course that month."
+                    renderAs="line" yAxisMin="0"></dms-data-visualizer>
+            <dms-data-visualizer
+                    dataUrl="/backend-api/data-viz/moodle-courses"
+                    title="Completions by Course"
+                    description="How often each course is completed; a course nobody has completed recently may be out of date or hard to find."
+                    renderAs="table" filterable="true"></dms-data-visualizer>
+        </th:block>
+    </th:block>
+</div>
+</body>
+</html>

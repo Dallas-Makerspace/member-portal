@@ -10,7 +10,7 @@ class HomePage(private val page: Page) {
 
   val viewProfileLink: Locator get() = page.locator("#editYourProfile a")
 
-  val suggestedEventsHeading: Locator get() = page.locator("h2.suggested-events-heading")
+  val suggestedEventsHeading: Locator get() = page.locator("#suggestedEventsHeading")
 
   val suggestedEventsSkeleton: Locator get() = page.locator("#suggestedEventsSkeleton")
 

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Online Courses</title>
+</head>
+<body>
+<div th:fragment="content" class="moodle-courses-slot" th:attr="data-committee=${sectionModel.committeeSlug}">
+    <script>
+        (function () {
+            var slot = document.currentScript.parentElement;
+            var wrapper = slot.closest('.mt-4') || slot;
+            fetch('/api/committee-courses?committee=' + encodeURIComponent(slot.dataset.committee))
+                .then(function (res) { return res.status === 200 ? res.text() : ''; })
+                .then(function (html) {
+                    if (!html.trim()) { wrapper.remove(); return; }
+                    slot.innerHTML = html;
+                    var more = slot.querySelector('#moodleMoreCourses');
+                    var toggle = slot.querySelector('#moodleMoreCoursesToggle');
+                    if (!more || !toggle) return;
+                    more.addEventListener('shown.bs.collapse', function () { toggle.textContent = 'Show fewer'; });
+                    more.addEventListener('hidden.bs.collapse', function () { toggle.textContent = toggle.dataset.label; });
+                })
+                .catch(function () { wrapper.remove(); });
+        })();
+    </script>
+</div>
+</body>
+</html>

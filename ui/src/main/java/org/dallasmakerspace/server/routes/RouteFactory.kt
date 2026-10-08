@@ -10,6 +10,7 @@ import org.dallasmakerspace.server.di.DiscourseModule
 import org.dallasmakerspace.server.di.LinkedInModule
 import org.dallasmakerspace.server.di.RoutesModule
 import org.dallasmakerspace.server.di.VoterRegistrationModule
+import org.dallasmakerspace.server.moodle.di.MoodleModule
 
 object RouteFactory {
   val redirects = mutableMapOf<String, String>()
@@ -113,6 +114,8 @@ object RouteFactory {
     INTERLOCK_CABINETS("/interlock-cabinets"),
     ACTION_TRACK("/api/track"),
     SUGGESTED_EVENTS("/api/suggested-events"),
+    SUGGESTED_COURSES("/api/suggested-courses"),
+    COMMITTEE_COURSES("/api/committee-courses"),
     SETTINGS_BANNER("/api/settings-banner"),
     ASK_AI("/ask-ai"),
     MANIFEST("/manifest.json"),
@@ -142,7 +145,8 @@ object RouteFactory {
             DiscourseModule::class,
             LinkedInModule::class,
             VoterRegistrationModule::class,
-            BambuStatusModule::class])
+            BambuStatusModule::class,
+            MoodleModule::class])
 interface RoutesComponent {
   fun getRoutesMap(): Map<String, IRouteHandler>
 }

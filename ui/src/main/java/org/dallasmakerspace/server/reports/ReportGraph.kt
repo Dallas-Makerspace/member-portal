@@ -118,6 +118,20 @@ object ReportGraph {
                         ),
                 ),
                 ReportNode(
+                    name = "Online Courses",
+                    description = "DMS Learn (Moodle) online course reports",
+                    urlSlug = "online-courses",
+                    children =
+                        listOf(
+                            ReportNode(
+                                name = "Learning Stats",
+                                description =
+                                    "Online course enrolments and completions, overall or per committee",
+                                urlSlug = "overview",
+                            ),
+                        ),
+                ),
+                ReportNode(
                     name = "Group History",
                     description = "History of group membership changes",
                     urlSlug = "group-history",

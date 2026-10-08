@@ -30,6 +30,8 @@ import org.dallasmakerspace.members.GroupSettingsService
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.ProfilePhotoService
+import org.dallasmakerspace.moodle.MoodleCatalogService
+import org.dallasmakerspace.moodle.MoodleMemberCoursesService
 import org.dallasmakerspace.notifications.DigestProcessor
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationWorker
@@ -53,6 +55,7 @@ import org.dallasmakerspace.webhook.di.WebhookModule
             ConfigModule::class,
             DiscourseModule::class,
             BambuddyModule::class,
+            MoodleModule::class,
             GuacamoleModule::class,
             WinRmModule::class,
             DoorControllerModule::class,
@@ -119,6 +122,10 @@ interface AppComponent {
   fun getRemoteAccessService(): RemoteAccessService
 
   fun getBambuddyStatusService(): BambuddyStatusService
+
+  fun getMoodleCatalogService(): MoodleCatalogService
+
+  fun getMoodleMemberCoursesService(): MoodleMemberCoursesService
 
   fun getMemberSettingsService(): MemberSettingsService
 

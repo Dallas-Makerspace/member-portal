@@ -11,7 +11,10 @@ import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
+import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.models.SearchPreloadResponse
+import org.dallasmakerspace.server.moodle.MOODLE_FEATURE_FLAG
+import org.dallasmakerspace.server.moodle.MoodleCourses
 import org.dallasmakerspace.server.models.slug
 
 class SearchPreloadHandler
@@ -19,7 +22,8 @@ class SearchPreloadHandler
 constructor(
     loggerFactory: LoggerFactory,
     userInfoProvider: UserInfoProvider,
-    private val memberService: MemberService
+    private val memberService: MemberService,
+    private val memberServiceClient: MemberServiceClient,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
   private val log = loggerFactory.create(javaClass)
 
@@ -76,8 +80,10 @@ constructor(
                 "type" to "group")
           }
 
-      // Combine members and groups
-      val combinedData = memberData + groupData
+      val courseData = moodleCourseRecords(currentTime)
+
+      // Combine members, groups and DMS Learn courses
+      val combinedData = memberData + groupData + courseData
 
       log.debug("SearchPreloadHandler members size: ${preloadResponse.members.size}")
       log.debug("SearchPreloadHandler groups size: ${preloadResponse.groups.size}")
@@ -94,8 +100,43 @@ constructor(
     }
   }
 
+  /** DMS Learn courses as search records, if `moodle.enabled` is on for the requester. */
+  private suspend fun moodleCourseRecords(currentTime: Long): List<Map<String, Any?>> {
+    val username = userInfo["preferred_username"] as? String ?: return emptyList()
+    val enabled =
+        moodleFlagCache[username]?.takeIf { currentTime - it.first < cacheDuration }?.second
+            ?: memberServiceClient
+                .isFeatureEnabled(MOODLE_FEATURE_FLAG, username, session.sessionId)
+                .also {
+                  if (moodleFlagCache.size >= MAX_FLAG_CACHE_SIZE) moodleFlagCache.clear()
+                  moodleFlagCache[username] = currentTime to it
+                }
+    if (!enabled) return emptyList()
+
+    val cached = moodleCourseCache.get()?.takeIf { currentTime - it.first < cacheDuration }
+    val courses =
+        cached?.second
+            ?: MoodleCourses.parse(memberServiceClient.getMoodleCatalog(session.sessionId))
+                .map {
+                  mapOf(
+                      "displayName" to it.name,
+                      "username" to it.id.toString(),
+                      "description" to
+                          listOfNotNull(it.committeeName, it.authorName?.let { a -> "by $a" }, it.summary)
+                              .joinToString(" · "),
+                      "url" to it.url,
+                      "type" to "course")
+                }
+                .also { if (it.isNotEmpty()) moodleCourseCache.set(currentTime to it) }
+    return courses
+  }
+
   companion object {
+    private const val MAX_FLAG_CACHE_SIZE = 1_000
     private val cache = ConcurrentHashMap<String, Pair<Long, SearchPreloadResponse>>()
     private val cacheDuration = TimeUnit.MINUTES.toMillis(5)
+    private val moodleFlagCache = ConcurrentHashMap<String, Pair<Long, Boolean>>()
+    private val moodleCourseCache =
+        java.util.concurrent.atomic.AtomicReference<Pair<Long, List<Map<String, Any?>>>?>(null)
   }
 }

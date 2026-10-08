@@ -143,6 +143,12 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.SUGGESTED_EVENTS.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.SUGGESTED_COURSES.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.COMMITTEE_COURSES.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.SETTINGS_BANNER.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

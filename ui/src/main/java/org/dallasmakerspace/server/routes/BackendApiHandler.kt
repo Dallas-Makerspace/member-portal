@@ -24,10 +24,10 @@ private val bodyMapType = object : TypeToken<Map<String, Any?>>() {}.type
 /**
  * Service path prefixes the generic proxy must never forward. The service authorizes these by the
  * UI's own API credentials, not the end user, so proxying them would let any member read other
- * members' notifications, emit emails to anyone, or trigger webhook fan-outs. The UI reaches them
- * only through dedicated, user-checked handlers.
+ * members' notifications or DMS Learn course progress, emit emails to anyone, or trigger webhook
+ * fan-outs. The UI reaches them only through dedicated, user-checked handlers.
  */
-private val BLOCKED_PREFIXES = setOf("notifications", "webhook")
+private val BLOCKED_PREFIXES = setOf("notifications", "webhook", "moodle")
 
 /** First path segment after normalizing encoding and dot/empty segments, lowercased. */
 internal fun proxiedRootSegment(path: String): String? {

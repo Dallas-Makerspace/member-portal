@@ -136,6 +136,14 @@ class DMSSearch extends HTMLElement {
         .results-list dms-group-pill {
           pointer-events: none;
         }
+        .results-list .course-name {
+          font-weight: 600;
+        }
+        .results-list .course-label {
+          margin-left: 8px;
+          font-size: 0.75rem;
+          opacity: 0.7;
+        }
         .loading-indicator {
           font-style: italic;
           text-align: center;
@@ -196,6 +204,8 @@ class DMSSearch extends HTMLElement {
                         this.handleMemberClick(selectedItem);
                     } else if (selectedItem.type === 'group') {
                         this.handleGroupClick(selectedItem);
+                    } else if (selectedItem.type === 'course') {
+                        this.handleCourseClick(selectedItem);
                     }
                 }
                 break;
@@ -333,6 +343,9 @@ class DMSSearch extends HTMLElement {
                 return (item.displayName?.toLowerCase().includes(query) || '') ||
                 (item.username?.toLowerCase().includes(query) || '') ||
                 (item.description?.toLowerCase().includes(query) || '');
+            } else if (item.type === 'course') {
+                return (item.displayName?.toLowerCase().includes(query) || '') ||
+                (item.description?.toLowerCase().includes(query) || '');
             }
             return false;
         });
@@ -408,6 +421,16 @@ class DMSSearch extends HTMLElement {
                     groupPill.setAttribute('slug', item.username);
                     li.appendChild(groupPill);
                     li.addEventListener('click', () => this.handleGroupClick(item));
+                } else if (item.type === 'course') {
+                    const name = document.createElement('span');
+                    name.className = 'course-name';
+                    name.textContent = item.displayName;
+                    const label = document.createElement('span');
+                    label.className = 'course-label';
+                    label.textContent = 'Online course';
+                    li.appendChild(name);
+                    li.appendChild(label);
+                    li.addEventListener('click', () => this.handleCourseClick(item));
                 }
                 resultsList.appendChild(li);
             });
@@ -431,6 +454,13 @@ class DMSSearch extends HTMLElement {
         input.value = `${group.displayName} (Group)`;
         this.displayResults([]);
         window.location.href = `/groups/${group.username}`;
+    }
+
+    handleCourseClick(course) {
+        this.displayResults([]);
+        if (course.url && /^https:\/\//i.test(course.url)) {
+            window.open(course.url, '_blank', 'noopener');
+        }
     }
 
     clearSearch() {

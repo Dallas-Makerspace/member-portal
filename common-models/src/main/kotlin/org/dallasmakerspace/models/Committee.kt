@@ -13,9 +13,19 @@ data class Committee(
     val teacherGroups: List<String> = emptyList(),
     val groupPrefixes: List<String> = emptyList(),
     val homepageUrl: String? = null,
+    /**
+     * DMS Learn (Moodle) top-level course categories, matched by idnumber or name. Moodle only
+     * returns idnumbers to admins, so list the category name when it differs from the committee's.
+     */
+    val learnCategories: List<String> = emptyList(),
 ) {
   val slug: String
     get() = name.lowercase().replace(" ", "-")
+
+  fun matchesLearnCategory(idNumber: String?, name: String?): Boolean =
+      learnCategories.any {
+        it.equals(idNumber?.trim(), ignoreCase = true) || it.equals(name?.trim(), ignoreCase = true)
+      }
 }
 
 object Committees {
@@ -32,6 +42,7 @@ object Committees {
               teacherGroups = listOf("3D Printer Teachers", "3D Vacuum Former Teachers"),
               groupPrefixes = listOf("3D"),
               homepageUrl = "https://source.dallasmakerspace.org/display/3DFAB/3D+Fabrication",
+              learnCategories = listOf("3DFAB", "3D Fabrication"),
               isActive = true,
           ),
           Committee(
@@ -52,6 +63,7 @@ object Committees {
               teacherGroups = listOf("CA Teachers"),
               groupPrefixes = listOf("CA"),
               homepageUrl = "https://source.dallasmakerspace.org/display/CA/Creative+Arts",
+              learnCategories = listOf("CA"),
               isActive = true,
           ),
           Committee(
@@ -63,6 +75,7 @@ object Committees {
               teacherGroups = listOf("Ceramics Teachers"),
               groupPrefixes = listOf("Ceramics"),
               homepageUrl = "https://source.dallasmakerspace.org/display/CER/Ceramics",
+              learnCategories = listOf("CER"),
               isActive = true,
           ),
           Committee(
@@ -74,6 +87,7 @@ object Committees {
               teacherGroups = listOf("Digital Media Darkroom Teachers", "Digital Media Teachers"),
               groupPrefixes = listOf("Digital Media"),
               homepageUrl = "https://source.dallasmakerspace.org/display/DM/Digital+Media",
+              learnCategories = listOf("DM"),
               isActive = true,
           ),
           Committee(
@@ -105,6 +119,7 @@ object Committees {
               teacherGroups = listOf("Jewelry Casting Teachers", "Lapidary Teachers"),
               groupPrefixes = listOf("Jewelry", "Lapidary"),
               homepageUrl = "https://source.dallasmakerspace.org/display/JEWEL/Jewelry+Studio",
+              learnCategories = listOf("Jewelry"),
               isActive = true,
           ),
           Committee(
@@ -116,6 +131,7 @@ object Committees {
               teacherGroups = listOf("Laser Teachers"),
               groupPrefixes = listOf("Laser"),
               homepageUrl = "https://source.dallasmakerspace.org/display/LASER/Laser",
+              learnCategories = listOf("Laser"),
               isActive = true,
           ),
           Committee(
@@ -133,6 +149,7 @@ object Committees {
                   ),
               groupPrefixes = listOf("Machine Shop"),
               homepageUrl = "https://source.dallasmakerspace.org/display/MACH/Machine+Shop",
+              learnCategories = listOf("Mach"),
               isActive = true,
           ),
           Committee(
@@ -144,6 +161,7 @@ object Committees {
               teacherGroups = listOf("Metal Shop Teachers"),
               groupPrefixes = listOf("Metal Shop"),
               homepageUrl = "https://source.dallasmakerspace.org/display/METAL/Metal+Shop",
+              learnCategories = listOf("METAL"),
               isActive = true,
           ),
           Committee(
@@ -155,6 +173,7 @@ object Committees {
               teacherGroups = listOf("Science Teachers"),
               groupPrefixes = listOf("Science"),
               homepageUrl = "https://source.dallasmakerspace.org/display/SCIENCE/Science",
+              learnCategories = listOf("SCI"),
               isActive = true,
           ),
           Committee(
@@ -167,6 +186,7 @@ object Committees {
                   listOf("WS Shapeoko Teachers", "Woodshop Multicam Teachers", "Woodshop Teachers"),
               groupPrefixes = listOf("Woodshop", "WS"),
               homepageUrl = "https://source.dallasmakerspace.org/display/WOOD/Woodshop+Committee",
+              learnCategories = listOf("WOOD"),
               isActive = true,
           ),
           Committee(
@@ -225,6 +245,7 @@ object Committees {
               name = "Automotive",
               chairGroupName = "Automotive Committee Chair",
               groupPrefixes = listOf("Automotive"),
+              learnCategories = listOf("AUTO"),
               isActive = true,
           ),
           Committee(

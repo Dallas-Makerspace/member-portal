@@ -101,6 +101,18 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val MOODLE_ENABLED =
+      ConfigKey(
+          key = "moodle.enabled",
+          description =
+              "Show DMS Learn (Moodle) online courses on committee pages, the home page, search " +
+                  "and Ask AI, plus the Online Courses report; can be piloted for specific " +
+                  "members/AD groups before a full rollout",
+          category = "Moodle",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val WAIVER_REPORT_ALLOWED_USERNAMES =
       ConfigKey(
           key = "waiver-report.allowed-usernames",
@@ -162,6 +174,7 @@ object ConfigRegistry {
           REMOTE_ACCESS_MASTERCAM_CONNECTION_IDS,
           REMOTE_ACCESS_MASTERCAM_AD_GROUP,
           BAMBU_STATUS_ENABLED,
+          MOODLE_ENABLED,
           WAIVER_REPORT_ALLOWED_USERNAMES,
           NOTIFICATIONS_ENABLED,
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,

@@ -56,6 +56,7 @@ import org.dallasmakerspace.models.AskAiFeedbackRequest
 import org.dallasmakerspace.models.AskAiRequest
 import org.dallasmakerspace.models.AskAiStreamResult
 import org.dallasmakerspace.models.NamespaceOwnerType
+import org.dallasmakerspace.moodle.routing.moodleRoutes
 import org.dallasmakerspace.notifications.routing.notificationRoutes
 import org.dallasmakerspace.notifications.routing.profileSubscriptionRoutes
 import org.dallasmakerspace.remoteaccess.routing.remoteAccessRoutes
@@ -1151,6 +1152,12 @@ fun Application.configureRouting() {
       /** Bambu 3D printer status — Bambuddy summary/detail/camera proxy * */
       val bambuddyStatusService by lazy { AppComponentHolder.instance.getBambuddyStatusService() }
       bambuddyRoutes(bambuddyStatusService)
+
+      /** DMS Learn (Moodle) — course catalog and a member's own course progress * */
+      moodleRoutes(
+          AppComponentHolder.instance.getMoodleCatalogService(),
+          AppComponentHolder.instance.getMoodleMemberCoursesService(),
+      )
     }
 
     /** Notification REST API (emit, outbox, preferences) * */

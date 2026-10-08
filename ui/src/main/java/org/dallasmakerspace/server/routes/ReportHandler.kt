@@ -5,10 +5,12 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.thymeleaf.*
 import javax.inject.Inject
+import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.moodle.MOODLE_FEATURE_FLAG
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.reports.ReportGraph
 import org.dallasmakerspace.server.reports.ReportNode
@@ -131,7 +133,21 @@ constructor(
       templateData["isWaiverReportAuthorized"] = isWaiverReportAuthorized
     }
 
+    if (parentSlug == "online-courses") addMoodleModel(templateData, queryParams)
+
     call.respond(ThymeleafContent("report", templateData))
+  }
+
+  private suspend fun addMoodleModel(
+      templateData: MutableMap<String, Any>,
+      queryParams: Map<String, String>,
+  ) {
+    val currentUsername = (userInfo["preferred_username"] as? String) ?: ""
+    templateData["moodleEnabled"] =
+        memberServiceClient.isFeatureEnabled(MOODLE_FEATURE_FLAG, currentUsername, session.sessionId)
+    queryParams["committee"]
+        ?.let { Committees.findBySlug(it) }
+        ?.let { templateData["moodleCommittee"] = it }
   }
 
   private suspend fun renderReportsList(

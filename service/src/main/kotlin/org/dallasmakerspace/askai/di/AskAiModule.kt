@@ -18,6 +18,7 @@ import org.dallasmakerspace.askai.openrouter.OpenRouterClientMock
 import org.dallasmakerspace.askai.search.CalendarSearchSource
 import org.dallasmakerspace.askai.search.ConfluenceSearchSource
 import org.dallasmakerspace.askai.search.DiscourseSearchSource
+import org.dallasmakerspace.askai.search.MoodleCourseSearchSource
 import org.dallasmakerspace.askai.search.SearchSource
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
@@ -89,8 +90,10 @@ class AskAiModule {
       discourseSearchSource: DiscourseSearchSource,
       confluenceSearchSource: ConfluenceSearchSource,
       calendarSearchSource: CalendarSearchSource,
+      moodleCourseSearchSource: MoodleCourseSearchSource,
   ): Set<SearchSource> {
-    return setOf(discourseSearchSource, confluenceSearchSource, calendarSearchSource)
+    return setOf(
+        discourseSearchSource, confluenceSearchSource, calendarSearchSource, moodleCourseSearchSource)
   }
 
   private fun useMockServices(appConfig: AppConfig) =

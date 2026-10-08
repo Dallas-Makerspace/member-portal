@@ -36,6 +36,9 @@ import org.dallasmakerspace.dataviz.reports.membership.ActiveMembers
 import org.dallasmakerspace.dataviz.reports.membership.BadgeValidationReport
 import org.dallasmakerspace.dataviz.reports.membership.DistributionDistance
 import org.dallasmakerspace.dataviz.reports.membership.DistributionRate
+import org.dallasmakerspace.dataviz.reports.moodle.MoodleByCommitteeReport
+import org.dallasmakerspace.dataviz.reports.moodle.MoodleCompletionsMonthlyReport
+import org.dallasmakerspace.dataviz.reports.moodle.MoodleCoursesReport
 import org.dallasmakerspace.smartwaiver.SignedWaivers
 
 @Module
@@ -77,6 +80,9 @@ class DataVizModule {
       adReplicationHealthReport: AdReplicationHealthReport,
       adReplicationLatencyTrendReport: AdReplicationLatencyTrendReport,
       adReplicationFailureTrendReport: AdReplicationFailureTrendReport,
+      moodleCompletionsMonthlyReport: MoodleCompletionsMonthlyReport,
+      moodleCoursesReport: MoodleCoursesReport,
+      moodleByCommitteeReport: MoodleByCommitteeReport,
   ): Set<DataVizReport> {
     return setOf(
         visitorsByDayReport,
@@ -112,6 +118,9 @@ class DataVizModule {
         adReplicationHealthReport,
         adReplicationLatencyTrendReport,
         adReplicationFailureTrendReport,
+        moodleCompletionsMonthlyReport,
+        moodleCoursesReport,
+        moodleByCommitteeReport,
     )
   }
 }

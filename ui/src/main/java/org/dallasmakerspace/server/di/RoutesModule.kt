@@ -81,7 +81,9 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
-  ): IRouteHandler = SearchPreloadHandler(loggerFactory, userInfoProvider, memberService)
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler =
+      SearchPreloadHandler(loggerFactory, userInfoProvider, memberService, memberServiceClient)
 
   @IntoMap
   @Provides

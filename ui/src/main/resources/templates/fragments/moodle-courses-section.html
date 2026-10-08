@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Online Courses</title>
+</head>
+<body>
+<div th:fragment="content" class="dms-card shadow-sm">
+    <style>
+        .moodle-course-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
+    <div class="card-body">
+        <h4 class="card-title mt-3 mb-1 dms-card-title">Online Courses</h4>
+        <p class="text-muted small mb-4">Self-paced courses on DMS Learn you can take from home.</p>
+
+        <div class="d-flex flex-column gap-3">
+            <div th:each="course : ${sectionModel.courses}"
+                 th:insert="~{fragments/moodle-courses-section :: courseRow(${course})}"></div>
+        </div>
+
+        <div th:if="${!sectionModel.moreCourses.empty}" class="collapse" id="moodleMoreCourses">
+            <div class="d-flex flex-column gap-3 mt-3">
+                <div th:each="course : ${sectionModel.moreCourses}"
+                     th:insert="~{fragments/moodle-courses-section :: courseRow(${course})}"></div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end flex-wrap gap-2 mt-3">
+            <a th:href="${sectionModel.statsUrl}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
+                <span class="material-symbols-outlined" style="font-size: 18px;">bar_chart</span>
+                Learning stats
+            </a>
+            <button th:if="${!sectionModel.moreCourses.empty}" id="moodleMoreCoursesToggle"
+                    class="btn btn-sm btn-outline-primary" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#moodleMoreCourses"
+                    aria-expanded="false" aria-controls="moodleMoreCourses"
+                    th:attr="data-label='Show all ' + ${sectionModel.totalCount} + ' courses'"
+                    th:text="'Show all ' + ${sectionModel.totalCount} + ' courses'">Show all</button>
+        </div>
+    </div>
+</div>
+
+<div th:fragment="courseRow(course)" class="d-flex align-items-start gap-3">
+    <span class="material-symbols-outlined text-muted" style="font-size: 24px;">school</span>
+    <div class="flex-grow-1 min-w-0">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <a th:href="${course.url}" target="_blank" rel="noopener"
+               class="text-decoration-none text-dark fw-semibold" th:text="${course.name}"></a>
+            <span th:if="${course.completed}" class="badge text-bg-success flex-shrink-0">Completed</span>
+            <span th:if="${course.inProgress and course.progress != null and course.progress > 0}" class="badge text-bg-primary flex-shrink-0"
+                  th:text="'In progress ' + ${course.progress} + '%'"></span>
+            <span th:if="${course.inProgress and (course.progress == null or course.progress == 0)}" class="badge text-bg-primary flex-shrink-0">Enrolled</span>
+        </div>
+        <div class="text-muted small mt-1" th:if="${course.authorName != null}">
+            by
+            <a th:if="${course.authorUsername != null}" th:href="'/profile/@' + ${course.authorUsername}"
+               class="text-muted" th:text="${course.authorName}"></a>
+            <span th:unless="${course.authorUsername != null}" th:text="${course.authorName}"></span>
+        </div>
+        <div class="text-muted small mt-1 moodle-course-summary" th:if="${course.summary != ''}" th:text="${course.summary}"></div>
+    </div>
+</div>
+</body>
+</html>
