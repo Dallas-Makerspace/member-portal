@@ -97,6 +97,7 @@ constructor(
                 committeeName = committee?.name,
                 authorName = author?.fullname?.let(MoodleText::plainText)?.takeIf { it.isNotEmpty() },
                 authorUsername = author?.let { usernamesById[it.id] },
+                selfEnrol = "self" in course.enrollmentmethods,
             )
           }
     }

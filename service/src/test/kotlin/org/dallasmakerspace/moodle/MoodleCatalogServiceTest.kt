@@ -79,6 +79,19 @@ class MoodleCatalogServiceTest {
   }
 
   @Test
+  fun `self enrolment comes from the course's enabled enrolment methods`() {
+    val courses =
+        MoodleCatalogService.buildCourses(
+            categories,
+            listOf(
+                course(16, 3, 1).copy(enrollmentmethods = listOf("manual", "self")),
+                course(17, 3, 2).copy(enrollmentmethods = listOf("manual"))),
+            learnUrl)
+
+    assertEquals(listOf(true, false), courses.map { it.selfEnrol })
+  }
+
+  @Test
   fun `unmapped categories leave the committee empty`() {
     val c = MoodleCatalogService.buildCourses(categories, listOf(course(12, 4, 1)), learnUrl).single()
     assertNull(c.committeeSlug)

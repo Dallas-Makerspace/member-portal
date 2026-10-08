@@ -35,6 +35,7 @@ constructor(
         catalogService
             .getCatalog()
             .courses
+            .filter { it.selfEnrol }
             .map { course ->
               val name = course.name.lowercase()
               val context =

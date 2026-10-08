@@ -29,7 +29,7 @@
                     renderAs="line" yAxisMin="0"></dms-data-visualizer>
             <dms-data-visualizer
                     th:attr="title=${moodleCommittee.name + ': Completions by Course'},dataUrl=${'/backend-api/data-viz/moodle-courses' + scope}"
-                    description="How often each of this committee's courses is completed; a course nobody has completed recently may be out of date or hard to find."
+                    description="How often each of this committee's courses is completed. Courses marked &lt;strong&gt;No self-enrolment&lt;/strong&gt; can't be joined by members: enable self enrolment in Moodle, or hide the course until it's ready to avoid confusion."
                     renderAs="table" filterable="true"></dms-data-visualizer>
         </th:block>
 
@@ -48,7 +48,7 @@
             <dms-data-visualizer
                     dataUrl="/backend-api/data-viz/moodle-courses"
                     title="Completions by Course"
-                    description="How often each course is completed; a course nobody has completed recently may be out of date or hard to find."
+                    description="How often each course is completed. Courses marked &lt;strong&gt;No self-enrolment&lt;/strong&gt; can't be joined by members: committees should enable self enrolment in Moodle, or hide the course until it's ready to avoid confusion."
                     renderAs="table" filterable="true"></dms-data-visualizer>
         </th:block>
     </th:block>

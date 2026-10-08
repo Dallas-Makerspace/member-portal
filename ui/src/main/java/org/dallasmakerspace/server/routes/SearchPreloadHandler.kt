@@ -117,6 +117,7 @@ constructor(
     val courses =
         cached?.second
             ?: MoodleCourses.parse(memberServiceClient.getMoodleCatalog(session.sessionId))
+                .filter { it.selfEnrol }
                 .map {
                   mapOf(
                       "displayName" to it.name,

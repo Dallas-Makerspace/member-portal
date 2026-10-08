@@ -14,12 +14,17 @@ data class MoodleCourseView(
     val committeeName: String?,
     val authorName: String? = null,
     val authorUsername: String? = null,
+    val selfEnrol: Boolean = false,
     val enrolled: Boolean = false,
     val completed: Boolean = false,
     val progress: Int? = null,
 ) {
   val inProgress: Boolean
     get() = enrolled && !completed
+
+  /** The member can open it: they're already enrolled, or can enrol themselves. */
+  val joinable: Boolean
+    get() = enrolled || selfEnrol
 
   fun toJson(): Map<String, Any?> =
       mapOf(
@@ -60,6 +65,7 @@ object MoodleCourses {
           committeeName = c["committeeName"] as? String,
           authorName = c["authorName"] as? String,
           authorUsername = c["authorUsername"] as? String,
+          selfEnrol = c["selfEnrol"] == true,
           enrolled = status != null,
           completed = status?.get("completed") == true,
           progress = (status?.get("progress") as? Number)?.toInt(),
@@ -86,7 +92,7 @@ object MoodleCourses {
             .toSet()
     val ranked =
         courses
-            .filterNot { it.completed }
+            .filter { it.joinable && !it.completed }
             .sortedWith(
                 compareBy<MoodleCourseView> {
                       when {

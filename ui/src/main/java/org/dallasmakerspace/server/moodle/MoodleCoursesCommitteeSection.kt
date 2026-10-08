@@ -45,7 +45,7 @@ constructor(private val memberServiceClient: MemberServiceClient) {
           memberServiceClient.getMoodleMemberCourses(sessionId, username)
         }
         val catalog = memberServiceClient.getMoodleCatalog(sessionId, committee.slug)
-        val courses = MoodleCourses.parse(catalog, memberCoursesDeferred.await())
+        val courses = MoodleCourses.parse(catalog, memberCoursesDeferred.await()).filter { it.joinable }
         if (courses.isEmpty()) return@coroutineScope null
         mapOf(
             "courses" to courses.take(COLLAPSED_COUNT),

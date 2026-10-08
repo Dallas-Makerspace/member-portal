@@ -3,6 +3,8 @@ package org.dallasmakerspace.dataviz.reports.moodle
 import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.moodle.EnrolmentRecord
@@ -75,8 +77,27 @@ class MoodleReportsTest {
     assertEquals("Laser", response.metadata?.get("Committee"))
     assertEquals(1, response.data?.size)
     assertEquals(
-        listOf("Course", "Completions (12 mo)", "Completions (all time)", "Last completed"),
+        listOf("Course", "Completions (12 mo)", "Completions (all time)", "Last completed", "Status"),
         response.dataFields.map { it.name })
+  }
+
+  @Test
+  fun `visible courses without self enrolment are flagged and listed first`() = runBlocking<Unit> {
+    val open = course.copy(id = 2, shortname = "EX-2", name = "Example Open Course", selfEnrol = true)
+    whenever(catalogService.getAllCourses()).thenReturn(listOf(open, course))
+    whenever(statsService.getRecords())
+        .thenReturn(
+            listOf(
+                EnrolmentRecord("ex-2", 1, null, LocalDate.now().minusMonths(1)),
+                EnrolmentRecord("ex-2", 2, null, LocalDate.now().minusMonths(1))))
+
+    val response = MoodleCoursesReport(support).getData(params("jdoe"))
+    val rows = response.data!!.map { it.values }
+
+    assertEquals("No self-enrolment", rows[0]["Status"]!!.jsonObject["text"]!!.jsonPrimitive.content)
+    assertEquals("danger", rows[0]["Status"]!!.jsonObject["variant"]!!.jsonPrimitive.content)
+    assertEquals("Open", rows[1]["Status"]!!.jsonObject["text"]!!.jsonPrimitive.content)
+    assertEquals("1", response.metadata?.get("No self-enrolment"))
   }
 
   @Test

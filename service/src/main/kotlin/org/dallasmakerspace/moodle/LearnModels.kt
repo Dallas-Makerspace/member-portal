@@ -17,6 +17,8 @@ data class LearnCourse(
     val committeeName: String? = null,
     val authorName: String? = null,
     val authorUsername: String? = null,
+    /** Members can enrol themselves (Moodle self enrolment is enabled). */
+    val selfEnrol: Boolean = false,
 )
 
 @Serializable data class LearnCatalog(val learnUrl: String, val courses: List<LearnCourse>)

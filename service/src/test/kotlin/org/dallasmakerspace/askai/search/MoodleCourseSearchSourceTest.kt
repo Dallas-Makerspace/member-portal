@@ -40,6 +40,7 @@ class MoodleCourseSearchSourceTest {
           categoryName = "Example",
           committeeSlug = "laser",
           committeeName = "Laser",
+          selfEnrol = true,
       )
 
   private suspend fun stub(enabled: Boolean) {

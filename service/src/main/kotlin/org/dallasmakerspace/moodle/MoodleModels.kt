@@ -27,6 +27,8 @@ data class MoodleCourse(
     val visible: Int = 1,
     /** Course contacts (teachers) as shown in Moodle's course listings. */
     val contacts: List<MoodleCourseContact> = emptyList(),
+    /** Enabled enrolment plugins, e.g. "self", "manual". */
+    val enrollmentmethods: List<String> = emptyList(),
 )
 
 @Serializable data class MoodleCourseContact(val id: Int, val fullname: String = "")

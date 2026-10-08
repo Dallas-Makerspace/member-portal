@@ -31,6 +31,7 @@ class MoodleCoursesCommitteeSectionTest {
                     "name" to "Example $it",
                     "url" to "https://learn.example.org/course/view.php?id=$it",
                     "committeeSlug" to "laser",
+                    "selfEnrol" to (it != 5),
                 )
               },
       )
@@ -72,7 +73,8 @@ class MoodleCoursesCommitteeSectionTest {
     val model = assertNotNull(loader.load(laser, "sid", "jdoe"))
 
     assertEquals(3, (model["courses"] as List<*>).size)
-    assertEquals(2, (model["moreCourses"] as List<*>).size)
+    assertEquals(1, (model["moreCourses"] as List<*>).size) // course 5 isn't self-enrollable
+    assertEquals(4, model["totalCount"])
     assertEquals("/reports/online-courses/overview?committee=laser", model["statsUrl"])
   }
 }

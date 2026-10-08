@@ -8,8 +8,9 @@ import org.junit.Test
 class MoodleCoursesTest {
 
   // Shaped like the service response after Gson (numbers come back as Double).
-  private fun course(id: Int, committeeSlug: String?) =
+  private fun course(id: Int, committeeSlug: String?, selfEnrol: Boolean = true) =
       mapOf(
+          "selfEnrol" to selfEnrol,
           "id" to id.toDouble(),
           "name" to "Example Course $id",
           "summary" to "Summary $id",
@@ -60,6 +61,18 @@ class MoodleCoursesTest {
     assertEquals("Jane Doe", course.authorName)
     assertEquals("jdoe", course.authorUsername)
     assertEquals("Jane Doe", course.toJson()["authorName"])
+  }
+
+  @Test
+  fun `courses members can't enrol in are only shown when they're already enrolled`() {
+    val mixed =
+        catalog +
+            ("courses" to listOf(course(1, "laser", selfEnrol = false), course(2, "laser", selfEnrol = false), course(3, "laser")))
+    val enrolledIn2 = listOf(mapOf("courseId" to 2.0, "progress" to 10.0, "completed" to false))
+
+    val picks = MoodleCourses.suggest(MoodleCourses.parse(mixed, enrolledIn2), emptySet())
+
+    assertEquals(listOf(2, 3), picks.map { it.id })
   }
 
   @Test
