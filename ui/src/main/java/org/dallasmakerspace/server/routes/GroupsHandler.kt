@@ -18,6 +18,8 @@ import org.dallasmakerspace.server.models.getNameFromSlug
 import org.dallasmakerspace.server.models.getSlugFromName
 import org.dallasmakerspace.server.models.isGroupDN
 import org.dallasmakerspace.server.models.parseCNFromDN
+import org.dallasmakerspace.server.moodle.MOODLE_FEATURE_FLAG
+import org.dallasmakerspace.server.moodle.MoodleCourses
 import org.dallasmakerspace.server.plugins.AuthException
 
 class GroupsHandler
@@ -34,6 +36,11 @@ constructor(
     // Get group slug requested from path /groups/{group_slug}
     val requestedGroupSlug =
         call.parameters["group_slug"] ?: throw AuthException("No group slug found in url path")
+    // External links (e.g. Moodle's AD Group field) use %20; canonicalize to the "+" slug.
+    if (requestedGroupSlug.contains(' ')) {
+      call.respondRedirect("/groups/${getSlugFromName(requestedGroupSlug)}")
+      return@coroutineScope
+    }
     val requestedGroupName = getNameFromSlug(requestedGroupSlug)
     val actorUsername = userInfo["preferred_username"] as? String
 
@@ -60,6 +67,18 @@ constructor(
       actorUsername?.let {
         memberServiceClient.isGroupAdmin(it, requestedGroupSlug, session.sessionId)
       } ?: false
+    }
+
+    val onlineCoursesDeferred = async {
+      val enabled =
+          actorUsername?.let {
+            memberServiceClient.isFeatureEnabled(MOODLE_FEATURE_FLAG, it, session.sessionId)
+          } ?: false
+      if (!enabled) emptyList()
+      else
+          MoodleCourses.forGroup(
+              MoodleCourses.parse(memberServiceClient.getMoodleCatalog(session.sessionId)),
+              requestedGroupName)
     }
 
     val requestedGroup = groupDeferred.await()
@@ -197,6 +216,7 @@ constructor(
     }
 
     requestedGroup.description?.let { jsonMap["description"] = it }
+    onlineCoursesDeferred.await().takeIf { it.isNotEmpty() }?.let { jsonMap["onlineCourses"] = it }
     call.respond(ThymeleafContent("group", jsonMap))
   }
 }

@@ -33,10 +33,10 @@ class MoodleApiClientMock @Inject constructor(loggerFactory: LoggerFactory) : IM
 
   private val courses =
       listOf(
-          course(101, "EX-LASER-101", "Example Laser Safety & Orientation", 1, 10001, author = 9001),
+          course(101, "EX-LASER-101", "Example Laser Safety & Orientation", 1, 10001, author = 9001, adGroup = "Laser Example Basics"),
           course(102, "EX-LASER-201", "Example Laser Engraving Settings", 1, 10002),
           course(201, "EX-WOOD-100", "Example Woodshop Orientation", 2, 20001, author = 9002),
-          course(202, "EX-WOOD-110", "Example Table Saw Basics", 2, 20002, author = 9002),
+          course(202, "EX-WOOD-110", "Example Table Saw Basics", 2, 20002, author = 9002, adGroup = "Woodshop Example Table Saw"),
           course(203, "EX-WOOD-120", "Example Router Table Basics", 2, 20003),
           course(204, "EX-WOOD-130", "Example Bandsaw Basics", 2, 20004, selfEnrol = false),
           course(205, "EX-CNC-100", "Example Tabletop CNC", 3, 20101),
@@ -113,6 +113,7 @@ class MoodleApiClientMock @Inject constructor(loggerFactory: LoggerFactory) : IM
       visible: Int = 1,
       author: Int? = null,
       selfEnrol: Boolean = true,
+      adGroup: String? = null,
   ) =
       MoodleCourse(
           id = id,
@@ -124,5 +125,6 @@ class MoodleApiClientMock @Inject constructor(loggerFactory: LoggerFactory) : IM
           visible = visible,
           contacts = listOfNotNull(author?.let { MoodleCourseContact(it, MOCK_AUTHORS.getValue(it).second) }),
           enrollmentmethods = if (selfEnrol) listOf("manual", "self") else listOf("manual"),
+          customfields = listOfNotNull(adGroup?.let { MoodleCustomField("ad_group", it, it) }),
       )
 }

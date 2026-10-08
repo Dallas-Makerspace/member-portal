@@ -19,6 +19,8 @@ data class LearnCourse(
     val authorUsername: String? = null,
     /** Members can enrol themselves (Moodle self enrolment is enabled). */
     val selfEnrol: Boolean = false,
+    /** AD group a member is added to on completing the course (course custom field ad_group). */
+    val adGroup: String? = null,
 )
 
 @Serializable data class LearnCatalog(val learnUrl: String, val courses: List<LearnCourse>)

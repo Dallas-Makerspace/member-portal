@@ -13,6 +13,7 @@ import org.dallasmakerspace.models.Committee
 import org.dallasmakerspace.models.Committees
 
 private const val SUMMARY_MAX_LENGTH = 280
+private const val AD_GROUP_FIELD = "ad_group"
 
 /** Cached DMS Learn course catalog, with each course mapped to its committee. */
 @Singleton
@@ -98,6 +99,11 @@ constructor(
                 authorName = author?.fullname?.let(MoodleText::plainText)?.takeIf { it.isNotEmpty() },
                 authorUsername = author?.let { usernamesById[it.id] },
                 selfEnrol = "self" in course.enrollmentmethods,
+                adGroup =
+                    course.customfields
+                        .firstOrNull { it.shortname == AD_GROUP_FIELD }
+                        ?.let { MoodleText.plainText(it.valueraw ?: it.value) }
+                        ?.takeIf { it.isNotEmpty() },
             )
           }
     }

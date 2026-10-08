@@ -29,7 +29,11 @@ data class MoodleCourse(
     val contacts: List<MoodleCourseContact> = emptyList(),
     /** Enabled enrolment plugins, e.g. "self", "manual". */
     val enrollmentmethods: List<String> = emptyList(),
+    val customfields: List<MoodleCustomField> = emptyList(),
 )
+
+@Serializable
+data class MoodleCustomField(val shortname: String = "", val value: String? = null, val valueraw: String? = null)
 
 @Serializable data class MoodleCourseContact(val id: Int, val fullname: String = "")
 

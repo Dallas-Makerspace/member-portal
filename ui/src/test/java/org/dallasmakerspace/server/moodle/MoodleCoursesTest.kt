@@ -76,6 +76,21 @@ class MoodleCoursesTest {
   }
 
   @Test
+  fun `forGroup returns self-enrollable courses that grant the group`() {
+    val courses =
+        MoodleCourses.parse(
+            catalog +
+                ("courses" to
+                    listOf(
+                        course(1, "laser") + ("adGroup" to "Laser Example Basics"),
+                        course(2, "laser", selfEnrol = false) + ("adGroup" to "Laser Example Basics"),
+                        course(3, "laser") + ("adGroup" to "Other Group"),
+                    )))
+
+    assertEquals(listOf(1), MoodleCourses.forGroup(courses, "/laser example basics").map { it.id })
+  }
+
+  @Test
   fun `parse tolerates a missing catalog`() {
     assertTrue(MoodleCourses.parse(null).isEmpty())
   }

@@ -15,6 +15,7 @@ data class MoodleCourseView(
     val authorName: String? = null,
     val authorUsername: String? = null,
     val selfEnrol: Boolean = false,
+    val adGroup: String? = null,
     val enrolled: Boolean = false,
     val completed: Boolean = false,
     val progress: Int? = null,
@@ -66,12 +67,17 @@ object MoodleCourses {
           authorName = c["authorName"] as? String,
           authorUsername = c["authorUsername"] as? String,
           selfEnrol = c["selfEnrol"] == true,
+          adGroup = c["adGroup"] as? String,
           enrolled = status != null,
           completed = status?.get("completed") == true,
           progress = (status?.get("progress") as? Number)?.toInt(),
       )
     }
   }
+
+  /** Self-enrollable courses whose completion grants [groupName]. */
+  fun forGroup(courses: List<MoodleCourseView>, groupName: String): List<MoodleCourseView> =
+      courses.filter { it.selfEnrol && it.adGroup.equals(groupName.trimStart('/'), ignoreCase = true) }
 
   /**
    * Home-page picks: courses already started first, then ones from committees whose AD groups the

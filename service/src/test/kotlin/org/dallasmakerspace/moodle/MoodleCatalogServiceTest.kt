@@ -92,6 +92,20 @@ class MoodleCatalogServiceTest {
   }
 
   @Test
+  fun `ad group comes from the course's ad_group custom field`() {
+    val courses =
+        MoodleCatalogService.buildCourses(
+            categories,
+            listOf(
+                course(18, 3, 1).copy(customfields = listOf(MoodleCustomField("ad_group", "Example &amp; Group", "Example & Group"))),
+                course(19, 3, 2).copy(customfields = listOf(MoodleCustomField("ad_group", "", ""))),
+                course(20, 3, 3)),
+            learnUrl)
+
+    assertEquals(listOf("Example & Group", null, null), courses.map { it.adGroup })
+  }
+
+  @Test
   fun `unmapped categories leave the committee empty`() {
     val c = MoodleCatalogService.buildCourses(categories, listOf(course(12, 4, 1)), learnUrl).single()
     assertNull(c.committeeSlug)
