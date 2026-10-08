@@ -80,9 +80,10 @@ useful for less-tested integrations like WinRM — without a full CI/CD deploy:
    gitignored — never commit it.
 3. Confirm `DEV_MODE=false` and `USE_MOCK_SERVICES=false` are both set — either one alone is not
    enough to disable mocks (see `useMockServices()` in each `di/*Module.kt`).
-4. Run `runAll` as usual — `service/.env` and `ui/.env` are loaded automatically into each
-   subprocess's environment if present. Already-set shell/OS environment variables always take
-   priority over `.env` file values.
+4. Run `runAll` as usual — `service/.env` and `ui/.env` are loaded automatically by the
+   `:service:run` / `:ui:run` tasks (so IntelliJ Gradle run configurations get them too).
+   Already-set shell/OS/run-configuration environment variables always take priority over `.env`
+   file values.
 5. Watch service startup logs for the "REAL BACKENDS ACTIVE" warning before relying on results.
 
 Disabling mocks is all-or-nothing across every integration, not per-integration — so if you only

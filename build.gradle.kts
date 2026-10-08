@@ -28,6 +28,45 @@ allprojects {
     version = "0.0.1"
 }
 
+// Loads KEY=VALUE pairs from a gitignored .env file (never committed).
+fun loadDotEnv(envFile: File): Map<String, String> {
+    if (!envFile.exists()) return emptyMap()
+    return envFile.readLines()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() && !it.startsWith("#") }
+        .mapNotNull { line ->
+            val idx = line.indexOf('=')
+            if (idx < 0) return@mapNotNull null
+            val key = line.substring(0, idx).trim()
+            var value = line.substring(idx + 1).trim()
+            if (value.length >= 2 &&
+                ((value.first() == '"' && value.last() == '"') ||
+                    (value.first() == '\'' && value.last() == '\''))
+            ) {
+                value = value.substring(1, value.length - 1)
+            }
+            key to value
+        }
+        .toMap()
+}
+
+// :service:run and :ui:run read <module>/.env, so runAll and IDE Gradle run configs both get it.
+// Env vars already set (shell, OS, run configuration) win; .env only fills gaps.
+subprojects {
+    tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
+        val envFile = project.file(".env")
+        doFirst {
+            val dotEnv = loadDotEnv(envFile)
+            if (dotEnv.isEmpty()) return@doFirst
+            val added = dotEnv.filterKeys { it !in environment }
+            added.forEach { (key, value) -> environment(key, value) }
+            logger.lifecycle(
+                "> loaded ${added.size} of ${dotEnv.size} vars from ${envFile.parentFile.name}/.env " +
+                    "(${dotEnv.size - added.size} already set)")
+        }
+    }
+}
+
 tasks.register("runAll") {
     group = "application"
     description = "Runs service and ui subprojects concurrently"
@@ -43,44 +82,13 @@ tasks.register("runAll") {
         // leaving the Gradle/Ktor JVMs as orphans that descendants() can no longer reach.
         val trackedPids = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
 
-        // Loads KEY=VALUE pairs from <dir>/.env if present (gitignored, never committed).
-        // Lets a module be run against real prod-like config locally instead of mocks.
-        fun loadDotEnv(dir: File): Map<String, String> {
-            val envFile = dir.resolve(".env")
-            if (!envFile.exists()) return emptyMap()
-            return envFile.readLines()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() && !it.startsWith("#") }
-                .mapNotNull { line ->
-                    val idx = line.indexOf('=')
-                    if (idx < 0) return@mapNotNull null
-                    val key = line.substring(0, idx).trim()
-                    var value = line.substring(idx + 1).trim()
-                    if (value.length >= 2 &&
-                        ((value.first() == '"' && value.last() == '"') ||
-                            (value.first() == '\'' && value.last() == '\''))
-                    ) {
-                        value = value.substring(1, value.length - 1)
-                    }
-                    key to value
-                }
-                .toMap()
-        }
-
         fun startProcess(cfg: Proc): Process {
             // --no-daemon keeps the Gradle JVM alive as a direct child of cmd.exe,
             // giving us a stable, walkable process tree for the lifetime of the server.
+            // <module>/.env is loaded by the module's own run task (see subprojects above).
             val processBuilder = ProcessBuilder(gradlew + listOf(cfg.task, "--no-daemon"))
                 .directory(rootDir)
                 .redirectErrorStream(true)
-
-            // Already-set shell/OS env vars win; .env only fills gaps not already set.
-            val dotEnv = loadDotEnv(file(cfg.label))
-            if (dotEnv.isNotEmpty()) {
-                val env = processBuilder.environment()
-                dotEnv.forEach { (k, v) -> env.putIfAbsent(k, v) }
-                println("> [${cfg.label}] loaded ${dotEnv.size} vars from ${cfg.label}/.env")
-            }
 
             val process = processBuilder.start()
             trackedPids.add(process.pid())
