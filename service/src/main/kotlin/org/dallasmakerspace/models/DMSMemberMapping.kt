@@ -14,7 +14,6 @@ fun daoToProfileModel(dao: ProfileDAO) =
         discordUsername = dao.discordUsername,
         discordAvatarUrl = dao.discordAvatarUrl,
         discordWebhookId = dao.discordWebhookId,
-        linkedinUsername = dao.linkedinUsername,
         profilePhotoUrl = dao.profilePhotoKey?.let { profilePhotoUrl(dao.id.value, it) })
 
 private const val HEX_RADIX = 16

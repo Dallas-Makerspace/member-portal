@@ -25,7 +25,6 @@ object ProfileTable : IdTable<String>("profile") {
   val discordUsername: Column<String?> = varchar("discord_username", 100).nullable()
   val discordAvatarUrl: Column<String?> = varchar("discord_avatar_url", 2083).nullable()
   val discordWebhookId: Column<String?> = varchar("discord_webhook_id", 100).nullable()
-  val linkedinUsername: Column<String?> = varchar("linkedin_username", 100).nullable()
   // Uploaded profile photo (see the "storage" package). Distinct from avatarUrl/discourseAvatarUrl
   // above, which are refreshed from external sources and would otherwise clobber an upload.
   val profilePhotoKey: Column<String?> = varchar("profile_photo_key", 512).nullable()
@@ -53,7 +52,6 @@ class ProfileDAO(username: EntityID<String>) : Entity<String>(username) {
   var discordUsername by ProfileTable.discordUsername
   var discordAvatarUrl by ProfileTable.discordAvatarUrl
   var discordWebhookId by ProfileTable.discordWebhookId
-  var linkedinUsername by ProfileTable.linkedinUsername
   var profilePhotoKey by ProfileTable.profilePhotoKey
   var profilePhotoUpdatedAt by ProfileTable.profilePhotoUpdatedAt
   var attributes by ProfileTable.attributes

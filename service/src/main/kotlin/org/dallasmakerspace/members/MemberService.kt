@@ -489,12 +489,6 @@ constructor(
               "New: ${memberFromApi.discordWebhookId}")
       propertiesUpdated = true
     }
-    if (dbMember.linkedinUsername != memberFromApi.linkedinUsername) {
-      log.info(
-          "LinkedIn username updated for $username; Old: ${dbMember.linkedinUsername}; " +
-              "New: ${memberFromApi.linkedinUsername}")
-      propertiesUpdated = true
-    }
     if (propertiesUpdated) {
       // Update the member in the database.
       log.info("Updating member in the database: $username")

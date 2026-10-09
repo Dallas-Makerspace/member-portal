@@ -176,7 +176,7 @@ Dallas Makerspace (DMS) is a member-run nonprofit workshop in Carrollton, TX, wi
 **Use markdown links for every portal page reference.** Write `[Friendly Name](/relative-path)` — never bare paths in prose and never the full URL. The portal renders markdown as clickable links. Use short, member-friendly link text, not the path itself.
 
 Safe portal links to emit:
-- `[My Profile](/profile-me)` — AD groups, voter registration, account linking (Talk/Discord/LinkedIn)
+- `[My Profile](/profile-me)` — AD groups, voter registration, account linking (Talk/Discord), social links
 - `[Committees](/committees)` — every committee and its chair
 - `[Board of Directors](/groups/board+of+directors)`
 - `[Reports](/reports)` — DMS operations reports

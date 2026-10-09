@@ -58,8 +58,9 @@ constructor(
 
   /**
    * Applies a partial settings update for a member. Every change is appended as a new record so an
-   * audit trail is preserved. Keys with null or blank values are cleared (recorded with a NULL
-   * value); non-empty values are validated and appended. Unknown keys are rejected.
+   * audit trail is preserved; values equal to the current one are skipped. Keys with null or blank
+   * values are cleared (recorded with a NULL value). Unknown keys and invalid values are rejected
+   * before anything is written.
    *
    * @param actorUsername The username of the member making the change, used to record who updated
    *   the settings. May be null if the change was not performed by a member.
@@ -72,19 +73,27 @@ constructor(
     val profileId =
         repository.getProfileId(username)
             ?: throw IllegalArgumentException("Unknown member: $username")
+    val normalized =
+        updates.mapValues { (key, value) ->
+          val settingsKey =
+              MemberSettingsRegistry.findByKey(key)
+                  ?: throw IllegalArgumentException("Unknown member setting key: $key")
+          value
+              ?.takeUnless { it.isBlank() }
+              ?.also {
+                require(settingsKey.validate(it)) { "Invalid value for member setting '$key': $it" }
+              }
+        }
+    val latest = repository.getLatest(username)
+    val changes = normalized.filter { (key, value) -> latest[key] != value }
+    if (changes.isEmpty()) return
     val actorProfileId = actorUsername?.let { repository.getProfileId(it) }
 
-    updates.forEach { (key, value) ->
-      val settingsKey =
-          MemberSettingsRegistry.findByKey(key)
-              ?: throw IllegalArgumentException("Unknown member setting key: $key")
-
-      if (value.isNullOrBlank()) {
-        repository.append(profileId, key, null, actorProfileId)
+    changes.forEach { (key, value) ->
+      repository.append(profileId, key, value, actorProfileId)
+      if (value == null) {
         log.info("Cleared member setting '$key' for $username")
       } else {
-        require(settingsKey.validate(value)) { "Invalid value for member setting '$key': $value" }
-        repository.append(profileId, key, value, actorProfileId)
         log.info("Updated member setting '$key' for $username to '$value'")
       }
     }

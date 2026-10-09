@@ -7,8 +7,10 @@ import org.dallasmakerspace.core.LoggerFactory
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.slf4j.Logger
@@ -27,6 +29,7 @@ class MemberSettingsServiceTest {
     mockRepository = mock()
 
     whenever(mockLoggerFactory.create(any<Class<*>>())).thenReturn(mockLogger)
+    runBlocking { whenever(mockRepository.getLatest(any())).thenReturn(emptyMap()) }
 
     service = MemberSettingsService(mockRepository, mockLoggerFactory)
   }
@@ -72,7 +75,8 @@ class MemberSettingsServiceTest {
   @Test
   fun `updateSettings appends clear when value is blank`() = runBlocking {
     whenever(mockRepository.getProfileId("user1")).thenReturn(1)
-    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
+    whenever(mockRepository.getLatest("user1"))
+        .thenReturn(mapOf("communication_preference" to "EMAIL"))
 
     service.updateSettings("user1", mapOf("communication_preference" to ""), "user1")
 
@@ -82,10 +86,64 @@ class MemberSettingsServiceTest {
   @Test
   fun `updateSettings appends clear when value is null`() = runBlocking {
     whenever(mockRepository.getProfileId("user1")).thenReturn(1)
+    whenever(mockRepository.getLatest("user1"))
+        .thenReturn(mapOf("communication_preference" to "EMAIL"))
 
     service.updateSettings("user1", mapOf("communication_preference" to null), "user1")
 
     verify(mockRepository).append(eq(1), eq("communication_preference"), eq(null), eq(1))
+  }
+
+  @Test
+  fun `updateSettings skips unchanged value`() = runBlocking {
+    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
+    whenever(mockRepository.getLatest("user1"))
+        .thenReturn(mapOf("communication_preference" to "EMAIL"))
+
+    service.updateSettings("user1", mapOf("communication_preference" to "EMAIL"), "user1")
+
+    verify(mockRepository, never()).append(any(), any(), anyOrNull(), anyOrNull())
+  }
+
+  @Test
+  fun `updateSettings skips clearing an unset key`() = runBlocking {
+    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
+
+    service.updateSettings("user1", mapOf("social_youtube" to ""), "user1")
+
+    verify(mockRepository, never()).append(any(), any(), anyOrNull(), anyOrNull())
+  }
+
+  @Test
+  fun `updateSettings validates every value before writing`() = runBlocking {
+    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
+
+    assertFailsWith<IllegalArgumentException> {
+      service.updateSettings(
+          "user1",
+          mapOf(
+              "communication_preference" to "EMAIL",
+              "social_instagram" to "https://www.instagram.com/jdoe"),
+          "user1")
+    }
+    verify(mockRepository, never()).append(any(), any(), anyOrNull(), anyOrNull())
+  }
+
+  @Test
+  fun `updateSettings appends social handle`() = runBlocking {
+    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
+
+    service.updateSettings("user1", mapOf("social_instagram" to "jdoe"), "user1")
+
+    verify(mockRepository).append(eq(1), eq("social_instagram"), eq("jdoe"), eq(1))
+  }
+
+  @Test
+  fun `getSettings returns social links`() = runBlocking {
+    whenever(mockRepository.getLatest("user1"))
+        .thenReturn(mapOf("social_youtube" to "@jdoe", "unknown_setting" to "x"))
+
+    assertEquals(mapOf("social_youtube" to "@jdoe"), service.getSettings("user1"))
   }
 
   @Test
