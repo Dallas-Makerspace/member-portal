@@ -120,6 +120,25 @@ private fun Route.protectedNotificationRoutes(notificationService: NotificationS
     getPreferencesRoute(notificationService)
     updatePreferenceRoute(notificationService)
     deliveryStatusRoute(notificationService)
+    readStateRoutes(notificationService)
+  }
+}
+
+/** Unread count for the portal's attention dot, and mark-all-read when the inbox is viewed. */
+private fun Route.readStateRoutes(notificationService: NotificationService) {
+  get("/notifications/unread-count/{username}") {
+    val username =
+        call.parameters["username"] ?: return@get call.respondBadRequest("Username required")
+    val count = notificationService.countUnread(username)
+    call.respond(
+        ApiResponse(Status.SUCCESS, "Unread for $username: $count", mapOf("count" to count)))
+  }
+  post("/notifications/mark-read/{username}") {
+    val username =
+        call.parameters["username"] ?: return@post call.respondBadRequest("Username required")
+    val marked = notificationService.markAllRead(username)
+    call.respond(
+        ApiResponse(Status.SUCCESS, "Marked $marked read for $username", mapOf("marked" to marked)))
   }
 }
 

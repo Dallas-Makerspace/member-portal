@@ -240,4 +240,37 @@ class NotificationRoutesTest {
     assertEquals(HttpStatusCode.BadRequest, response.status)
     Unit
   }
+
+  @Test
+  fun `get unread-count should return the member's unread count`() = testApplication {
+    configureApp()
+    runBlocking { whenever(mockService.countUnread("jdoe")).thenReturn(3) }
+
+    val response =
+        client.get("/notifications/unread-count/jdoe") {
+          header("X-Api-Key", "test-key")
+          header("X-Api-Client", "test-client")
+        }
+
+    assertEquals(HttpStatusCode.OK, response.status)
+    val apiResponse = response.body<ApiResponse<Map<String, Double>>>()
+    assertEquals(3.0, apiResponse.data!!["count"])
+    Unit
+  }
+
+  @Test
+  fun `post mark-read should mark the member's notifications read`() = testApplication {
+    configureApp()
+    runBlocking { whenever(mockService.markAllRead("jdoe")).thenReturn(2) }
+
+    val response =
+        client.post("/notifications/mark-read/jdoe") {
+          header("X-Api-Key", "test-key")
+          header("X-Api-Client", "test-client")
+        }
+
+    assertEquals(HttpStatusCode.OK, response.status)
+    runBlocking { verify(mockService).markAllRead("jdoe") }
+    Unit
+  }
 }

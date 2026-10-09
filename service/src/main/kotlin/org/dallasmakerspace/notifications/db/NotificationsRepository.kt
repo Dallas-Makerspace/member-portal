@@ -364,6 +364,33 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
         } > 0
       }
 
+  /** Delivered notifications [memberUsername] hasn't seen yet. */
+  suspend fun countUnread(memberUsername: String): Int = suspendTransaction {
+    val resolvedProfileId =
+        ProfileResolver.findProfileId(memberUsername) ?: return@suspendTransaction 0
+    NotificationsTable.select {
+          (NotificationsTable.profileId eq resolvedProfileId) and
+              (NotificationsTable.status eq NotificationStatus.SENT.name) and
+              NotificationsTable.readAt.isNull()
+        }
+        .count()
+        .toInt()
+  }
+
+  /** Marks every delivered, unread notification of [memberUsername] read; returns the count. */
+  suspend fun markAllRead(memberUsername: String, readAt: LocalDateTime): Int = suspendTransaction {
+    val resolvedProfileId =
+        ProfileResolver.findProfileId(memberUsername) ?: return@suspendTransaction 0
+    NotificationsTable.update({
+      (NotificationsTable.profileId eq resolvedProfileId) and
+          (NotificationsTable.status eq NotificationStatus.SENT.name) and
+          NotificationsTable.readAt.isNull()
+    }) {
+      it[this.readAt] = readAt
+      it[updatedAt] = readAt
+    }
+  }
+
   suspend fun getPreference(
       memberUsername: String,
       topic: NotificationTopic,

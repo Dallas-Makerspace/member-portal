@@ -224,4 +224,18 @@ class NotificationsRepositoryTest {
 
     assertEquals(UnknownTopic("REMOVED_FEATURE"), repository.list(10).single().topic)
   }
+
+  @Test
+  fun `unread counts only delivered rows and markAllRead clears just this member`() = runBlocking {
+    insert(status = NotificationStatus.SENT)
+    insert(status = NotificationStatus.SENT)
+    insert(status = NotificationStatus.IN_DIGEST)
+    insert(member = "asmith", status = NotificationStatus.SENT)
+
+    assertEquals(2, repository.countUnread("jdoe"))
+    assertEquals(2, repository.markAllRead("jdoe", now))
+    assertEquals(0, repository.countUnread("jdoe"))
+    assertEquals(1, repository.countUnread("asmith"))
+    assertEquals(0, repository.countUnread("nobody"))
+  }
 }

@@ -310,6 +310,13 @@ constructor(
   suspend fun markRead(id: Long, memberUsername: String): Boolean =
       repository.markRead(id, memberUsername, LocalDateTime.now(utcZone))
 
+  /** Delivered notifications [memberUsername] hasn't seen in the portal inbox yet. */
+  suspend fun countUnread(memberUsername: String): Int = repository.countUnread(memberUsername)
+
+  /** Marks all of [memberUsername]'s delivered notifications read (they viewed the inbox). */
+  suspend fun markAllRead(memberUsername: String): Int =
+      repository.markAllRead(memberUsername, LocalDateTime.now(utcZone))
+
   /**
    * The subset of [usernames] with an enabled Active Directory account (membership not lapsed), in
    * one directory lookup. Unknown usernames are treated as inactive (fail closed). LDAP is
