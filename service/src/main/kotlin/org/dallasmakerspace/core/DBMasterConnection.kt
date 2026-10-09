@@ -21,9 +21,13 @@ class DBMasterConnection @Inject constructor(val appConfig: AppConfig) {
       val separator = if (dbUrl.contains("?")) "&" else "?"
       dbUrl +=
           "$separator" +
+              // Without pool=true the driver ignores the pool options and connects per transaction.
+              "pool=true&" +
+              // Matches Exposed's per-transaction setting, saving two round trips per transaction.
+              "autocommit=false&" +
               "maxPoolSize=10&" +
               "minPoolSize=1&" +
-              "maxIdleTime=60000&" +
+              "maxIdleTime=300&" +
               "serverTimezone=UTC&" +
               "autoReconnect=true&" +
               "connectTimeout=3000&" +

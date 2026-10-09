@@ -14,8 +14,8 @@ class MemberSettingsRepositoryMock @Inject constructor() : IMemberSettingsReposi
   override suspend fun getProfileId(username: String): Int? =
       profileIds.getOrPut(username) { nextProfileId.getAndIncrement() }
 
-  override suspend fun getLatest(profileId: Int): Map<String, String> {
-    val records = store[profileId] ?: return emptyMap()
+  override suspend fun getLatest(username: String): Map<String, String> {
+    val records = store[getProfileId(username)] ?: return emptyMap()
     return records
         .asReversed()
         .mapNotNull { record -> record.value?.let { record.key to it } }
@@ -23,16 +23,13 @@ class MemberSettingsRepositoryMock @Inject constructor() : IMemberSettingsReposi
         .toMap()
   }
 
-  override suspend fun getHistory(profileId: Int): List<MemberSettingsRecord> =
-      store[profileId]?.asReversed()?.toList() ?: emptyList()
+  override suspend fun getHistory(username: String): List<MemberSettingsRecord> =
+      store[getProfileId(username)]?.asReversed()?.map { record ->
+        record.copy(updatedByUsername = record.updatedByProfileId?.let { getUsername(it) })
+      } ?: emptyList()
 
   override suspend fun getUsername(profileId: Int): String? =
       profileIds.entries.firstOrNull { it.value == profileId }?.key
-
-  override suspend fun getUsernames(profileIds: Collection<Int>): Map<Int, String> =
-      this.profileIds.entries
-          .filter { (_, id) -> id in profileIds }
-          .associate { (username, id) -> id to username }
 
   override suspend fun append(
       profileId: Int,

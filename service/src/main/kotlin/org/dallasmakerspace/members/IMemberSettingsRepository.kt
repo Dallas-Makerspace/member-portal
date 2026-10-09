@@ -8,6 +8,7 @@ data class MemberSettingsRecord(
     val value: String?,
     val updatedByProfileId: Int?,
     val updatedAt: LocalDateTime,
+    val updatedByUsername: String? = null,
 )
 
 interface IMemberSettingsRepository {
@@ -17,22 +18,20 @@ interface IMemberSettingsRepository {
 
   /**
    * Returns the latest non-null value per setting key for a member. Keys that have never been set,
-   * or whose latest record is a clear (NULL value), are omitted.
+   * or whose latest record is a clear (NULL value), are omitted. Empty if the member doesn't exist.
    */
-  suspend fun getLatest(profileId: Int): Map<String, String>
+  suspend fun getLatest(username: String): Map<String, String>
 
   /**
-   * Returns all setting change records for a member in reverse chronological order (newest first).
-   * Unlike [getLatest], cleared (NULL value) records are included so the full audit trail is
-   * visible.
+   * Returns all setting change records for a member in reverse chronological order (newest first),
+   * with [MemberSettingsRecord.updatedByUsername] resolved. Unlike [getLatest], cleared (NULL
+   * value) records are included so the full audit trail is visible. Empty if the member doesn't
+   * exist.
    */
-  suspend fun getHistory(profileId: Int): List<MemberSettingsRecord>
+  suspend fun getHistory(username: String): List<MemberSettingsRecord>
 
   /** Resolves a profile id to its username, or null if the profile does not exist. */
   suspend fun getUsername(profileId: Int): String?
-
-  /** Resolves a batch of profile ids to usernames. Ids that do not exist are omitted. */
-  suspend fun getUsernames(profileIds: Collection<Int>): Map<Int, String>
 
   /**
    * Appends a new setting record. A NULL value records that the setting was cleared.

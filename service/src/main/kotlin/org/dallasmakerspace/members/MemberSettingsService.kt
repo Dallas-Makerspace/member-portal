@@ -26,12 +26,10 @@ constructor(
    * Returns the member's stored settings as a map of setting_key to setting_value. Only keys that
    * are currently set are returned; unset and cleared settings are omitted.
    */
-  suspend fun getSettings(username: String): Map<String, String> {
-    val profileId = repository.getProfileId(username) ?: return emptyMap()
-    return repository.getLatest(profileId).filterKeys { key ->
-      MemberSettingsRegistry.findByKey(key) != null
-    }
-  }
+  suspend fun getSettings(username: String): Map<String, String> =
+      repository.getLatest(username).filterKeys { key ->
+        MemberSettingsRegistry.findByKey(key) != null
+      }
 
   /**
    * Returns the full append-only change history for a member as a list of maps, newest first. Each
@@ -39,17 +37,15 @@ constructor(
    * updated_at (formatted in Central Time).
    */
   suspend fun getSettingsHistory(username: String): List<Map<String, String?>> {
-    val profileId = repository.getProfileId(username) ?: return emptyList()
     val records =
-        repository.getHistory(profileId).filter { record ->
+        repository.getHistory(username).filter { record ->
           MemberSettingsRegistry.findByKey(record.key) != null
         }
-    val usernames = repository.getUsernames(records.mapNotNull { it.updatedByProfileId }.toSet())
     return records.map { record ->
       mapOf(
           "setting_key" to record.key,
           "setting_value" to record.value,
-          "updated_by" to record.updatedByProfileId?.let { usernames[it] },
+          "updated_by" to record.updatedByUsername,
           "updated_at" to
               record.updatedAt
                   .atZone(utcZone)

@@ -33,8 +33,7 @@ class MemberSettingsServiceTest {
 
   @Test
   fun `getSettings returns only stored keys`() = runBlocking {
-    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
-    whenever(mockRepository.getLatest(1))
+    whenever(mockRepository.getLatest("user1"))
         .thenReturn(mapOf("communication_preference" to "EMAIL", "unknown_setting" to "x"))
 
     val result = service.getSettings("user1")
@@ -44,8 +43,7 @@ class MemberSettingsServiceTest {
 
   @Test
   fun `getSettings returns empty map when nothing stored`() = runBlocking {
-    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
-    whenever(mockRepository.getLatest(1)).thenReturn(emptyMap())
+    whenever(mockRepository.getLatest("user1")).thenReturn(emptyMap())
 
     val result = service.getSettings("user1")
 
@@ -54,7 +52,7 @@ class MemberSettingsServiceTest {
 
   @Test
   fun `getSettings returns empty map when member not found`() = runBlocking {
-    whenever(mockRepository.getProfileId("ghost")).thenReturn(null)
+    whenever(mockRepository.getLatest("ghost")).thenReturn(emptyMap())
 
     val result = service.getSettings("ghost")
 

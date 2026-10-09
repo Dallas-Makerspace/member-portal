@@ -7,6 +7,7 @@ import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.members.db.MemberSettingsDAO
 import org.dallasmakerspace.members.db.MemberSettingsTable
 import org.dallasmakerspace.members.db.ProfileDAO
+import org.dallasmakerspace.members.db.ProfileResolver
 import org.dallasmakerspace.members.db.ProfileTable
 import org.dallasmakerspace.members.db.suspendTransaction
 import org.jetbrains.exposed.dao.id.EntityID
@@ -22,7 +23,9 @@ class MemberSettingsRepository @Inject constructor(loggerFactory: LoggerFactory)
     ProfileDAO.findById(EntityID(username, ProfileTable))?.idColumn?.value
   }
 
-  override suspend fun getLatest(profileId: Int): Map<String, String> = suspendTransaction {
+  override suspend fun getLatest(username: String): Map<String, String> = suspendTransaction {
+    val profileId =
+        ProfileResolver.findProfileId(username) ?: return@suspendTransaction emptyMap()
     MemberSettingsDAO.find { MemberSettingsTable.profileId eq profileId }
         .orderBy(MemberSettingsTable.idColumn to SortOrder.DESC)
         .map { dao -> dao.settingKey to dao.settingValue }
@@ -31,29 +34,28 @@ class MemberSettingsRepository @Inject constructor(loggerFactory: LoggerFactory)
         .toMap()
   }
 
-  override suspend fun getHistory(profileId: Int): List<MemberSettingsRecord> = suspendTransaction {
-    MemberSettingsDAO.find { MemberSettingsTable.profileId eq profileId }
-        .orderBy(MemberSettingsTable.idColumn to SortOrder.DESC)
-        .map { dao ->
+  override suspend fun getHistory(username: String): List<MemberSettingsRecord> =
+      suspendTransaction {
+        val profileId =
+            ProfileResolver.findProfileId(username) ?: return@suspendTransaction emptyList()
+        val daos =
+            MemberSettingsDAO.find { MemberSettingsTable.profileId eq profileId }
+                .orderBy(MemberSettingsTable.idColumn to SortOrder.DESC)
+                .toList()
+        val usernames = ProfileResolver.resolveUsernames(daos.mapNotNull { it.updatedBy })
+        daos.map { dao ->
           MemberSettingsRecord(
               key = dao.settingKey,
               value = dao.settingValue,
               updatedByProfileId = dao.updatedBy,
               updatedAt = dao.updatedAt,
+              updatedByUsername = dao.updatedBy?.let { usernames[it] },
           )
         }
-  }
+      }
 
   override suspend fun getUsername(profileId: Int): String? = suspendTransaction {
     ProfileDAO.find { ProfileTable.idColumn eq profileId }.firstOrNull()?.let { it.id.value }
-  }
-
-  override suspend fun getUsernames(profileIds: Collection<Int>): Map<Int, String> {
-    if (profileIds.isEmpty()) return emptyMap()
-    return suspendTransaction {
-      ProfileDAO.find { ProfileTable.idColumn inList profileIds }
-          .associate { dao -> dao.idColumn.value to dao.id.value }
-    }
   }
 
   override suspend fun append(
