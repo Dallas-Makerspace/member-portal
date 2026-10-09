@@ -60,9 +60,6 @@
             border-radius: 50%;
             overflow: hidden;
         }
-        .account-icon.is-linked img {
-            filter: grayscale(100%);
-        }
         .account-item {
             display: flex;
             align-items: center;
@@ -75,25 +72,10 @@
         .account-platform {
             margin-bottom: 0;
         }
-        .account-platform-disabled {
-            color: #6c757d;
-            margin-bottom: 0;
-        }
-        .account-name {
-            margin-bottom: 0;
-            font-weight: 500;
-            color: #333;
-        }
-        .account-link {
-            text-decoration: none;
-        }
-        .unlink {
+        .link-cta {
             font-size: 14px;
-            color: #333;
-            display: block;
-        }
-        .unlink.link-cta {
             color: #0d6efd;
+            display: block;
         }
         .accounts-container {
             display: flex;
@@ -113,6 +95,39 @@
             .account-divider {
                 display: none;
             }
+        }
+
+        /* Small muted text actions (Copy, Add/Edit, Change) beside bio card details */
+        .profile-action {
+            display: inline-block;
+            margin-left: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            border: 1px solid #ced4da;
+            border-radius: 0.25rem;
+            background: none;
+            color: #6c757d;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            line-height: 1;
+            text-transform: uppercase;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .profile-action:hover,
+        .profile-action:focus-visible {
+            border-color: #adb5bd;
+            background-color: #f8f9fa;
+            color: #495057;
+        }
+        .profile-action.text-success {
+            border-color: currentColor;
+        }
+        .social-icon {
+            width: 20px;
+            height: 20px;
+            margin-left: 4px;
+            vertical-align: middle;
         }
 
         /* Voting Rights card */
@@ -255,47 +270,35 @@
                             </span>
                         </div>
 
-                        <div th:if="${discourse_username}" class="d-flex align-items-center mb-3">
+                        <div th:if="${discourse_username != null and is_self != 'true'}"
+                             class="d-flex align-items-center mb-3">
                             <img class="card-item-icon" alt="" src="../static/images/discourse.svg"/>
-                            <span>Send message on <a target="_blank"
+                            <span>Send message on <a target="_blank" rel="noopener"
                                                      th:href="|https://talk.dallasmakerspace.org/new-message?username=${discourse_username}&title=Hey%20👋|">Talk</a></span>
-                            <button type="button" class="btn btn-link p-0 ms-2 text-muted"
+                            <button type="button" class="profile-action"
                                     title="Copy Talk username" data-copy-title="Copy Talk username"
-                                    th:attr="onclick=|copyUsernameToClipboard('${discourse_username}', this)|"
-                                    style="line-height:1;">
-                                <span class="material-symbols-outlined" style="font-size:18px;">content_copy</span>
-                            </button>
+                                    aria-label="Copy Talk username" th:data-copy-text="${discourse_username}"
+                                    onclick="copyUsernameToClipboard(this.dataset.copyText, this)">Copy</button>
                         </div>
 
-                        <div th:if="${discord_userid}" class="d-flex align-items-center mb-3">
+                        <div th:if="${discord_userid != null and is_self != 'true'}"
+                             class="d-flex align-items-center mb-3">
                             <img class="card-item-icon" alt="" src="../static/images/discord.svg"/>
-                            <span>Send message on <a target="_blank"
+                            <span>Send message on <a target="_blank" rel="noopener"
                                                      th:href="|https://discord.com/users/${discord_userid}|">Discord</a></span>
-                            <button th:if="${discord_username}" type="button" class="btn btn-link p-0 ms-2 text-muted"
+                            <button th:if="${discord_username != null}" type="button" class="profile-action"
                                     title="Copy Discord username" data-copy-title="Copy Discord username"
-                                    th:attr="onclick=|copyUsernameToClipboard('${discord_username}', this)|"
-                                    style="line-height:1;">
-                                <span class="material-symbols-outlined" style="font-size:18px;">content_copy</span>
-                            </button>
+                                    aria-label="Copy Discord username" th:data-copy-text="${discord_username}"
+                                    onclick="copyUsernameToClipboard(this.dataset.copyText, this)">Copy</button>
                         </div>
 
                         <div class="d-flex align-items-center mb-3"
                              th:with="pref_label=${communication_preference == 'EMAIL'} ? 'Email' : (${communication_preference == 'DISCOURSE'} ? 'Talk' : (${communication_preference == 'DISCORD'} ? 'Discord' : (${communication_preference == 'SMS'} ? 'Text/SMS' : 'Not set')))">
                             <span class="material-symbols-outlined card-item-icon">contact_mail</span>
-                            <span>Contact preference:
-                                <a th:if="${is_self or authz.can('MANAGE_MEMBERS')}"
-                                   th:href="'/profile/@' + ${preferred_username} + '/settings'"
-                                   th:text="${pref_label}"></a>
-                                <th:block th:unless="${is_self or authz.can('MANAGE_MEMBERS')}" th:text="${pref_label}"></th:block>
-                            </span>
-                        </div>
-
-                        <div th:if="${is_self and follow_feature_enabled}"
-                             class="d-flex align-items-center mb-3">
-                            <span class="material-symbols-outlined card-item-icon">notifications</span>
-                            <span>Notifications:
-                                <a th:href="'/profile/@' + ${preferred_username} + '/notifications'">View inbox</a>
-                            </span>
+                            <span>Contact preference: <th:block th:text="${pref_label}"></th:block></span>
+                            <a th:if="${is_self == 'true' or authz.can('MANAGE_MEMBERS')}" class="profile-action"
+                               th:href="'/profile/@' + ${preferred_username} + '/settings'"
+                               aria-label="Change contact preference">Change</a>
                         </div>
 
                         <div th:if="${communication_preference == 'EMAIL' and personal_email}"
@@ -325,16 +328,20 @@
                                 </span>
                         </div>-->
 
-                        <div th:if="${linkedin_username}" class="d-flex align-items-center mb-3">
+                        <!-- social_link_fields is only set on your own profile (it feeds the dialog) -->
+                        <div th:if="${social_link_fields != null or !#lists.isEmpty(social_links)}"
+                             class="d-flex align-items-center mb-3">
                             <span class="material-symbols-outlined card-item-icon">share</span>
                             <span>Socials:
-                                <a th:href="|https://www.linkedin.com/in/${linkedin_username}|"
-                                   target="_blank" rel="noopener">
-                                    <img src="../static/images/linkedin.svg" alt="LinkedIn"
-                                         style="height: 20px; width: 20px; margin-left: 4px; vertical-align: middle;"
-                                         th:title="|LinkedIn: ${linkedin_username}|">
-                                </a>
+                                <a th:each="link : ${social_links}" th:href="${link['url']}"
+                                   target="_blank" rel="noopener noreferrer"><img class="social-icon"
+                                        th:src="${link['icon']}" th:alt="${link['name']}"
+                                        th:title="${link['name']}"></a>
                             </span>
+                            <button th:if="${social_link_fields != null}" type="button" class="profile-action"
+                                    data-bs-toggle="modal" data-bs-target="#socialLinksModal"
+                                    th:text="${#lists.isEmpty(social_links)} ? 'Add' : 'Edit'"
+                                    th:attr="aria-label=${#lists.isEmpty(social_links)} ? 'Add social links' : 'Edit social links'">Add</button>
                         </div>
 
                         <div th:unless="${enabled}" class="d-flex align-items-center mb-3">
@@ -484,79 +491,38 @@
 
         </div>
         <div class="col-md-8">
-            <!-- Linked accounts card -->
-            <div th:if="${is_self}" class="dms-card shadow-sm mt-4">
+            <!-- Link Accounts card: one call to action per account not linked yet (unlink is in Settings) -->
+            <div th:if="${is_self == 'true' and (discourse_username == null or discord_userid == null)}"
+                 class="dms-card shadow-sm mt-4">
                 <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Linked Accounts</h4>
+                    <h4 class="card-title mt-3 mb-4 dms-card-title">Link Accounts</h4>
                     <div class="accounts-container">
-                        <div class="account-item">
-                            <div class="account-icon bg-light"
-                                 th:classappend="${discourse_username == null ? '' : 'is-linked'}">
+                        <div th:if="${discourse_username == null}" class="account-item">
+                            <div class="account-icon bg-light">
                                 <img src="../static/images/discourse.svg" alt="Talk icon" class="w-100">
                             </div>
                             <div class="account-details">
                                 <div class="d-flex align-items-center">
                                     <p class="account-platform me-2">Talk:</p>
-                                    <a th:if="${discourse_username}"
-                                       th:href="|https://talk.dallasmakerspace.org/u/${discourse_username}/summary|"
-                                       target="_blank"
-                                       class="account-link">
-                                        <p class="account-name" th:text="|${discourse_username}|"></p>
-                                    </a>
-                                    <span th:unless="${discourse_username}">Not Linked</span>
+                                    <span>Not Linked</span>
                                 </div>
-                                <a href="/unlink-discourse" th:if="${discourse_username}" class="unlink">Unlink
-                                    Account</a>
-                                <a href="/link-discourse" th:unless="${discourse_username}" class="unlink link-cta">Link
-                                    Account</a>
+                                <a href="/link-discourse" class="link-cta">Link Account</a>
                             </div>
                         </div>
 
-                        <hr class="account-divider my-2">
+                        <hr th:if="${discourse_username == null and discord_userid == null}"
+                            class="account-divider my-2">
 
-                        <div class="account-item">
-                            <div class="account-icon bg-light"
-                                 th:classappend="${discord_userid == null ? '' : 'is-linked'}">
+                        <div th:if="${discord_userid == null}" class="account-item">
+                            <div class="account-icon bg-light">
                                 <img src="../static/images/discord.svg" alt="Discord icon" class="w-100">
                             </div>
                             <div class="account-details">
                                 <div class="d-flex align-items-center">
                                     <p class="account-platform me-2">Discord:</p>
-                                    <span th:if="${discord_username}" class="account-name"
-                                          th:text="|${discord_username}|"></span>
-                                    <span th:unless="${discord_userid}">Not Linked</span>
+                                    <span>Not Linked</span>
                                 </div>
-                                <a href="/unlink-discord" th:if="${discord_userid}" class="unlink">Unlink
-                                    Account</a>
-                                <a href="/link-discord" th:unless="${discord_userid}" class="unlink link-cta">Link
-                                    Account</a>
-                            </div>
-                        </div>
-
-                        <hr class="account-divider my-2">
-
-                        <div class="account-item">
-                            <div class="account-icon bg-light"
-                                 th:classappend="${linkedin_username == null ? '' : 'is-linked'}">
-                                <img src="../static/images/linkedin.svg" alt="LinkedIn icon" class="w-100">
-                            </div>
-                            <div class="account-details">
-                                <div class="d-flex align-items-center">
-                                    <p class="account-platform me-2">LinkedIn:</p>
-                                    <a th:if="${linkedin_username}"
-                                       th:href="|https://www.linkedin.com/in/${linkedin_username}|"
-                                       target="_blank" rel="noopener"
-                                       class="account-link">
-                                        <span class="account-name"
-                                              th:text="${linkedin_username}"></span>
-                                    </a>
-                                    <span th:unless="${linkedin_username}">Not Linked</span>
-                                </div>
-                                <a href="/unlink-linkedin" th:if="${linkedin_username}" class="unlink">Unlink
-                                    Account</a>
-                                <a href="#" th:unless="${linkedin_username}" class="unlink link-cta"
-                                   data-bs-toggle="modal" data-bs-target="#linkLinkedInModal">Link
-                                    Account</a>
+                                <a href="/link-discord" class="link-cta">Link Account</a>
                             </div>
                         </div>
                     </div>
@@ -806,43 +772,9 @@
         </div>
     </div>
 
-    <!-- LinkedIn Link Modal -->
-    <div th:if="${is_self and !linkedin_username}" class="modal fade" id="linkLinkedInModal" tabindex="-1"
-         aria-labelledby="linkLinkedInModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="linkLinkedInModalLabel">Link LinkedIn Account</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted mb-3">Enter your LinkedIn profile URL to link your account.</p>
-                    <div class="mb-3">
-                        <label for="linkedinUrl" class="form-label">LinkedIn Profile URL</label>
-                        <input type="url" class="form-control" id="linkedinUrl"
-                               placeholder="https://www.linkedin.com/in/your-username"
-                               autocomplete="off">
-                        <div class="invalid-feedback" id="linkedinUrlError">
-                            Please enter a valid LinkedIn profile URL (e.g., https://www.linkedin.com/in/username)
-                        </div>
-                        <small class="text-muted mt-2 d-block">
-                            <a href="https://www.linkedin.com/help/linkedin/answer/a522735" target="_blank"
-                               rel="noopener">
-                                How do I find my LinkedIn profile URL?
-                            </a>
-                        </small>
-                    </div>
-                    <div id="linkedinUsernamePreview" class="alert alert-info d-none mb-0">
-                        Username: <strong id="extractedUsername"></strong>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="linkLinkedInBtn" disabled>Link Account</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <th:block th:if="${social_link_fields != null}">
+        <th:block th:replace="~{fragments/social-links :: social-links-modal}"></th:block>
+    </th:block>
 
     <th:block th:replace="~{fragments/toast :: toast}"></th:block>
 </div>
@@ -858,73 +790,6 @@
 <script type="module" src="../static/js/dms-relative-date.js"></script>
 <script type="module" th:if="${profile_photo_enabled and (is_self == 'true' or (can_moderate_photo and has_uploaded_photo))}"
         src="../static/js/profile-photo.js"></script>
-
-<!-- LinkedIn Modal Script -->
-<script th:if="${is_self and !linkedin_username}">
-    (function() {
-        'use strict';
-
-        const linkedinUrlInput = document.getElementById('linkedinUrl');
-        const linkBtn = document.getElementById('linkLinkedInBtn');
-        const usernamePreview = document.getElementById('linkedinUsernamePreview');
-        const extractedUsernameSpan = document.getElementById('extractedUsername');
-
-        // LinkedIn URL validation regex
-        // Matches: https://www.linkedin.com/in/username, http://linkedin.com/in/username, etc.
-        const linkedinUrlPattern = /^https?:\/\/(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9\-]+)\/?$/;
-
-        function validateAndExtractUsername(url) {
-            const match = url.trim().match(linkedinUrlPattern);
-            if (match) {
-                return match[1]; // Return the captured username
-            }
-            return null;
-        }
-
-        function updateValidationState() {
-            const url = linkedinUrlInput.value;
-            const username = validateAndExtractUsername(url);
-
-            if (url === '') {
-                // Empty - neutral state
-                linkedinUrlInput.classList.remove('is-valid', 'is-invalid');
-                usernamePreview.classList.add('d-none');
-                linkBtn.disabled = true;
-            } else if (username) {
-                // Valid
-                linkedinUrlInput.classList.remove('is-invalid');
-                linkedinUrlInput.classList.add('is-valid');
-                extractedUsernameSpan.textContent = username;
-                usernamePreview.classList.remove('d-none');
-                linkBtn.disabled = false;
-            } else {
-                // Invalid
-                linkedinUrlInput.classList.remove('is-valid');
-                linkedinUrlInput.classList.add('is-invalid');
-                usernamePreview.classList.add('d-none');
-                linkBtn.disabled = true;
-            }
-        }
-
-        linkedinUrlInput.addEventListener('input', updateValidationState);
-
-        linkBtn.addEventListener('click', function() {
-            const username = validateAndExtractUsername(linkedinUrlInput.value);
-            if (username) {
-                // Redirect to link handler with username as query param
-                window.location.href = '/link-linkedin?linkedinUsername=' + encodeURIComponent(username);
-            }
-        });
-
-        // Reset modal state when hidden
-        document.getElementById('linkLinkedInModal').addEventListener('hidden.bs.modal', function() {
-            linkedinUrlInput.value = '';
-            linkedinUrlInput.classList.remove('is-valid', 'is-invalid');
-            usernamePreview.classList.add('d-none');
-            linkBtn.disabled = true;
-        });
-    })();
-</script>
 
 <!-- Initialize Bootstrap tooltips -->
 <script th:if="${authz.can('MANAGE_MEMBERS')}">

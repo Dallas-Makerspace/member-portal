@@ -46,7 +46,7 @@ constructor(
       call.respond(HttpStatusCode.BadRequest, PhotoResponse(false, "Missing username"))
       return
     }
-    if (!isSameOrigin(call)) {
+    if (!call.isSameOriginRequest()) {
       call.respond(HttpStatusCode.Forbidden, PhotoResponse(false, "Cross-site request rejected"))
       return
     }
@@ -153,12 +153,12 @@ constructor(
     }
     return output.toByteArray()
   }
-
-  private fun isSameOrigin(call: ApplicationCall): Boolean =
-      isSameOriginHeader(
-          call.request.header("Host"),
-          call.request.header("Origin") ?: call.request.header("Referer"))
 }
+
+/** Minimum cross-site defense for mutating requests; see [isSameOriginHeader]. */
+fun ApplicationCall.isSameOriginRequest(): Boolean =
+    isSameOriginHeader(
+        request.header("Host"), request.header("Origin") ?: request.header("Referer"))
 
 /**
  * True if [originOrReferer]'s host matches [host] (a request's `Host` header), or if

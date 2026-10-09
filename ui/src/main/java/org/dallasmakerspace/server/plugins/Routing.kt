@@ -79,25 +79,18 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.DISCOURSE_LINK.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
-      get(RouteFactory.Paths.DISCOURSE_UNLINK.path) {
+      post(RouteFactory.Paths.DISCOURSE_UNLINK.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
       get(RouteFactory.Paths.DISCOURSE_CALLBACK.path) {
         RouteFactory.getHandler(RouteFactory.Paths.DISCOURSE_CALLBACK.path)?.handleBase(call)
       }
       get(RouteFactory.Paths.DISCORD_LINK.path) { RouteFactory.getHandler(call)?.handleBase(call) }
-      get(RouteFactory.Paths.DISCORD_UNLINK.path) {
+      post(RouteFactory.Paths.DISCORD_UNLINK.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
       get(RouteFactory.Paths.DISCORD_CALLBACK.path) {
         RouteFactory.getHandler(RouteFactory.Paths.DISCORD_CALLBACK.path)?.handleBase(call)
-      }
-      get(RouteFactory.Paths.LINKEDIN_LINK.path) { RouteFactory.getHandler(call)?.handleBase(call) }
-      get(RouteFactory.Paths.LINKEDIN_UNLINK.path) {
-        RouteFactory.getHandler(call)?.handleBase(call)
-      }
-      get(RouteFactory.Paths.LINKEDIN_CALLBACK.path) {
-        RouteFactory.getHandler(RouteFactory.Paths.LINKEDIN_CALLBACK.path)?.handleBase(call)
       }
       get(RouteFactory.Paths.REGISTER_VOTING.path) {
         RouteFactory.getHandler(call)?.handleBase(call)

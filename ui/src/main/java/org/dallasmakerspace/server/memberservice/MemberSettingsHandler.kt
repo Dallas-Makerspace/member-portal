@@ -2,6 +2,7 @@ package org.dallasmakerspace.server.memberservice
 
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Parameters
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveParameters
@@ -14,6 +15,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.models.CommunicationPreference
+import org.dallasmakerspace.models.SocialNetwork
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -21,6 +23,9 @@ import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
 import org.dallasmakerspace.server.routes.NotificationPreferences
 import org.dallasmakerspace.server.routes.NotificationsInboxHandler
+import org.dallasmakerspace.server.routes.SocialLinks
+
+private const val COMMUNICATION_PREFERENCE_KEY = "communication_preference"
 
 class MemberSettingsHandler
 @Inject
@@ -46,7 +51,7 @@ constructor(
     }
 
     if (call.request.httpMethod == HttpMethod.Post) {
-      handlePost(call, requestedUsername, currentUsername, notificationsEnabled(currentUsername))
+      handlePost(call, requestedUsername, currentUsername)
       return
     }
 
@@ -57,8 +62,8 @@ constructor(
       call.sessions.set(session.copy(isSettingsUpdateSuccess = false))
       jsonMap["toast_message"] = "Contact preference updated."
     }
-    if (call.request.queryParameters["updated"] == NotificationPreferences.FORM_NAME) {
-      jsonMap["toast_message"] = "Notification preferences updated."
+    settingsUpdatedToast(call.request.queryParameters["updated"])?.let {
+      jsonMap["toast_message"] = it
     }
 
     call.respond(ThymeleafContent("settings", jsonMap))
@@ -96,13 +101,22 @@ constructor(
                   mapOf("value" to pref.name, "label" to pref.label)
                 },
             "communication_preference" to
-                (settings.await()["communication_preference"] ?: ""),
+                (settings.await()[COMMUNICATION_PREFERENCE_KEY] ?: ""),
+            "member_loaded" to (memberValue != null),
             "discourse_linked" to (memberValue?.discourseUsername?.isNotEmpty() == true),
             "discord_linked" to (memberValue?.discordUserId?.isNotEmpty() == true),
-            "settings_history" to history.await(),
+            "settings_history" to history.await().map(::settingsHistoryRow),
             "notification_preferences_enabled" to notificationsEnabled.await(),
         )
-        .apply { putAll(notifications.await()) }
+        .apply {
+          memberValue?.discourseUsername?.takeIf { it.isNotEmpty() }?.let {
+            put("discourse_username", it)
+          }
+          memberValue?.discordUsername?.takeIf { it.isNotEmpty() }?.let {
+            put("discord_username", it)
+          }
+          putAll(notifications.await())
+        }
   }
 
   private suspend fun notificationsEnabled(currentUsername: String?): Boolean =
@@ -111,30 +125,108 @@ constructor(
             NotificationsInboxHandler.FEATURE_FLAG_KEY, it, session.sessionId)
       } ?: false
 
+  /** Each form posts a `form` name; the contact preference form predates it and sends none. */
   private suspend fun handlePost(
       call: ApplicationCall,
       requestedUsername: String,
       currentUsername: String?,
-      notificationsEnabled: Boolean,
   ) {
     val params = call.receiveParameters()
-    if (params["form"] == NotificationPreferences.FORM_NAME) {
-      if (notificationsEnabled) {
-        notificationPreferences.save(requestedUsername, session.sessionId, params)
-        call.respondRedirect(
-            "/profile/@$requestedUsername/settings?updated=${NotificationPreferences.FORM_NAME}",
-            permanent = false)
-      } else {
-        call.respond(HttpStatusCode.NotFound)
-      }
+    when (params["form"]) {
+      NotificationPreferences.FORM_NAME ->
+          saveNotificationPreferences(call, requestedUsername, currentUsername, params)
+      SocialLinks.FORM_NAME -> saveSocialLinks(call, requestedUsername, currentUsername, params)
+      null -> saveContactPreference(call, requestedUsername, currentUsername, params)
+      else -> call.respond(HttpStatusCode.BadRequest)
+    }
+  }
+
+  private suspend fun saveNotificationPreferences(
+      call: ApplicationCall,
+      requestedUsername: String,
+      currentUsername: String?,
+      params: Parameters,
+  ) {
+    if (!notificationsEnabled(currentUsername)) {
+      call.respond(HttpStatusCode.NotFound)
       return
     }
+    notificationPreferences.save(requestedUsername, session.sessionId, params)
+    call.respondRedirect(
+        "/profile/@$requestedUsername/settings?updated=${NotificationPreferences.FORM_NAME}",
+        permanent = false)
+  }
 
+  private suspend fun saveSocialLinks(
+      call: ApplicationCall,
+      requestedUsername: String,
+      currentUsername: String?,
+      params: Parameters,
+  ) {
+    // The dialog validates as the member types, so an invalid link here bypassed it.
+    val updates = SocialLinks.parseForm(params)
+    if (updates == null) {
+      call.respond(HttpStatusCode.BadRequest)
+      return
+    }
     memberService.updateMemberSettings(
-        requestedUsername, currentUsername, params["communication_preference"], session.sessionId)
+        requestedUsername, currentUsername, updates, session.sessionId)
+    call.respondRedirect(
+        "/profile/@$requestedUsername?updated=${SocialLinks.FORM_NAME}", permanent = false)
+  }
+
+  private suspend fun saveContactPreference(
+      call: ApplicationCall,
+      requestedUsername: String,
+      currentUsername: String?,
+      params: Parameters,
+  ) {
+    memberService.updateMemberSettings(
+        requestedUsername,
+        currentUsername,
+        params[COMMUNICATION_PREFERENCE_KEY],
+        session.sessionId)
 
     // The profile shows the "updated" toast (see ProfileHandler.setToastMessage).
     call.sessions.set(session.copy(isSettingsUpdateSuccess = true))
     call.respondRedirect("/profile/@$requestedUsername", permanent = false)
   }
+
+  companion object {
+    /** `updated` values the unlink handlers redirect back to this page with. */
+    const val TALK_UNLINKED = "talk-unlinked"
+    const val DISCORD_UNLINKED = "discord-unlinked"
+  }
+}
+
+/** Toast for the settings page's `updated` query parameter, if it names a known change. */
+internal fun settingsUpdatedToast(updated: String?): String? =
+    when (updated) {
+      NotificationPreferences.FORM_NAME -> "Notification preferences updated."
+      MemberSettingsHandler.TALK_UNLINKED -> "Talk account unlinked."
+      MemberSettingsHandler.DISCORD_UNLINKED -> "Discord account unlinked."
+      else -> null
+    }
+
+/** A settings history entry from the service, plus the label and value the page shows. */
+internal fun settingsHistoryRow(entry: Map<String, String?>): Map<String, Any?> {
+  val key = entry["setting_key"].orEmpty()
+  val value = entry["setting_value"]?.takeIf { it.isNotEmpty() }
+  val network = SocialNetwork.fromSettingKey(key)
+  val label =
+      when {
+        key == COMMUNICATION_PREFERENCE_KEY -> "Communication preference"
+        network != null -> network.displayName
+        else -> key
+      }
+  val displayValue =
+      when {
+        key == COMMUNICATION_PREFERENCE_KEY ->
+            value?.let { v -> CommunicationPreference.entries.find { it.name == v }?.label ?: v }
+                ?: "No preference"
+        network != null -> value?.let { network.profileUrl(it) } ?: "Removed"
+        else -> value ?: "Cleared"
+      }
+  return entry +
+      mapOf("label" to label, "display_value" to displayValue, "is_cleared" to (value == null))
 }

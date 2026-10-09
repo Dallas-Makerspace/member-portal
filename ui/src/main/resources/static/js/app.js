@@ -246,8 +246,9 @@ function printDMSItBanner() {
 }
 
 /**
- * Copy text to the clipboard and show brief "copied" feedback on the triggering button.
- * The button should contain a <span class="material-symbols-outlined"> icon.
+ * Copy text to the clipboard and show brief "copied" feedback on the triggering button: an inner
+ * <span class="material-symbols-outlined"> icon turns into a check mark, otherwise the button's
+ * own text reads "Copied".
  * @param {string} text - The text to copy
  * @param {HTMLElement} btn - The button element that was clicked
  */
@@ -271,14 +272,15 @@ function copyUsernameToClipboard(text, btn) {
     };
 
     writeText(text).then(() => {
+        if (btn.classList.contains('text-success')) return; // feedback already showing
         const icon = btn.querySelector('.material-symbols-outlined');
-        if (!icon) return;
-        const original = icon.textContent;
-        icon.textContent = 'check';
+        const label = icon || btn;
+        const original = label.textContent;
+        label.textContent = icon ? 'check' : 'Copied';
         btn.classList.add('text-success');
         btn.setAttribute('title', 'Copied!');
         setTimeout(() => {
-            icon.textContent = original;
+            label.textContent = original;
             btn.classList.remove('text-success');
             btn.setAttribute('title', btn.dataset.copyTitle || 'Copy');
         }, 1500);

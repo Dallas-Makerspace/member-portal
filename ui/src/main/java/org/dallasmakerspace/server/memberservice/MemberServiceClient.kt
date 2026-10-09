@@ -103,7 +103,7 @@ constructor(
   suspend fun updateMemberSettings(
       username: String,
       actorUsername: String?,
-      communicationPreference: String?,
+      updates: Map<String, String>,
       sessionId: String?,
   ) {
     val baseHeaders = getApiHeaders(sessionId)
@@ -112,8 +112,7 @@ constructor(
           baseHeaders.forEach { key, values -> values.forEach { value -> append(key, value) } }
           actorUsername?.let { append("X-Actor-Username", it) }
         }
-    val body = mapOf("communication_preference" to (communicationPreference ?: ""))
-    dmsHttpClient.patch("$baseUrl/members/$username/settings", apiHeaders, body)
+    dmsHttpClient.patch("$baseUrl/members/$username/settings", apiHeaders, updates)
   }
 
   suspend fun getGroupSettings(groupSlug: String, sessionId: String?): Map<String, String> {

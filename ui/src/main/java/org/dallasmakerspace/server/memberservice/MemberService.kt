@@ -56,8 +56,21 @@ constructor(
       communicationPreference: String?,
       sessionId: String?,
   ) {
-    memberServiceClient.updateMemberSettings(
-        username, actorUsername, communicationPreference, sessionId)
+    updateMemberSettings(
+        username,
+        actorUsername,
+        mapOf("communication_preference" to communicationPreference.orEmpty()),
+        sessionId)
+  }
+
+  /** Values are stored as given; "" clears a setting. */
+  suspend fun updateMemberSettings(
+      username: String,
+      actorUsername: String?,
+      updates: Map<String, String>,
+      sessionId: String?,
+  ) {
+    memberServiceClient.updateMemberSettings(username, actorUsername, updates, sessionId)
   }
 
   suspend fun unlinkDiscourseAccount(username: String, sessionId: String?) {
@@ -102,32 +115,6 @@ constructor(
     member.discordUserId = null
     member.discordUsername = null
     member.discordAvatarUrl = null
-    try { // Patch object
-      memberServiceClient.patchMember(username, member, sessionId)
-    } catch (e: HttpException) {
-      log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
-    }
-  }
-
-  suspend fun linkLinkedInAccount(username: String, linkedinUsername: String, sessionId: String?) {
-    // Get member object
-    val member = memberServiceClient.getMember(username, sessionId)
-    // Update LinkedIn field
-    member.linkedinUsername = linkedinUsername
-    try { // Patch object
-      memberServiceClient.patchMember(username, member, sessionId)
-    } catch (e: HttpException) {
-      log.error("Failed to patch member: $username; member object: $member", e)
-      throw MemberServiceException(e.message ?: "Failed to patch member: $username", e)
-    }
-  }
-
-  suspend fun unlinkLinkedInAccount(username: String, sessionId: String?) {
-    // Get member object
-    val member = memberServiceClient.getMember(username, sessionId)
-    // Clear LinkedIn field
-    member.linkedinUsername = null
     try { // Patch object
       memberServiceClient.patchMember(username, member, sessionId)
     } catch (e: HttpException) {

@@ -60,7 +60,6 @@ data class UserSession(
     var accessToken: String? = null,
     var isDiscourseLinkSuccess: Boolean = false,
     var isDiscordLinkSuccess: Boolean = false,
-    var isLinkedInLinkSuccess: Boolean = false,
     var isVoterRegistrationSuccess: Boolean = false,
     var isSettingsUpdateSuccess: Boolean = false,
     var isGroupSettingsUpdateSuccess: Boolean = false,

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Social links dialog, opened by the Socials row's Add/Edit button on the member's own profile.
+  Fields come from SocialLinks.formFields; each data-pattern is SocialNetwork.inputPattern, the same
+  check the server applies on save. Posts form=socials to the settings handler; an empty box
+  removes that link.
+-->
+<th:block th:fragment="social-links-modal">
+    <div class="modal fade" id="socialLinksModal" tabindex="-1" aria-labelledby="socialLinksModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+            <form class="modal-content" id="socialLinksForm" method="post" novalidate
+                  th:action="'/profile/@' + ${preferred_username} + '/settings'">
+                <input type="hidden" name="form" value="socials">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="socialLinksModalLabel">Social links</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">
+                        Copy the address of your profile page on each site and paste it below.
+                        Leave a box empty to remove that link.
+                    </p>
+                    <div class="mb-3" th:each="field : ${social_link_fields}">
+                        <label class="form-label d-flex align-items-center gap-2" th:for="${field['key']}">
+                            <img th:src="${field['icon']}" alt="" width="20" height="20">
+                            <span th:text="${field['name']}"></span>
+                        </label>
+                        <input type="text" class="form-control social-link-input" inputmode="url"
+                               maxlength="500" autocomplete="off" autocapitalize="off" spellcheck="false"
+                               th:id="${field['key']}" th:name="${field['key']}" th:value="${field['value']}"
+                               th:placeholder="${field['example']}" th:data-pattern="${field['pattern']}"
+                               th:attr="aria-describedby=${field['key'] + '-error'}">
+                        <div class="invalid-feedback" th:id="${field['key'] + '-error'}"
+                             th:text="|This doesn’t look like a link to a ${field['name']} profile. It should look like ${field['example']}|"></div>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <small class="text-muted">All members can see these links on your profile.</small>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="socialLinksSave" disabled>Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        (function () {
+            'use strict';
+            const modal = document.getElementById('socialLinksModal');
+            const form = document.getElementById('socialLinksForm');
+            const save = document.getElementById('socialLinksSave');
+            const inputs = Array.from(form.querySelectorAll('.social-link-input'));
+
+            // Never the HTML pattern attribute: browsers compile it in a stricter regex mode.
+            function isValid(input) {
+                const value = input.value.trim();
+                return value === '' || new RegExp(input.dataset.pattern, 'i').test(value);
+            }
+
+            function showValidity(input) {
+                const invalid = !isValid(input);
+                input.classList.toggle('is-invalid', invalid);
+                input.setAttribute('aria-invalid', String(invalid));
+            }
+
+            function updateSave() {
+                const changed = inputs.some(input => input.value.trim() !== input.defaultValue);
+                save.disabled = !changed || !inputs.every(isValid);
+            }
+
+            inputs.forEach(input => {
+                input.addEventListener('blur', () => showValidity(input));
+                input.addEventListener('input', () => {
+                    if (input.classList.contains('is-invalid')) showValidity(input);
+                    updateSave();
+                });
+            });
+
+            form.addEventListener('submit', event => {
+                inputs.forEach(showValidity);
+                const firstInvalid = inputs.find(input => !isValid(input));
+                if (firstInvalid) {
+                    event.preventDefault();
+                    firstInvalid.focus();
+                }
+            });
+
+            modal.addEventListener('shown.bs.modal', () => inputs[0].focus());
+            modal.addEventListener('hidden.bs.modal', () => {
+                form.reset();
+                inputs.forEach(input => {
+                    input.classList.remove('is-invalid');
+                    input.removeAttribute('aria-invalid');
+                });
+                updateSave();
+            });
+        })();
+    </script>
+</th:block>
+</body>
+</html>

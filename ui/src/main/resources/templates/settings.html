@@ -74,6 +74,43 @@
                 </div>
             </div>
 
+            <!-- Linked Accounts card; the unlink routes act on the signed-in member, so self only -->
+            <div class="dms-card shadow-sm mt-4" id="linked-accounts"
+                 th:if="${is_self == 'true' and member_loaded}">
+                <div class="card-body pt-0 pb-4">
+                    <h4 class="card-title mt-3 mb-4 dms-card-title">Linked Accounts</h4>
+                    <p class="text-muted">
+                        Link your Talk and Discord accounts so other members can reach you there.
+                    </p>
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex align-items-center gap-3">
+                            <img src="/static/images/discourse.svg" alt="" width="32" height="32">
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">Talk</div>
+                                <div class="text-muted small"
+                                     th:text="${discourse_username != null} ? '@' + ${discourse_username} : 'Not linked'"></div>
+                            </div>
+                            <button th:if="${discourse_linked}" type="button" class="btn btn-sm btn-outline-danger"
+                                    data-bs-toggle="modal" data-bs-target="#unlinkTalkModal">Unlink</button>
+                            <a th:unless="${discourse_linked}" href="/link-discourse"
+                               class="btn btn-sm btn-primary">Link</a>
+                        </li>
+                        <li class="list-group-item d-flex align-items-center gap-3">
+                            <img src="/static/images/discord.svg" alt="" width="32" height="32">
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">Discord</div>
+                                <div class="text-muted small"
+                                     th:text="${discord_username != null} ? '@' + ${discord_username} : (${discord_linked} ? 'Linked' : 'Not linked')"></div>
+                            </div>
+                            <button th:if="${discord_linked}" type="button" class="btn btn-sm btn-outline-danger"
+                                    data-bs-toggle="modal" data-bs-target="#unlinkDiscordModal">Unlink</button>
+                            <a th:unless="${discord_linked}" href="/link-discord"
+                               class="btn btn-sm btn-primary">Link</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
             <!-- Notification Preferences card -->
             <div class="dms-card shadow-sm mt-4" id="notification-preferences"
                  th:if="${notification_preferences_enabled}">
@@ -192,16 +229,9 @@
                                             th:attr="timestamp=${entry['updated_at']}"></dms-relative-date>
                                 </td>
                                 <td>
-                                    <div class="text-muted"
-                                         th:text="${entry['setting_key'] == 'communication_preference' ? 'Communication preference:' : entry['setting_key'] + ':'}"></div>
-                                    <th:block
-                                            th:if="${entry['setting_value'] != null and !entry['setting_value'].isEmpty()}">
-                                        <th:block th:each="pref : ${communication_preferences}"
-                                                  th:if="${pref['value'] == entry['setting_value']}"
-                                                  th:text="${pref['label']}"></th:block>
-                                    </th:block>
-                                    <span th:if="${entry['setting_value'] == null or entry['setting_value'].isEmpty()}"
-                                          class="text-muted">No preference</span>
+                                    <div class="text-muted" th:text="${entry['label'] + ':'}"></div>
+                                    <span class="text-break" th:classappend="${entry['is_cleared']} ? 'text-muted' : ''"
+                                          th:text="${entry['display_value']}"></span>
                                 </td>
                                 <td>
                                     <th:block th:if="${entry['updated_by'] != null and !entry['updated_by'].isEmpty()}">
@@ -222,6 +252,44 @@
             </div>
         </div>
     </div>
+
+    <!-- Unlink confirmations; each form posts to the unlink route for the signed-in member -->
+    <th:block th:if="${is_self == 'true' and member_loaded}">
+        <div th:if="${discourse_linked}" class="modal fade" id="unlinkTalkModal" tabindex="-1"
+             aria-labelledby="unlinkTalkModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" method="post" action="/unlink-discourse">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="unlinkTalkModalLabel">Unlink Talk?</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">This will remove the member green dot from Talk.</div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Unlink</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div th:if="${discord_linked}" class="modal fade" id="unlinkDiscordModal" tabindex="-1"
+             aria-labelledby="unlinkDiscordModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" method="post" action="/unlink-discord">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="unlinkDiscordModalLabel">Unlink Discord?</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        Members won't be able to message you on Discord from your profile anymore.
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Unlink</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </th:block>
 
     <th:block th:replace="~{fragments/toast :: toast}"></th:block>
 </div>

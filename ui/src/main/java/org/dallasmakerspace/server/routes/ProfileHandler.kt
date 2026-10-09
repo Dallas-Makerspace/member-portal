@@ -77,12 +77,12 @@ constructor(
     val electionsUrlDeferred = async {
       memberServiceClient.getConfigValue("voting.elections-url", session.sessionId)
     }
-    val settingsDeferred: Deferred<Map<String, String>> = async {
+    val settingsDeferred: Deferred<Map<String, String>?> = async {
       try {
         memberService.getMemberSettings(requestedUsername, session.sessionId)
       } catch (e: Exception) {
         log.warn("Failed to fetch settings for member: $requestedUsername", e)
-        emptyMap()
+        null
       }
     }
     val followingDeferred = async {
@@ -138,9 +138,6 @@ constructor(
       requestedMember.discordUsername?.let { jsonMap["discord_username"] = it }
       requestedMember.discordAvatarUrl?.let { jsonMap["discord_avatar_url"] = it }
     }
-    if (requestedMember.linkedinUsername.isNullOrEmpty().not()) {
-      jsonMap["linkedin_username"] = requestedMember.linkedinUsername as Any
-    }
     requestedMember.groups
         .firstOrNull { group -> group.name == voterRegistrationManager.getVotingMembersGroupName() }
         ?.apply { jsonMap["is_voting_member"] = "true" }
@@ -148,8 +145,12 @@ constructor(
     jsonMap["profile_photo_enabled"] = profilePhotoEnabledDeferred.await()
     jsonMap["has_uploaded_photo"] = requestedMember.profilePhotoUrl != null
     jsonMap["can_moderate_photo"] = canManageMembers && !isSelf
-    val communicationPreference = settingsDeferred.await().get("communication_preference") ?: ""
+    val settings = settingsDeferred.await()
+    val communicationPreference = settings?.get("communication_preference") ?: ""
     jsonMap["communication_preference"] = communicationPreference
+    jsonMap["social_links"] = SocialLinks.displayLinks(settings.orEmpty())
+    // No dialog without settings: it would prefill empty and clear the member's links on save.
+    if (isSelf && settings != null) jsonMap["social_link_fields"] = SocialLinks.formFields(settings)
     if (isSelfOrAdmin || communicationPreference == CommunicationPreference.EMAIL.name) {
       requestedMember.personalEmail?.apply { jsonMap["personal_email"] = this as Any }
     }
@@ -224,7 +225,7 @@ constructor(
       }
     }
 
-    setToastMessage(call, jsonMap, requestedMember, session)
+    setToastMessage(call, jsonMap, requestedMember, session, isSelf)
     call.respond(ThymeleafContent("profile", jsonMap))
   }
 
@@ -233,6 +234,7 @@ constructor(
       jsonMap: MutableMap<String, Any>,
       requestedMember: DMSMember,
       session: UserSession,
+      isSelf: Boolean,
   ) {
     if (session.isDiscourseLinkSuccess) {
       log.info("Setting toast message for ${requestedMember.username} successful discourse link")
@@ -244,13 +246,6 @@ constructor(
       call.sessions.set(session.copy(isDiscordLinkSuccess = false))
       jsonMap["toast_message"] =
           "Successfully linked Discord @${requestedMember.discordUsername} to your profile."
-      // jsonMap["toast_btn_url"] = "/unlink-discord"
-      // jsonMap["toast_btn_label"] = "Unlink"
-    } else if (session.isLinkedInLinkSuccess) {
-      log.info("Setting toast message for ${requestedMember.username} successful linkedin link")
-      call.sessions.set(session.copy(isLinkedInLinkSuccess = false))
-      jsonMap["toast_message"] =
-          "Successfully linked LinkedIn ${requestedMember.linkedinUsername} to your profile."
     } else if (session.isVoterRegistrationSuccess) {
       log.info(
           "Setting toast message for ${requestedMember.username} successful voter registration")
@@ -260,6 +255,8 @@ constructor(
       log.info("Setting toast message for ${requestedMember.username} successful settings update")
       call.sessions.set(session.copy(isSettingsUpdateSuccess = false))
       jsonMap["toast_message"] = "Contact preference updated."
+    } else if (isSelf && call.request.queryParameters["updated"] == SocialLinks.FORM_NAME) {
+      jsonMap["toast_message"] = "Social links updated."
     }
   }
 

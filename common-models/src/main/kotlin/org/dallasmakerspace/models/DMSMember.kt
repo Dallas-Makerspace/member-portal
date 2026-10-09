@@ -19,7 +19,6 @@ data class DMSMember(
     var discordUsername: String? = null,
     var discordAvatarUrl: String? = null,
     var discordWebhookId: String? = null,
-    var linkedinUsername: String? = null,
     // Set only by the service from profile.profile_photo_key; not accepted on member update DTOs,
     // so a member/AD refresh can never clobber it.
     var profilePhotoUrl: String? = null,

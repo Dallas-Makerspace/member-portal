@@ -8,7 +8,6 @@ import org.dallasmakerspace.server.attention.di.AttentionModule
 import org.dallasmakerspace.server.bambustatus.di.BambuStatusModule
 import org.dallasmakerspace.server.di.DiscordModule
 import org.dallasmakerspace.server.di.DiscourseModule
-import org.dallasmakerspace.server.di.LinkedInModule
 import org.dallasmakerspace.server.di.RoutesModule
 import org.dallasmakerspace.server.di.VoterRegistrationModule
 import org.dallasmakerspace.server.moodle.di.MoodleModule
@@ -82,9 +81,6 @@ object RouteFactory {
     DISCORD_LINK("/link-discord"),
     DISCORD_UNLINK("/unlink-discord"),
     DISCORD_CALLBACK("/discord-callback"),
-    LINKEDIN_LINK("/link-linkedin"),
-    LINKEDIN_UNLINK("/unlink-linkedin"),
-    LINKEDIN_CALLBACK("/linkedin-callback"),
     STATIC("/static"),
     GROUPS("/groups/{group_slug}"),
     GROUP_MEMBERS("/groups/{group_slug}/members"),
@@ -146,7 +142,6 @@ object RouteFactory {
             RoutesModule::class,
             DiscordModule::class,
             DiscourseModule::class,
-            LinkedInModule::class,
             VoterRegistrationModule::class,
             BambuStatusModule::class,
             MoodleModule::class,

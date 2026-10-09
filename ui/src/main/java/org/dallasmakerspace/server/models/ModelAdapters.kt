@@ -35,7 +35,6 @@ fun dmsMemberFromMap(data: Map<String, Any?>): DMSMember {
       discordUsername = data["discordUsername"] as String?,
       discordAvatarUrl = data["discordAvatarUrl"] as String?,
       discordWebhookId = data["discordWebhookId"] as String?,
-      linkedinUsername = data["linkedinUsername"] as String?,
       profilePhotoUrl = data["profilePhotoUrl"] as String?,
       memberSince = (data["memberSince"] as? String)?.let { Instant.parse(it) },
       groups = groups,
@@ -134,6 +133,5 @@ fun dmsMemberToMap(member: DMSMember): Map<String, Any?> {
       "discordUsername" to member.discordUsername,
       "discordAvatarUrl" to member.discordAvatarUrl,
       "discordWebhookId" to member.discordWebhookId,
-      "linkedinUsername" to member.linkedinUsername,
   )
 }
