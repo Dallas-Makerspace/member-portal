@@ -11,6 +11,8 @@ import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.ProfilePhotoClient
 
 private const val PROFILE_PIC_FALLBACK = "/static/images/profile-pic-not-set.svg"
+// Unversioned URLs (e.g. the navbar avatar) can't be busted on upload, so keep them short-lived.
+private const val UNVERSIONED_CACHE_CONTROL = "private, max-age=300"
 
 /**
  * Stable, cacheable avatar URL for any member: `/avatar/@{username}`. Not flag-gated - existing
@@ -36,7 +38,9 @@ constructor(
       return
     }
 
-    profilePhotoClient.streamOrRedirect(username, call) {
+    val cacheControl =
+        if (call.request.queryParameters["v"] == null) UNVERSIONED_CACHE_CONTROL else null
+    profilePhotoClient.streamOrRedirect(username, call, cacheControl) {
       val discourseAvatarUrl =
           try {
             memberService.getMember(username, session.sessionId).discourseAvatarUrl

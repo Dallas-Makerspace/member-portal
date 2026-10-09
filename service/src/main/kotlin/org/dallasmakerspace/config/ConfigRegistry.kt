@@ -163,6 +163,18 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val ACCOUNT_MENU_ENABLED =
+      ConfigKey(
+          key = "nav.account-menu.enabled",
+          description =
+              "Show the avatar account menu (profile, follows, notifications, settings, sign " +
+                  "out, attention dot) instead of the navbar's \"My Profile\" link; on by " +
+                  "default, disable as a kill switch",
+          category = "Navigation",
+          defaultValue = FeatureFlagValue(enabled = true),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -180,5 +192,6 @@ object ConfigRegistry {
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,
           FOLLOW_FEATURE_ENABLED,
           PROFILE_PHOTO_ENABLED,
+          ACCOUNT_MENU_ENABLED,
       )
 }

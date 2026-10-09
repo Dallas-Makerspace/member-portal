@@ -152,6 +152,7 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.SETTINGS_BANNER.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.ATTENTION.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.ASK_AI.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       post(RouteFactory.Paths.ASK_AI.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get("/ask-ai/stream") {
@@ -196,9 +197,6 @@ fun Application.configureRouting() {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
       get(RouteFactory.Paths.NOTIFICATIONS.path) { RouteFactory.getHandler(call)?.handleBase(call) }
-      post(RouteFactory.Paths.NOTIFICATIONS.path) {
-        RouteFactory.getHandler(call)?.handleBase(call)
-      }
     }
 
     // Short link redirect - auth is optional at the Ktor level so unauthenticated bot traffic
@@ -211,6 +209,9 @@ fun Application.configureRouting() {
     }
 
     get(RouteFactory.Paths.PING.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+
+    // Outside auth_session so an already-expired session still lands on the redirect, not login.
+    post(RouteFactory.Paths.SIGN_OUT.path) { RouteFactory.getHandler(call)?.handleBase(call) }
 
     post(RouteFactory.Paths.SMARTWAIVER_WEBHOOK.path) {
       RouteFactory.getHandler(call)?.handleBase(call)

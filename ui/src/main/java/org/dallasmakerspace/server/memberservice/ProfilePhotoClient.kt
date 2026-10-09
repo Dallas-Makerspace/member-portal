@@ -73,10 +73,14 @@ constructor(
         install(ContentNegotiation) { jackson {} }
       }
 
-  /** [fallbackUrl] is only resolved when there's no photo to stream, since it costs a lookup. */
+  /**
+   * [fallbackUrl] is only resolved when there's no photo to stream, since it costs a lookup.
+   * [cacheControl] replaces the service's Cache-Control when set.
+   */
   suspend fun streamOrRedirect(
       username: String,
       call: ApplicationCall,
+      cacheControl: String? = null,
       fallbackUrl: suspend () -> String,
   ) {
     try {
@@ -90,7 +94,7 @@ constructor(
               return@execute
             }
             val contentType = response.contentType() ?: ContentType.Image.JPEG
-            response.headers[HttpHeaders.CacheControl]?.let {
+            (cacheControl ?: response.headers[HttpHeaders.CacheControl])?.let {
               call.response.header(HttpHeaders.CacheControl, it)
             }
             val channel = response.bodyAsChannel()

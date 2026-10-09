@@ -39,7 +39,7 @@ constructor(
     // as the facepile it's linked from.
     val flagEnabled =
         currentUsername?.let {
-          memberServiceClient.isFeatureEnabled(FOLLOW_FEATURE_FLAG_KEY, it, session.sessionId)
+          memberServiceClient.isFeatureEnabled(FEATURE_FLAG_KEY, it, session.sessionId)
         } ?: false
     if (!flagEnabled) {
       call.respond(HttpStatusCode.NotFound)
@@ -64,7 +64,8 @@ constructor(
     call.respond(ThymeleafContent("follows", model))
   }
 
-  private companion object {
-    const val FOLLOW_FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
+  companion object {
+    /** Gates this page; the account menu's Follows item follows it. */
+    const val FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
   }
 }

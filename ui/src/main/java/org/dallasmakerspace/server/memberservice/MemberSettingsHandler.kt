@@ -11,12 +11,16 @@ import io.ktor.server.sessions.sessions
 import io.ktor.server.sessions.set
 import io.ktor.server.thymeleaf.ThymeleafContent
 import javax.inject.Inject
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.models.CommunicationPreference
 import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
+import org.dallasmakerspace.server.routes.NotificationPreferences
+import org.dallasmakerspace.server.routes.NotificationsInboxHandler
 
 class MemberSettingsHandler
 @Inject
@@ -24,10 +28,11 @@ constructor(
     loggerFactory: LoggerFactory,
     userInfoProvider: UserInfoProvider,
     private val memberService: MemberService,
+    private val memberServiceClient: MemberServiceClient,
+    private val notificationPreferences: NotificationPreferences,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
   private val log = loggerFactory.create(javaClass)
 
-  @Suppress("TooGenericExceptionCaught", "SwallowedException")
   override suspend fun handleAuthenticated(call: ApplicationCall) {
     val requestedUsername =
         call.parameters["preferred_username"]
@@ -41,33 +46,48 @@ constructor(
     }
 
     if (call.request.httpMethod == HttpMethod.Post) {
-      val params = call.receiveParameters()
-      val communicationPreference = params["communication_preference"]
-
-      memberService.updateMemberSettings(
-          requestedUsername, currentUsername, communicationPreference, session.sessionId)
-
-      // The profile shows the "updated" toast (see ProfileHandler.setToastMessage).
-      call.sessions.set(session.copy(isSettingsUpdateSuccess = true))
-      call.respondRedirect("/profile/@$requestedUsername", permanent = false)
+      handlePost(call, requestedUsername, currentUsername, notificationsEnabled(currentUsername))
       return
     }
 
-    val settings = memberService.getMemberSettings(requestedUsername, session.sessionId)
-    val history = memberService.getMemberSettingsHistory(requestedUsername, session.sessionId)
+    val jsonMap = loadModel(requestedUsername, currentUsername)
 
-    var discourseLinked = false
-    var discordLinked = false
-    try {
-      val member = memberService.getMember(requestedUsername, session.sessionId)
-      discourseLinked = member.discourseUsername?.isNotEmpty() == true
-      discordLinked = member.discordUserId?.isNotEmpty() == true
-    } catch (e: Exception) {
-      log.warn("Failed to fetch member for settings page: $requestedUsername", e)
+    if (session.isSettingsUpdateSuccess) {
+      log.info("Setting toast for successful settings update")
+      call.sessions.set(session.copy(isSettingsUpdateSuccess = false))
+      jsonMap["toast_message"] = "Contact preference updated."
+    }
+    if (call.request.queryParameters["updated"] == NotificationPreferences.FORM_NAME) {
+      jsonMap["toast_message"] = "Notification preferences updated."
     }
 
-    val jsonMap =
-        mutableMapOf<String, Any>(
+    call.respond(ThymeleafContent("settings", jsonMap))
+  }
+
+  /** The page's backend calls are independent, so they run concurrently. */
+  @Suppress("TooGenericExceptionCaught", "SwallowedException")
+  private suspend fun loadModel(
+      requestedUsername: String,
+      currentUsername: String?,
+  ): MutableMap<String, Any> = coroutineScope {
+    val sessionId = session.sessionId
+    val notificationsEnabled = async { notificationsEnabled(currentUsername) }
+    val settings = async { memberService.getMemberSettings(requestedUsername, sessionId) }
+    val history = async { memberService.getMemberSettingsHistory(requestedUsername, sessionId) }
+    val member = async {
+      try {
+        memberService.getMember(requestedUsername, sessionId)
+      } catch (e: Exception) {
+        log.warn("Failed to fetch member for settings page: $requestedUsername", e)
+        null
+      }
+    }
+    val notifications = async {
+      if (notificationsEnabled.await()) notificationPreferences.model(requestedUsername, sessionId)
+      else emptyMap()
+    }
+    val memberValue = member.await()
+    mutableMapOf<String, Any>(
             "preferred_username" to requestedUsername,
             "is_self" to (requestedUsername == currentUsername).toString(),
             "authz" to authz,
@@ -75,18 +95,46 @@ constructor(
                 CommunicationPreference.entries.map { pref ->
                   mapOf("value" to pref.name, "label" to pref.label)
                 },
-            "communication_preference" to (settings["communication_preference"] ?: ""),
-            "discourse_linked" to discourseLinked,
-            "discord_linked" to discordLinked,
-            "settings_history" to history,
+            "communication_preference" to
+                (settings.await()["communication_preference"] ?: ""),
+            "discourse_linked" to (memberValue?.discourseUsername?.isNotEmpty() == true),
+            "discord_linked" to (memberValue?.discordUserId?.isNotEmpty() == true),
+            "settings_history" to history.await(),
+            "notification_preferences_enabled" to notificationsEnabled.await(),
         )
+        .apply { putAll(notifications.await()) }
+  }
 
-    if (session.isSettingsUpdateSuccess) {
-      log.info("Setting toast for successful settings update")
-      call.sessions.set(session.copy(isSettingsUpdateSuccess = false))
-      jsonMap["toast_message"] = "Contact preference updated."
+  private suspend fun notificationsEnabled(currentUsername: String?): Boolean =
+      currentUsername?.let {
+        memberServiceClient.isFeatureEnabled(
+            NotificationsInboxHandler.FEATURE_FLAG_KEY, it, session.sessionId)
+      } ?: false
+
+  private suspend fun handlePost(
+      call: ApplicationCall,
+      requestedUsername: String,
+      currentUsername: String?,
+      notificationsEnabled: Boolean,
+  ) {
+    val params = call.receiveParameters()
+    if (params["form"] == NotificationPreferences.FORM_NAME) {
+      if (notificationsEnabled) {
+        notificationPreferences.save(requestedUsername, session.sessionId, params)
+        call.respondRedirect(
+            "/profile/@$requestedUsername/settings?updated=${NotificationPreferences.FORM_NAME}",
+            permanent = false)
+      } else {
+        call.respond(HttpStatusCode.NotFound)
+      }
+      return
     }
 
-    call.respond(ThymeleafContent("settings", jsonMap))
+    memberService.updateMemberSettings(
+        requestedUsername, currentUsername, params["communication_preference"], session.sessionId)
+
+    // The profile shows the "updated" toast (see ProfileHandler.setToastMessage).
+    call.sessions.set(session.copy(isSettingsUpdateSuccess = true))
+    call.respondRedirect("/profile/@$requestedUsername", permanent = false)
   }
 }

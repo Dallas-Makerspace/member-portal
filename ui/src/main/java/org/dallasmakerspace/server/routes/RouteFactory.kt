@@ -4,6 +4,7 @@ import dagger.Component
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import javax.inject.Singleton
+import org.dallasmakerspace.server.attention.di.AttentionModule
 import org.dallasmakerspace.server.bambustatus.di.BambuStatusModule
 import org.dallasmakerspace.server.di.DiscordModule
 import org.dallasmakerspace.server.di.DiscourseModule
@@ -117,6 +118,8 @@ object RouteFactory {
     SUGGESTED_COURSES("/api/suggested-courses"),
     COMMITTEE_COURSES("/api/committee-courses"),
     SETTINGS_BANNER("/api/settings-banner"),
+    ATTENTION("/api/attention"),
+    SIGN_OUT("/sign-out"),
     ASK_AI("/ask-ai"),
     MANIFEST("/manifest.json"),
     OFFLINE("/offline"),
@@ -146,7 +149,8 @@ object RouteFactory {
             LinkedInModule::class,
             VoterRegistrationModule::class,
             BambuStatusModule::class,
-            MoodleModule::class])
+            MoodleModule::class,
+            AttentionModule::class])
 interface RoutesComponent {
   fun getRoutesMap(): Map<String, IRouteHandler>
 }

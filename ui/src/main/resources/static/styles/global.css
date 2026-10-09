@@ -41,6 +41,130 @@ div.error-details > p { color: #c1c1c1; }
     border-top-color: white;
 }
 
+/* Account menu (avatar dropdown) */
+/* Scoped under .account-menu to beat Bootstrap's .btn, which loads later. */
+.account-menu .account-menu-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px;
+    line-height: 1;
+    --bs-btn-color: white;
+    --bs-btn-hover-color: white;
+    --bs-btn-active-color: white;
+    --bs-btn-hover-bg: rgba(255, 255, 255, 0.15);
+    --bs-btn-active-bg: rgba(255, 255, 255, 0.15);
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-border-color: transparent;
+}
+.account-menu .account-menu-toggle:focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
+}
+.account-avatar-wrap {
+    position: relative;
+    display: inline-flex;
+}
+.account-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    /* Shows until the photo loads. */
+    background: white url("/static/images/profile-pic-not-set.svg") center / cover no-repeat;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+}
+.account-avatar-lg {
+    width: 40px;
+    height: 40px;
+    border-color: #dee2e6;
+}
+.attention-dot {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #dc3545;
+    border: 2px solid #0b9cc9;
+}
+.account-dropdown {
+    min-width: 16rem;
+}
+.account-dropdown .dropdown-item {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+.account-dropdown .dropdown-item[aria-current="page"] {
+    font-weight: 600;
+}
+.account-dropdown .account-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.account-identity-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+.account-display-name {
+    font-weight: 600;
+}
+.account-username {
+    font-size: 0.85em;
+    color: #6c757d;
+}
+.account-dropdown .has-attention {
+    position: relative;
+    padding-right: 2rem;
+}
+.account-dropdown .has-attention::after {
+    content: "";
+    position: absolute;
+    top: 0.95rem;
+    right: 1rem;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #dc3545;
+}
+.attention-note {
+    display: block;
+    font-size: 0.8em;
+    color: #b02a37;
+}
+/* Mobile: keep brand, search, avatar and hamburger on one row; brand truncates instead of wrapping. */
+@media (max-width: 991.98px) {
+    .custom-navbar .navbar-brand {
+        flex: 1 1 0;
+        min-width: 0;
+        margin-right: 0.5rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    /* Cancels the search icon's me-2 and adds it before the hamburger, evening out the gaps. */
+    .custom-navbar .account-menu {
+        margin-left: -0.5rem;
+        margin-right: 0.5rem;
+    }
+    .account-menu .account-menu-toggle {
+        justify-content: center;
+    }
+    .account-menu .account-menu-toggle::after {
+        display: none;
+    }
+    .custom-navbar .navbar-toggler {
+        padding: 0.25rem 0.5rem;
+    }
+}
+
 /* Navbar Search - Desktop */
 .navbar-search {
     max-width: 400px;

@@ -35,6 +35,7 @@ import org.dallasmakerspace.server.routes.IndexHandler
 import org.dallasmakerspace.server.routes.InterlockToolsHandler
 import org.dallasmakerspace.server.routes.LoginHandler
 import org.dallasmakerspace.server.routes.ManifestHandler
+import org.dallasmakerspace.server.routes.NotificationPreferences
 import org.dallasmakerspace.server.routes.NotificationsInboxHandler
 import org.dallasmakerspace.server.routes.OfflineHandler
 import org.dallasmakerspace.server.routes.OidcCallbackHandler
@@ -56,6 +57,7 @@ import org.dallasmakerspace.server.routes.ShortLinkDetailsHandler
 import org.dallasmakerspace.server.routes.ShortLinkRedirectHandler
 import org.dallasmakerspace.server.routes.ShortLinksAdminHandler
 import org.dallasmakerspace.server.routes.ShortLinksHandler
+import org.dallasmakerspace.server.routes.SignOutHandler
 import org.dallasmakerspace.server.routes.SmartWaiverWebhookHandler
 import org.dallasmakerspace.server.routes.DiscourseWebhookHandler
 import org.dallasmakerspace.server.routes.SparkPostWebhookHandler
@@ -95,6 +97,11 @@ class RoutesModule {
   ): IRouteHandler = IndexHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
   @IntoMap @Provides @StringKey("/login") fun providesLoginHandler(): IRouteHandler = LoginHandler()
+
+  @IntoMap
+  @Provides
+  @StringKey("/sign-out")
+  fun providesSignOutHandler(appConfig: AppConfig): IRouteHandler = SignOutHandler(appConfig)
 
   @IntoMap
   @Provides
@@ -249,7 +256,11 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
-  ): IRouteHandler = MemberSettingsHandler(loggerFactory, userInfoProvider, memberService)
+      memberServiceClient: MemberServiceClient,
+      notificationPreferences: NotificationPreferences,
+  ): IRouteHandler =
+      MemberSettingsHandler(
+          loggerFactory, userInfoProvider, memberService, memberServiceClient, notificationPreferences)
 
   @IntoMap
   @Provides

@@ -20,6 +20,54 @@
                 </svg>
             </button>
 
+            <!-- Account menu: kept outside the hamburger so it stays reachable on mobile -->
+            <div class="dropdown account-menu order-lg-last" th:if="${accountMenuEnabled}">
+                <button class="btn account-menu-toggle dropdown-toggle" type="button" id="accountMenuToggle"
+                        data-bs-toggle="dropdown" aria-expanded="false" aria-controls="accountMenu"
+                        th:attr="aria-label='Account menu for ' + ${current_display_name},
+                                 data-base-label='Account menu for ' + ${current_display_name}">
+                    <span class="account-avatar-wrap">
+                        <img class="account-avatar" th:src="'/avatar/@' + ${current_username}" alt=""
+                             width="32" height="32">
+                        <span class="attention-dot d-none" data-attention-dot></span>
+                    </span>
+                    <span class="account-first-name d-none d-lg-inline" th:text="${current_first_name}"></span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end account-dropdown" id="accountMenu">
+                    <li>
+                        <a class="dropdown-item account-identity" th:href="'/profile/@' + ${current_username}">
+                            <img class="account-avatar account-avatar-lg" th:src="'/avatar/@' + ${current_username}"
+                                 alt="" width="40" height="40">
+                            <span class="account-identity-text">
+                                <span class="account-display-name" th:text="${current_display_name}"></span>
+                                <span class="account-username" th:text="'@' + ${current_username}"></span>
+                            </span>
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li class="d-none" data-attention-anchor></li>
+                    <li><a class="dropdown-item" th:href="'/profile/@' + ${current_username}">Profile</a></li>
+                    <li th:if="${followsMenuEnabled}">
+                        <a class="dropdown-item" th:href="'/profile/@' + ${current_username} + '/follows'"
+                           data-attention-key="follows">Follows</a>
+                    </li>
+                    <li th:if="${notificationsMenuEnabled}">
+                        <a class="dropdown-item" th:href="'/profile/@' + ${current_username} + '/notifications'"
+                           data-attention-key="notifications">Notifications</a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" th:href="'/profile/@' + ${current_username} + '/settings'"
+                           data-attention-key="settings">Settings</a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <form method="post" action="/sign-out" class="m-0">
+                            <button type="submit" class="dropdown-item">Sign out</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -165,7 +213,7 @@
                     <dms-search max-results="7"></dms-search>
                 </div>
 
-                <ul class="navbar-nav">
+                <ul class="navbar-nav" th:unless="${accountMenuEnabled}">
                     <li class="nav-item dropdown">
                         <a class="nav-link" href="/profile-me" role="button">
                             My Profile
@@ -185,6 +233,8 @@
 
     <!-- Search component script -->
     <script type="module" src="/static/js/dms-search-v6.js"></script>
+    <!-- Attention dot for the account menu -->
+    <script th:if="${accountMenuEnabled}" src="/static/js/dms-attention.js" defer></script>
     <!-- Action tracking script -->
     <script src="/static/js/action-tracker.js" defer></script>
     <!-- Communication preference banner -->

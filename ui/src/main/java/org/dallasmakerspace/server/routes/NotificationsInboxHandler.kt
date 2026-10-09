@@ -1,12 +1,8 @@
 package org.dallasmakerspace.server.routes
 
-import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.request.httpMethod
-import io.ktor.server.request.receiveParameters
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondRedirect
 import io.ktor.server.thymeleaf.ThymeleafContent
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -19,13 +15,11 @@ import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
-import org.dallasmakerspace.server.memberservice.NotificationPreferenceUpdate
 import org.dallasmakerspace.server.plugins.AuthException
 
 /**
- * Member notification inbox and preference management page
- * (/profile/@{preferred_username}/notifications). Email-only: SMS/Discord/Discourse exist as
- * Channel values on the backend but have no notifier wired up, so this page doesn't show them.
+ * Member notification inbox (/profile/@{preferred_username}/notifications). Preferences live on
+ * the settings page (see [NotificationPreferences]).
  */
 class NotificationsInboxHandler
 @Inject
@@ -34,7 +28,6 @@ constructor(
     userInfoProvider: UserInfoProvider,
     private val memberServiceClient: MemberServiceClient,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
-  private val log = loggerFactory.create(javaClass)
 
   override suspend fun handleAuthenticated(call: ApplicationCall) {
     val requestedUsername =
@@ -56,49 +49,18 @@ constructor(
     // off-pilot, since EVENT_ANNOUNCEMENT from follows is the only live producer right now.
     val flagEnabled =
         currentUsername?.let {
-          memberServiceClient.isFeatureEnabled(FOLLOW_FEATURE_FLAG_KEY, it, session.sessionId)
+          memberServiceClient.isFeatureEnabled(FEATURE_FLAG_KEY, it, session.sessionId)
         } ?: false
     if (!flagEnabled) {
       call.respond(HttpStatusCode.NotFound)
       return
     }
 
-    if (call.request.httpMethod == HttpMethod.Post) {
-      updatePreferences(call, requestedUsername)
-    } else {
-      showInbox(call, requestedUsername)
+    // Viewing your own inbox clears the unread dot; an admin viewing someone else's must not.
+    if (requestedUsername == currentUsername) {
+      memberServiceClient.markAllNotificationsRead(requestedUsername, session.sessionId)
     }
-  }
-
-  /**
-   * One form, one Save button, covering every topic row at once. Fields are keyed per topic
-   * (`enabled_$topic` / `aggregation_$topic`) since HTML forms are flat - there's no per-row
-   * grouping to rely on. Saves each topic with its own PUT to the service (no bulk-update
-   * endpoint exists); a partial failure partway through is an accepted risk for a low-stakes,
-   * three-row preferences table.
-   */
-  private suspend fun updatePreferences(call: ApplicationCall, username: String) {
-    val params = call.receiveParameters()
-    // Save exactly the topics the template rendered a row for, read back from the form itself
-    // (every visible row carries a hidden `aggregation_$topic` field - see notifications.html)
-    // rather than from a fixed topic list here: a WIP topic's missing `enabled_$topic` would
-    // otherwise read as "unchecked" and silently PUT enabled=false for a control the member never
-    // saw.
-    params.names()
-        .filter { it.startsWith(AGGREGATION_FIELD_PREFIX) }
-        .map { it.removePrefix(AGGREGATION_FIELD_PREFIX) }
-        .forEach { topic ->
-          val enabled = params["enabled_$topic"] == "true"
-          // The delivery <select> (or a hidden field when the channel can't batch digests) always
-          // carries a value, so saving never clears an override the member didn't touch.
-          val aggregation =
-              params["aggregation_$topic"]?.takeIf { it in AGGREGATION_DISPLAY_NAMES.keys }
-          memberServiceClient.updateNotificationPreference(
-              username,
-              session.sessionId,
-              NotificationPreferenceUpdate(topic, EMAIL_CHANNEL, enabled, aggregation))
-        }
-    call.respondRedirect(notificationsPathFor(username) + "?updated=true", permanent = false)
+    showInbox(call, requestedUsername)
   }
 
   private suspend fun showInbox(call: ApplicationCall, username: String) = coroutineScope {
@@ -106,42 +68,24 @@ constructor(
     val notificationsDeferred = async {
       memberServiceClient.getNotifications(username, INBOX_LIMIT, session.sessionId)
     }
-    val preferencesDeferred = async {
-      memberServiceClient.getNotificationPreferences(username, session.sessionId)
-    }
     val statusDeferred = async {
       memberServiceClient.getNotificationDeliveryStatus(username, session.sessionId)
     }
-    val rawNotifications = notificationsDeferred.await()
-    val notifications = groupDigests(rawNotifications.map { enrichNotification(it, showErrors) })
-    val preferenceTopics = groupPreferences(preferencesDeferred.await())
-    val status = statusDeferred.await()
+    val notifications =
+        groupDigests(notificationsDeferred.await().map { enrichNotification(it, showErrors) })
     val model =
-        mutableMapOf<String, Any>(
+        mapOf<String, Any>(
             "preferred_username" to username,
             "notifications" to notifications,
-            "preference_topics" to preferenceTopics,
-            "suggest_daily_digest" to
-                shouldSuggestDailyDigest(rawNotifications, preferenceTopics, LocalDateTime.now(UTC_ZONE)),
-            "suggestion_threshold" to DIGEST_SUGGESTION_EMAILS,
-            "aggregation_options" to AGGREGATION_DISPLAY_NAMES.entries.toList(),
-            "suppressed" to (status["suppressed"] == true),
-            "digest_schedule" to (status["digestSchedule"] as? String ?: ""),
+            "suppressed" to (statusDeferred.await()["suppressed"] == true),
         )
-    if (call.request.queryParameters["updated"] == "true") {
-      log.info("Showing toast for successful preference update")
-      model["toast_message"] = "Notification preference updated."
-    }
     call.respond(ThymeleafContent("notifications", model))
   }
 
-  private fun notificationsPathFor(username: String) =
-      RouteFactory.Paths.NOTIFICATIONS.path.replace("{preferred_username}", username)
-
-  private companion object {
-    const val INBOX_LIMIT = 50
-    const val FOLLOW_FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
-    const val AGGREGATION_FIELD_PREFIX = "aggregation_"
+  companion object {
+    /** Gates this page and the settings page's preferences card. */
+    const val FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
+    private const val INBOX_LIMIT = 50
   }
 }
 

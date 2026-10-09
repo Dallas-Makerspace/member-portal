@@ -26,6 +26,8 @@ abstract class AuthenticatedHandler(
 ) : IRouteHandler {
   companion object {
     val IS_INFRA_USER_KEY = AttributeKey<Boolean>("isInfraUser")
+    val DISPLAY_NAME_KEY = AttributeKey<String>("displayName")
+    val FIRST_NAME_KEY = AttributeKey<String>("firstName")
   }
 
   protected lateinit var session: UserSession
@@ -61,6 +63,7 @@ abstract class AuthenticatedHandler(
 
     val isInfraUser = authz.can(Permission.MANAGE_CONFIG.name)
     call.attributes.put(IS_INFRA_USER_KEY, isInfraUser)
+    putNameAttributes(call)
     val authzMs = ms()
 
     log.info(
@@ -69,6 +72,16 @@ abstract class AuthenticatedHandler(
             "authz=${authzMs - userInfoMs}ms, total-before-handler=${authzMs}ms")
 
     handleAuthenticated(call)
+  }
+
+  private fun putNameAttributes(call: ApplicationCall) {
+    val username = userInfo["preferred_username"] as? String ?: return
+    val displayName = (userInfo["name"] as? String)?.takeIf { it.isNotBlank() } ?: username
+    val firstName =
+        (userInfo["given_name"] as? String)?.takeIf { it.isNotBlank() }
+            ?: displayName.substringBefore(' ')
+    call.attributes.put(DISPLAY_NAME_KEY, displayName)
+    call.attributes.put(FIRST_NAME_KEY, firstName)
   }
 
   /** Responds with 403 Forbidden if the authenticated user lacks the given permission. */

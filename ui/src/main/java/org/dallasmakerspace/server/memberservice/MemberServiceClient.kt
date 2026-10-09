@@ -1179,6 +1179,29 @@ constructor(
     }
   }
 
+  /** Delivered notifications [username] hasn't seen in the inbox; 0 if unavailable. */
+  suspend fun getUnreadNotificationCount(username: String, sessionId: String?): Int {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result = dmsHttpClient.get("$baseUrl/notifications/unread-count/$username", apiHeaders)
+      ((result["data"] as? Map<*, *>)?.get("count") as? Number)?.toInt() ?: 0
+    } catch (ex: Exception) {
+      log.warn("Failed to get unread notification count for: $username", ex)
+      0
+    }
+  }
+
+  suspend fun markAllNotificationsRead(username: String, sessionId: String?) {
+    try {
+      dmsHttpClient.post(
+          "$baseUrl/notifications/mark-read/$username",
+          getApiHeaders(sessionId),
+          emptyMap<String, Any>())
+    } catch (ex: Exception) {
+      log.warn("Failed to mark notifications read for: $username", ex)
+    }
+  }
+
   suspend fun updateNotificationPreference(
       username: String,
       sessionId: String?,
