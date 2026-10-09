@@ -1,7 +1,6 @@
 -- Schema changes for the profile-photo feature. create.sql (the reference DDL dump) has already
 -- been updated to match; these are the actual ALTERs to run by hand against the prod `profile`
--- table, in order. Unlike `linkedin_username` (added to the Kotlin mapping but never to prod),
--- write these down and run them - don't let the schema drift.
+-- table, in order. Write these down and run them - don't let the schema drift.
 
 -- Step 2: add the uploaded-photo columns.
 ALTER TABLE `profile`
