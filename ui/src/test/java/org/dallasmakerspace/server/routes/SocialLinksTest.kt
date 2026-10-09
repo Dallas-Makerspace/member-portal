@@ -1,8 +1,10 @@
 package org.dallasmakerspace.server.routes
 
 import io.ktor.http.parametersOf
+import java.net.URI
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -34,6 +36,16 @@ class SocialLinksTest {
         fields.map { it["key"] })
     assertEquals("https://www.youtube.com/@jdoe", fields[1]["value"])
     assertEquals("", fields[0]["value"])
+  }
+
+  @Test
+  fun formFieldsHaveHintsAndOfficialHelpLinks() {
+    val fields = SocialLinks.formFields(emptyMap())
+
+    assertTrue(fields.all { it.getValue("hint").isNotBlank() })
+    assertEquals(
+        listOf("www.linkedin.com", "support.google.com", "www.facebook.com", null),
+        fields.map { field -> field.getValue("help_url").ifEmpty { null }?.let { URI(it).host } })
   }
 
   @Test

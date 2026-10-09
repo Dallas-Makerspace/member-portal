@@ -29,6 +29,8 @@ object SocialLinks {
             "example" to network.example,
             "pattern" to network.inputPattern,
             "value" to (storedValue(network, settings)?.let { network.profileUrl(it) } ?: ""),
+            "hint" to hint(network),
+            "help_url" to helpUrl(network).orEmpty(),
         )
       }
 
@@ -51,4 +53,27 @@ object SocialLinks {
       settings[network.settingKey]?.takeIf { network.isValidValue(it) }
 
   private fun icon(network: SocialNetwork) = "/static/images/${network.name.lowercase()}.svg"
+
+  private fun hint(network: SocialNetwork) =
+      when (network) {
+        SocialNetwork.LINKEDIN ->
+            "Open your profile on LinkedIn. Your link is under “Public profile & URL”, or under " +
+                "“Contact info” in the app."
+        SocialNetwork.YOUTUBE ->
+            "Open your channel on youtube.com and copy the address from your browser. It starts " +
+                "with youtube.com/@."
+        SocialNetwork.FACEBOOK ->
+            "Open your profile on facebook.com and copy the address from your browser."
+        SocialNetwork.INSTAGRAM ->
+            "Open your profile on instagram.com and copy the address from your browser. In the " +
+                "app, tap “Share profile”, then “Copy link”."
+      }
+
+  private fun helpUrl(network: SocialNetwork) =
+      when (network) {
+        SocialNetwork.LINKEDIN -> "https://www.linkedin.com/help/linkedin/answer/a522735"
+        SocialNetwork.YOUTUBE -> "https://support.google.com/youtube/answer/6180214"
+        SocialNetwork.FACEBOOK -> "https://www.facebook.com/help/162586890471598"
+        SocialNetwork.INSTAGRAM -> null
+      }
 }

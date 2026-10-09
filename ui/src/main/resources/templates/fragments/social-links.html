@@ -32,9 +32,14 @@
                                maxlength="500" autocomplete="off" autocapitalize="off" spellcheck="false"
                                th:id="${field['key']}" th:name="${field['key']}" th:value="${field['value']}"
                                th:placeholder="${field['example']}" th:data-pattern="${field['pattern']}"
-                               th:attr="aria-describedby=${field['key'] + '-error'}">
+                               th:attr="aria-describedby=${field['key'] + '-error ' + field['key'] + '-hint'}">
                         <div class="invalid-feedback" th:id="${field['key'] + '-error'}"
                              th:text="|This doesn’t look like a link to a ${field['name']} profile. It should look like ${field['example']}|"></div>
+                        <div class="form-text" th:id="${field['key'] + '-hint'}">
+                            <span th:text="${field['hint']}"></span>
+                            <a th:if="${field['help_url'] != ''}" th:href="${field['help_url']}"
+                               target="_blank" rel="noopener noreferrer">Learn how</a>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer justify-content-between">
@@ -62,8 +67,10 @@
             }
 
             function showValidity(input) {
+                const value = input.value.trim();
                 const invalid = !isValid(input);
                 input.classList.toggle('is-invalid', invalid);
+                input.classList.toggle('is-valid', !invalid && value !== '' && value !== input.defaultValue);
                 input.setAttribute('aria-invalid', String(invalid));
             }
 
@@ -73,9 +80,8 @@
             }
 
             inputs.forEach(input => {
-                input.addEventListener('blur', () => showValidity(input));
                 input.addEventListener('input', () => {
-                    if (input.classList.contains('is-invalid')) showValidity(input);
+                    showValidity(input);
                     updateSave();
                 });
             });
@@ -93,7 +99,7 @@
             modal.addEventListener('hidden.bs.modal', () => {
                 form.reset();
                 inputs.forEach(input => {
-                    input.classList.remove('is-invalid');
+                    input.classList.remove('is-invalid', 'is-valid');
                     input.removeAttribute('aria-invalid');
                 });
                 updateSave();
