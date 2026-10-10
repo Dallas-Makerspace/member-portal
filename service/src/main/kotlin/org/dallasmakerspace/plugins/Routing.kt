@@ -51,6 +51,7 @@ import org.dallasmakerspace.members.GroupSettingsService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.suspendTransaction
+import org.dallasmakerspace.members.routing.groupSelfMembershipRoutes
 import org.dallasmakerspace.members.routing.profilePhotoRoutes
 import org.dallasmakerspace.models.AskAiFeedbackRequest
 import org.dallasmakerspace.models.AskAiRequest
@@ -631,9 +632,7 @@ fun Application.configureRouting() {
 
         /**
          * Group settings — gated by [ConfigRegistry.GROUP_SETTINGS_ENABLED], not by
-         * GROUP_MEMBER_MANAGEMENT_ENABLED. That flag controls whether self-service add/remove is
-         * exposed to end members; group settings is a separate, still-in-progress admin feature
-         * with its own rollout switch.
+         * GROUP_MEMBER_MANAGEMENT_ENABLED (which gates admin add/remove above).
          */
         patch<Groups.DMSGroup.Settings> { request ->
           val groupslug = request.parent.groupslug
@@ -1173,6 +1172,9 @@ fun Application.configureRouting() {
     /** Upload/remove/serve a member's profile photo * */
     val profilePhotoService by lazy { AppComponentHolder.instance.getProfilePhotoService() }
     profilePhotoRoutes(profilePhotoService, featureFlagService, memberService)
+
+    /** Member self-service join/leave, gated per group by allow_self_add_remove * */
+    groupSelfMembershipRoutes(groupSettingsService, memberService)
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */
     featureFlagRoutes(featureFlagService)

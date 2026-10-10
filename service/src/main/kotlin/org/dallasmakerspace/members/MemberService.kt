@@ -991,6 +991,16 @@ constructor(
     }
   }
 
+  /** Direct (memberOf) membership only; throws if AD can't be reached. */
+  suspend fun isDirectMemberOfGroup(username: String, groupslug: String): Boolean {
+    val groupName = Groups.getNameFromSlug(groupslug)
+    return withContext(Dispatchers.IO) {
+      activeDirectoryService.getMemberByUsername(username).groups.any {
+        it.cn.equals(groupName, ignoreCase = true)
+      }
+    }
+  }
+
   private fun isUserInGroup(username: String, groupCn: String): Boolean {
     return try {
       activeDirectoryService.getMemberByUsername(username).groups.any { it.cn == groupCn }

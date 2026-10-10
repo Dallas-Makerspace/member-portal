@@ -34,6 +34,10 @@ constructor(
     }
   }
 
+  /** Returns a boolean setting's current value, or false if it's unset for the group. */
+  suspend fun isEnabled(groupName: String, key: GroupSettingsKey<Boolean>): Boolean =
+      getSettings(groupName)[key.key]?.let(key.deserialize) ?: false
+
   /**
    * Returns the full append-only change history for a group as a list of maps, newest first. Each
    * entry contains setting_key, setting_value (null if cleared), updated_by (actor username) and

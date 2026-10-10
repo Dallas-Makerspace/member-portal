@@ -73,6 +73,22 @@ class GroupSettingsServiceTest {
   }
 
   @Test
+  fun `isEnabled returns stored boolean value`() = runBlocking {
+    whenever(mockRepository.getGroupId("group1")).thenReturn(1)
+    whenever(mockRepository.getLatest(1)).thenReturn(mapOf("allow_self_add_remove" to "true"))
+
+    assertEquals(true, service.isEnabled("group1", GroupSettingsRegistry.ALLOW_SELF_ADD_REMOVE))
+    assertEquals(false, service.isEnabled("group1", GroupSettingsRegistry.ALLOW_FOLLOW))
+  }
+
+  @Test
+  fun `isEnabled returns false when group not found`() = runBlocking {
+    whenever(mockRepository.getGroupId("ghost")).thenReturn(null)
+
+    assertEquals(false, service.isEnabled("ghost", GroupSettingsRegistry.ALLOW_SELF_ADD_REMOVE))
+  }
+
+  @Test
   fun `updateSettings appends valid value with actor`() = runBlocking {
     whenever(mockRepository.getOrCreateGroupId(eq("group1"), anyOrNull())).thenReturn(1)
     whenever(mockRepository.getProfileId("admin")).thenReturn(2)

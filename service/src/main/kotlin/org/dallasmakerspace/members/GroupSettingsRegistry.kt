@@ -3,9 +3,8 @@ package org.dallasmakerspace.members
 /**
  * Registry of all known group settings. Adding a new setting here makes it available via the API.
  *
- * This is a framework-only feature today: the settings below are stored, audited, and editable by
- * `MANAGE_GROUPS` holders, but nothing in the codebase yet checks their values. Each description
- * notes the not-yet-built feature it is intended to gate.
+ * Settings are stored, audited, and editable by `MANAGE_GROUPS` holders. Each description notes
+ * where (if anywhere) the setting is enforced.
  */
 object GroupSettingsRegistry {
 
@@ -13,10 +12,8 @@ object GroupSettingsRegistry {
       GroupSettingsKey<Boolean>(
           key = "allow_self_add_remove",
           description =
-              "Whether members may add/remove themselves from this group without admin action. " +
-                  "NOT YET ENFORCED — framework only. Enforcement will plug into a future " +
-                  "self-service join/leave flow (not yet built) by checking this flag before " +
-                  "allowing a member-initiated add/remove.",
+              "Whether members may join/leave this group themselves without admin action. " +
+                  "Enforced by the /groups/{slug}/self routes (GroupSelfMembershipRoutes).",
           deserialize = { it.toBooleanStrict() },
           validate = { raw -> raw == "true" || raw == "false" },
       )
