@@ -6,7 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import org.dallasmakerspace.activedirectory.IActiveDirectoryClient
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.db.master.GenericRepository
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.models.DataField

@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.toJavaLocalDateTime
 import org.dallasmakerspace.activedirectory.ActiveDirectoryService
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.GroupDAO
 import org.dallasmakerspace.members.db.GroupHistoryColumnAliases
 import org.dallasmakerspace.members.db.GroupHistoryDAO
@@ -14,7 +15,6 @@ import org.dallasmakerspace.members.db.GroupHistoryTable
 import org.dallasmakerspace.members.db.GroupsTable
 import org.dallasmakerspace.members.db.ProfileTable
 import org.dallasmakerspace.members.db.daoToGroupHistoryModel
-import org.dallasmakerspace.members.db.suspendTransaction
 import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.models.GroupHistory
 import org.jetbrains.exposed.sql.JoinType

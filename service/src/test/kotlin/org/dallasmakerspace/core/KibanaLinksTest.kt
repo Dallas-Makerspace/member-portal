@@ -1,9 +1,8 @@
-package org.dallasmakerspace.dataviz
+package org.dallasmakerspace.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import org.dallasmakerspace.core.AppConfig
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 

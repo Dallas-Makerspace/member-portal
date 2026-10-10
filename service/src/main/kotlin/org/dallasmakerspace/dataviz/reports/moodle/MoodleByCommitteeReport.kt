@@ -2,7 +2,7 @@ package org.dallasmakerspace.dataviz.reports.moodle
 
 import javax.inject.Inject
 import kotlinx.serialization.json.JsonPrimitive
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType

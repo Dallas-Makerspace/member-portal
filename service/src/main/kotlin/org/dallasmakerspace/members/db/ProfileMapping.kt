@@ -1,17 +1,13 @@
 package org.dallasmakerspace.members.db
 
 import java.time.LocalDateTime
-import kotlinx.coroutines.Dispatchers
-import org.dallasmakerspace.core.DBMemberPortalConnection
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.EntityClass
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.alias
 import org.jetbrains.exposed.sql.javatime.datetime
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 
 /** Exposed table for the mariaDB table - profile. */
 @Suppress("MagicNumber")
@@ -56,6 +52,3 @@ class ProfileDAO(username: EntityID<String>) : Entity<String>(username) {
   var profilePhotoUpdatedAt by ProfileTable.profilePhotoUpdatedAt
   var attributes by ProfileTable.attributes
 }
-
-suspend fun <T> suspendTransaction(block: Transaction.() -> T): T =
-    newSuspendedTransaction(Dispatchers.IO, statement = block, db = DBMemberPortalConnection.db)

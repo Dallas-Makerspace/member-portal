@@ -5,8 +5,8 @@ import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.ProfileResolver
-import org.dallasmakerspace.members.db.suspendTransaction
 import org.dallasmakerspace.notifications.Aggregation
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.Notification

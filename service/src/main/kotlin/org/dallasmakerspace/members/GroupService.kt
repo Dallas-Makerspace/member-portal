@@ -5,9 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.ActiveDirectoryService
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.core.api.Groups
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
-import org.dallasmakerspace.routing.Groups
 
 class GroupService
 @Inject

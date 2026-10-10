@@ -4,13 +4,13 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.GroupDAO
 import org.dallasmakerspace.members.db.GroupSettingsDAO
 import org.dallasmakerspace.members.db.GroupSettingsTable
 import org.dallasmakerspace.members.db.GroupsTable
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.ProfileTable
-import org.dallasmakerspace.members.db.suspendTransaction
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.SortOrder
 

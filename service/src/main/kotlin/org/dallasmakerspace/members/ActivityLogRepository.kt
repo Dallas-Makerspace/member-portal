@@ -1,13 +1,13 @@
 package org.dallasmakerspace.members
 
 import javax.inject.Inject
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.ActivityLogDAO
 import org.dallasmakerspace.members.db.ActivityLogTable
 import org.dallasmakerspace.members.db.ProfileColumnAliases.actorProfileAlias
 import org.dallasmakerspace.members.db.ProfileColumnAliases.subjectProfileAlias
 import org.dallasmakerspace.members.db.ProfileTable
 import org.dallasmakerspace.members.db.daoToActivityLogModel
-import org.dallasmakerspace.members.db.suspendTransaction
 import org.dallasmakerspace.models.ActivityLog
 import org.dallasmakerspace.models.ActivityLogEvent
 import org.dallasmakerspace.models.ActivityLogSource

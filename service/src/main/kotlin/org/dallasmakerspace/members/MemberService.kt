@@ -17,6 +17,7 @@ import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.activedirectory.isGroupDN
 import org.dallasmakerspace.activedirectory.parseCNFromDN
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.core.api.Groups
 import org.dallasmakerspace.db.master.IMakerManagerDataService
 import org.dallasmakerspace.db.master.IWhmcsDataService
 import org.dallasmakerspace.discourse.DiscourseAvatarService
@@ -25,7 +26,6 @@ import org.dallasmakerspace.doorcontroller.DoorEventsRepository
 import org.dallasmakerspace.models.ActivityLogEvent
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
-import org.dallasmakerspace.routing.Groups
 import org.dallasmakerspace.voterregistration.VoterRegistrationManager
 
 @Suppress("LongParameterList")

@@ -3,8 +3,8 @@ package org.dallasmakerspace.remoteaccess.routing
 import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.remoteaccess.RemoteAccessService
 
 fun Route.remoteAccessRoutes(remoteAccessService: RemoteAccessService) {

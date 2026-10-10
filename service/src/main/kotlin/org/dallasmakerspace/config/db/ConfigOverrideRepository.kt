@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import javax.inject.Inject
 import org.dallasmakerspace.core.LoggerFactory
-import org.dallasmakerspace.members.db.suspendTransaction
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.jetbrains.exposed.sql.SortOrder
 
 class ConfigOverrideRepository @Inject constructor(loggerFactory: LoggerFactory) :

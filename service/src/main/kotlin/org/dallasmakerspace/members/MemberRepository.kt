@@ -5,11 +5,11 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import javax.inject.Inject
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.ProfileTable
-import org.dallasmakerspace.members.db.suspendTransaction
+import org.dallasmakerspace.members.db.daoToProfileModel
 import org.dallasmakerspace.models.DMSMember
-import org.dallasmakerspace.models.daoToProfileModel
 import org.jetbrains.exposed.sql.and
 
 /**

@@ -30,6 +30,10 @@ import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.routing.configRoutes
 import org.dallasmakerspace.config.routing.featureFlagRoutes
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Groups
+import org.dallasmakerspace.core.api.Status
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.cron.AdReplicationHealthCronJob
 import org.dallasmakerspace.cron.AdReplicationHealthCronJobParams
 import org.dallasmakerspace.cron.DoorSwipesCronJob
@@ -46,11 +50,10 @@ import org.dallasmakerspace.discourse.FeaturedProjectsService
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.ExternalAccountAlreadyLinkedException
 import org.dallasmakerspace.members.GroupService
-import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.GroupSettingsService
+import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.db.ProfileDAO
-import org.dallasmakerspace.members.db.suspendTransaction
 import org.dallasmakerspace.members.routing.groupSelfMembershipRoutes
 import org.dallasmakerspace.members.routing.profilePhotoRoutes
 import org.dallasmakerspace.models.AskAiFeedbackRequest
@@ -63,7 +66,6 @@ import org.dallasmakerspace.notifications.routing.profileSubscriptionRoutes
 import org.dallasmakerspace.remoteaccess.routing.remoteAccessRoutes
 import org.dallasmakerspace.routing.*
 import org.dallasmakerspace.routing.BadgeLookup
-import org.dallasmakerspace.routing.Groups
 import org.dallasmakerspace.routing.Members
 import org.dallasmakerspace.routing.ShortLinksResource
 import org.dallasmakerspace.shortlinks.RedirectResult
@@ -1252,12 +1254,4 @@ fun routeObjectToModel(it: Members.DMSMember): org.dallasmakerspace.models.DMSMe
       discordAvatarUrl = it.discordAvatarUrl,
       discordWebhookId = it.discordWebhookId,
   )
-}
-
-data class ApiResponse<T>(val status: Status, val message: String, val data: T?)
-
-@Serializable
-enum class Status {
-  SUCCESS,
-  ERROR,
 }

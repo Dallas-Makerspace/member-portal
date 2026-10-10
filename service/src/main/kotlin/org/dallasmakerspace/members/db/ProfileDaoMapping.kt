@@ -1,6 +1,7 @@
-package org.dallasmakerspace.models
+package org.dallasmakerspace.members.db
 
-import org.dallasmakerspace.members.db.ProfileDAO
+import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.profilePhotoUrl
 
 /** Converter function to create a DMSMember from a ProfileDAO. */
 fun daoToProfileModel(dao: ProfileDAO) =
@@ -15,9 +16,3 @@ fun daoToProfileModel(dao: ProfileDAO) =
         discordAvatarUrl = dao.discordAvatarUrl,
         discordWebhookId = dao.discordWebhookId,
         profilePhotoUrl = dao.profilePhotoKey?.let { profilePhotoUrl(dao.id.value, it) })
-
-private const val HEX_RADIX = 16
-
-/** Versioned by the storage key (new per upload), so the immutable-cached URL changes every time. */
-fun profilePhotoUrl(username: String, key: String): String =
-    "/avatar/@$username?v=${key.hashCode().toUInt().toString(HEX_RADIX)}"

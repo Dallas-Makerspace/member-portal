@@ -6,7 +6,8 @@ import javax.inject.Inject
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
+import org.dallasmakerspace.core.api.Groups
 import org.dallasmakerspace.members.GroupHistoryRepository
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.models.ActionType
@@ -17,7 +18,6 @@ import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
 import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
-import org.dallasmakerspace.routing.Groups
 
 class GroupHistoryReport
 @Inject

@@ -6,7 +6,7 @@ import org.dallasmakerspace.adreplication.AdReplicationHealthEsRepository
 import org.dallasmakerspace.adreplication.adReplicationKibanaLink
 import org.dallasmakerspace.adreplication.pivotTrend
 import org.dallasmakerspace.core.AppConfig
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.models.DataVizResponse
 
 private const val DEFAULT_TREND_DAYS = 7

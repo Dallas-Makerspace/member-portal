@@ -3,11 +3,11 @@ package org.dallasmakerspace.moodle.routing
 import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.moodle.MoodleCatalogService
 import org.dallasmakerspace.moodle.MoodleMemberCoursesService
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
 
 fun Route.moodleRoutes(
     catalogService: MoodleCatalogService,

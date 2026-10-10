@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import org.dallasmakerspace.activedirectory.IActiveDirectoryClient
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.db.master.GenericRepository
 import org.dallasmakerspace.db.master.IMakerManagerDataService
 import org.dallasmakerspace.db.master.IWhmcsDataService

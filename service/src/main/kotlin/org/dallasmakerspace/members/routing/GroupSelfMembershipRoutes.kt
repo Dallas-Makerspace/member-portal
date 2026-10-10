@@ -11,13 +11,13 @@ import io.ktor.server.routing.put
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.authorize
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Groups
+import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.core.appLogger
 import org.dallasmakerspace.members.GroupSettingsRegistry
 import org.dallasmakerspace.members.GroupSettingsService
 import org.dallasmakerspace.members.MemberService
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
-import org.dallasmakerspace.routing.Groups
 
 private val log = appLogger("GroupSelfMembershipRoutes")
 

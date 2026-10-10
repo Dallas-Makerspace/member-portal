@@ -3,6 +3,7 @@ package org.dallasmakerspace
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import org.dallasmakerspace.core.CoreServices
 import org.dallasmakerspace.core.logging.TrustManager
 import org.dallasmakerspace.di.AppComponentHolder
 import org.dallasmakerspace.plugins.HealthState
@@ -19,6 +20,10 @@ import org.dallasmakerspace.plugins.configureSerialization
 private class Application
 
 fun main() {
+  // Before anything can log: logback-created classes read these (see CoreServices).
+  CoreServices.install(
+      appConfig = { AppComponentHolder.instance.getAppConfig() },
+      loggerFactory = { AppComponentHolder.instance.getLoggerFactory() })
 
   val appComponent = AppComponentHolder.instance
   val appConfig = appComponent.getAppConfig()

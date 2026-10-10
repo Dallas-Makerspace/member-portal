@@ -7,8 +7,8 @@ import javax.inject.Inject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.core.logging.ElasticsearchClientManager
-import org.dallasmakerspace.dataviz.DataVizReport
 import org.dallasmakerspace.models.Cabinets
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.DataField

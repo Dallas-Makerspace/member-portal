@@ -24,14 +24,14 @@ import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.authorize
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.core.appLogger
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.PHOTO_TOO_LARGE_MESSAGE
 import org.dallasmakerspace.members.ProfilePhotoRateLimitedException
 import org.dallasmakerspace.members.ProfilePhotoService
 import org.dallasmakerspace.members.ProfilePhotoValidationException
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
 
 private const val MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 private const val CACHE_CONTROL_ONE_YEAR = "private, max-age=31536000, immutable"

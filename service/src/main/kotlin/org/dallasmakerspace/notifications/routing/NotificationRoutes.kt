@@ -11,6 +11,8 @@ import io.ktor.server.routing.put
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.authorize
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.notifications.Aggregation
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.CreateNotificationRequest
@@ -19,8 +21,6 @@ import org.dallasmakerspace.notifications.MemberPreferenceView
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
 
 /** API view of a notification (dates as ISO-8601 strings). */
 data class NotificationView(

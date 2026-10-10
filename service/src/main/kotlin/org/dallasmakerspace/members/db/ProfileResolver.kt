@@ -1,5 +1,6 @@
 package org.dallasmakerspace.members.db
 
+import org.dallasmakerspace.core.db.suspendTransaction
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList

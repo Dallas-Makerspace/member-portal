@@ -4,8 +4,8 @@ import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.dallasmakerspace.bambuddy.BambuddyStatusService
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 
 fun Route.bambuddyRoutes(bambuddyStatusService: BambuddyStatusService) {
   get("/bambu/summary") {

@@ -1,7 +1,7 @@
 package org.dallasmakerspace.adreplication
 
 import org.dallasmakerspace.core.AppConfig
-import org.dallasmakerspace.dataviz.KibanaLinks
+import org.dallasmakerspace.core.KibanaLinks
 
 // No per-item KQL filter - unlike interlock's per-tool/committee host filter, all three AD
 // replication reports show every configured DC, so there's nothing to filter by; the link just

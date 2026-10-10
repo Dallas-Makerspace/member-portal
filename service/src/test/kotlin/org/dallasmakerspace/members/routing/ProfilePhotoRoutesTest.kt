@@ -24,11 +24,11 @@ import org.dallasmakerspace.auth.apiKey
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.api.ApiResponse
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.ProfilePhotoRateLimitedException
 import org.dallasmakerspace.members.ProfilePhotoService
 import org.dallasmakerspace.members.ProfilePhotoValidationException
-import org.dallasmakerspace.plugins.ApiResponse
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock

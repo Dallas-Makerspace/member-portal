@@ -7,8 +7,8 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.core.logging.ElasticsearchClientManager
-import org.dallasmakerspace.dataviz.DataVizReport
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem

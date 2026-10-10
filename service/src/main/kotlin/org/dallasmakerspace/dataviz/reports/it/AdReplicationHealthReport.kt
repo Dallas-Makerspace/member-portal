@@ -14,7 +14,7 @@ import org.dallasmakerspace.adreplication.StoredReplicationSample
 import org.dallasmakerspace.adreplication.adReplicationKibanaLink
 import org.dallasmakerspace.adreplication.shortDcName
 import org.dallasmakerspace.core.AppConfig
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType

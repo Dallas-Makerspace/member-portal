@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.db.master.GenericRepository
 import org.dallasmakerspace.models.DataField
 import org.dallasmakerspace.models.DataItem

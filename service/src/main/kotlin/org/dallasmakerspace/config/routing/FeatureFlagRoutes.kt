@@ -14,8 +14,8 @@ import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.ConfigValueType
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.config.FeatureFlagValue
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 
 @Serializable data class FeatureFlagStatus(val enabled: Boolean)
 

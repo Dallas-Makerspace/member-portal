@@ -9,8 +9,8 @@ import org.dallasmakerspace.auth.authorize
 import org.dallasmakerspace.config.ConfigKey
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 
 fun Route.configRoutes(configOverrideService: ConfigOverrideService) {
   authorize(Permission.MANAGE_CONFIG) {

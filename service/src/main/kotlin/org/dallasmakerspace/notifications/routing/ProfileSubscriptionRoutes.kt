@@ -13,9 +13,9 @@ import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.authorize
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
 
 /**
  * Follow/unfollow another member, and who-follows-who listings. `{username}` is always the target

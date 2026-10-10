@@ -3,7 +3,7 @@ package org.dallasmakerspace.dataviz.di
 import dagger.Module
 import dagger.Provides
 import dagger.multibindings.ElementsIntoSet
-import org.dallasmakerspace.dataviz.DataVizReport
+import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.dataviz.reports.TimeOfDayReport
 import org.dallasmakerspace.dataviz.reports.VisitorsByDayReport
 import org.dallasmakerspace.dataviz.reports.accesscontrol.BadgeSwipesReport
@@ -13,9 +13,6 @@ import org.dallasmakerspace.dataviz.reports.calendar.GroupCalendarReport
 import org.dallasmakerspace.dataviz.reports.calendar.TopAttendees
 import org.dallasmakerspace.dataviz.reports.calendar.TopOrganizers
 import org.dallasmakerspace.dataviz.reports.groups.GroupHistoryReport
-import org.dallasmakerspace.dataviz.reports.it.AdReplicationFailureTrendReport
-import org.dallasmakerspace.dataviz.reports.it.AdReplicationHealthReport
-import org.dallasmakerspace.dataviz.reports.it.AdReplicationLatencyTrendReport
 import org.dallasmakerspace.dataviz.reports.interlock.CabinetActivityReport
 import org.dallasmakerspace.dataviz.reports.interlock.CabinetDeniedAccessReport
 import org.dallasmakerspace.dataviz.reports.interlock.CabinetInactivityReport
@@ -27,6 +24,9 @@ import org.dallasmakerspace.dataviz.reports.interlock.TopCabinetsReport
 import org.dallasmakerspace.dataviz.reports.interlock.TopToolsReport
 import org.dallasmakerspace.dataviz.reports.interlock.TopUsersReport
 import org.dallasmakerspace.dataviz.reports.interlock.UsageHeatmapReport
+import org.dallasmakerspace.dataviz.reports.it.AdReplicationFailureTrendReport
+import org.dallasmakerspace.dataviz.reports.it.AdReplicationHealthReport
+import org.dallasmakerspace.dataviz.reports.it.AdReplicationLatencyTrendReport
 import org.dallasmakerspace.dataviz.reports.it.BadgeValidationAdReport
 import org.dallasmakerspace.dataviz.reports.it.BadgeValidationMergedReport
 import org.dallasmakerspace.dataviz.reports.it.LapsedMembersActiveAdReport

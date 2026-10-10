@@ -22,6 +22,8 @@ import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.apiKey
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.notifications.Aggregation
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.Notification
@@ -29,8 +31,6 @@ import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
 import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.notifications.topics.SystemTopic
-import org.dallasmakerspace.plugins.ApiResponse
-import org.dallasmakerspace.plugins.Status
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any

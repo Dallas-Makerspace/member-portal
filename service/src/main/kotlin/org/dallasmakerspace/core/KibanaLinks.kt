@@ -1,6 +1,5 @@
-package org.dallasmakerspace.dataviz
+package org.dallasmakerspace.core
 
-import org.dallasmakerspace.core.AppConfig
 
 /**
  * Shared Kibana "Discover" deep-link builder - factored out of `InterlockEventsService` so every
