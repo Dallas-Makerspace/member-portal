@@ -13,6 +13,9 @@ object CoreServices {
     loggerFactoryProvider = loggerFactory
   }
 
+  val isInstalled: Boolean
+    get() = appConfigProvider != null
+
   val appConfig: AppConfig
     get() = checkNotNull(appConfigProvider) { NOT_INSTALLED }()
 
