@@ -17,7 +17,7 @@ automatically — keep it green and keep changes small enough to land safely on 
 
 - **Do not create feature branches for normal work.** Commit and push directly to `master`.
 - **Guard incomplete/WIP features behind a `FeatureFlagType` site config**, not behind a branch. Add a `ConfigKey` in
-  `service/src/main/kotlin/org/dallasmakerspace/config/ConfigRegistry.kt`:
+  `service/modules/config/src/main/kotlin/org/dallasmakerspace/config/ConfigRegistry.kt`:
   ```kotlin
   val MY_NEW_FEATURE_ENABLED =
       ConfigKey(
@@ -31,7 +31,7 @@ automatically — keep it green and keep changes small enough to land safely on 
   This lets a feature ship to `master`/production in an off state, then be piloted for specific members/AD groups (
   `enabledUsernames`/`enabledGroupNames`) before a full rollout (`enabled = true`) — see `GROUP_SETTINGS_ENABLED` or
   `REMOTE_ACCESS_ENABLED` for existing examples, and
-  `service/src/main/kotlin/org/dallasmakerspace/config/FeatureFlagService.kt` (`isEnabledForUsername`) plus
+  `service/modules/config/src/main/kotlin/org/dallasmakerspace/config/FeatureFlagService.kt` (`isEnabledForUsername`) plus
   `MemberServiceClient.isFeatureEnabled(...)` in the UI module for how to check the flag for the current user at
   runtime, rather than the plain `ConfigOverrideService.get(...)` boolean lookup (that pattern has no per-user piloting
   and is only for simple `BooleanType` toggles).
@@ -117,11 +117,11 @@ integrations will also attempt real calls using whatever placeholder values rema
 # Run service
 ./gradlew :service:run
 
-# Run service tests
+# Run service tests (app module only; feature modules: :service:<module>:test, or ./gradlew test for all)
 ./gradlew :service:test
 
-# Run single test class
-./gradlew :service:test --tests "org.dallasmakerspace.YourTestClass"
+# Run single test class (use the module that owns the class, e.g. :service:members:test)
+./gradlew :service:members:test --tests "org.dallasmakerspace.YourTestClass"
 
 # Run detekt (static analysis)
 ./gradlew :service:detekt
@@ -157,6 +157,16 @@ integrations will also attempt real calls using whatever placeholder values rema
 ### Member Profile Service (Backend API)
 
 **Entry Point:** `service/src/main/kotlin/org/dallasmakerspace/Application.kt`
+
+**Modules:** `:service` is the app (Dagger `AppComponent`, plugins, routing, cron, webhook). Feature code lives
+in `:service:<name>` modules under `service/modules/<name>` (`core`, `activedirectory`, `config`, `members` (+
+discourse), `directory` (remoteaccess + adreplication), `notifications`, `dataviz`, `askai`, `smartwaiver`,
+`winrm`, ...), each with its own tests. `:service:core` is the base everything depends on; shared build setup for
+all `:service:*` modules is in the root `build.gradle.kts`. A new module needs an entry in the `listOf(...)` in
+`settings.gradle.kts`, a `build.gradle.kts` listing its project/external dependencies, and an
+`implementation(project(...))` line in `service/build.gradle.kts`. Run `./gradlew test` for all modules.
+`@Inject` classes get their Dagger factories generated in their own module, so a module must stay free of
+dependencies on the app module (use `core.CoreServices`, not `AppComponentHolder`, below the app layer).
 
 **Key Packages:**
 

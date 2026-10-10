@@ -112,4 +112,9 @@ dependencies {
   testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
+// Whole-service coverage: merge the feature modules into :service:koverHtmlReport.
+rootProject.subprojects
+    .filter { it.path.startsWith(":service:") }
+    .forEach { dependencies { kover(it) } }
+
 kotlin { jvmToolchain(21) }
