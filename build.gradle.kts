@@ -54,6 +54,7 @@ fun loadDotEnv(envFile: File): Map<String, String> {
 // Env vars already set (shell, OS, run configuration) win; .env only fills gaps.
 subprojects {
     tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
+        notCompatibleWithConfigurationCache("doFirst calls the script-level loadDotEnv helper")
         val envFile = project.file(".env")
         doFirst {
             val dotEnv = loadDotEnv(envFile)
@@ -70,6 +71,7 @@ subprojects {
 tasks.register("runAll") {
     group = "application"
     description = "Runs service and ui subprojects concurrently"
+    notCompatibleWithConfigurationCache("Spawns child Gradle processes from script-level helpers")
     doLast {
         val isWindows = System.getProperty("os.name").lowercase().contains("windows")
         val gradlew = if (isWindows) listOf("cmd", "/c", ".\\gradlew.bat") else listOf("./gradlew")
