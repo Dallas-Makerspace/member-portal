@@ -5,7 +5,7 @@
   Social links dialog, opened by the Socials row's Add/Edit button on the member's own profile.
   Fields come from SocialLinks.formFields; each data-pattern is SocialNetwork.inputPattern, the same
   check the server applies on save. Posts form=socials to the settings handler; an empty box
-  removes that link.
+  removes that link. Ids are neutral because ad-block social filters hide #social_facebook etc.
 -->
 <th:block th:fragment="social-links-modal">
     <div class="modal fade" id="socialLinksModal" tabindex="-1" aria-labelledby="socialLinksModalLabel"
@@ -23,21 +23,22 @@
                         Copy the address of your profile page on each site and paste it below.
                         Leave a box empty to remove that link.
                     </p>
-                    <div class="mb-3" th:each="field : ${social_link_fields}">
-                        <label class="form-label d-flex align-items-center gap-2" th:for="${field['key']}">
+                    <div class="mb-3" th:each="field, stat : ${social_link_fields}"
+                         th:with="fieldId=${'social-link-' + stat.index}">
+                        <label class="form-label d-flex align-items-center gap-2" th:for="${fieldId}">
                             <img th:src="${field['icon']}" alt="" width="20" height="20">
                             <span th:text="${field['name']}"></span>
                         </label>
                         <input type="text" class="form-control social-link-input" inputmode="url"
                                maxlength="500" autocomplete="off" autocapitalize="off" spellcheck="false"
-                               th:id="${field['key']}" th:name="${field['key']}" th:value="${field['value']}"
+                               th:id="${fieldId}" th:name="${field['key']}" th:value="${field['value']}"
                                th:placeholder="${field['example']}" th:data-pattern="${field['pattern']}"
-                               th:attr="aria-describedby=${field['key'] + '-error ' + field['key'] + '-hint'}">
-                        <div class="invalid-feedback" th:id="${field['key'] + '-error'}"
+                               th:attr="aria-describedby=${fieldId + '-error ' + fieldId + '-hint'}">
+                        <div class="invalid-feedback" th:id="${fieldId + '-error'}"
                              th:text="|This doesn’t look like a link to a ${field['name']} profile. It should look like ${field['example']}|"></div>
-                        <div class="form-text" th:id="${field['key'] + '-hint'}">
+                        <div class="form-text" th:id="${fieldId + '-hint'}">
                             <span th:text="${field['hint']}"></span>
-                            <a th:if="${field['help_url'] != ''}" th:href="${field['help_url']}"
+                            <a th:if="${!#strings.isEmpty(field['help_url'])}" th:href="${field['help_url']}"
                                target="_blank" rel="noopener noreferrer">Learn how</a>
                         </div>
                     </div>
