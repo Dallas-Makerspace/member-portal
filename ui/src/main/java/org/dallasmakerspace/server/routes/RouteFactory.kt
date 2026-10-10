@@ -37,6 +37,7 @@ object RouteFactory {
         .replace("/groups/[^/]+/members/[^/]+".toRegex(), "/groups/{group_slug}/members/{username}")
         .replace("/groups/[^/]+/members".toRegex(), "/groups/{group_slug}/members")
         .replace("/groups/[^/]+/settings".toRegex(), "/groups/{group_slug}/settings")
+        .replace("/groups/[^/]+/self$".toRegex(), "/groups/{group_slug}/self")
         .replace("/groups/[^/]+$".toRegex(), "/groups/{group_slug}")
         .replace("/reports.*".toRegex(), "/reports/{path...}")
         .replace("/backend-api/.*".toRegex(), "/backend-api/{path...}")
@@ -86,6 +87,7 @@ object RouteFactory {
     GROUP_MEMBERS("/groups/{group_slug}/members"),
     GROUP_MEMBER_DETAIL("/groups/{group_slug}/members/{username}"),
     GROUP_SETTINGS("/groups/{group_slug}/settings"),
+    GROUP_SELF_MEMBERSHIP("/groups/{group_slug}/self"),
     SEARCH_PRELOAD("/search-preload"),
     PROFILE_DEBUG_INFO("/profile/@{preferred_username}/debug-info"),
     PROFILE_KIOSK_WAIVER_PHOTOS("/profile/@{preferred_username}/kiosk-waiver-photos"),

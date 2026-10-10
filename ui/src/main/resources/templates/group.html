@@ -43,6 +43,15 @@
                             Take Online Course
                         </a>
                     </div>
+                    <div th:if="${selfMembershipAction != ''}" class="mt-3">
+                        <button type="button" class="btn btn-sm dms-self-membership-btn"
+                                th:classappend="${selfMembershipAction == 'join'} ? 'btn-primary' : 'btn-outline-danger'"
+                                th:attr="data-action=${selfMembershipAction},data-group-slug=${slug},data-group-name=${name}">
+                            <span class="material-symbols-outlined align-middle" style="font-size: 1rem;"
+                                  th:text="${selfMembershipAction == 'join'} ? 'group_add' : 'logout'"></span>
+                            <span th:text="${selfMembershipAction == 'join'} ? 'Join group' : 'Leave group'"></span>
+                        </button>
+                    </div>
                     <div th:if="${canManageGroupSettings}" class="mt-3">
                         <a th:href="'/groups/' + ${slug} + '/settings'"
                            class="btn btn-outline-secondary btn-sm">
@@ -223,6 +232,33 @@
     .dms-card .nav-tabs .nav-link { color: #6c757d; }
     .dms-card .nav-tabs .nav-link.active { color: #0b9cc9; }
 </style>
+<script th:if="${selfMembershipAction != ''}">
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.dms-self-membership-btn');
+        if (!btn) return;
+        const join = btn.dataset.action === 'join';
+        if (!join && !confirm('Leave ' + btn.dataset.groupName + '?')) return;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        fetch('/groups/' + btn.dataset.groupSlug + '/self', { method: join ? 'PUT' : 'DELETE' })
+            .then(function(r) { return r.json().then(function(body) { return { ok: r.ok, body: body }; }); })
+            .then(function(res) {
+                if (res.ok) {
+                    showToastAfterReload(res.body.message);
+                    window.location.reload();
+                } else {
+                    showToast(res.body.message || "Couldn't update your membership.", 'danger');
+                    btn.disabled = false;
+                    btn.removeAttribute('aria-busy');
+                }
+            })
+            .catch(function() {
+                showToast("Couldn't update your membership. Refresh the page and try again.", 'danger');
+                btn.disabled = false;
+                btn.removeAttribute('aria-busy');
+            });
+    });
+</script>
 <script th:if="${canManageMembers}">
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('.dms-remove-member-btn');

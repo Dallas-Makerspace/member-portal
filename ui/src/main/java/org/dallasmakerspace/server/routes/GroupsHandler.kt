@@ -68,6 +68,11 @@ constructor(
         memberServiceClient.isGroupAdmin(it, requestedGroupSlug, session.sessionId)
       } ?: false
     }
+    val selfMembershipDeferred = async {
+      actorUsername?.let {
+        memberServiceClient.getSelfMembershipStatus(requestedGroupSlug, it, session.sessionId)
+      }
+    }
 
     val onlineCoursesDeferred = async {
       val enabled =
@@ -86,6 +91,7 @@ constructor(
     val featureEnabled = featureEnabledDeferred.await()
     val groupSettingsFeatureEnabled = groupSettingsFeatureEnabledDeferred.await()
     val isGroupAdmin = isGroupAdminDeferred.await()
+    val selfMembership = selfMembershipDeferred.await()
 
     // Check feature flag and user role
     val canManageMembers =
@@ -103,6 +109,12 @@ constructor(
             "canManageGroupSettings" to canManageGroupSettings,
             "canManageMembers" to canManageMembers,
             "actorUsername" to (actorUsername ?: ""),
+            "selfMembershipAction" to
+                when {
+                  selfMembership == null || !selfMembership.allowed -> ""
+                  selfMembership.isMember -> "leave"
+                  else -> "join"
+                },
             "memberUsernamesJson" to "[]",
         )
     if (requestedGroup.members.isNotEmpty()) {

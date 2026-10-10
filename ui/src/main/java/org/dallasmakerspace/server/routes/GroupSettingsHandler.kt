@@ -20,8 +20,8 @@ import org.dallasmakerspace.server.models.getNameFromSlug
 import org.dallasmakerspace.server.plugins.AuthException
 
 /**
- * Renders and updates group-level settings. Framework only today — see GroupSettingsRegistry on
- * the service side for what each setting is intended to gate; no enforcement lives here yet.
+ * Renders and updates group-level settings. See GroupSettingsRegistry on the service side for
+ * where each setting is enforced.
  *
  * The two known settings below are duplicated from the service module's GroupSettingsRegistry
  * (the UI module cannot depend on the service module). Adding a third setting requires updating
@@ -45,8 +45,9 @@ constructor(
                 "key" to "allow_self_add_remove",
                 "label" to "Allow members to add/remove themselves",
                 "description" to
-                    "Whether members should be allowed to add or remove themselves from this " +
-                        "group without admin action. Not yet enforced anywhere.",
+                    "Shows a Join/Leave button on this group's page so members can add or " +
+                        "remove themselves without admin action. Leaving only removes direct " +
+                        "membership, not membership inherited through a nested group.",
             ),
             mapOf(
                 "key" to "allow_follow",

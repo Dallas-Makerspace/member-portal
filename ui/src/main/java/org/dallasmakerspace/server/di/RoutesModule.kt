@@ -28,6 +28,7 @@ import org.dallasmakerspace.server.routes.CommitteeDetailHandler
 import org.dallasmakerspace.server.routes.CommitteesHandler
 import org.dallasmakerspace.server.routes.ConfigAdminHandler
 import org.dallasmakerspace.server.routes.GroupMemberManagementHandler
+import org.dallasmakerspace.server.routes.GroupSelfMembershipHandler
 import org.dallasmakerspace.server.routes.GroupSettingsHandler
 import org.dallasmakerspace.server.routes.GroupsHandler
 import org.dallasmakerspace.server.routes.IRouteHandler
@@ -230,6 +231,16 @@ class RoutesModule {
       memberServiceClient: MemberServiceClient,
   ): IRouteHandler =
       GroupSettingsHandler(loggerFactory, userInfoProvider, memberService, memberServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/groups/{group_slug}/self")
+  fun providesGroupSelfMembershipHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler =
+      GroupSelfMembershipHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
   @IntoMap
   @Provides

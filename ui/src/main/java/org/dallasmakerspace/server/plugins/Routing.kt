@@ -180,6 +180,12 @@ fun Application.configureRouting() {
       post(RouteFactory.Paths.GROUP_SETTINGS.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      put(RouteFactory.Paths.GROUP_SELF_MEMBERSHIP.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      delete(RouteFactory.Paths.GROUP_SELF_MEMBERSHIP.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.CAMERAS.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.CAMERAS_API.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       post(RouteFactory.Paths.CAMERAS_API.path) { RouteFactory.getHandler(call)?.handleBase(call) }

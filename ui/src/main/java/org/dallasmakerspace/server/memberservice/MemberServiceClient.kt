@@ -43,6 +43,8 @@ data class NotificationPreferenceUpdate(
     val aggregation: String?,
 )
 
+data class SelfMembershipStatus(val allowed: Boolean, val isMember: Boolean)
+
 @Suppress("TooGenericExceptionCaught")
 @Singleton
 class MemberServiceClient
@@ -287,6 +289,55 @@ constructor(
     } catch (ex: Exception) {
       log.error("Failed to remove $username from group: $groupName", ex)
       throw MemberServiceException("Failed to remove $username from group: $groupName", ex)
+    }
+  }
+
+  /** Null if the status couldn't be fetched; callers should hide self-service then. */
+  suspend fun getSelfMembershipStatus(
+      groupSlug: String,
+      actorUsername: String,
+      sessionId: String?,
+  ): SelfMembershipStatus? {
+    return try {
+      val result =
+          dmsHttpClient.get(
+              "$baseUrl/groups/$groupSlug/self", actorHeaders(sessionId, actorUsername))
+      val data = result["data"] as? Map<*, *> ?: return null
+      SelfMembershipStatus(
+          allowed = data["allowed"] as? Boolean ?: false,
+          isMember = data["isMember"] as? Boolean ?: false,
+      )
+    } catch (ex: Exception) {
+      log.warn("Failed to get self-membership status for $actorUsername on group: $groupSlug", ex)
+      null
+    }
+  }
+
+  suspend fun joinGroup(groupSlug: String, actorUsername: String, sessionId: String?) {
+    try {
+      dmsHttpClient.put(
+          "$baseUrl/groups/$groupSlug/self", actorHeaders(sessionId, actorUsername), "")
+    } catch (ex: Exception) {
+      log.error("Failed self-service join of $actorUsername to group: $groupSlug", ex)
+      throw MemberServiceException("Failed to join group: $groupSlug", ex)
+    }
+  }
+
+  suspend fun leaveGroup(groupSlug: String, actorUsername: String, sessionId: String?) {
+    try {
+      dmsHttpClient.delete(
+          "$baseUrl/groups/$groupSlug/self", actorHeaders(sessionId, actorUsername))
+    } catch (ex: Exception) {
+      log.error("Failed self-service leave of $actorUsername from group: $groupSlug", ex)
+      throw MemberServiceException("Failed to leave group: $groupSlug", ex)
+    }
+  }
+
+  private fun actorHeaders(sessionId: String?, actorUsername: String): StringValues {
+    val baseHeaders = getApiHeaders(sessionId)
+    return StringValues.build {
+      baseHeaders.forEach { key, values -> values.forEach { value -> append(key, value) } }
+      append("X-Actor-Username", actorUsername)
     }
   }
 
