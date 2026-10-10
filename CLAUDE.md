@@ -246,6 +246,18 @@ The page loader (`dms-page-loader.js`) provides:
 **When creating new templates:** Always include `dms-page-loader.js` to ensure consistent loading feedback across all
 pages.
 
+## Build & CI
+
+- **Caching:** the Gradle build cache and configuration cache are on (`gradle.properties`). `runAll` and the `run`
+  tasks opt out of the configuration cache. CI restores the cache via `setup-gradle`, so only modules downstream of a
+  change recompile and retest. A change to `:service:core` (or a Gradle upgrade) invalidates nearly everything.
+- **Build once:** the CI e2e job builds `service-all.jar` / `ui-all.jar`, runs e2e against them, and uploads them as
+  the `service-jar` / `ui-jar` artifacts. CD (`common-cd.yml`) downloads those artifacts via `ci_run_id` instead of
+  rebuilding, so what e2e tested is what ships. Artifacts expire after 7 days, so re-running an old CD run fails.
+- **Local e2e:** needs a MariaDB with `service/docs/sql/create.sql` loaded, the two jars started from `service/` and
+  `ui/` with JDK 21 and the job `env:` from `ci.yml`, then `./gradlew :e2e:cleanTest :e2e:test` (plain `:e2e:test`
+  is usually up-to-date and does nothing).
+
 ## Development Setup
 
 ### IntelliJ IDEA
