@@ -1,4 +1,3 @@
-import io.gitlab.arturbosch.detekt.extensions.DetektExtension
 import org.gradle.api.tasks.SourceSetContainer
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 
@@ -55,9 +54,6 @@ configure(subprojects.filter { it.path.startsWith(":service:") }) {
   extensions.configure<SourceSetContainer> {
     named("test") { resources.srcDir(rootProject.file("service/src/main/resources")) }
   }
-  extensions.configure<DetektExtension> {
-    config.setFrom(rootProject.file("service/config/detekt/detekt.yml"))
-  }
 
   dependencies {
     add("implementation", project(":common-models"))
@@ -72,8 +68,9 @@ configure(subprojects.filter { it.path.startsWith(":service:") }) {
     add("implementation", "io.ktor:ktor-server-auth:$ktorVersion")
     add("implementation", "io.ktor:ktor-server-resources:$ktorVersion")
     add("implementation", "io.ktor:ktor-server-status-pages:$ktorVersion")
-    add("implementation", "io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
-    add("implementation", "io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
+    // io.ktor.plugin BOM version (what :service resolved these to before the split); the rest is $ktorVersion
+    add("implementation", "io.ktor:ktor-server-content-negotiation-jvm:3.3.3")
+    add("implementation", "io.ktor:ktor-serialization-kotlinx-json-jvm:3.3.3")
     add("implementation", "io.ktor:ktor-client-core:$ktorVersion")
     add("implementation", "io.ktor:ktor-client-okhttp:$ktorVersion")
     add("implementation", "io.ktor:ktor-client-json:$ktorVersion")

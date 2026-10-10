@@ -5,8 +5,8 @@ package org.dallasmakerspace.core
  * can't inject. The app module installs the providers at the start of `main()`.
  */
 object CoreServices {
-  @Volatile private lateinit var appConfigProvider: () -> AppConfig
-  @Volatile private lateinit var loggerFactoryProvider: () -> LoggerFactory
+  @Volatile private var appConfigProvider: (() -> AppConfig)? = null
+  @Volatile private var loggerFactoryProvider: (() -> LoggerFactory)? = null
 
   fun install(appConfig: () -> AppConfig, loggerFactory: () -> LoggerFactory) {
     appConfigProvider = appConfig
@@ -14,8 +14,10 @@ object CoreServices {
   }
 
   val appConfig: AppConfig
-    get() = appConfigProvider()
+    get() = checkNotNull(appConfigProvider) { NOT_INSTALLED }()
 
   val loggerFactory: LoggerFactory
-    get() = loggerFactoryProvider()
+    get() = checkNotNull(loggerFactoryProvider) { NOT_INSTALLED }()
+
+  private const val NOT_INSTALLED = "CoreServices.install() must run first (see Application.main)"
 }
