@@ -289,6 +289,83 @@ function copyUsernameToClipboard(text, btn) {
     });
 }
 
+/**
+ * Show or clear an in-button spinner for a pending action. The spinner replaces the button's
+ * Material icon if it has one, otherwise it is prepended to the label. Locks the button's width so
+ * it doesn't jump, disables it and sets aria-busy. Call with `false` to restore (error paths, or
+ * bfcache restores); on success paths that reload the page, leave it spinning.
+ * @param {HTMLElement|null} btn
+ * @param {boolean} loading
+ * @param {string} [srText='Working…'] - Screen-reader text announced while busy.
+ */
+function setButtonLoading(btn, loading, srText = 'Working…') {
+    if (!btn) return;
+    const isLink = btn.tagName === 'A';
+    if (loading) {
+        if (btn.dataset.dmsLoading) return;
+        btn.dataset.dmsLoading = 'true';
+        btn.style.minWidth = btn.getBoundingClientRect().width + 'px';
+        btn.setAttribute('aria-busy', 'true');
+        if (isLink) {
+            btn.classList.add('disabled');
+            btn.setAttribute('aria-disabled', 'true');
+        } else {
+            btn.disabled = true;
+        }
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm';
+        spinner.setAttribute('aria-hidden', 'true');
+        spinner.dataset.dmsSpinner = 'true';
+        const sr = document.createElement('span');
+        sr.className = 'visually-hidden';
+        sr.setAttribute('role', 'status');
+        sr.dataset.dmsSpinner = 'true';
+        sr.textContent = srText;
+        const icon = btn.querySelector('.material-symbols-outlined');
+        if (icon) {
+            icon.classList.add('d-none');
+            icon.dataset.dmsHidden = 'true';
+            icon.after(spinner, sr);
+        } else {
+            spinner.classList.add('me-1');
+            btn.prepend(spinner, sr);
+        }
+    } else {
+        btn.querySelectorAll('[data-dms-spinner]').forEach((el) => el.remove());
+        const icon = btn.querySelector('[data-dms-hidden]');
+        if (icon) {
+            icon.classList.remove('d-none');
+            delete icon.dataset.dmsHidden;
+        }
+        btn.style.minWidth = '';
+        btn.removeAttribute('aria-busy');
+        if (isLink) {
+            btn.classList.remove('disabled');
+            btn.removeAttribute('aria-disabled');
+        } else {
+            btn.disabled = false;
+        }
+        delete btn.dataset.dmsLoading;
+    }
+}
+
+// Full-page form posts: spin the submit button. Opt out with data-no-loading on the form.
+document.addEventListener('submit', (e) => {
+    setTimeout(() => {
+        const form = e.target;
+        if (e.defaultPrevented || form.hasAttribute('data-no-loading')) return;
+        if (form.target && form.target !== '_self') return;
+        setButtonLoading(e.submitter || form.querySelector('button[type="submit"], button:not([type])'), true, 'Saving…');
+    }, 0);
+});
+
+// Back/forward cache restores the page mid-spin; clear any stuck buttons.
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted) {
+        document.querySelectorAll('[data-dms-loading]').forEach((btn) => setButtonLoading(btn, false));
+    }
+});
+
 function hideToast() {
     const toastLive = document.getElementById('liveToast');
     if (toastLive) {

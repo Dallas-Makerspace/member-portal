@@ -521,13 +521,10 @@
             document.getElementById('editConfigAlert').style.display = 'none';
 
             var resetBtn = document.getElementById('resetToDefaultBtn');
-            resetBtn.disabled = false;
-            resetBtn.innerHTML = '<span class="btn-icon-label"><span class="material-symbols-outlined">restart_alt</span> Reset to Default</span>';
+            setButtonLoading(resetBtn, false);
             resetBtn.style.display = currentIsOverridden ? 'inline-flex' : 'none';
 
-            var saveBtn = document.getElementById('saveConfigBtn');
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '<span class="btn-icon-label"><span class="material-symbols-outlined">save</span> Save</span>';
+            setButtonLoading(document.getElementById('saveConfigBtn'), false);
         });
 
         document.getElementById('saveConfigBtn').addEventListener('click', function () {
@@ -550,8 +547,7 @@
             if (reason.length < 10) { showAlert(alertEl, 'danger', 'Reason must be at least 10 characters.'); return; }
 
             var saveBtn = document.getElementById('saveConfigBtn');
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving…';
+            setButtonLoading(saveBtn, true, 'Saving…');
 
             var infraOnly = document.getElementById('editInfraOnly').checked;
             fetch('/backend-api/config/' + encodeURIComponent(currentKey), {
@@ -570,8 +566,7 @@
             })
                 .catch(function (err) {
                 showAlert(alertEl, 'danger', 'Failed to save: ' + err.message);
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save';
+                setButtonLoading(saveBtn, false);
             });
         });
 
@@ -583,8 +578,7 @@
             if (!confirm('Reset "' + currentKey + '" to its default value?')) { return; }
 
             var resetBtn = document.getElementById('resetToDefaultBtn');
-            resetBtn.disabled = true;
-            resetBtn.textContent = 'Resetting…';
+            setButtonLoading(resetBtn, true, 'Resetting…');
 
             fetch('/backend-api/config/' + encodeURIComponent(currentKey) + '/reset', {
                 method: 'POST',
@@ -602,8 +596,7 @@
             })
                 .catch(function (err) {
                 showAlert(alertEl, 'danger', 'Failed to reset: ' + err.message);
-                resetBtn.disabled = false;
-                resetBtn.textContent = 'Reset to Default';
+                setButtonLoading(resetBtn, false);
             });
         });
 

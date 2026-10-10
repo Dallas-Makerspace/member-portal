@@ -424,7 +424,7 @@
         var id = btn.dataset.activeConnectionId;
         var who = btn.dataset.occupant || 'this user';
         if (!confirm('Force disconnect ' + who + ' from this machine?')) return;
-        btn.disabled = true;
+        setButtonLoading(btn, true, 'Disconnecting…');
         // redirect: 'manual' - same reasoning as refreshCategories() above: an expired session
         // redirects to /login, and letting fetch() chase that cross-origin to Keycloak surfaces as
         // an opaque network error instead of something actionable.
@@ -432,12 +432,13 @@
             .then(function (r) {
                 if (r.type === 'opaqueredirect') {
                     showSessionExpiredBanner();
+                    setButtonLoading(btn, false);
                     return;
                 }
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 refreshCategories();
             })
-            .catch(function (e) { alert('Failed: ' + e); btn.disabled = false; });
+            .catch(function (e) { alert('Failed: ' + e); setButtonLoading(btn, false); });
     });
 </script>
 </body>

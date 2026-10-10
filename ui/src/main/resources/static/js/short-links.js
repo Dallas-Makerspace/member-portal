@@ -142,7 +142,7 @@
                                 <td><span class="badge bg-info">${ns.ownerType}</span></td>
                                 <td><span class="badge ${ns.isActive ? 'bg-success' : 'bg-secondary'}">${ns.isActive ? 'Active' : 'Inactive'}</span></td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="window.shortLinksApp.deleteNamespace(${ns.id})">Delete</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="window.shortLinksApp.deleteNamespace(${ns.id}, this)">Delete</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -211,7 +211,7 @@
                                 <td><span class="badge ${link.isActive ? 'bg-success' : 'bg-secondary'}">${link.isActive ? 'Active' : 'Inactive'}</span></td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" onclick="window.shortLinksApp.editLink(${link.id})">Edit</button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="window.shortLinksApp.deleteLink(${link.id})">Delete</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="window.shortLinksApp.deleteLink(${link.id}, this)">Delete</button>
                                 </td>
                             </tr>
                             `;
@@ -372,6 +372,9 @@
             .map(a => a.trim())
             .filter(a => a.length > 0);
 
+        const saveBtn = document.getElementById('saveNamespaceBtn');
+        if (saveBtn.dataset.dmsLoading) return;
+        setButtonLoading(saveBtn, true, 'Creating namespace…');
         try {
             const response = await fetch(`${API_BASE}/namespaces/create`, {
                 method: 'POST',
@@ -404,6 +407,8 @@
         } catch (error) {
             console.error('Failed to create namespace:', error);
             showError(error.message || 'Failed to create namespace');
+        } finally {
+            setButtonLoading(saveBtn, false);
         }
     }
 
@@ -419,6 +424,9 @@
 
         const isEdit = !!linkId;
 
+        const saveBtn = document.getElementById('saveLinkBtn');
+        if (saveBtn.dataset.dmsLoading) return;
+        setButtonLoading(saveBtn, true, isEdit ? 'Updating link…' : 'Creating link…');
         try {
             let response;
             if (isEdit) {
@@ -467,6 +475,8 @@
         } catch (error) {
             console.error('Failed to save link:', error);
             showError(error.message || 'Failed to save link');
+        } finally {
+            setButtonLoading(saveBtn, false);
         }
     }
 
@@ -502,11 +512,12 @@
     /**
      * Delete a namespace
      */
-    async function deleteNamespace(namespaceId) {
+    async function deleteNamespace(namespaceId, btn) {
         if (!confirm('Are you sure you want to delete this namespace? This will also delete all associated links.')) {
             return;
         }
 
+        setButtonLoading(btn, true, 'Deleting namespace…');
         try {
             const response = await fetch(`${API_BASE}/namespaces/${namespaceId}/delete`, {
                 method: 'DELETE'
@@ -524,17 +535,20 @@
         } catch (error) {
             console.error('Failed to delete namespace:', error);
             showError(error.message || 'Failed to delete namespace');
+        } finally {
+            setButtonLoading(btn, false);
         }
     }
 
     /**
      * Delete a short link
      */
-    async function deleteLink(linkId) {
+    async function deleteLink(linkId, btn) {
         if (!confirm('Are you sure you want to delete this short link?')) {
             return;
         }
 
+        setButtonLoading(btn, true, 'Deleting link…');
         try {
             const response = await fetch(`${API_BASE}/links/${linkId}/delete`, {
                 method: 'DELETE'
@@ -551,6 +565,8 @@
         } catch (error) {
             console.error('Failed to delete link:', error);
             showError(error.message || 'Failed to delete link');
+        } finally {
+            setButtonLoading(btn, false);
         }
     }
 

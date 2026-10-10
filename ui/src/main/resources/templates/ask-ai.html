@@ -297,13 +297,13 @@
                     <div class="answer-content" id="stream-answer-content"></div>
                     <div class="feedback-section" style="display:none">
                         <span class="text-muted me-2">Was this helpful?</span>
-                        <button type="button" class="btn btn-outline-success feedback-btn" onclick="sendFeedback(true, 'stream-feedbackStatus')">
+                        <button type="button" class="btn btn-outline-success feedback-btn" onclick="sendFeedback(true, 'stream-feedbackStatus', this)">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
                                 <path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.464 1.448 1.545 1.07.114 1.564.415 2.068.723l.048.03c.272.165.578.348.97.484.397.136.861.217 1.466.217h3.5c.937 0 1.599-.477 1.934-1.064a1.86 1.86 0 0 0 .254-.912c0-.152-.023-.312-.077-.464.201-.263.38-.578.488-.901.11-.33.172-.762.004-1.149.069-.13.12-.269.159-.403.077-.27.113-.568.113-.857 0-.288-.036-.585-.113-.856a2.144 2.144 0 0 0-.138-.362 1.9 1.9 0 0 0 .234-1.734c-.206-.592-.682-1.1-1.2-1.272-.847-.282-1.803-.276-2.516-.211a9.84 9.84 0 0 0-.443.05 9.365 9.365 0 0 0-.062-4.509A1.38 1.38 0 0 0 9.125.111L8.864.046z"/>
                             </svg>
                             Yes
                         </button>
-                        <button type="button" class="btn btn-outline-danger feedback-btn" onclick="sendFeedback(false, 'stream-feedbackStatus')">
+                        <button type="button" class="btn btn-outline-danger feedback-btn" onclick="sendFeedback(false, 'stream-feedbackStatus', this)">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
                                 <path d="M8.864 15.674c-.956.24-1.843-.484-1.908-1.42-.072-1.05-.23-2.015-.428-2.59-.125-.36-.479-1.012-1.04-1.638-.557-.624-1.282-1.179-2.131-1.41C2.685 8.432 2 7.85 2 7V3c0-.845.682-1.464 1.448-1.546 1.07-.113 1.564-.415 2.068-.723l.048-.029c.272-.166.578-.349.97-.484C6.931.08 7.395 0 8 0h3.5c.937 0 1.599.478 1.934 1.064.164.287.254.607.254.913 0 .152-.023.312-.077.464.201.262.38.577.488.9.11.33.172.762.004 1.15.069.13.12.268.159.403.077.27.113.567.113.856 0 .289-.036.586-.113.856-.035.12-.076.237-.138.362.133.358.197.714.197 1.04 0 .613-.168 1.153-.458 1.563.134.182.252.372.352.559.165.311.197.64.197.91 0 .37-.098.773-.342 1.09-.29.38-.702.606-1.088.657-.358.044-.663.048-.848.048H8z"/>
                             </svg>
@@ -393,13 +393,13 @@
                 <!-- Feedback Section -->
                 <div class="feedback-section">
                     <span class="text-muted me-2">Was this helpful?</span>
-                    <button type="button" class="btn btn-outline-success feedback-btn" onclick="sendFeedback(true)">
+                    <button type="button" class="btn btn-outline-success feedback-btn" onclick="sendFeedback(true, undefined, this)">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.464 1.448 1.545 1.07.114 1.564.415 2.068.723l.048.03c.272.165.578.348.97.484.397.136.861.217 1.466.217h3.5c.937 0 1.599-.477 1.934-1.064a1.86 1.86 0 0 0 .254-.912c0-.152-.023-.312-.077-.464.201-.263.38-.578.488-.901.11-.33.172-.762.004-1.149.069-.13.12-.269.159-.403.077-.27.113-.568.113-.857 0-.288-.036-.585-.113-.856a2.144 2.144 0 0 0-.138-.362 1.9 1.9 0 0 0 .234-1.734c-.206-.592-.682-1.1-1.2-1.272-.847-.282-1.803-.276-2.516-.211a9.84 9.84 0 0 0-.443.05 9.365 9.365 0 0 0-.062-4.509A1.38 1.38 0 0 0 9.125.111L8.864.046z"/>
                         </svg>
                         Yes
                     </button>
-                    <button type="button" class="btn btn-outline-danger feedback-btn" onclick="sendFeedback(false)">
+                    <button type="button" class="btn btn-outline-danger feedback-btn" onclick="sendFeedback(false, undefined, this)">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M8.864 15.674c-.956.24-1.843-.484-1.908-1.42-.072-1.05-.23-2.015-.428-2.59-.125-.36-.479-1.012-1.04-1.638-.557-.624-1.282-1.179-2.131-1.41C2.685 8.432 2 7.85 2 7V3c0-.845.682-1.464 1.448-1.546 1.07-.113 1.564-.415 2.068-.723l.048-.029c.272-.166.578-.349.97-.484C6.931.08 7.395 0 8 0h3.5c.937 0 1.599.478 1.934 1.064.164.287.254.607.254.913 0 .152-.023.312-.077.464.201.262.38.577.488.9.11.33.172.762.004 1.15.069.13.12.268.159.403.077.27.113.567.113.856 0 .289-.036.586-.113.856-.035.12-.076.237-.138.362.133.358.197.714.197 1.04 0 .613-.168 1.153-.458 1.563.134.182.252.372.352.559.165.311.197.64.197.91 0 .37-.098.773-.342 1.09-.29.38-.702.606-1.088.657-.358.044-.663.048-.848.048H8z"/>
                         </svg>
@@ -815,8 +815,7 @@
         // Also reset form state on page show (handles browser back/forward cache)
         window.addEventListener('pageshow', function(event) {
             if (event.persisted && submitBtn) {
-                submitBtn.classList.remove('loading');
-                submitBtn.disabled = false;
+                setButtonLoading(submitBtn, false);
             }
         });
     });
@@ -829,14 +828,13 @@
 
         if (textarea && form) {
             textarea.value = question;
-            submitBtn.classList.add('loading');
-            submitBtn.disabled = true;
+            setButtonLoading(submitBtn, true, 'Asking…');
             form.submit();
         }
     }
 
     // Send feedback
-    function sendFeedback(isHelpful, statusId) {
+    function sendFeedback(isHelpful, statusId, clickedBtn) {
         const statusEl = document.getElementById(statusId || 'feedbackStatus');
         const cacheIdEl = document.getElementById('answerCacheId');
         const cacheId = cacheIdEl ? parseInt(cacheIdEl.value, 10) : null;
@@ -853,6 +851,7 @@
             btn.disabled = true;
             btn.classList.add('disabled');
         });
+        setButtonLoading(clickedBtn, true, 'Submitting feedback…');
 
         statusEl.textContent = 'Submitting...';
         statusEl.style.display = 'inline';
@@ -868,9 +867,13 @@
             .then(response => {
             if (response.ok) {
                 statusEl.textContent = 'Thanks for your feedback!';
+                // Stop the spinner but keep the buttons locked
+                setButtonLoading(clickedBtn, false);
+                document.querySelectorAll('.feedback-btn').forEach(btn => btn.disabled = true);
             } else {
                 statusEl.textContent = 'Failed to submit feedback';
                 // Re-enable buttons on error
+                setButtonLoading(clickedBtn, false);
                 document.querySelectorAll('.feedback-btn').forEach(btn => {
                     btn.disabled = false;
                     btn.classList.remove('disabled');
@@ -881,6 +884,7 @@
             console.error('Error submitting feedback:', error);
             statusEl.textContent = 'Failed to submit feedback';
             // Re-enable buttons on error
+            setButtonLoading(clickedBtn, false);
             document.querySelectorAll('.feedback-btn').forEach(btn => {
                 btn.disabled = false;
                 btn.classList.remove('disabled');
@@ -937,9 +941,7 @@
             return;
         }
 
-        // Disable button and show loading state
-        button.disabled = true;
-        button.textContent = '⏳ Refreshing...';
+        setButtonLoading(button, true, 'Refreshing…');
 
         // Create a form and submit with refresh flag
         const form = document.createElement('form');

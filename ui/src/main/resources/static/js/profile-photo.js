@@ -160,6 +160,8 @@ function initProfilePhoto(username, canUpload) {
             ? 'Remove your profile photo? Your Discourse avatar will be shown instead.'
             : `Remove @${username}'s profile photo? Their Discourse avatar will be shown instead.`;
         if (!confirm(prompt)) return;
+        const btn = e.currentTarget;
+        setButtonLoading(btn, true, 'Removing photo…');
         try {
             const response = await fetch(`/profile/@${username}/photo`, { method: 'DELETE' });
             const body = await response.json().catch(() => ({}));
@@ -168,9 +170,11 @@ function initProfilePhoto(username, canUpload) {
                 window.location.reload();
             } else {
                 showToast(body.message || 'Failed to remove profile photo', 'danger');
+                setButtonLoading(btn, false);
             }
         } catch (err) {
             showToast('Failed to remove profile photo', 'danger');
+            setButtonLoading(btn, false);
         }
     }
 

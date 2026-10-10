@@ -238,8 +238,7 @@
         if (!btn) return;
         const join = btn.dataset.action === 'join';
         if (!join && !confirm('Leave ' + btn.dataset.groupName + '?')) return;
-        btn.disabled = true;
-        btn.setAttribute('aria-busy', 'true');
+        setButtonLoading(btn, true, join ? 'Joining…' : 'Leaving…');
         fetch('/groups/' + btn.dataset.groupSlug + '/self', { method: join ? 'PUT' : 'DELETE' })
             .then(function(r) { return r.json().then(function(body) { return { ok: r.ok, body: body }; }); })
             .then(function(res) {
@@ -248,14 +247,12 @@
                     window.location.reload();
                 } else {
                     showToast(res.body.message || "Couldn't update your membership.", 'danger');
-                    btn.disabled = false;
-                    btn.removeAttribute('aria-busy');
+                    setButtonLoading(btn, false);
                 }
             })
             .catch(function() {
                 showToast("Couldn't update your membership. Refresh the page and try again.", 'danger');
-                btn.disabled = false;
-                btn.removeAttribute('aria-busy');
+                setButtonLoading(btn, false);
             });
     });
 </script>
@@ -266,25 +263,7 @@
         const username = btn.dataset.username;
         const groupSlug = btn.dataset.groupSlug;
         if (!confirm('Remove ' + username + ' from this group?')) return;
-        const icon = btn.querySelector('.material-symbols-outlined');
-        btn.disabled = true;
-        btn.setAttribute('aria-busy', 'true');
-        icon.style.display = 'none';
-        const spinner = document.createElement('span');
-        spinner.className = 'spinner-border spinner-border-sm';
-        spinner.setAttribute('role', 'status');
-        spinner.setAttribute('aria-hidden', 'true');
-        btn.appendChild(spinner);
-        const srLabel = document.createElement('span');
-        srLabel.className = 'visually-hidden';
-        srLabel.textContent = 'Removing member…';
-        btn.appendChild(srLabel);
-        const restoreIcon = function() {
-            btn.removeAttribute('aria-busy');
-            srLabel.remove();
-            spinner.remove();
-            icon.style.display = '';
-        };
+        setButtonLoading(btn, true, 'Removing member…');
         fetch('/groups/' + groupSlug + '/members/' + username, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
@@ -295,13 +274,11 @@
             }
             else { r.text().then(function(t) {
                 showToast('Failed to remove member: ' + t, 'danger');
-                btn.disabled = false;
-                restoreIcon();
+                setButtonLoading(btn, false);
             }); }
         }).catch(function(err) {
             showToast('Error: ' + err, 'danger');
-            btn.disabled = false;
-            restoreIcon();
+            setButtonLoading(btn, false);
         });
     });
 
