@@ -31,6 +31,13 @@ repositories {
 dependencies {
   implementation(project(":common-models"))
   implementation(project(":service:core"))
+  implementation(project(":service:askai"))
+  implementation(project(":service:dataviz"))
+  implementation(project(":service:notifications"))
+  implementation(project(":service:smartwaiver"))
+  implementation(project(":service:directory"))
+  implementation(project(":service:members"))
+  implementation(project(":service:config"))
   implementation(project(":service:activedirectory"))
   implementation(project(":service:bambuddy"))
   implementation(project(":service:moodle"))

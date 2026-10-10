@@ -44,7 +44,11 @@ configure(subprojects.filter { it.path.startsWith(":service:") }) {
   apply(plugin = "com.ncorti.ktfmt.gradle")
   apply(plugin = "io.gitlab.arturbosch.detekt")
 
-  repositories { mavenCentral() }
+  repositories {
+    mavenCentral()
+    // Vendored WinRM jar (see service/libs/README.md); consumers of :service:winrm resolve it too.
+    flatDir { dirs(rootProject.file("service/libs")) }
+  }
 
   extensions.configure<KotlinJvmProjectExtension> { jvmToolchain(21) }
   // Tests ran against the app's application.conf / logback.xml before the split; keep that.
@@ -83,6 +87,10 @@ configure(subprojects.filter { it.path.startsWith(":service:") }) {
 
     add("testImplementation", "io.ktor:ktor-server-test-host:$ktorVersion")
     add("testImplementation", "io.ktor:ktor-client-mock:$ktorVersion")
+    add("testImplementation", "io.ktor:ktor-serialization-gson-jvm:$ktorVersion")
+    if (path != ":service:core") {
+      add("testImplementation", testFixtures(project(":service:core")))
+    }
     add("testImplementation", "org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
     add("testImplementation", "junit:junit:4.13.2")
     add("testImplementation", "org.mockito:mockito-core:4.11.0")

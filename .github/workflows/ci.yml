@@ -38,6 +38,7 @@ jobs:
           path: |
             common-models/build/test-results/
             service/build/test-results/
+            service/modules/*/build/test-results/
             ui/build/test-results/
           retention-days: 30
 
