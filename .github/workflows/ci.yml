@@ -115,19 +115,39 @@ jobs:
           mariadb -h mariadb -P 3306 -u "$DB_MASTER_USER" -p"$DB_MASTER_PASSWORD" member_profile \
             < service/docs/sql/create.sql
 
-      - name: Build service and UI
-        run: ./gradlew :service:classes :ui:classes --no-daemon
+      - name: Build service and UI jars
+        run: ./gradlew :service:shadowJar :ui:shadowJar
 
+      # The CD workflows deploy exactly these jars (see common-cd.yml), so what e2e tests is what ships.
+      - name: Upload service jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: service-jar
+          path: service/build/libs/service-all.jar
+          retention-days: 7
+
+      - name: Upload UI jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-jar
+          path: ui/build/libs/ui-all.jar
+          retention-days: 7
+
+      # Each app runs from its module dir, mirroring Gradle's run task.
       - name: Start service and UI
         run: |
-          ./gradlew runAll --no-daemon > /tmp/runall.log 2>&1 &
-          echo $! > /tmp/runall.pid
-          sleep 15
-          if ! kill -0 "$(cat /tmp/runall.pid)" 2>/dev/null; then
-            echo "runAll exited before apps could start"
-            tail -200 /tmp/runall.log
-            exit 1
-          fi
+          (cd service && exec java -jar build/libs/service-all.jar > /tmp/service.log 2>&1) &
+          echo $! > /tmp/service.pid
+          (cd ui && exec java -jar build/libs/ui-all.jar > /tmp/ui.log 2>&1) &
+          echo $! > /tmp/ui.pid
+          sleep 5
+          for app in service ui; do
+            if ! kill -0 "$(cat /tmp/$app.pid)" 2>/dev/null; then
+              echo "$app exited before it could start"
+              tail -200 /tmp/$app.log
+              exit 1
+            fi
+          done
 
       - name: Wait for service and UI
         run: |
@@ -137,16 +157,20 @@ jobs:
               echo "Apps ready after attempt ${attempt}"
               exit 0
             fi
-            if ! kill -0 "$(cat /tmp/runall.pid)" 2>/dev/null; then
-              echo "runAll exited while waiting for apps"
-              tail -200 /tmp/runall.log
-              exit 1
-            fi
+            for app in service ui; do
+              if ! kill -0 "$(cat /tmp/$app.pid)" 2>/dev/null; then
+                echo "$app exited while waiting for apps"
+                tail -200 /tmp/$app.log
+                exit 1
+              fi
+            done
             echo "Waiting for service (:8081) and UI (:8000)... (${attempt}/90)"
             sleep 5
           done
-          echo "=== runAll log (last 200 lines) ==="
-          tail -200 /tmp/runall.log
+          for app in service ui; do
+            echo "=== $app log (last 200 lines) ==="
+            tail -200 /tmp/$app.log
+          done
           exit 1
 
       - name: Run Playwright e2e tests
@@ -155,13 +179,11 @@ jobs:
       - name: Stop service and UI
         if: always()
         run: |
-          if [ -f /tmp/runall.pid ]; then
-            kill "$(cat /tmp/runall.pid)" 2>/dev/null || true
-          fi
-          pkill -f 'GradleWrapperMain.*:service:run' || true
-          pkill -f 'GradleWrapperMain.*:ui:run' || true
-          pkill -f 'org.dallasmakerspace.Application' || true
-          pkill -f 'MemberProfileUiApplication' || true
+          for app in service ui; do
+            if [ -f /tmp/$app.pid ]; then
+              kill "$(cat /tmp/$app.pid)" 2>/dev/null || true
+            fi
+          done
 
       - name: Upload e2e test results
         if: always()
@@ -171,12 +193,14 @@ jobs:
           path: e2e/build/test-results/
           retention-days: 30
 
-      - name: Upload runAll log on failure
+      - name: Upload app logs on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: runall-log
-          path: /tmp/runall.log
+          name: app-logs
+          path: |
+            /tmp/service.log
+            /tmp/ui.log
           retention-days: 7
 
   publish-e2e-test-results:
