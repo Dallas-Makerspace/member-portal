@@ -60,7 +60,7 @@ plugins {
   id("com.google.devtools.ksp")
   id("io.ktor.plugin")
   id("org.jetbrains.kotlinx.kover")
-  id("com.ncorti.ktfmt.gradle") version "0.23.0"
+  id("com.ncorti.ktfmt.gradle")
   id("io.gitlab.arturbosch.detekt")
 }
 

@@ -1,7 +1,7 @@
 plugins {
   kotlin("jvm")
   kotlin("plugin.serialization")
-  id("com.ncorti.ktfmt.gradle") version "0.23.0"
+  id("com.ncorti.ktfmt.gradle")
 }
 
 repositories { mavenCentral() }

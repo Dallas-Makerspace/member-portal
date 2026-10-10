@@ -1,3 +1,6 @@
+import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+
 // Root build file for member-portal monorepo
 // Individual module configurations are in service/build.gradle.kts and ui/build.gradle.kts
 
@@ -9,6 +12,7 @@ plugins {
     id("io.ktor.plugin") version "3.3.3" apply false
     id("org.jetbrains.kotlinx.kover") version "0.7.6" apply false
     id("io.gitlab.arturbosch.detekt") version "1.23.6" apply false
+    id("com.ncorti.ktfmt.gradle") version "0.23.0" apply false
 }
 
 // Load local properties if they exist (gitignored for machine-specific settings)
@@ -21,6 +25,65 @@ if (localPropertiesFile.exists()) {
             extra.set(key, value)
         }
     }
+}
+
+// Shared setup for the :service:* feature modules; each module's own build file only adds what is
+// specific to it.
+val ktorVersion: String by project
+val kotlinVersion: String by project
+val logbackVersion: String by project
+val exposedVersion: String by project
+val daggerVersion: String by project
+
+configure(subprojects.filter { it.path.startsWith(":service:") }) {
+  apply(plugin = "org.jetbrains.kotlin.jvm")
+  apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
+  apply(plugin = "com.google.devtools.ksp")
+  apply(plugin = "org.jetbrains.kotlinx.kover")
+  apply(plugin = "com.ncorti.ktfmt.gradle")
+  apply(plugin = "io.gitlab.arturbosch.detekt")
+
+  repositories { mavenCentral() }
+
+  extensions.configure<KotlinJvmProjectExtension> { jvmToolchain(21) }
+  extensions.configure<DetektExtension> {
+    config.setFrom(rootProject.file("service/config/detekt/detekt.yml"))
+  }
+
+  dependencies {
+    add("implementation", project(":common-models"))
+    add("implementation", "com.google.dagger:dagger:$daggerVersion")
+    add("ksp", "com.google.dagger:dagger-compiler:$daggerVersion")
+    add("implementation", "ch.qos.logback:logback-classic:$logbackVersion")
+    add("implementation", "org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
+    add("implementation", "com.squareup.okhttp3:okhttp:4.12.0")
+    // Ktor server + client packages shared by most feature modules
+    add("implementation", "io.ktor:ktor-utils:$ktorVersion")
+    add("implementation", "io.ktor:ktor-server-core-jvm:$ktorVersion")
+    add("implementation", "io.ktor:ktor-server-auth:$ktorVersion")
+    add("implementation", "io.ktor:ktor-server-resources:$ktorVersion")
+    add("implementation", "io.ktor:ktor-server-status-pages:$ktorVersion")
+    add("implementation", "io.ktor:ktor-server-content-negotiation-jvm:$ktorVersion")
+    add("implementation", "io.ktor:ktor-serialization-kotlinx-json-jvm:$ktorVersion")
+    add("implementation", "io.ktor:ktor-client-core:$ktorVersion")
+    add("implementation", "io.ktor:ktor-client-okhttp:$ktorVersion")
+    add("implementation", "io.ktor:ktor-client-json:$ktorVersion")
+    add("implementation", "io.ktor:ktor-client-logging:$ktorVersion")
+    add("implementation", "io.ktor:ktor-client-content-negotiation:$ktorVersion")
+    // Exposed ORM
+    add("implementation", "org.jetbrains.exposed:exposed-core:$exposedVersion")
+    add("implementation", "org.jetbrains.exposed:exposed-dao:$exposedVersion")
+    add("implementation", "org.jetbrains.exposed:exposed-java-time:$exposedVersion")
+    add("implementation", "org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
+
+    add("testImplementation", "io.ktor:ktor-server-test-host:$ktorVersion")
+    add("testImplementation", "io.ktor:ktor-client-mock:$ktorVersion")
+    add("testImplementation", "org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
+    add("testImplementation", "junit:junit:4.13.2")
+    add("testImplementation", "org.mockito:mockito-core:4.11.0")
+    add("testImplementation", "org.mockito:mockito-inline:4.11.0")
+    add("testImplementation", "org.mockito.kotlin:mockito-kotlin:5.4.0")
+  }
 }
 
 allprojects {

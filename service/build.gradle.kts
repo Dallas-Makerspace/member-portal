@@ -10,7 +10,7 @@ plugins {
   id("io.ktor.plugin")
   id("com.google.devtools.ksp")
   id("org.jetbrains.kotlinx.kover")
-  id("com.ncorti.ktfmt.gradle") version "0.23.0"
+  id("com.ncorti.ktfmt.gradle")
   id("io.gitlab.arturbosch.detekt")
 }
 
@@ -30,6 +30,7 @@ repositories {
 
 dependencies {
   implementation(project(":common-models"))
+  implementation(project(":service:core"))
   implementation("com.squareup.okhttp3:okhttp:4.12.0")
   implementation("com.google.dagger:dagger:$daggerVersion")
   ksp("com.google.dagger:dagger-compiler:$daggerVersion")
@@ -85,6 +86,7 @@ dependencies {
   implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
   implementation("com.agido:logback-elasticsearch-appender:3.0.11")
 
+  testImplementation(testFixtures(project(":service:core")))
   testImplementation("io.ktor:ktor-server-test-host")
   testImplementation("io.ktor:ktor-client-mock:$ktorVersion")
   testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlinVersion")
