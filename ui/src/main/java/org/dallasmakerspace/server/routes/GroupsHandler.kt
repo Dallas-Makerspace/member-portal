@@ -179,7 +179,9 @@ constructor(
                     "link" to if (isGroup) "/groups/$slug" else "/profile/@$name",
                 )
               }
-      jsonMap["administrators"] = processedAdmins
+      if (processedAdmins.isNotEmpty()) {
+        jsonMap["administrators"] = processedAdmins
+      }
     }
 
     // Process nested groups
