@@ -8,7 +8,7 @@ package org.dallasmakerspace.activedirectory
  * @param dn The distinguished name to check
  * @return true if the DN represents a group, false otherwise
  */
-internal fun isGroupDN(dn: String): Boolean {
+fun isGroupDN(dn: String): Boolean {
   val lowerDN = dn.lowercase()
   return lowerDN.contains("ou=security") ||
       lowerDN.contains("ou=organizational") ||
@@ -22,7 +22,7 @@ internal fun isGroupDN(dn: String): Boolean {
  * @param dn The distinguished name to parse
  * @return The CN value, or the original string if no CN component is found
  */
-internal fun parseCNFromDN(dn: String): String {
+fun parseCNFromDN(dn: String): String {
   val cnPrefix = "CN="
   val startIndex = dn.indexOf(cnPrefix, ignoreCase = true)
   if (startIndex == -1) return dn

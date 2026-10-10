@@ -1,4 +1,5 @@
 import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import org.gradle.api.tasks.SourceSetContainer
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 
 // Root build file for member-portal monorepo
@@ -46,6 +47,10 @@ configure(subprojects.filter { it.path.startsWith(":service:") }) {
   repositories { mavenCentral() }
 
   extensions.configure<KotlinJvmProjectExtension> { jvmToolchain(21) }
+  // Tests ran against the app's application.conf / logback.xml before the split; keep that.
+  extensions.configure<SourceSetContainer> {
+    named("test") { resources.srcDir(rootProject.file("service/src/main/resources")) }
+  }
   extensions.configure<DetektExtension> {
     config.setFrom(rootProject.file("service/config/detekt/detekt.yml"))
   }
