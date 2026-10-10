@@ -17,8 +17,6 @@ dependencies {
   ksp("com.google.dagger", "dagger-compiler", daggerVersion)
   implementation("com.squareup.okhttp3:okhttp:4.12.0")
   implementation("io.ktor", "ktor-client-auth", ktorVersion)
-  // Kept for EngineBenchmark.kt's CIO-vs-OkHttp comparison only.
-  implementation("io.ktor", "ktor-client-cio", ktorVersion)
   implementation("io.ktor", "ktor-client-okhttp", ktorVersion)
   implementation("io.ktor", "ktor-client-content-negotiation", ktorVersion)
   implementation("io.ktor", "ktor-client-core", ktorVersion)
@@ -73,11 +71,3 @@ application {
 }
 
 kotlin { jvmToolchain(21) }
-
-// TEMPORARY diagnostic task - see EngineBenchmark.kt. Remove alongside that file.
-tasks.register<JavaExec>("engineBenchmark") {
-  group = "diagnostics"
-  mainClass.set("org.dallasmakerspace.bench.EngineBenchmarkKt")
-  classpath = sourceSets.main.get().runtimeClasspath
-  args = listOf(project.findProperty("outputPath") as? String ?: "engine-benchmark.csv")
-}
