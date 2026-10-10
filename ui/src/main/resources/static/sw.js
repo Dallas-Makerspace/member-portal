@@ -1,7 +1,7 @@
 // Service Worker for Dallas Makerspace Member Portal
 // Version: 1.0.0
 
-const CACHE_VERSION = 'v28';
+const CACHE_VERSION = 'v29';
 const STATIC_CACHE = `dms-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dms-dynamic-${CACHE_VERSION}`;
 const MAX_CACHE_AGE_DAYS = 7;
@@ -90,10 +90,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // CSS and JS: Stale While Revalidate — serve cached immediately, refresh cache in background
-  if (
-    url.pathname.match(/\.(css|js)$/)
-  ) {
+  // Own CSS and JS: Network First — the inline page scripts depend on the shared helpers, so
+  // stale-while-revalidate served new HTML with an old app.js after a deploy.
+  if (url.origin === location.origin && url.pathname.match(/\.(css|js)$/)) {
+    event.respondWith(networkFirst(request, STATIC_CACHE));
+    return;
+  }
+
+  // Third-party CSS and JS: Stale While Revalidate — serve cached immediately, refresh in background
+  if (url.pathname.match(/\.(css|js)$/)) {
     event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
     return;
   }
