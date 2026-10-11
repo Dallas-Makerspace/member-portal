@@ -1,7 +1,7 @@
 // Service Worker for Dallas Makerspace Member Portal
 // Version: 1.0.0
 
-const CACHE_VERSION = 'v29';
+const CACHE_VERSION = '__BUILD_ID__'; // stamped at build time (ui/build.gradle.kts)
 const STATIC_CACHE = `dms-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `dms-dynamic-${CACHE_VERSION}`;
 const MAX_CACHE_AGE_DAYS = 7;
@@ -91,9 +91,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Own CSS and JS: Network First — the inline page scripts depend on the shared helpers, so
-  // stale-while-revalidate served new HTML with an old app.js after a deploy.
+  // stale-while-revalidate served new HTML with an old app.js after a deploy. 'no-cache' makes the
+  // fetch revalidate (ETag) instead of trusting the browser's 5-minute max-age copy.
   if (url.origin === location.origin && url.pathname.match(/\.(css|js)$/)) {
-    event.respondWith(networkFirst(request, STATIC_CACHE));
+    event.respondWith(networkFirst(new Request(request, { cache: 'no-cache' }), STATIC_CACHE));
     return;
   }
 

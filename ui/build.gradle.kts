@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 description = "Web UI for Member Profiles"
 
 val ktorVersion: String by project
@@ -71,3 +73,44 @@ application {
 }
 
 kotlin { jvmToolchain(21) }
+
+// Stamps sw.js with a hash of src/main/resources/static so its cache name changes whenever any
+// static asset does (no manual CACHE_VERSION bump). The source sw.js holds a placeholder.
+abstract class StampServiceWorker : DefaultTask() {
+  @get:InputDirectory
+  @get:PathSensitive(PathSensitivity.RELATIVE)
+  abstract val staticDir: DirectoryProperty
+
+  @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+  @TaskAction
+  fun stamp() {
+    val root = staticDir.get().asFile
+    val digest = MessageDigest.getInstance("SHA-256")
+    root
+        .walkTopDown()
+        .filter { it.isFile }
+        .sortedBy { it.relativeTo(root).invariantSeparatorsPath }
+        .forEach {
+          digest.update(it.relativeTo(root).invariantSeparatorsPath.toByteArray())
+          digest.update(it.readText().replace("\r\n", "\n").toByteArray())
+        }
+    val buildId = digest.digest().joinToString("") { "%02x".format(it) }.take(12)
+    val out = outputDir.get().asFile.resolve("static/sw.js")
+    out.parentFile.mkdirs()
+    out.writeText(root.resolve("sw.js").readText().replace("__BUILD_ID__", buildId))
+  }
+}
+
+val stampServiceWorker by
+    tasks.registering(StampServiceWorker::class) {
+      staticDir.set(layout.projectDirectory.dir("src/main/resources/static"))
+      outputDir.set(layout.buildDirectory.dir("generated/sw"))
+    }
+
+tasks.processResources {
+  // Drop only the unstamped source copy; the generated one has the same relative path.
+  val sourceDir = layout.projectDirectory.dir("src").asFile
+  exclude { it.path == "static/sw.js" && it.file.startsWith(sourceDir) }
+  from(stampServiceWorker)
+}
