@@ -13,6 +13,10 @@
         <h4 class="card-title mt-3 mb-1 dms-card-title">Online Courses</h4>
         <p class="text-muted small mb-4">Self-paced courses on DMS Learn you can take from home.</p>
 
+        <p th:if="${sectionModel.courses.empty}" class="text-muted small mb-0">
+            No online courses yet. Add course editors below so they can create the first one.
+        </p>
+
         <div class="d-flex flex-column gap-3">
             <div th:each="course : ${sectionModel.courses}"
                  th:insert="~{fragments/moodle-courses-section :: courseRow(${course})}"></div>
@@ -43,7 +47,7 @@
                 <span class="material-symbols-outlined" style="font-size: 18px;">group</span>
                 Manage editors
             </a>
-            <a th:href="${sectionModel.statsUrl}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
+            <a th:if="${!sectionModel.courses.empty}" th:href="${sectionModel.statsUrl}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
                 <span class="material-symbols-outlined" style="font-size: 18px;">bar_chart</span>
                 Learning stats
             </a>

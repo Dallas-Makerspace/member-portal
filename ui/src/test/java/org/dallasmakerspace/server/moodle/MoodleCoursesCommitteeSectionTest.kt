@@ -28,6 +28,9 @@ class MoodleCoursesCommitteeSectionTest {
   @Before
   fun noEditorsByDefault() = runBlocking<Unit> {
     whenever(client.getMultipleGroups(any(), anyOrNull())).thenReturn(emptyList())
+    whenever(client.isGroupAdmin(any(), any(), anyOrNull())).thenReturn(false)
+    whenever(client.getFeatureFlag(eq("groups.member-management-enabled"), anyOrNull(), any()))
+        .thenReturn(true)
   }
 
   private fun catalog(count: Int) =
@@ -140,7 +143,45 @@ class MoodleCoursesCommitteeSectionTest {
     val model = assertNotNull(loader.load(laser, "sid", "jdoe"))
 
     assertEquals(emptyList<Any>(), model["editors"])
+    assertNull(model["editorsGroupUrl"])
     assertEquals(false, model["canManageEditors"])
+  }
+
+  @Test
+  fun `manage editors needs member management to be enabled`() = runBlocking<Unit> {
+    withCourses()
+    whenever(client.getMultipleGroups(any(), anyOrNull())).thenReturn(listOf(editorsGroup()))
+    whenever(client.getFeatureFlag(eq("groups.member-management-enabled"), anyOrNull(), any()))
+        .thenReturn(false)
+
+    val model = assertNotNull(loader.load(laser, "sid", "jdoe", canAdminGroups = true))
+
+    assertEquals(false, model["canManageEditors"])
+    assertEquals("/groups/Laser+Online+Course+Editors", model["editorsGroupUrl"])
+  }
+
+  @Test
+  fun `committees without a Moodle category skip every lookup`() = runBlocking<Unit> {
+    whenever(client.isFeatureEnabled(any(), any(), anyOrNull())).thenReturn(true)
+
+    assertNull(loader.load(Committees.findBySlug("blacksmith")!!, "sid", "jdoe"))
+
+    verify(client, never()).getMoodleCatalog(anyOrNull(), anyOrNull())
+    verify(client, never()).getMultipleGroups(any(), anyOrNull())
+  }
+
+  @Test
+  fun `a committee with no courses shows the card only to those who can manage editors`() = runBlocking<Unit> {
+    whenever(client.isFeatureEnabled(any(), any(), anyOrNull())).thenReturn(true)
+    whenever(client.getMoodleCatalog(anyOrNull(), eq("laser"))).thenReturn(catalog(0))
+    whenever(client.getMoodleMemberCourses(anyOrNull(), eq("jdoe"))).thenReturn(emptyList())
+    whenever(client.getMultipleGroups(any(), anyOrNull())).thenReturn(listOf(editorsGroup()))
+
+    assertNull(loader.load(laser, "sid", "jdoe"))
+
+    val model = assertNotNull(loader.load(laser, "sid", "jdoe", canAdminGroups = true))
+    assertEquals(0, model["totalCount"])
+    assertEquals(true, model["canManageEditors"])
   }
 
   @Test

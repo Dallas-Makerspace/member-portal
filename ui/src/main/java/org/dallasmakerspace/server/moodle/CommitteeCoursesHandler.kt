@@ -30,7 +30,8 @@ constructor(
                 committee,
                 session.sessionId,
                 username,
-                canAdminGroups = authz.can(Permission.MANAGE_GROUPS.name))
+                canAdminGroups = authz.can(Permission.MANAGE_GROUPS.name),
+                isInfraUser = authz.can(Permission.MANAGE_CONFIG.name))
     if (model == null) {
       call.respond(HttpStatusCode.NoContent)
       return

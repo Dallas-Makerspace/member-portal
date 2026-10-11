@@ -14,6 +14,7 @@ import org.dallasmakerspace.server.models.getSlugFromName
 
 private const val COLLAPSED_COUNT = 3
 private const val EDITORS_GROUP_SUFFIX = "Online Course Editors"
+private const val MEMBER_MANAGEMENT_FLAG = "groups.member-management-enabled"
 
 /**
  * "Online Courses" card on committee pages. Renders only a placeholder so the page never waits on
@@ -46,18 +47,27 @@ constructor(private val memberServiceClient: MemberServiceClient) {
       sessionId: String?,
       username: String,
       canAdminGroups: Boolean = false,
+      isInfraUser: Boolean = false,
   ): Map<String, Any?>? =
       coroutineScope {
+        // Courses and editors both hang off the committee's Moodle category.
+        if (committee.learnCategories.isEmpty()) return@coroutineScope null
         if (!memberServiceClient.isFeatureEnabled(MOODLE_FEATURE_FLAG, username, sessionId)) {
           return@coroutineScope null
         }
         val memberCoursesDeferred = async {
           memberServiceClient.getMoodleMemberCourses(sessionId, username)
         }
-        val editorsDeferred = async { loadEditors(committee, sessionId, username, canAdminGroups) }
+        val editorsDeferred = async {
+          loadEditors(committee, sessionId, username, canAdminGroups, isInfraUser)
+        }
         val catalog = memberServiceClient.getMoodleCatalog(sessionId, committee.slug)
         val courses = MoodleCourses.parse(catalog, memberCoursesDeferred.await()).filter { it.joinable }
-        if (courses.isEmpty()) return@coroutineScope null
+        val editors = editorsDeferred.await()
+        // With no courses the card is only for those who can add editors, so the first one gets built.
+        if (courses.isEmpty() && editors?.get("canManageEditors") != true) {
+          return@coroutineScope null
+        }
         val model =
             mutableMapOf<String, Any?>(
                 "courses" to courses.take(COLLAPSED_COUNT),
@@ -68,7 +78,7 @@ constructor(private val memberServiceClient: MemberServiceClient) {
                 "editorsGroupUrl" to null,
                 "canManageEditors" to false,
             )
-        editorsDeferred.await()?.let { model.putAll(it) }
+        editors?.let { model.putAll(it) }
         model
       }
 
@@ -81,6 +91,7 @@ constructor(private val memberServiceClient: MemberServiceClient) {
       sessionId: String?,
       username: String,
       canAdminGroups: Boolean,
+      isInfraUser: Boolean,
   ): Map<String, Any?>? {
     val names =
         (committee.groupPrefixes + committee.name).distinct().map { "$it $EDITORS_GROUP_SUFFIX" }
@@ -92,6 +103,10 @@ constructor(private val memberServiceClient: MemberServiceClient) {
           null // the card renders fine without editors
         } ?: return null
     val slug = getSlugFromName(group.name)
+    // The group page only offers add/remove while member management is enabled.
+    val canManage =
+        (canAdminGroups || memberServiceClient.isGroupAdmin(username, slug, sessionId)) &&
+            memberServiceClient.getFeatureFlag(MEMBER_MANAGEMENT_FLAG, sessionId, isInfraUser)
     return mapOf(
         "editors" to
             group.members
@@ -104,7 +119,7 @@ constructor(private val memberServiceClient: MemberServiceClient) {
                   )
                 },
         "editorsGroupUrl" to "/groups/$slug",
-        "canManageEditors" to (canAdminGroups || memberServiceClient.isGroupAdmin(username, slug, sessionId)),
+        "canManageEditors" to canManage,
     )
   }
 }
