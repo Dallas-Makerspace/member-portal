@@ -34,14 +34,25 @@ constructor(
   ): Map<Int, AccountStatus> {
     val accountProductsInfoMap =
         whmcsDataRepository.getAccountProductInfoMap(whmcsIdList, startDate)
+    val suspensionDays = getAutoSuspensionDays()
     val result = mutableMapOf<Int, AccountStatus>()
     whmcsIdList.forEach { whmcsId ->
       val products = accountProductsInfoMap[whmcsId] ?: emptyList()
       result[whmcsId] =
-          checkActiveInRange(products, startDate, voterRegistrationManager.getUserGracePeriods())
+          checkActiveInRange(
+              products, startDate, voterRegistrationManager.getUserGracePeriods(), suspensionDays)
     }
     return result
   }
+
+  @Volatile private var cachedAutoSuspensionDays: Long? = null
+
+  /** Days past an unpaid due date before WHMCS auto-suspends a service; 0 if auto-suspend is off. */
+  private suspend fun getAutoSuspensionDays(): Long =
+      cachedAutoSuspensionDays
+          ?: (whmcsDataRepository.getAutoSuspensionDays() ?: 0).toLong().also {
+            cachedAutoSuspensionDays = it
+          }
 
   /**
    * Check if the user has at least one active product from the startDate to now. Product is
@@ -52,13 +63,15 @@ constructor(
    * @param whmcsId WHMCS user ID
    * @param products List of products for the user
    * @param startDate Start date for the check
+   * @param suspensionDays Days a suspended product stays covered past its next due date
    * @return True if the user has at least active product between start date and now, false
    *   otherwise
    */
   private fun checkActiveInRange(
       products: List<WhmcsProductInfo>,
       startDate: LocalDate,
-      userGracePeriods: List<UserGracePeriod>
+      userGracePeriods: List<UserGracePeriod>,
+      suspensionDays: Long,
   ): AccountStatus {
     val today = time.getToday()
     val userProducts = products.sortedBy { it.regDate }
@@ -75,7 +88,8 @@ constructor(
     // For each date between start date and now, check if the user has an active product
     var currentDate = startDate
     while (!currentDate.isAfter(today)) {
-      val dateIsCovered = userProducts.any { productCoversDate(it, currentDate) }
+      val dateIsCovered =
+          userProducts.any { productCoversDate(it, currentDate, suspensionDays) }
 
       val dateInGracePeriod =
           userGracePeriods.any { gracePeriod ->
@@ -153,16 +167,21 @@ constructor(
    * 2. And either:
    *    - Product is currently active (Active + null termination)
    *    - Or termination date is on or after the date we're checking
-   *    - Or it is suspended and the date is before its unpaid next due date
+   *    - Or it is suspended and the date is before WHMCS auto-suspended it (next due date plus
+   *      [suspensionDays])
    */
-  private fun productCoversDate(product: WhmcsProductInfo, date: LocalDate): Boolean {
+  private fun productCoversDate(
+      product: WhmcsProductInfo,
+      date: LocalDate,
+      suspensionDays: Long,
+  ): Boolean {
     val isCurrentlyActive =
         product.domainStatus == WhmcsDomainStatus.Active && product.terminationDate == null
     val isTerminatedOnOrAfterDate = product.terminationDate?.isBefore(date) == false
     val isSuspendedAfterDate =
         product.domainStatus == WhmcsDomainStatus.Suspended &&
             product.terminationDate == null &&
-            product.nextDueDate?.isAfter(date) == true
+            product.nextDueDate?.plusDays(suspensionDays)?.isAfter(date) == true
 
     return !product.regDate.isAfter(date) &&
         (isCurrentlyActive || isTerminatedOnOrAfterDate || isSuspendedAfterDate)

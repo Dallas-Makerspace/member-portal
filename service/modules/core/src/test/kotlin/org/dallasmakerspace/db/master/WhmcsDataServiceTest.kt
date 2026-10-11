@@ -171,6 +171,27 @@ class WhmcsDataServiceTest {
   }
 
   @Test
+  fun `getAccountInfoMap extends suspended product coverage by auto-suspension days`() =
+      runBlocking {
+        val whmcsId = 1
+        val nextDueDate = TODAY.minusDays(4)
+        val products = listOf(suspendedProduct(START_DATE.minusDays(10), nextDueDate))
+
+        whenever(whmcsDataRepository.getAccountProductInfoMap(listOf(whmcsId), START_DATE))
+            .thenReturn(mapOf(whmcsId to products))
+        whenever(whmcsDataRepository.getAutoSuspensionDays()).thenReturn(4)
+        whenever(voterRegistrationManager.getUserGracePeriods()).thenReturn(emptyList())
+
+        val status = whmcsDataService.getAccountInfoMap(listOf(whmcsId))[whmcsId]!!
+        assertEquals(1, status.daysInCurrentStatus)
+        assertEquals(
+            listOf(
+                TimelineEntry(TimelineEntryType.ACTIVE, START_DATE, TODAY.minusDays(1), 90),
+                TimelineEntry(TimelineEntryType.GAP, TODAY, null, 1)),
+            status.timeline)
+      }
+
+  @Test
   fun `getAccountInfoMap treats suspended product without next due date as uncovered`() =
       runBlocking {
         val whmcsId = 1

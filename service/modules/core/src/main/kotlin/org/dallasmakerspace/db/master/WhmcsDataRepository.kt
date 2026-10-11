@@ -76,6 +76,33 @@ class WhmcsDataRepository @Inject constructor() {
   }
 
   /**
+   * Get WHMCS's AutoSuspensionDays setting.
+   *
+   * @return Days past due before a service is auto-suspended, or null if auto-suspension is off
+   */
+  suspend fun getAutoSuspensionDays(): Int? {
+    val settings = mutableMapOf<String, String?>()
+    suspendTransaction {
+      val query =
+          """
+        SELECT setting, value
+        FROM `dms-whmcs`.tblconfiguration
+        WHERE setting IN ('AutoSuspension', 'AutoSuspensionDays')
+      """
+              .trimIndent()
+
+      this.exec(query) { resultSet: ResultSet ->
+        while (resultSet.next()) {
+          settings[resultSet.getString("setting")] = resultSet.getString("value")
+        }
+      }
+    }
+
+    return if (settings["AutoSuspension"] == "on") settings["AutoSuspensionDays"]?.toIntOrNull()
+    else null
+  }
+
+  /**
    * Get the regdate of the earliest record in tblhosting table
    *
    * @param whmcsId WHMCS user ID to get the earliest registration date for
