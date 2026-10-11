@@ -74,9 +74,13 @@ CREATE TABLE `groups` (
   `name` varchar(255) NOT NULL COMMENT 'The name of the group',
   `dn` varchar(512) NOT NULL COMMENT 'The distinguished name (DN) of the group in Active Directory',
   `created` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'The timestamp when the record was created in our database',
+  `object_guid` varchar(36) DEFAULT NULL COMMENT 'AD objectGUID, canonical lowercase hyphenated; NULL until backfilled',
+  `status` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, DISABLED or ARCHIVED',
+  `archived_at` timestamp NULL DEFAULT NULL COMMENT 'When the group was archived; NULL unless status is ARCHIVED',
   PRIMARY KEY (`id`),
   UNIQUE KEY `groups_name_UNQ` (`name`),
-  UNIQUE KEY `groups_dn_UNQ` (`dn`)
+  UNIQUE KEY `groups_dn_UNQ` (`dn`),
+  UNIQUE KEY `groups_object_guid_UNQ` (`object_guid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Reference table for groups in Active Directory';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -409,7 +413,6 @@ CREATE TABLE `profile_subscriptions` (
   CONSTRAINT `profile_subscriptions_followed_profile_FK` FOREIGN KEY (`followed_profile_id`) REFERENCES `profile` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Member-to-member follow relationships, e.g. follow an event organizer to be notified when they post a new event.';
 
--- Dump completed on 2025-12-31 21:13:59
 --
 -- Table structure for table `workflow_run`
 --
@@ -509,3 +512,4 @@ CREATE TABLE `workflow_event` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Append-only run log and audit trail';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+-- Dump completed on 2025-12-31 21:13:59

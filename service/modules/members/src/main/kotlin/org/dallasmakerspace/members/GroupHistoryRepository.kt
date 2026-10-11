@@ -2,6 +2,7 @@ package org.dallasmakerspace.members
 
 import java.time.LocalDateTime
 import javax.inject.Inject
+import org.dallasmakerspace.activedirectory.AdGuid
 import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.GroupDAO
 import org.dallasmakerspace.members.db.GroupHistoryColumnAliases.actorProfileAlias
@@ -15,13 +16,16 @@ import org.dallasmakerspace.members.db.daoToGroupHistoryModel
 import org.dallasmakerspace.models.ActionType
 import org.dallasmakerspace.models.GroupHistory
 import org.jetbrains.exposed.sql.JoinType
+import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.select
 import org.slf4j.LoggerFactory
 
 /** Manages the group history records. CRUD operations using GroupHistoryDAO. */
-class GroupHistoryRepository @Inject constructor() : IGroupHistoryRepository {
+class GroupHistoryRepository @Inject constructor(private val guidResolver: GroupGuidResolver) :
+    IGroupHistoryRepository {
   private val logger = LoggerFactory.getLogger(GroupHistoryRepository::class.java)
 
   /**
@@ -212,22 +216,50 @@ class GroupHistoryRepository @Inject constructor() : IGroupHistoryRepository {
    * @param dn The distinguished name of the group (optional).
    * @return The ID of the group.
    */
-  override suspend fun getOrCreateGroup(name: String, dn: String?): Int = suspendTransaction {
-    val existingGroup = GroupDAO.find { GroupsTable.name eq name }.firstOrNull()
+  override suspend fun getOrCreateGroup(name: String, dn: String?): Int {
+    val resolved = guidResolver.resolve(name)
+    return resolveGroup(name, dn ?: resolved?.dn, resolved?.guid)
+  }
 
-    if (existingGroup != null) {
-      existingGroup.id.value
-    } else {
-      val actualDn = dn ?: "CN=$name,OU=Groups,DC=dms,DC=local"
-      GroupDAO.new {
-            this.name = name
-            this.dn = actualDn
-            this.created = LocalDateTime.now()
-          }
-          .id
-          .value
+  override suspend fun resolveGroup(name: String, dn: String?, objectGuid: String?): Int {
+    val guid = objectGuid?.let { AdGuid.normalize(it) }
+    return suspendTransaction {
+      val byGuid = guid?.let { findRow(GroupsTable.objectGuid eq it) }
+      val byName = findRow(GroupsTable.name eq name)
+      val byDn = dn?.let { findRow(GroupsTable.dn eq it) }
+      val decision = decideGroupSync(name, dn, guid, byGuid?.ref(), byName?.ref(), byDn?.ref())
+      when (decision) {
+        is GroupSyncDecision.Use -> decision.id
+        is GroupSyncDecision.FillGuid -> {
+          byName?.objectGuid = decision.guid
+          decision.id
+        }
+        is GroupSyncDecision.Heal -> {
+          byGuid?.name = decision.name
+          decision.dn?.let { byGuid?.dn = it }
+          logger.info("Group row {} renamed to match AD (GUID match)", decision.id)
+          decision.id
+        }
+        is GroupSyncDecision.Conflict -> {
+          logger.warn("Group row {} not updated: {}", decision.id, decision.reason)
+          decision.id
+        }
+        is GroupSyncDecision.Create ->
+            GroupDAO.new {
+                  this.name = name
+                  this.dn = decision.dn
+                  this.created = LocalDateTime.now()
+                  this.objectGuid = guid
+                }
+                .id
+                .value
+      }
     }
   }
+
+  private fun findRow(op: Op<Boolean>): GroupDAO? = GroupDAO.find { op }.firstOrNull()
+
+  private fun GroupDAO.ref() = GroupRowRef(id.value, name, dn, objectGuid)
 
   override suspend fun hasPortalInitiatedRecord(
       memberId: Int,

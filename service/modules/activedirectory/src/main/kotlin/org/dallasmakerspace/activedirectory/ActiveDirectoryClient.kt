@@ -198,6 +198,16 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
     }
   }
 
+  // objectGUID is binary; the string view of an LDAP attribute value is lossy for it.
+  private fun Map<String, Any?>.withCanonicalGuid(
+      entry: com.unboundid.ldap.sdk.SearchResultEntry
+  ): Map<String, Any?> =
+      if (entry.hasAttribute("objectGUID")) {
+        this + ("objectGUID" to AdGuid.fromBytes(entry.getAttributeValueBytes("objectGUID")))
+      } else {
+        this
+      }
+
   override fun getGroup(groupname: String): Map<String, Any?> {
     val startTime = System.currentTimeMillis()
     var connectedServer = "unknown"
@@ -239,9 +249,11 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
               ?: throw ADException("Group $groupname not found in AD")
 
       val group =
-          groupEntry.attributes.associate {
-            it.name to if (it.name == "member") it.values else it.values.firstOrNull()
-          }
+          groupEntry.attributes
+              .associate {
+                it.name to if (it.name == "member") it.values else it.values.firstOrNull()
+              }
+              .withCanonicalGuid(groupEntry)
 
       // Escape special characters like '(' and ')' in the group DN
       val groupDN =
@@ -337,9 +349,11 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       for (groupEntry in searchResult.searchEntries) {
         val groupName = groupEntry.getAttributeValue("cn")
         val group =
-            groupEntry.attributes.associate {
-              it.name to if (it.name == "member") it.values else it.values.firstOrNull()
-            }
+            groupEntry.attributes
+                .associate {
+                  it.name to if (it.name == "member") it.values else it.values.firstOrNull()
+                }
+                .withCanonicalGuid(groupEntry)
 
         // Escape special characters in the group DN
         val groupDN =
@@ -834,15 +848,17 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
         searchResult.searchEntries.associate { groupEntry ->
           val groupName = groupEntry.getAttributeValue("cn")
           val group =
-              groupEntry.attributes.associate {
-                it.name to
-                    if (it.name == "member") {
-                      // For member count, just return the count without loading all members
-                      it.values?.size ?: 0
-                    } else {
-                      it.values.firstOrNull()
-                    }
-              }
+              groupEntry.attributes
+                  .associate {
+                    it.name to
+                        if (it.name == "member") {
+                          // For member count, just return the count without loading all members
+                          it.values?.size ?: 0
+                        } else {
+                          it.values.firstOrNull()
+                        }
+                  }
+                  .withCanonicalGuid(groupEntry)
           groupName to group
         }
     val mapDurationMs = (System.nanoTime() - mapStart) / 1_000_000

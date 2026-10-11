@@ -21,7 +21,11 @@ interface IGroupHistoryRepository {
       source: String = "AD_WEBHOOK",
   ): GroupHistory
 
+  /** Looks up or creates the group row; also fills the AD objectGUID on a best-effort basis. */
   suspend fun getOrCreateGroup(name: String, dn: String? = null): Int
+
+  /** Resolves by [objectGuid] first, then by name, healing a stale name/DN or missing GUID. */
+  suspend fun resolveGroup(name: String, dn: String?, objectGuid: String?): Int
 
   suspend fun hasPortalInitiatedRecord(
       memberId: Int,

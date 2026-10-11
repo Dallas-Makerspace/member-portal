@@ -5,4 +5,5 @@ dependencies {
   implementation(project(":service:doorcontroller"))
   implementation(project(":service:storage"))
   implementation("com.googlecode.libphonenumber:libphonenumber:8.13.5")
+  testImplementation("com.h2database:h2:2.2.220")
 }

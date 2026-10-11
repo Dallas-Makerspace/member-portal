@@ -7,11 +7,15 @@ import dagger.multibindings.IntoSet
 import javax.inject.Singleton
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.members.GroupGuidBackfillStore
+import org.dallasmakerspace.members.GroupGuidBackfillStoreMock
+import org.dallasmakerspace.members.GroupGuidResolver
 import org.dallasmakerspace.members.GroupHistoryRepository
 import org.dallasmakerspace.members.GroupHistoryRepositoryMock
 import org.dallasmakerspace.members.GroupSettingsRepository
 import org.dallasmakerspace.members.GroupSettingsRepositoryMock
 import org.dallasmakerspace.members.GroupSettingsService
+import org.dallasmakerspace.members.IGroupGuidBackfillStore
 import org.dallasmakerspace.members.IGroupHistoryRepository
 import org.dallasmakerspace.members.IGroupSettingsRepository
 import org.dallasmakerspace.members.IMemberRepository
@@ -44,8 +48,21 @@ abstract class MembersModule {
         if (useMockServices(appConfig)) MemberRepositoryMock() else MemberRepository(loggerFactory)
 
     @Provides
-    fun provideGroupHistoryRepository(appConfig: AppConfig): IGroupHistoryRepository =
-        if (useMockServices(appConfig)) GroupHistoryRepositoryMock() else GroupHistoryRepository()
+    @Singleton
+    fun provideGroupHistoryRepository(
+        appConfig: AppConfig,
+        guidResolver: GroupGuidResolver,
+    ): IGroupHistoryRepository =
+        if (useMockServices(appConfig)) {
+          GroupHistoryRepositoryMock()
+        } else {
+          GroupHistoryRepository(guidResolver)
+        }
+
+    @Provides
+    @Singleton
+    fun provideGroupGuidBackfillStore(appConfig: AppConfig): IGroupGuidBackfillStore =
+        if (useMockServices(appConfig)) GroupGuidBackfillStoreMock() else GroupGuidBackfillStore()
 
     @Provides
     fun provideMemberSettingsRepository(

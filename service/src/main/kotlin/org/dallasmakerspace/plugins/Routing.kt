@@ -38,6 +38,7 @@ import org.dallasmakerspace.cron.AdReplicationHealthCronJob
 import org.dallasmakerspace.cron.AdReplicationHealthCronJobParams
 import org.dallasmakerspace.cron.DoorSwipesCronJob
 import org.dallasmakerspace.cron.DoorSwipesCronJobParams
+import org.dallasmakerspace.cron.GroupGuidBackfillJobParams
 import org.dallasmakerspace.cron.MemberRefreshCronJob
 import org.dallasmakerspace.cron.MemberRefreshCronJobParams
 import org.dallasmakerspace.cron.ShowAndTellCronJob
@@ -71,9 +72,9 @@ import org.dallasmakerspace.routing.ShortLinksResource
 import org.dallasmakerspace.shortlinks.RedirectResult
 import org.dallasmakerspace.shortlinks.ShortLinksService
 import org.dallasmakerspace.webhook.WebhookRouter
-
 import org.dallasmakerspace.workflows.groupLockMessage
 import org.dallasmakerspace.workflows.routing.workflowRoutes
+
 /** Dev-only default for `app.notifications.webhook-token`; rejected outside development. */
 private const val DEV_NOTIFICATIONS_WEBHOOK_TOKEN = "dev-insecure-webhook-token-change-in-prod"
 
@@ -189,6 +190,7 @@ fun Application.configureRouting() {
     val processQueueJob: SmartWaiverProcessQueueJob by lazy {
       AppComponentHolder.instance.getSmartWaiverProcessQueueJob()
     }
+    val groupGuidBackfillJob by lazy { AppComponentHolder.instance.getGroupGuidBackfillJob() }
     val dataVizRouter: DataVizRouter by lazy { AppComponentHolder.instance.getDataVizRouter() }
     val webhookRouter: WebhookRouter by lazy { AppComponentHolder.instance.getWebhookRouter() }
     val shortLinksService: ShortLinksService by lazy {
@@ -202,9 +204,9 @@ fun Application.configureRouting() {
       AppComponentHolder.instance.getGroupSettingsService()
     }
     val featureFlagService by lazy { AppComponentHolder.instance.getFeatureFlagService() }
+    val workflowService by lazy { AppComponentHolder.instance.getWorkflowService() }
     val memberWaiverPhotosService by lazy {
       AppComponentHolder.instance.getMemberWaiverPhotosService()
-    val workflowService by lazy { AppComponentHolder.instance.getWorkflowService() }
     }
 
     get("/") {
@@ -592,14 +594,14 @@ fun Application.configureRouting() {
       /** Group write operations * */
       authorize(Permission.MANAGE_GROUPS) {
         patch<Groups.DMSGroup.Add> { groupRequested ->
-          val actorUsername = call.request.headers["X-Actor-Username"]
-          val isInfra =
           workflowService
               .groupLockMessage(Groups.getNameFromSlug(groupRequested.parent.groupslug))
               ?.let {
                 return@patch call.respond(
                     HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
               }
+          val actorUsername = call.request.headers["X-Actor-Username"]
+          val isInfra =
               actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
                   ?: false
           if (!configOverrideService.get(ConfigRegistry.GROUP_MEMBER_MANAGEMENT_ENABLED, isInfra)) {
@@ -620,14 +622,14 @@ fun Application.configureRouting() {
         }
 
         delete<Groups.DMSGroup.Add> { groupRequested ->
-          val actorUsername = call.request.headers["X-Actor-Username"]
-          val isInfra =
           workflowService
               .groupLockMessage(Groups.getNameFromSlug(groupRequested.parent.groupslug))
               ?.let {
                 return@delete call.respond(
                     HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
               }
+          val actorUsername = call.request.headers["X-Actor-Username"]
+          val isInfra =
               actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
                   ?: false
           if (!configOverrideService.get(ConfigRegistry.GROUP_MEMBER_MANAGEMENT_ENABLED, isInfra)) {
@@ -654,11 +656,11 @@ fun Application.configureRouting() {
         patch<Groups.DMSGroup.Settings> { request ->
           val groupslug = request.parent.groupslug
           val groupName = Groups.getNameFromSlug(groupslug)
-          val actorUsername = call.request.headers["X-Actor-Username"]
-          // Can't verify pilot membership without an actor, so treat a missing actor as disabled.
           workflowService.groupLockMessage(groupName)?.let {
             return@patch call.respond(HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
           }
+          val actorUsername = call.request.headers["X-Actor-Username"]
+          // Can't verify pilot membership without an actor, so treat a missing actor as disabled.
           val featureEnabled =
               actorUsername?.let {
                 featureFlagService.isEnabledForUsername(ConfigRegistry.GROUP_SETTINGS_ENABLED, it)
@@ -693,11 +695,11 @@ fun Application.configureRouting() {
               org.dallasmakerspace.voterregistration
                   .VoterRegistrationManager()
                   .getVotingMembersGroupName()
-          memberService.addMembersToGroup(listOf(username), groupname, actorUsername)
-          call.respond(ApiResponse(Status.SUCCESS, "Registered $username for voting", null))
           workflowService.groupLockMessage(groupname)?.let {
             return@patch call.respond(HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
           }
+          memberService.addMembersToGroup(listOf(username), groupname, actorUsername)
+          call.respond(ApiResponse(Status.SUCCESS, "Registered $username for voting", null))
         }
 
         delete("/voter-registration/{username}") {
@@ -712,11 +714,11 @@ fun Application.configureRouting() {
               org.dallasmakerspace.voterregistration
                   .VoterRegistrationManager()
                   .getVotingMembersGroupName()
-          memberService.removeMembersToGroup(listOf(username), groupname, actorUsername)
-          call.respond(ApiResponse(Status.SUCCESS, "Unregistered $username from voting", null))
           workflowService.groupLockMessage(groupname)?.let {
             return@delete call.respond(HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
           }
+          memberService.removeMembersToGroup(listOf(username), groupname, actorUsername)
+          call.respond(ApiResponse(Status.SUCCESS, "Unregistered $username from voting", null))
         }
       }
 
@@ -762,6 +764,16 @@ fun Application.configureRouting() {
         get("/cron/backfill-smartwaiver") {
           val result = backfillJob.run()
           call.respondText(result.toText(), ContentType.Text.Plain)
+        }
+
+        // Dry run unless dryRun=false is passed exactly; a typo must not trigger writes.
+        get("/cron/group-guid-backfill") {
+          val dryRun = !"false".equals(call.request.queryParameters["dryRun"], ignoreCase = true)
+          val batchSize = call.request.queryParameters["batchSize"]?.toIntOrNull()
+          val params =
+              if (batchSize != null) GroupGuidBackfillJobParams(dryRun, batchSize)
+              else GroupGuidBackfillJobParams(dryRun)
+          call.respondText(groupGuidBackfillJob.run(params), ContentType.Text.Plain)
         }
 
         get("/cron/process-smartwaiver-queue") {
@@ -1178,6 +1190,13 @@ fun Application.configureRouting() {
       val bambuddyStatusService by lazy { AppComponentHolder.instance.getBambuddyStatusService() }
       bambuddyRoutes(bambuddyStatusService)
 
+      /** Workflows — definitions, preflight, runs, operator actions, SSE streams * */
+      workflowRoutes(
+          workflowService,
+          AppComponentHolder.instance.getWorkflowEventBus(),
+          AppComponentHolder.instance.getWorkflowStreamLifecycle().streamsClosed,
+      )
+
       /** DMS Learn (Moodle) — course catalog and a member's own course progress * */
       moodleRoutes(
           AppComponentHolder.instance.getMoodleCatalogService(),
@@ -1190,13 +1209,6 @@ fun Application.configureRouting() {
     notificationRoutes(notificationService)
 
     /** Follow/unfollow another member + who-follows-who listings * */
-      /** Workflows — definitions, preflight, runs, operator actions, SSE streams * */
-      workflowRoutes(
-          workflowService,
-          AppComponentHolder.instance.getWorkflowEventBus(),
-          AppComponentHolder.instance.getWorkflowStreamLifecycle().streamsClosed,
-      )
-
     val profileSubscriptionService by lazy {
       AppComponentHolder.instance.getProfileSubscriptionService()
     }

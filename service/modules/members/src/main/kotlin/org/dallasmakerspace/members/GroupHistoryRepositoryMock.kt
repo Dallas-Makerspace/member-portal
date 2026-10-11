@@ -26,6 +26,8 @@ class GroupHistoryRepositoryMock @Inject constructor() : IGroupHistoryRepository
 
   override suspend fun getOrCreateGroup(name: String, dn: String?): Int = 0
 
+  override suspend fun resolveGroup(name: String, dn: String?, objectGuid: String?): Int = 0
+
   override suspend fun hasPortalInitiatedRecord(
       memberId: Int,
       groupId: Int,

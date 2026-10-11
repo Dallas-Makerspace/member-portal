@@ -16,6 +16,9 @@ object GroupsTable : IdTable<Int>("groups") {
   val name = varchar("name", 255)
   val dn = varchar("dn", 512)
   val created = datetime("created")
+  val objectGuid = varchar("object_guid", 36).nullable()
+  val status = varchar("status", 16).default("ACTIVE")
+  val archivedAt = datetime("archived_at").nullable()
 
   override val id: Column<EntityID<Int>>
     get() = idColumn
@@ -27,6 +30,9 @@ class GroupDAO(id: EntityID<Int>) : Entity<Int>(id) {
   var name by GroupsTable.name
   var dn by GroupsTable.dn
   var created by GroupsTable.created
+  var objectGuid by GroupsTable.objectGuid
+  var status by GroupsTable.status
+  var archivedAt by GroupsTable.archivedAt
 }
 
 fun daoToGroupModel(resultRow: ResultRow) =
@@ -34,4 +40,7 @@ fun daoToGroupModel(resultRow: ResultRow) =
         resultRow[GroupsTable.idColumn].value,
         resultRow[GroupsTable.name],
         resultRow[GroupsTable.dn],
-        resultRow[GroupsTable.created].toKotlinLocalDateTime())
+        resultRow[GroupsTable.created].toKotlinLocalDateTime(),
+        resultRow[GroupsTable.objectGuid],
+        resultRow[GroupsTable.status],
+        resultRow[GroupsTable.archivedAt]?.toKotlinLocalDateTime())

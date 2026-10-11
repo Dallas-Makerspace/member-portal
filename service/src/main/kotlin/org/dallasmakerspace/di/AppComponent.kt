@@ -113,6 +113,8 @@ interface AppComponent {
 
   fun getSmartWaiverProcessQueueJob(): SmartWaiverProcessQueueJob
 
+  fun getGroupGuidBackfillJob(): org.dallasmakerspace.cron.GroupGuidBackfillJob
+
   fun getCalendarService(): CalendarService
 
   fun getShortLinksService(): ShortLinksService
@@ -148,7 +150,6 @@ interface AppComponent {
   fun getObjectStoreFactory(): ObjectStoreFactory
 
   fun getProfilePhotoService(): ProfilePhotoService
-}
 
   fun getWorkflowService(): WorkflowService
 
@@ -159,3 +160,4 @@ interface AppComponent {
   fun getWorkflowEngineSettings(): EngineSettings
 
   fun getWorkflowStreamLifecycle(): WorkflowStreamLifecycle
+}
