@@ -41,7 +41,12 @@ class MoodleCommitteeCoursesLoader
 @Inject
 constructor(private val memberServiceClient: MemberServiceClient) {
 
-  suspend fun load(committee: Committee, sessionId: String?, username: String): Map<String, Any?>? =
+  suspend fun load(
+      committee: Committee,
+      sessionId: String?,
+      username: String,
+      canAdminGroups: Boolean = false,
+  ): Map<String, Any?>? =
       coroutineScope {
         if (!memberServiceClient.isFeatureEnabled(MOODLE_FEATURE_FLAG, username, sessionId)) {
           return@coroutineScope null
@@ -49,7 +54,7 @@ constructor(private val memberServiceClient: MemberServiceClient) {
         val memberCoursesDeferred = async {
           memberServiceClient.getMoodleMemberCourses(sessionId, username)
         }
-        val editorsDeferred = async { loadEditors(committee, sessionId, username) }
+        val editorsDeferred = async { loadEditors(committee, sessionId, username, canAdminGroups) }
         val catalog = memberServiceClient.getMoodleCatalog(sessionId, committee.slug)
         val courses = MoodleCourses.parse(catalog, memberCoursesDeferred.await()).filter { it.joinable }
         if (courses.isEmpty()) return@coroutineScope null
@@ -75,6 +80,7 @@ constructor(private val memberServiceClient: MemberServiceClient) {
       committee: Committee,
       sessionId: String?,
       username: String,
+      canAdminGroups: Boolean,
   ): Map<String, Any?>? {
     val names =
         (committee.groupPrefixes + committee.name).distinct().map { "$it $EDITORS_GROUP_SUFFIX" }
@@ -98,7 +104,7 @@ constructor(private val memberServiceClient: MemberServiceClient) {
                   )
                 },
         "editorsGroupUrl" to "/groups/$slug",
-        "canManageEditors" to memberServiceClient.isGroupAdmin(username, slug, sessionId),
+        "canManageEditors" to (canAdminGroups || memberServiceClient.isGroupAdmin(username, slug, sessionId)),
     )
   }
 }

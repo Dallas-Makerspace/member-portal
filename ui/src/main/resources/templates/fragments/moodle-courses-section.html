@@ -25,7 +25,7 @@
             </div>
         </div>
 
-        <div th:if="${sectionModel.editors != null and (!sectionModel.editors.empty or sectionModel.canManageEditors)}"
+        <div th:if="${sectionModel.editorsGroupUrl != null}"
              class="d-flex flex-wrap align-items-center gap-2 mt-3 pt-3 border-top">
             <span class="text-muted small">Course editors:</span>
             <a th:each="editor : ${sectionModel.editors}" th:href="'/profile/@' + ${editor.username}"
@@ -34,7 +34,7 @@
                      class="rounded-circle" loading="lazy">
                 <span th:text="${editor.displayName}"></span>
             </a>
-            <span th:if="${sectionModel.editors != null and sectionModel.editors.empty}" class="text-muted small">None yet</span>
+            <span th:if="${sectionModel.editors.empty}" class="text-muted small">None yet</span>
         </div>
 
         <div class="d-flex justify-content-end flex-wrap gap-2 mt-3">

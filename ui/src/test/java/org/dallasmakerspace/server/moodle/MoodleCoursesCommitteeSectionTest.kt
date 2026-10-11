@@ -120,6 +120,19 @@ class MoodleCoursesCommitteeSectionTest {
   }
 
   @Test
+  fun `loader shows an empty editors group and lets group admins manage it`() = runBlocking<Unit> {
+    withCourses()
+    whenever(client.getMultipleGroups(any(), anyOrNull()))
+        .thenReturn(listOf(editorsGroup().copy(members = emptyList())))
+
+    val model = assertNotNull(loader.load(laser, "sid", "jdoe", canAdminGroups = true))
+
+    assertEquals(emptyList<Any>(), model["editors"])
+    assertEquals("/groups/Laser+Online+Course+Editors", model["editorsGroupUrl"])
+    assertEquals(true, model["canManageEditors"])
+  }
+
+  @Test
   fun `loader omits editors when the group does not exist`() = runBlocking<Unit> {
     withCourses()
     whenever(client.getMultipleGroups(any(), anyOrNull())).thenReturn(emptyList())

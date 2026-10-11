@@ -6,6 +6,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.thymeleaf.ThymeleafContent
 import javax.inject.Inject
 import org.dallasmakerspace.models.Committees
+import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
@@ -24,7 +25,12 @@ constructor(
     val username = userInfo["preferred_username"] as? String
     val model =
         if (committee == null || username == null) null
-        else loader.load(committee, session.sessionId, username)
+        else
+            loader.load(
+                committee,
+                session.sessionId,
+                username,
+                canAdminGroups = authz.can(Permission.MANAGE_GROUPS.name))
     if (model == null) {
       call.respond(HttpStatusCode.NoContent)
       return
