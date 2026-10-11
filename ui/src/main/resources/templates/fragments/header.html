@@ -195,14 +195,29 @@
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="javascript:void(0)" role="button"
                            data-bs-toggle="dropdown"
-                           data-bs-auto-close="outside" aria-expanded="false">About</a>
+                           data-bs-auto-close="outside" aria-expanded="false">About
+                            <span class="badge rounded-pill text-bg-danger d-none"
+                                  data-wf-attention-badge></span></a>
                         <ul class="dropdown-menu">
                             <li>
                                 <a class="dropdown-item" href="https://github.com/Dallas-Makerspace"
                                    target="_blank">GitHub</a>
                             </li>
-                            <li>
-                                <a class="dropdown-item" href="/admin/config">Site Config</a>
+                            <!-- Admin nested dropdown -->
+                            <li class="dropend">
+                                <a class="dropdown-item dropdown-toggle" href="javascript:void(0)"
+                                   data-bs-toggle="dropdown"
+                                   data-bs-auto-close="outside" aria-expanded="false">Admin
+                                    <span class="badge rounded-pill text-bg-danger d-none"
+                                          data-wf-attention-badge></span></a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="/admin/config">Site Config</a></li>
+                                    <li th:if="${workflowsAdminMenu}">
+                                        <a class="dropdown-item" href="/admin/workflows">Workflows in progress
+                                            <span class="badge rounded-pill text-bg-danger d-none"
+                                                  data-wf-attention-badge></span></a>
+                                    </li>
+                                </ul>
                             </li>
                         </ul>
                     </li>
@@ -235,6 +250,19 @@
     <script type="module" src="/static/js/dms-search-v6.js"></script>
     <!-- Attention dot for the account menu -->
     <script th:if="${accountMenuEnabled}" src="/static/js/dms-attention.js" defer></script>
+    <!-- Count of workflow runs needing attention, shown on the About > Admin entries (one fetch per page load) -->
+    <script th:if="${workflowsAdminMenu}">
+        fetch('/api/workflows/admin/summary', {credentials: 'same-origin', headers: {'Accept': 'application/json'}})
+            .then(function (r) { return r.ok && !r.redirected ? r.json() : null; })
+            .then(function (s) {
+                if (!s || !s.needsAttention) return;
+                document.querySelectorAll('[data-wf-attention-badge]').forEach(function (b) {
+                    b.textContent = s.needsAttention;
+                    b.classList.remove('d-none');
+                });
+            })
+            .catch(function () { /* badge is non-critical */ });
+    </script>
     <!-- Action tracking script -->
     <script src="/static/js/action-tracker.js" defer></script>
     <!-- Communication preference banner -->
@@ -287,4 +315,22 @@
     </script>
 </header>
 </body>
-</html>
+</html>                            <!-- Admin nested dropdown -->
+                            <li class="dropend">
+                                <a class="dropdown-item dropdown-toggle" href="javascript:void(0)"
+                                   data-bs-toggle="dropdown"
+                                   data-bs-auto-close="outside" aria-expanded="false">Admin
+                                    <span class="badge rounded-pill text-bg-danger d-none"
+                                          data-wf-attention-badge></span></a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="/admin/config">Site Config</a></li>
+                                    <li th:if="${workflowsAdminMenu}">
+                                        <a class="dropdown-item" href="/admin/workflows">Workflows in progress
+                                            <span class="badge rounded-pill text-bg-danger d-none"
+                                                  data-wf-attention-badge></span></a>
+                                    </li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+

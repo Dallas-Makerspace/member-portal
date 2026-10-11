@@ -64,6 +64,9 @@ import org.dallasmakerspace.server.routes.DiscourseWebhookHandler
 import org.dallasmakerspace.server.routes.SparkPostWebhookHandler
 import org.dallasmakerspace.server.routes.SuggestedEventsHandler
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
+import org.dallasmakerspace.server.workflows.WorkflowApiHandler
+import org.dallasmakerspace.server.workflows.WorkflowPagesHandler
+import org.dallasmakerspace.server.workflows.WorkflowServiceClient
 
 @Module
 @Suppress("TooManyFunctions")
@@ -520,4 +523,52 @@ class RoutesModule {
       userInfoProvider: UserInfoProvider,
       memberServiceClient: MemberServiceClient,
   ): IRouteHandler = NotificationsInboxHandler(loggerFactory, userInfoProvider, memberServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/api/workflows/{path...}")
+  fun providesWorkflowApiHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+      workflowServiceClient: WorkflowServiceClient,
+  ): IRouteHandler =
+      WorkflowApiHandler(
+          loggerFactory, userInfoProvider, memberServiceClient, workflowServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/admin/workflows")
+  fun providesWorkflowAdminPageHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+      workflowServiceClient: WorkflowServiceClient,
+  ): IRouteHandler =
+      WorkflowPagesHandler(
+          loggerFactory, userInfoProvider, memberServiceClient, workflowServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/workflows/runs/{runId}")
+  fun providesWorkflowRunPageHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+      workflowServiceClient: WorkflowServiceClient,
+  ): IRouteHandler =
+      WorkflowPagesHandler(
+          loggerFactory, userInfoProvider, memberServiceClient, workflowServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/workflows/demo")
+  fun providesWorkflowDemoPageHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+      workflowServiceClient: WorkflowServiceClient,
+  ): IRouteHandler =
+      WorkflowPagesHandler(
+          loggerFactory, userInfoProvider, memberServiceClient, workflowServiceClient)
 }

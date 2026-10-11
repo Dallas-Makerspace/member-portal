@@ -196,6 +196,18 @@ fun Application.configureRouting() {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
       get(RouteFactory.Paths.NOTIFICATIONS.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+      route(RouteFactory.Paths.WORKFLOWS_API.path) {
+        handle { RouteFactory.getHandler(RouteFactory.Paths.WORKFLOWS_API.path)?.handleBase(call) }
+      }
+      get(RouteFactory.Paths.WORKFLOWS_ADMIN.path) {
+        RouteFactory.getHandler(RouteFactory.Paths.WORKFLOWS_ADMIN.path)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.WORKFLOW_RUN.path) {
+        RouteFactory.getHandler(RouteFactory.Paths.WORKFLOW_RUN.path)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.WORKFLOW_DEMO.path) {
+        RouteFactory.getHandler(RouteFactory.Paths.WORKFLOW_DEMO.path)?.handleBase(call)
+      }
     }
 
     // Short link redirect - auth is optional at the Ktor level so unauthenticated bot traffic

@@ -78,6 +78,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Workflow API and SSE streams: bypass the worker entirely (an infinite stream can't be cached)
+  if (url.pathname.startsWith('/api/workflows/')) {
+    return;
+  }
+
   // API calls: Network Only (no caching for member data)
   if (url.pathname.startsWith('/backend-api/')) {
     event.respondWith(networkOnly(request));

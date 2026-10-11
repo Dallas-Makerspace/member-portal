@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Reusable workflow launch button with live status (see docs/features/workflows/README.md).
+
+  1. In head:        <th:block th:replace="~{fragments/workflow-launch :: styles}"></th:block>
+  2. Where wanted:   <span th:replace="~{fragments/workflow-launch :: button('group.archive', 'group:' + ${slug},
+                         '{&quot;groupName&quot;:&quot;...&quot;}', 'Archive group', 'btn-outline-danger')}"></span>
+  3. After Bootstrap JS and app.js, once per page:
+                     <th:block th:replace="~{fragments/workflow-launch :: scripts}"></th:block>
+
+  The button stays hidden unless the workflows.enabled flag is on for the user and they hold the
+  workflow's required permission (the UI re-checks both on every call). The input argument holds
+  prefilled field values as a JSON object; fields that are not prefilled are asked for in the dialog.
+-->
+<th:block th:fragment="styles">
+    <link rel="stylesheet" href="/static/styles/workflows.css"/>
+</th:block>
+
+<span th:fragment="button(workflowId, subject, input, label, btnClass)" class="wf-launch" hidden
+      th:attr="data-workflow-id=${workflowId},data-subject=${subject},data-input=${input},data-label=${label},data-btn-class=${btnClass}"></span>
+
+<th:block th:fragment="scripts">
+    <script src="/static/js/workflow-common.js"></script>
+    <script src="/static/js/workflow-launch.js"></script>
+</th:block>
+</body>
+</html>

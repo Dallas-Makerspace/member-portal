@@ -11,6 +11,7 @@ import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
 import org.dallasmakerspace.server.routes.NotificationsInboxHandler
 import org.dallasmakerspace.server.routes.ProfileFollowsHandler
+import org.dallasmakerspace.server.workflows.WORKFLOWS_FEATURE_FLAG
 import org.slf4j.LoggerFactory
 
 private const val FLAG_CACHE_TTL_MS = 60_000L
@@ -23,7 +24,7 @@ private val flagCache = ConcurrentHashMap<String, CachedFlag>()
 
 private val cmLog = LoggerFactory.getLogger("CommonModel")
 
-private suspend fun getCachedFeatureFlag(
+internal suspend fun getCachedFeatureFlag(
     client: MemberServiceClient,
     key: String,
     username: String?,
@@ -55,7 +56,8 @@ fun Application.configureCommonModel(memberServiceClient: MemberServiceClient) {
               REMOTE_ACCESS_FLAG,
               ACCOUNT_MENU_FLAG,
               ProfileFollowsHandler.FEATURE_FLAG_KEY,
-              NotificationsInboxHandler.FEATURE_FLAG_KEY)
+              NotificationsInboxHandler.FEATURE_FLAG_KEY,
+              WORKFLOWS_FEATURE_FLAG)
           .distinct()
           .associateWith { key ->
             async { getCachedFeatureFlag(memberServiceClient, key, userId, sessionId) }
@@ -69,6 +71,7 @@ fun Application.configureCommonModel(memberServiceClient: MemberServiceClient) {
         accountMenuEnabled && flags.getValue(ProfileFollowsHandler.FEATURE_FLAG_KEY)
     val notificationsMenuEnabled =
         accountMenuEnabled && flags.getValue(NotificationsInboxHandler.FEATURE_FLAG_KEY)
+    val workflowsEnabled = flags.getValue(WORKFLOWS_FEATURE_FLAG)
     val displayName =
         call.attributes.getOrNull(AuthenticatedHandler.DISPLAY_NAME_KEY) ?: currentUsername
     val firstName =
@@ -86,6 +89,8 @@ fun Application.configureCommonModel(memberServiceClient: MemberServiceClient) {
                     "accountMenuEnabled" to accountMenuEnabled,
                     "followsMenuEnabled" to followsMenuEnabled,
                     "notificationsMenuEnabled" to notificationsMenuEnabled,
+                    "workflowsEnabled" to workflowsEnabled,
+                    "workflowsAdminMenu" to (workflowsEnabled && isInfraUser),
                 ),
             body.etag,
             body.contentType,

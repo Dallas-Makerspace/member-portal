@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:replace="~{fragments/workflow-launch :: styles}"></th:block>
+</head>
+<body>
+<span th:replace="~{fragments/workflow-launch :: button('group.archive', 'group:example-group', '{&quot;groupName&quot;:&quot;example-group&quot;}', 'Archive group', 'btn-outline-danger')}"></span>
+<th:block th:replace="~{fragments/workflow-launch :: scripts}"></th:block>
+</body>
+</html>

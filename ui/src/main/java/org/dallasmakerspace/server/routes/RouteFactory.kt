@@ -134,6 +134,10 @@ object RouteFactory {
     PERSONAL_BIN_SCANNER("/personal-bin-scanner"),
     SCANNER_STATUS_API("/scanner-api/status/{username}"),
     NOTIFICATIONS("/profile/@{preferred_username}/notifications"),
+    WORKFLOWS_API("/api/workflows/{path...}"),
+    WORKFLOWS_ADMIN("/admin/workflows"),
+    WORKFLOW_RUN("/workflows/runs/{runId}"),
+    WORKFLOW_DEMO("/workflows/demo"),
   }
 }
 
