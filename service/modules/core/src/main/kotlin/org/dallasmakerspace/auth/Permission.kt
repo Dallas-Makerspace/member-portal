@@ -8,4 +8,5 @@ enum class Permission {
   MANAGE_CONFIG,
   EXECUTE_CRON,
   USE_ASKAI,
+  RUN_WORKFLOWS,
 }

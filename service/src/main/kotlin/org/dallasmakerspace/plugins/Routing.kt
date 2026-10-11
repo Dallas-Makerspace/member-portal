@@ -72,6 +72,8 @@ import org.dallasmakerspace.shortlinks.RedirectResult
 import org.dallasmakerspace.shortlinks.ShortLinksService
 import org.dallasmakerspace.webhook.WebhookRouter
 
+import org.dallasmakerspace.workflows.groupLockMessage
+import org.dallasmakerspace.workflows.routing.workflowRoutes
 /** Dev-only default for `app.notifications.webhook-token`; rejected outside development. */
 private const val DEV_NOTIFICATIONS_WEBHOOK_TOKEN = "dev-insecure-webhook-token-change-in-prod"
 
@@ -202,6 +204,7 @@ fun Application.configureRouting() {
     val featureFlagService by lazy { AppComponentHolder.instance.getFeatureFlagService() }
     val memberWaiverPhotosService by lazy {
       AppComponentHolder.instance.getMemberWaiverPhotosService()
+    val workflowService by lazy { AppComponentHolder.instance.getWorkflowService() }
     }
 
     get("/") {
@@ -591,6 +594,12 @@ fun Application.configureRouting() {
         patch<Groups.DMSGroup.Add> { groupRequested ->
           val actorUsername = call.request.headers["X-Actor-Username"]
           val isInfra =
+          workflowService
+              .groupLockMessage(Groups.getNameFromSlug(groupRequested.parent.groupslug))
+              ?.let {
+                return@patch call.respond(
+                    HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
+              }
               actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
                   ?: false
           if (!configOverrideService.get(ConfigRegistry.GROUP_MEMBER_MANAGEMENT_ENABLED, isInfra)) {
@@ -613,6 +622,12 @@ fun Application.configureRouting() {
         delete<Groups.DMSGroup.Add> { groupRequested ->
           val actorUsername = call.request.headers["X-Actor-Username"]
           val isInfra =
+          workflowService
+              .groupLockMessage(Groups.getNameFromSlug(groupRequested.parent.groupslug))
+              ?.let {
+                return@delete call.respond(
+                    HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
+              }
               actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }
                   ?: false
           if (!configOverrideService.get(ConfigRegistry.GROUP_MEMBER_MANAGEMENT_ENABLED, isInfra)) {
@@ -641,6 +656,9 @@ fun Application.configureRouting() {
           val groupName = Groups.getNameFromSlug(groupslug)
           val actorUsername = call.request.headers["X-Actor-Username"]
           // Can't verify pilot membership without an actor, so treat a missing actor as disabled.
+          workflowService.groupLockMessage(groupName)?.let {
+            return@patch call.respond(HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
+          }
           val featureEnabled =
               actorUsername?.let {
                 featureFlagService.isEnabledForUsername(ConfigRegistry.GROUP_SETTINGS_ENABLED, it)
@@ -677,6 +695,9 @@ fun Application.configureRouting() {
                   .getVotingMembersGroupName()
           memberService.addMembersToGroup(listOf(username), groupname, actorUsername)
           call.respond(ApiResponse(Status.SUCCESS, "Registered $username for voting", null))
+          workflowService.groupLockMessage(groupname)?.let {
+            return@patch call.respond(HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
+          }
         }
 
         delete("/voter-registration/{username}") {
@@ -693,6 +714,9 @@ fun Application.configureRouting() {
                   .getVotingMembersGroupName()
           memberService.removeMembersToGroup(listOf(username), groupname, actorUsername)
           call.respond(ApiResponse(Status.SUCCESS, "Unregistered $username from voting", null))
+          workflowService.groupLockMessage(groupname)?.let {
+            return@delete call.respond(HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
+          }
         }
       }
 
@@ -1166,6 +1190,13 @@ fun Application.configureRouting() {
     notificationRoutes(notificationService)
 
     /** Follow/unfollow another member + who-follows-who listings * */
+      /** Workflows — definitions, preflight, runs, operator actions, SSE streams * */
+      workflowRoutes(
+          workflowService,
+          AppComponentHolder.instance.getWorkflowEventBus(),
+          AppComponentHolder.instance.getWorkflowStreamLifecycle().streamsClosed,
+      )
+
     val profileSubscriptionService by lazy {
       AppComponentHolder.instance.getProfileSubscriptionService()
     }
@@ -1176,7 +1207,8 @@ fun Application.configureRouting() {
     profilePhotoRoutes(profilePhotoService, featureFlagService, memberService)
 
     /** Member self-service join/leave, gated per group by allow_self_add_remove * */
-    groupSelfMembershipRoutes(groupSettingsService, memberService)
+    groupSelfMembershipRoutes(
+        groupSettingsService, memberService, groupLockMessage = workflowService::groupLockMessage)
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */
     featureFlagRoutes(featureFlagService)

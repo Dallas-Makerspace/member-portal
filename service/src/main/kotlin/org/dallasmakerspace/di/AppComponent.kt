@@ -43,6 +43,11 @@ import org.dallasmakerspace.smartwaiver.SmartwaiverModule
 import org.dallasmakerspace.storage.ObjectStoreFactory
 import org.dallasmakerspace.webhook.WebhookRouter
 import org.dallasmakerspace.webhook.di.WebhookModule
+import org.dallasmakerspace.workflows.EngineSettings
+import org.dallasmakerspace.workflows.WorkflowEventBus
+import org.dallasmakerspace.workflows.WorkflowExecutor
+import org.dallasmakerspace.workflows.WorkflowService
+import org.dallasmakerspace.workflows.WorkflowStreamLifecycle
 
 @Singleton
 @Component(
@@ -66,7 +71,8 @@ import org.dallasmakerspace.webhook.di.WebhookModule
             SmartwaiverModule::class,
             NotificationsModule::class,
             StorageModule::class,
-            WebhookModule::class])
+            WebhookModule::class,
+            WorkflowsModule::class])
 @Suppress("TooManyFunctions")
 interface AppComponent {
   fun inject(application: Application)
@@ -143,3 +149,13 @@ interface AppComponent {
 
   fun getProfilePhotoService(): ProfilePhotoService
 }
+
+  fun getWorkflowService(): WorkflowService
+
+  fun getWorkflowEventBus(): WorkflowEventBus
+
+  fun getWorkflowExecutor(): WorkflowExecutor
+
+  fun getWorkflowEngineSettings(): EngineSettings
+
+  fun getWorkflowStreamLifecycle(): WorkflowStreamLifecycle

@@ -23,20 +23,22 @@ private val log = appLogger("GroupSelfMembershipRoutes")
 
 /**
  * Self-service join/leave for the `X-Actor-Username` member only, gated by the group's
- * `allow_self_add_remove` setting. Only direct AD membership counts.
+ * `allow_self_add_remove` setting. Only direct AD membership counts. [groupLockMessage] returns a
+ * reason when a workflow run has locked the group (join/leave then gets a 409), else null.
  */
 fun Route.groupSelfMembershipRoutes(
     groupSettingsService: GroupSettingsService,
     memberService: MemberService,
+    groupLockMessage: suspend (groupName: String) -> String? = { null },
 ) {
   authenticate(ApiKeyAuthProvider.X_API_KEY) {
     authorize(Permission.MANAGE_GROUPS) {
       get("/groups/{groupslug}/self") { handleStatus(call, groupSettingsService, memberService) }
       put("/groups/{groupslug}/self") {
-        handleChange(call, groupSettingsService, memberService, join = true)
+        handleChange(call, groupSettingsService, memberService, groupLockMessage, join = true)
       }
       delete("/groups/{groupslug}/self") {
-        handleChange(call, groupSettingsService, memberService, join = false)
+        handleChange(call, groupSettingsService, memberService, groupLockMessage, join = false)
       }
     }
   }
@@ -70,6 +72,7 @@ private suspend fun handleChange(
     call: ApplicationCall,
     groupSettingsService: GroupSettingsService,
     memberService: MemberService,
+    groupLockMessage: suspend (String) -> String?,
     join: Boolean,
 ) {
   val groupslug = call.parameters["groupslug"] ?: return call.respondMissingGroup()
@@ -80,6 +83,9 @@ private suspend fun handleChange(
     return call.respond(
         HttpStatusCode.Forbidden,
         ApiResponse(Status.ERROR, "$groupName does not allow members to join or leave", null))
+  }
+  groupLockMessage(groupName)?.let {
+    return call.respond(HttpStatusCode.Conflict, ApiResponse(Status.ERROR, it, null))
   }
   val isMember = memberService.isDirectMemberOfGroup(actor, groupslug)
   if (join && isMember) {

@@ -14,6 +14,8 @@ import org.dallasmakerspace.plugins.configureHealth
 import org.dallasmakerspace.plugins.configureMonitoring
 import org.dallasmakerspace.plugins.configureRouting
 import org.dallasmakerspace.plugins.configureSerialization
+import org.dallasmakerspace.plugins.configureWorkflows
+import org.dallasmakerspace.plugins.shutdownWorkflows
 
 // Named marker class so the real-backends warning below gets a clean "Application" logger name
 // (main() is a top-level function, so it has no javaClass of its own to pass to LoggerFactory).
@@ -56,9 +58,12 @@ fun main() {
         configureHTTP()
         configureDatabase()
         configureRouting()
+        configureWorkflows()
         configureElasticsearch()
         HealthState.markReady()
       }
+  // Starts immediately on SIGTERM (not after the sleep below) so leases are released in time.
+  Runtime.getRuntime().addShutdownHook(Thread { shutdownWorkflows(appComponent) })
   Runtime.getRuntime()
       .addShutdownHook(
           Thread {

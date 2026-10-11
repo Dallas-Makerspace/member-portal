@@ -36,6 +36,7 @@ class GroupSelfMembershipRoutesTest {
 
   private lateinit var mockGroupSettingsService: GroupSettingsService
   private lateinit var mockMemberService: MemberService
+  private var lockMessage: String? = null
 
   @Before
   fun setUp() {
@@ -68,7 +69,9 @@ class GroupSelfMembershipRoutesTest {
       install(Authentication) {
         apiKey(appConfig(), ApiKeyAuthProvider.X_API_KEY) { validate { null } }
       }
-      routing { groupSelfMembershipRoutes(mockGroupSettingsService, mockMemberService) }
+      routing {
+        groupSelfMembershipRoutes(mockGroupSettingsService, mockMemberService) { lockMessage }
+      }
     }
   }
 
@@ -135,6 +138,24 @@ class GroupSelfMembershipRoutesTest {
     val response = send("DELETE")
 
     assertEquals(HttpStatusCode.Forbidden, response.status)
+    verify(mockMemberService, never()).removeMembersToGroup(any(), any(), anyOrNull())
+    Unit
+  }
+
+  @Test
+  fun `join and leave conflict while a workflow holds the group`() = testApplication {
+    configureApp()
+    allowSelfService(true)
+    directMember(false)
+    lockMessage = "Group 'Test Group' is locked by workflow run 7"
+
+    val join = send("PUT")
+    val leave = send("DELETE")
+
+    assertEquals(HttpStatusCode.Conflict, join.status)
+    assertEquals(HttpStatusCode.Conflict, leave.status)
+    assertTrue(join.bodyAsText().contains("locked by workflow run 7"))
+    verify(mockMemberService, never()).addMembersToGroup(any(), any(), anyOrNull())
     verify(mockMemberService, never()).removeMembersToGroup(any(), any(), anyOrNull())
     Unit
   }

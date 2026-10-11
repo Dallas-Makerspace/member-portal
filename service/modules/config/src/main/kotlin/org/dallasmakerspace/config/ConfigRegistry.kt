@@ -175,6 +175,18 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val WORKFLOWS_ENABLED =
+      ConfigKey(
+          key = "workflows.enabled",
+          description =
+              "Enable the workflows framework (multi-step operations with preflight, live run " +
+                  "status and the admin in-progress page); can be piloted for specific " +
+                  "members/AD groups before a full rollout",
+          category = "Workflows",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -193,5 +205,6 @@ object ConfigRegistry {
           FOLLOW_FEATURE_ENABLED,
           PROFILE_PHOTO_ENABLED,
           ACCOUNT_MENU_ENABLED,
+          WORKFLOWS_ENABLED,
       )
 }
