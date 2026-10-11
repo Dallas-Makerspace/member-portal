@@ -25,7 +25,24 @@
             </div>
         </div>
 
+        <div th:if="${sectionModel.editors != null and (!sectionModel.editors.empty or sectionModel.canManageEditors)}"
+             class="d-flex flex-wrap align-items-center gap-2 mt-3 pt-3 border-top">
+            <span class="text-muted small">Course editors:</span>
+            <a th:each="editor : ${sectionModel.editors}" th:href="'/profile/@' + ${editor.username}"
+               class="d-inline-flex align-items-center gap-1 text-decoration-none text-muted small">
+                <img th:if="${editor.avatarUrl != ''}" th:src="${editor.avatarUrl}" alt="" width="24" height="24"
+                     class="rounded-circle" loading="lazy">
+                <span th:text="${editor.displayName}"></span>
+            </a>
+            <span th:if="${sectionModel.editors != null and sectionModel.editors.empty}" class="text-muted small">None yet</span>
+        </div>
+
         <div class="d-flex justify-content-end flex-wrap gap-2 mt-3">
+            <a th:if="${sectionModel.canManageEditors}" th:href="${sectionModel.editorsGroupUrl}"
+               class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
+                <span class="material-symbols-outlined" style="font-size: 18px;">group</span>
+                Manage editors
+            </a>
             <a th:href="${sectionModel.statsUrl}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
                 <span class="material-symbols-outlined" style="font-size: 18px;">bar_chart</span>
                 Learning stats
