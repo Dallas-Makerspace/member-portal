@@ -1,0 +1,22 @@
+stateDiagram-v2
+    [*] --> PENDING: start (subject locks acquired)
+    PENDING --> RUNNING: executor claims run
+    RUNNING --> RUNNING: step succeeded or no-op, next step
+    RUNNING --> WAITING_RETRY: transient failure, attempts left
+    WAITING_RETRY --> RUNNING: next_attempt_at reached
+    RUNNING --> PAUSED: retries exhausted or permanent error
+    PAUSED --> RUNNING: operator retry or skip
+    PAUSED --> ROLLING_BACK: operator rollback
+    PAUSED --> ABANDONED: operator abandon
+    RUNNING --> ROLLING_BACK: auto-rollback policy
+    RUNNING --> CANCELLED: cancel requested, between steps
+    RUNNING --> SUCCEEDED: last step done
+    SUCCEEDED --> ROLLING_BACK: user-requested revert
+    ROLLING_BACK --> ROLLED_BACK: all rollbacks done
+    ROLLING_BACK --> ROLLBACK_FAILED: rollback retries exhausted
+    ROLLBACK_FAILED --> ROLLING_BACK: operator retry
+    ROLLBACK_FAILED --> ABANDONED: operator abandon
+    SUCCEEDED --> [*]
+    ROLLED_BACK --> [*]
+    ABANDONED --> [*]
+    CANCELLED --> [*]
