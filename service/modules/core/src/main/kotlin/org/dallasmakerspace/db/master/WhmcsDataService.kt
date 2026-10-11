@@ -75,21 +75,7 @@ constructor(
     // For each date between start date and now, check if the user has an active product
     var currentDate = startDate
     while (!currentDate.isAfter(today)) {
-      val dateIsCovered =
-          userProducts.any { product ->
-            // Product covers a date if:
-            // 1. Registration date is on or before the date we're checking
-            // 2. And either:
-            //    - Product is currently active (Active + null termination)
-            //    - Or termination date is after the date we're checking
-            val isCurrentlyActive =
-                product.domainStatus == WhmcsDomainStatus.Active && product.terminationDate == null
-            val isTerminatedAfterDate =
-                product.terminationDate?.isAfter(currentDate) == true ||
-                    product.terminationDate?.isEqual(currentDate) == true
-
-            !product.regDate.isAfter(currentDate) && (isCurrentlyActive || isTerminatedAfterDate)
-          }
+      val dateIsCovered = userProducts.any { productCoversDate(it, currentDate) }
 
       val dateInGracePeriod =
           userGracePeriods.any { gracePeriod ->
@@ -159,6 +145,27 @@ constructor(
         regDate = userProducts.firstOrNull()?.regDate,
         daysInCurrentStatus = daysInCurrentStatus,
         timeline = timeline)
+  }
+
+  /**
+   * Product covers a date if:
+   * 1. Registration date is on or before the date we're checking
+   * 2. And either:
+   *    - Product is currently active (Active + null termination)
+   *    - Or termination date is on or after the date we're checking
+   *    - Or it is suspended and the date is before its unpaid next due date
+   */
+  private fun productCoversDate(product: WhmcsProductInfo, date: LocalDate): Boolean {
+    val isCurrentlyActive =
+        product.domainStatus == WhmcsDomainStatus.Active && product.terminationDate == null
+    val isTerminatedOnOrAfterDate = product.terminationDate?.isBefore(date) == false
+    val isSuspendedAfterDate =
+        product.domainStatus == WhmcsDomainStatus.Suspended &&
+            product.terminationDate == null &&
+            product.nextDueDate?.isAfter(date) == true
+
+    return !product.regDate.isAfter(date) &&
+        (isCurrentlyActive || isTerminatedOnOrAfterDate || isSuspendedAfterDate)
   }
 
   override suspend fun getAccountRegdate(whmcsId: Int): LocalDate? {

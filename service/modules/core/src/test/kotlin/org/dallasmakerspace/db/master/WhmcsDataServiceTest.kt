@@ -149,6 +149,75 @@ class WhmcsDataServiceTest {
     assertTrue(result[whmcsId]!!.wasActiveInRange)
   }
 
+  @Test
+  fun `getAccountInfoMap covers suspended product until its next due date`() = runBlocking {
+    val whmcsId = 1
+    val nextDueDate = TODAY.minusDays(3)
+    val products = listOf(suspendedProduct(START_DATE.minusDays(10), nextDueDate))
+
+    whenever(whmcsDataRepository.getAccountProductInfoMap(listOf(whmcsId), START_DATE))
+        .thenReturn(mapOf(whmcsId to products))
+    whenever(voterRegistrationManager.getUserGracePeriods()).thenReturn(emptyList())
+
+    val status = whmcsDataService.getAccountInfoMap(listOf(whmcsId))[whmcsId]!!
+    assertFalse(status.wasActiveInRange)
+    assertEquals(TODAY, status.lastInactiveDate)
+    assertEquals(4, status.daysInCurrentStatus)
+    assertEquals(
+        listOf(
+            TimelineEntry(TimelineEntryType.ACTIVE, START_DATE, nextDueDate.minusDays(1), 87),
+            TimelineEntry(TimelineEntryType.GAP, nextDueDate, null, 4)),
+        status.timeline)
+  }
+
+  @Test
+  fun `getAccountInfoMap treats suspended product without next due date as uncovered`() =
+      runBlocking {
+        val whmcsId = 1
+        val products = listOf(suspendedProduct(START_DATE.minusDays(10), nextDueDate = null))
+
+        whenever(whmcsDataRepository.getAccountProductInfoMap(listOf(whmcsId), START_DATE))
+            .thenReturn(mapOf(whmcsId to products))
+        whenever(voterRegistrationManager.getUserGracePeriods()).thenReturn(emptyList())
+
+        val status = whmcsDataService.getAccountInfoMap(listOf(whmcsId))[whmcsId]!!
+        assertFalse(status.wasActiveInRange)
+        assertEquals(listOf(TimelineEntryType.GAP), status.timeline.map { it.type })
+      }
+
+  @Test
+  fun `getAccountInfoMap joins terminated product into following suspended product`() =
+      runBlocking {
+        val whmcsId = 1
+        val switchDate = START_DATE.plusDays(10)
+        val nextDueDate = TODAY.minusDays(3)
+        val products =
+            listOf(
+                WhmcsProductInfo(
+                    regDate = START_DATE.minusDays(100),
+                    terminationDate = switchDate,
+                    domainStatus = WhmcsDomainStatus.Terminated),
+                suspendedProduct(switchDate, nextDueDate))
+
+        whenever(whmcsDataRepository.getAccountProductInfoMap(listOf(whmcsId), START_DATE))
+            .thenReturn(mapOf(whmcsId to products))
+        whenever(voterRegistrationManager.getUserGracePeriods()).thenReturn(emptyList())
+
+        val status = whmcsDataService.getAccountInfoMap(listOf(whmcsId))[whmcsId]!!
+        assertEquals(
+            listOf(
+                TimelineEntry(TimelineEntryType.ACTIVE, START_DATE, nextDueDate.minusDays(1), 87),
+                TimelineEntry(TimelineEntryType.GAP, nextDueDate, null, 4)),
+            status.timeline)
+      }
+
+  private fun suspendedProduct(regDate: LocalDate, nextDueDate: LocalDate?) =
+      WhmcsProductInfo(
+          regDate = regDate,
+          terminationDate = null,
+          domainStatus = WhmcsDomainStatus.Suspended,
+          nextDueDate = nextDueDate)
+
   // Test grace periods
   private fun getValidGracePeriods(whmcsId: Int) =
       listOf(

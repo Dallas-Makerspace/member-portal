@@ -28,7 +28,8 @@ class WhmcsDataRepository @Inject constructor() {
           h.userid,
           h.regdate,
           h.termination_date,
-          h.domainstatus
+          h.domainstatus,
+          h.nextduedate
         FROM
         `dms-whmcs`.tblhosting h
         JOIN `dms-whmcs`.tblproducts p
@@ -51,13 +52,17 @@ class WhmcsDataRepository @Inject constructor() {
         while (resultSet.next()) {
           val whmcsUserId = resultSet.getInt("userid")
           val terminationDate = resultSet.getString("termination_date")
+          val nextDueDate = resultSet.getString("nextduedate")
           val productInfo =
               WhmcsProductInfo(
                   regDate = LocalDate.parse(resultSet.getString("regdate")),
                   terminationDate =
                       if ("0000-00-00" == terminationDate) null
                       else LocalDate.parse(terminationDate),
-                  domainStatus = WhmcsDomainStatus.valueOf(resultSet.getString("domainstatus")))
+                  domainStatus = WhmcsDomainStatus.valueOf(resultSet.getString("domainstatus")),
+                  nextDueDate =
+                      if (nextDueDate == null || "0000-00-00" == nextDueDate) null
+                      else LocalDate.parse(nextDueDate))
           if (result.containsKey(whmcsUserId)) {
             result[whmcsUserId] = result[whmcsUserId]!!.plus(productInfo)
           } else {
@@ -106,6 +111,7 @@ data class WhmcsProductInfo(
     val regDate: LocalDate,
     val terminationDate: LocalDate?,
     val domainStatus: WhmcsDomainStatus,
+    val nextDueDate: LocalDate? = null,
 )
 
 enum class WhmcsDomainStatus(val domainStatus: String) {
