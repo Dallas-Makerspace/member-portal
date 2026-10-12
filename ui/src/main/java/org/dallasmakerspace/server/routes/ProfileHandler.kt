@@ -119,10 +119,10 @@ constructor(
             "enabled" to requestedMember.enabled.toString(),
             "avatar_url" to avatarUrl,
         )
-    if (requestedMember.groups.isNotEmpty())
+    val displayedGroups = profileDisplayGroups(requestedMember.groups)
+    if (displayedGroups.isNotEmpty())
         jsonMap["groups"] =
-            requestedMember.groups
-                .sortedBy { it.name }
+            displayedGroups
                 .map { group ->
                   mapOf(
                       "name" to group.name,

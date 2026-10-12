@@ -16,6 +16,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.models.DirectoryOus
 
 private const val INITIAL_LDAP_CONNECTIONS = 3
 
@@ -823,19 +824,26 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
     val groupFilter = Filter.createEqualityFilter("objectCategory", "group")
 
     val searchStart = System.nanoTime()
-    val searchResult =
-        ldapPool.search(
-            "OU=Groups,DC=dms,DC=local",
-            SearchScope.SUB,
-            groupFilter,
-            "cn",
-            "distinguishedName",
-            "description",
-            "objectGUID",
-            "member",
+    val groupEntries =
+        firstWinsByCn(
+            DirectoryOus.GROUP_OUS.map { base ->
+              ldapPool
+                  .search(
+                      base,
+                      SearchScope.SUB,
+                      groupFilter,
+                      "cn",
+                      "distinguishedName",
+                      "description",
+                      "objectGUID",
+                      "member",
+                  )
+                  .searchEntries
+            },
+            onDuplicate = { cn -> log.warn("$TAG/getAllGroups duplicate name in two OUs: $cn") },
         )
     val searchDurationMs = (System.nanoTime() - searchStart) / 1_000_000
-    val entryCount = searchResult.searchEntries.size
+    val entryCount = groupEntries.size
     if (searchDurationMs > slowThresholdMs) {
       log.warn("$TAG/getAllGroups LDAP search took ${searchDurationMs}ms for ${entryCount} entries")
     } else {
@@ -845,7 +853,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
     val mapStart = System.nanoTime()
     val result =
-        searchResult.searchEntries.associate { groupEntry ->
+        groupEntries.associate { groupEntry ->
           val groupName = groupEntry.getAttributeValue("cn")
           val group =
               groupEntry.attributes
@@ -972,5 +980,22 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
   companion object {
     private const val TAG = "ActiveDirectoryClient"
+  }
+}
+
+/** Flattens per-OU search results; if a cn appears twice the earlier OU wins. */
+internal fun firstWinsByCn(
+    entriesPerOu: List<List<com.unboundid.ldap.sdk.SearchResultEntry>>,
+    onDuplicate: (String) -> Unit = {},
+): List<com.unboundid.ldap.sdk.SearchResultEntry> {
+  val seen = HashSet<String>()
+  return entriesPerOu.flatten().filter { entry ->
+    val cn = entry.getAttributeValue("cn")
+    if (cn == null || seen.add(cn.lowercase())) {
+      true
+    } else {
+      onDuplicate(cn)
+      false
+    }
   }
 }
