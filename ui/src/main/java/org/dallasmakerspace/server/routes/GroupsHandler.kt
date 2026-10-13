@@ -21,6 +21,7 @@ import org.dallasmakerspace.server.models.parseCNFromDN
 import org.dallasmakerspace.server.moodle.MOODLE_FEATURE_FLAG
 import org.dallasmakerspace.server.moodle.MoodleCourses
 import org.dallasmakerspace.server.plugins.AuthException
+import org.dallasmakerspace.server.workflows.GroupWorkflowLaunch
 
 class GroupsHandler
 @Inject
@@ -116,6 +117,8 @@ constructor(
                   else -> "join"
                 },
             "memberUsernamesJson" to "[]",
+            "workflowSubject" to GroupWorkflowLaunch.subject(requestedGroupName),
+            "exportMembersInput" to GroupWorkflowLaunch.exportMembersInput(requestedGroupName),
         )
     if (requestedGroup.members.isNotEmpty()) {
       // Create a map of username to most recent timestamp from history
