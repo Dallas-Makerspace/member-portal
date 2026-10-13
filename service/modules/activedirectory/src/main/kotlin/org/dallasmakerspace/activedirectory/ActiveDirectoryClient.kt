@@ -248,7 +248,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
       val groupEntry =
           preferredByGroupOu(searchResult.searchEntries)
-              ?: throw ADException("Group $groupname not found in AD")
+              ?: throw GroupNotFoundException(groupname)
 
       val group =
           groupEntry.attributes
@@ -679,7 +679,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
       val groupEntry =
           searchResult.searchEntries.firstOrNull()
-              ?: throw ADException("Group $group not found in AD")
+              ?: throw GroupNotFoundException(group)
 
       val groupDN = groupEntry.dn.toString()
 
@@ -763,7 +763,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
       val groupEntry =
           searchResult.searchEntries.firstOrNull()
-              ?: throw ADException("Group $group not found in AD")
+              ?: throw GroupNotFoundException(group)
 
       val groupDN = groupEntry.dn.toString()
 

@@ -127,7 +127,9 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
         (adResult["administrators"] as? Array<*>)?.map { it.toString() } ?: emptyList()
 
     // Parse members and nested groups, including disabled accounts for the single-group view
-    val (members, nestedGroups) = parseMembersAndGroups(adResult, includeDisabled = true)
+    val parsed = parseMembersAndGroups(adResult, includeDisabled = true)
+    val members = parsed.users
+    val nestedGroups = parsed.groupDns
 
     return ADGroup(
         cn = adResult["cn"].toString(),
@@ -138,6 +140,8 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
         membersListIncomplete = (adResult["member"] as Array<*>).size > MAX_GROUP_MEMBERS,
         administrators = administrators,
         nestedGroups = nestedGroups,
+        sourceMemberCount = parsed.sourceCount,
+        unresolvedMemberCount = parsed.unresolvedCount,
     )
   }
 
@@ -147,7 +151,9 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
       val administrators =
           (groupData["administrators"] as? Array<*>)?.map { it.toString() } ?: emptyList()
 
-      val (members, nestedGroups) = parseMembersAndGroups(groupData)
+      val parsed = parseMembersAndGroups(groupData)
+      val members = parsed.users
+      val nestedGroups = parsed.groupDns
 
       ADGroup(
           cn = groupData["cn"].toString(),
@@ -200,34 +206,43 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
     }
   }
 
+  private class ParsedMembers(
+      val users: List<ADUser>,
+      val groupDns: List<String>,
+      val sourceCount: Int,
+      val unresolvedCount: Int,
+  )
+
   /**
    * Parses the list of members and separates them into users and nested groups.
    *
    * @param attributeMap The map of attributes for the group
-   * @return Pair of (List of ADUser objects, List of group DNs)
+   * @return the resolved users, the nested group DNs, the raw member count, and how many
+   *   user-looking DNs did not resolve to a user
    */
   private fun parseMembersAndGroups(
       attributeMap: Map<String, Any?>?,
       includeDisabled: Boolean = false,
-  ): Pair<List<ADUser>, List<String>> {
-    if (attributeMap.isNullOrEmpty()) return Pair(emptyList(), emptyList())
+  ): ParsedMembers {
+    if (attributeMap.isNullOrEmpty()) return ParsedMembers(emptyList(), emptyList(), 0, 0)
 
     // Get the list of members from the attribute map
     val allMembers = (attributeMap["member"] as? Array<*>) ?: emptyList<String>()
-    val members = (allMembers as Array<*>).take(MAX_GROUP_MEMBERS).map { it.toString() }
+    val sourceCount = (allMembers as Array<*>).size
+    val members = allMembers.take(MAX_GROUP_MEMBERS).map { it.toString() }
 
     // Separate user DNs and group DNs
     val (groupDNs, userDNs) = members.partition { isGroupDN(it) }
 
     // Fetch ADUser objects for user DNs only
+    val resolved = userDNs.chunked(100).flatMap { subChunk -> getMembersByDnList(subChunk) }
     val users =
-        userDNs
-            .chunked(100)
-            .flatMap { subChunk -> getMembersByDnList(subChunk) }
+        resolved
             .let { if (includeDisabled) it else it.filter { u -> u.enabled } }
             .distinctBy { it.sAMAccountName }
 
-    return Pair(users, groupDNs)
+    return ParsedMembers(
+        users, groupDNs, sourceCount, (userDNs.size - resolved.size).coerceAtLeast(0))
   }
 
   /**

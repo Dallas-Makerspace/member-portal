@@ -58,9 +58,23 @@ Key behaviours to remember:
 
 ### 3.2 Next feature steps (planned order)
 
-1. [ ] **First real workflow, read-only:** export a group's members to S3 (new `StorageNamespace` entry for workflow
-   output; key derived from the run id so it is recomputable; persisted output = key, count, checksum only).
-   Then put the launch button on the group page behind the flag.
+1. [x] **First real workflow, read-only: `group.export-members`** (commit `44d6255`, deployed; launch button on the group
+   page behind the flag). An independent review found issues (truncated export looked complete; a failed run held the
+   group lock; preflight skipped validation when S3 was down; display names could be the text "null"; weak tests).
+   All fixed in the follow-up commit: the document carries `complete`/`sourceMemberCount`/`unresolvedMemberCount`/
+   `nestedGroups` and the step has a `requireComplete` arg (archive must set it and also check `nestedGroupCount`,
+   since nested groups are listed but not expanded); AUTO_ROLLBACK releases the lock on failure; no S3 call in
+   preflight; EXECUTE-mode validate is cheap; idempotency check is head-based; `GroupNotFoundException` replaces text
+   matching. Known limits: `complete` relies on a name heuristic to tell nested groups from users (errs toward
+   incomplete); the mock directory always looks complete; the literal text "null" for absent AD attributes is
+   handled in the export only (other `getMembersBy*` callers still stringify nulls).
+   - [ ] **Audited presigned download of the export** (service route + link on the run page; each download written to the
+     workflow event log). Decided yes, but **blocked on you checking the S3 bucket**: is it shared with profile photos,
+     is `workflow-exports/` private, and what retention/lifecycle rule applies to these personal-data snapshots?
+   - Decided: any user with MANAGE_GROUPS may export any group in the two group OUs (no admin-OU exclusion, no
+     per-group-admin path).
+   - Open: no LDAP response timeout is configured, so a hung AD read is bounded only by the library default (~300 s);
+     the executor lease must stay longer than any AD read or be given an explicit timeout.
 2. [ ] **Keycloak investigation** (must precede any rename/archive pilot). Check how the realm's LDAP group mapper
    identifies groups (by name or objectGUID), whether it drops groups on sync, and whether role mappings or token claims
    are attached to Keycloak groups. A "trigger Keycloak group sync" step may be needed at the end of both workflows.

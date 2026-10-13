@@ -243,7 +243,7 @@ All timestamps UTC (per project convention); convert to Chicago time at the edge
 | `workflow_event` | append-only: run_id, step_index?, ts, level, message, actor_id?. Feeds the run log and audit trail (operator actions included) |
 
 Rules: no secrets in `input_json` / `output_json`; large artifacts go to S3 and only the key is stored. Add a new
-`StorageNamespace.WORKFLOW_ARCHIVES` for archive output.
+`StorageNamespace.WORKFLOW_EXPORTS` (prefix `workflow-exports`) for export and archive snapshots.
 
 ## Required changes outside the engine (found in the code survey)
 

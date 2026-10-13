@@ -101,6 +101,18 @@ class GroupPageLaunchTest {
   }
 
   @Test
+  fun `a group name containing markup is escaped in the rendered attributes`() {
+    val name = "<script>alert(1)</script>"
+    val html = render(groupModel(name = name, enabled = true))
+
+    assertFalse(name in html, "raw markup from the group name reached the page")
+    val button = Regex("""<span[^>]*class="wf-launch"[^>]*>""").find(html)!!.value
+    assertFalse("<script" in button)
+    assertTrue("data-input=\"{&quot;groupName&quot;:&quot;&lt;script&gt;" in button, button)
+    assertTrue("data-subject=\"group:&lt;script&gt;" in button, button)
+  }
+
+  @Test
   fun `the subject is trimmed and lowercased like the service normalizes it`() {
     assertEquals("group:test group", GroupWorkflowLaunch.subject("  Test Group "))
     assertEquals("group:a:b", GroupWorkflowLaunch.subject("A:B"))

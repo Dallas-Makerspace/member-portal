@@ -29,7 +29,7 @@ constructor(private val exportMembers: ExportGroupMembersStep) :
         permission = "MANAGE_GROUPS",
         inputSerializer = GroupExportMembersInput.serializer(),
         inputFields = listOf(WorkflowInputField("groupName", "Group name")),
-        onFailure = FailurePolicy.PAUSE,
+        onFailure = FailurePolicy.AUTO_ROLLBACK,
         retry =
             RetryPolicy(
                 maxAttempts = 3,
@@ -45,7 +45,10 @@ constructor(private val exportMembers: ExportGroupMembersStep) :
   override fun subjects(input: GroupExportMembersInput) = listOf(Subject("group", input.groupName))
 
   override fun steps() =
-      listOf(step(exportMembers) { ExportGroupMembersStep.Args(input.groupName.trim()) })
+      listOf(
+          step(exportMembers) {
+            ExportGroupMembersStep.Args(input.groupName.trim(), requireComplete = false)
+          })
 
   override fun validateInput(input: GroupExportMembersInput) =
       if (input.groupName.isBlank()) listOf("groupName is required") else emptyList()
