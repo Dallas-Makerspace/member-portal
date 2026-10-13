@@ -27,16 +27,21 @@ data class GroupGuidClassification(
 
 private val DN_COMMA_SPACING = Regex("""\s*,\s*""")
 
-private fun normalizeDn(dn: String) = dn.replace(DN_COMMA_SPACING, ",").trim().lowercase()
+internal fun normalizeDn(dn: String) = dn.replace(DN_COMMA_SPACING, ",").trim().lowercase()
+
+/** Per AD group: its canonical GUID, or null if missing, malformed or duplicated. */
+internal fun usableGuids(adGroups: List<AdGroupRef>): List<String?> {
+  val guids = adGroups.map { AdGuid.normalize(it.guid) }
+  val duplicated = guids.filterNotNull().groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+  return guids.map { if (it != null && it !in duplicated) it else null }
+}
 
 /**
  * Matches groups rows to AD groups: rows that already have a GUID by GUID, the rest by DN and then
  * by case-insensitive name. Ambiguities are reported, never resolved.
  */
 fun classifyGroupGuids(rows: List<GroupRowRef>, adGroups: List<AdGroupRef>): GroupGuidClassification {
-  val guids = adGroups.map { AdGuid.normalize(it.guid) }
-  val duplicated = guids.filterNotNull().groupingBy { it }.eachCount().filterValues { it > 1 }.keys
-  val usableGuid = guids.map { if (it != null && it !in duplicated) it else null }
+  val usableGuid = usableGuids(adGroups)
   val indexByGuid =
       usableGuid.withIndex().filter { it.value != null }.associate { it.value!! to it.index }
   val indexesByDn = adGroups.indices.groupBy { normalizeDn(adGroups[it].dn) }

@@ -50,6 +50,27 @@ class GroupGuidBackfillStoreTest {
       }
 
   @Test
+  fun `sets the dn only where the row still holds the expected guid`() = runBlocking {
+    val match = MembersGroupsTestDb.insert("Team A", "CN=old a", guid1)
+    val other = MembersGroupsTestDb.insert("Team B", "CN=old b", guid2)
+    val result =
+        store.setDnsForGuid(
+            listOf(match to DnUpdate(guid1, "CN=new a"), other to DnUpdate(guid1, "CN=new b")))
+    assertEquals(GuidWriteResult(1, 1, emptyList()), result)
+    assertEquals(Triple("Team A", "CN=new a", guid1), MembersGroupsTestDb.row(match))
+    assertEquals(Triple("Team B", "CN=old b", guid2), MembersGroupsTestDb.row(other))
+  }
+
+  @Test
+  fun `a dn held by another row is reported as failed`() = runBlocking {
+    MembersGroupsTestDb.insert("Team A", "CN=taken", guid1)
+    val clash = MembersGroupsTestDb.insert("Team B", "CN=old b", guid2)
+    val result = store.setDnsForGuid(listOf(clash to DnUpdate(guid2, "CN=taken")))
+    assertEquals(GuidWriteResult(0, 0, listOf(clash)), result)
+    assertEquals("CN=old b", MembersGroupsTestDb.row(clash)!!.second)
+  }
+
+  @Test
   fun `backup table is created once and holds a copy`() = runBlocking {
     MembersGroupsTestDb.insert("Team A", "CN=Team A")
     val date = LocalDate.of(2030, 1, 2)

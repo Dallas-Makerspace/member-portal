@@ -12,6 +12,7 @@ import com.unboundid.ldap.sdk.SearchScope
 import com.unboundid.ldap.sdk.SimpleBindRequest
 import com.unboundid.ldap.sdk.controls.SimplePagedResultsControl
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.dallasmakerspace.core.AppConfig
@@ -246,7 +247,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
           )
 
       val groupEntry =
-          searchResult.searchEntries.firstOrNull()
+          preferredByGroupOu(searchResult.searchEntries)
               ?: throw ADException("Group $groupname not found in AD")
 
       val group =
@@ -347,7 +348,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
       val groups = mutableMapOf<String, Map<String, Any?>>()
 
-      for (groupEntry in searchResult.searchEntries) {
+      for (groupEntry in preferredPerCn(searchResult.searchEntries)) {
         val groupName = groupEntry.getAttributeValue("cn")
         val group =
             groupEntry.attributes
@@ -840,7 +841,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
                   )
                   .searchEntries
             },
-            onDuplicate = { cn -> log.warn("$TAG/getAllGroups duplicate name in two OUs: $cn") },
+            onDuplicate = duplicateNameWarning::log,
         )
     val searchDurationMs = (System.nanoTime() - searchStart) / 1_000_000
     val entryCount = groupEntries.size
@@ -978,10 +979,38 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
     log.info("$TAG/updateBadgeNumber Updated badge number for $username to $newBadgeNumber")
   }
 
+  private val duplicateNameWarning =
+      OncePerName { log.warn("$TAG/getAllGroups duplicate name in two OUs: $it") }
+
   companion object {
     private const val TAG = "ActiveDirectoryClient"
   }
 }
+
+private val normalizedGroupOus = DirectoryOus.GROUP_OUS.map(::normalizeDnForOu)
+
+private fun normalizeDnForOu(dn: String) = dn.split(',').joinToString(",") { it.trim().lowercase() }
+
+/** Index of the first GROUP_OUS entry containing [dn]; outside all of them sorts last. */
+internal fun groupOuRank(dn: String): Int {
+  val normalized = normalizeDnForOu(dn)
+  val rank = normalizedGroupOus.indexOfFirst { normalized.endsWith(",$it") }
+  return if (rank >= 0) rank else Int.MAX_VALUE
+}
+
+/** Picks the entry in the earliest group OU; ties and non-group-OU entries keep list order. */
+internal fun preferredByGroupOu(
+    entries: List<com.unboundid.ldap.sdk.SearchResultEntry>
+): com.unboundid.ldap.sdk.SearchResultEntry? = entries.minByOrNull { groupOuRank(it.dn) }
+
+/** One entry per cn (case-insensitive), chosen by [preferredByGroupOu], in first-seen order. */
+internal fun preferredPerCn(
+    entries: List<com.unboundid.ldap.sdk.SearchResultEntry>
+): List<com.unboundid.ldap.sdk.SearchResultEntry> =
+    entries
+        .groupBy { it.getAttributeValue("cn")?.lowercase() ?: "dn:${it.dn}" }
+        .values
+        .mapNotNull { preferredByGroupOu(it) }
 
 /** Flattens per-OU search results; if a cn appears twice the earlier OU wins. */
 internal fun firstWinsByCn(
@@ -997,5 +1026,14 @@ internal fun firstWinsByCn(
       onDuplicate(cn)
       false
     }
+  }
+}
+
+/** Runs [emit] at most once per distinct name (case-insensitive) for the life of the instance. */
+internal class OncePerName(private val emit: (String) -> Unit) {
+  private val seen: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+  fun log(name: String) {
+    if (seen.add(name.lowercase())) emit(name)
   }
 }

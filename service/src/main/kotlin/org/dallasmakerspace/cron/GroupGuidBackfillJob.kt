@@ -8,8 +8,10 @@ import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.members.AdGroupRef
+import org.dallasmakerspace.members.GroupDnClassification
 import org.dallasmakerspace.members.GroupGuidClassification
 import org.dallasmakerspace.members.IGroupGuidBackfillStore
+import org.dallasmakerspace.members.classifyGroupDns
 import org.dallasmakerspace.members.classifyGroupGuids
 
 /**
@@ -39,23 +41,30 @@ internal constructor(
         withContext(Dispatchers.IO) { activeDirectoryService.getAllGroups() }
             .map { AdGroupRef(it.objectGuid, it.distinguishedName, it.cn) }
     val result = classifyGroupGuids(rows, adGroups)
+    val dnResult = classifyGroupDns(rows, adGroups, result.matched)
 
     val report = StringBuilder()
     report.appendLine("mode=${if (params.dryRun) "DRY_RUN" else "REAL_RUN"}")
     report.appendLine("rows=${rows.size} adGroups=${adGroups.size}")
     appendClassification(report, result)
+    appendDnClassification(report, dnResult)
 
     if (!params.dryRun) {
       if (result.ambiguous.isNotEmpty() || result.unusableGuid.isNotEmpty()) {
         report.appendLine("REFUSED: AMBIGUOUS or UNUSABLE_GUID entries must be resolved by hand")
       } else {
-        report.append(applyUpdates(result, params.batchSize.coerceIn(1, MAX_BATCH_SIZE)))
+        val batchSize = params.batchSize.coerceIn(1, MAX_BATCH_SIZE)
+        report.append(applyUpdates(result, dnResult, batchSize))
       }
     }
     return report.toString().also { log.info(it) }
   }
 
-  private suspend fun applyUpdates(result: GroupGuidClassification, batchSize: Int): String {
+  private suspend fun applyUpdates(
+      result: GroupGuidClassification,
+      dnResult: GroupDnClassification,
+      batchSize: Int,
+  ): String {
     val backup = store.createBackupTable(today())
     var updated = 0
     var unchanged = 0
@@ -66,8 +75,19 @@ internal constructor(
       unchanged += written.unchanged
       failed += written.failedIds
     }
+    var dnUpdated = 0
+    var dnUnchanged = 0
+    val dnFailed = mutableListOf<Int>()
+    for (batch in dnResult.updates.entries.map { it.key to it.value }.chunked(batchSize)) {
+      val written = store.setDnsForGuid(batch)
+      dnUpdated += written.updated
+      dnUnchanged += written.unchanged
+      dnFailed += written.failedIds
+    }
     return "backup=$backup\nupdated=$updated unchanged=$unchanged failed=${failed.size}" +
-        " failedIds=$failed\n"
+        " failedIds=$failed\n" +
+        "dnUpdated=$dnUpdated dnUnchanged=$dnUnchanged dnFailed=${dnFailed.size}" +
+        " dnFailedIds=$dnFailed\n"
   }
 
   private fun appendClassification(report: StringBuilder, result: GroupGuidClassification) {
@@ -83,6 +103,13 @@ internal constructor(
             "reasons=$reasons")
     report.appendLine(
         "UNUSABLE_GUID=${result.unusableGuid.size} ids=${result.unusableGuid.take(MAX_LISTED_IDS)}")
+  }
+
+  private fun appendDnClassification(report: StringBuilder, result: GroupDnClassification) {
+    report.appendLine("DN_UPDATE=${result.updates.size}")
+    report.appendLine("DN_UNCHANGED=${result.unchanged.size}")
+    report.appendLine(
+        "DN_CONFLICT=${result.conflicts.size} ids=${result.conflicts.take(MAX_LISTED_IDS)}")
   }
 
   companion object {

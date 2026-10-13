@@ -21,6 +21,9 @@ interface IGroupGuidBackfillStore {
 
   /** Sets each GUID only where the row's object_guid is still NULL. One transaction per call. */
   suspend fun setGuidsIfNull(assignments: List<Pair<Int, String>>): GuidWriteResult
+
+  /** Sets each DN only where the row still holds the expected GUID; counts as for GUIDs. */
+  suspend fun setDnsForGuid(updates: List<Pair<Int, DnUpdate>>): GuidWriteResult
 }
 
 class GroupGuidBackfillStore : IGroupGuidBackfillStore {
@@ -62,6 +65,28 @@ class GroupGuidBackfillStore : IGroupGuidBackfillStore {
         }
         GuidWriteResult(updated, unchanged, failed)
       }
+
+  @Suppress("TooGenericExceptionCaught")
+  override suspend fun setDnsForGuid(updates: List<Pair<Int, DnUpdate>>): GuidWriteResult =
+      suspendTransaction {
+        var updated = 0
+        var unchanged = 0
+        val failed = mutableListOf<Int>()
+        for ((id, change) in updates) {
+          try {
+            val count =
+                GroupsTable.update(
+                    { (GroupsTable.id eq id) and (GroupsTable.objectGuid eq change.guid) }) {
+                  it[dn] = change.dn
+                }
+            if (count > 0) updated += count else unchanged++
+          } catch (e: ExposedSQLException) {
+            logger.warn("DN update failed for group row {}", id)
+            failed.add(id)
+          }
+        }
+        GuidWriteResult(updated, unchanged, failed)
+      }
 }
 
 class GroupGuidBackfillStoreMock : IGroupGuidBackfillStore {
@@ -72,4 +97,7 @@ class GroupGuidBackfillStoreMock : IGroupGuidBackfillStore {
 
   override suspend fun setGuidsIfNull(assignments: List<Pair<Int, String>>) =
       GuidWriteResult(0, assignments.size, emptyList())
+
+  override suspend fun setDnsForGuid(updates: List<Pair<Int, DnUpdate>>) =
+      GuidWriteResult(0, updates.size, emptyList())
 }
