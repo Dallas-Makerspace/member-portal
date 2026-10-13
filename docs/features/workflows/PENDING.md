@@ -68,9 +68,19 @@ Key behaviours to remember:
    matching. Known limits: `complete` relies on a name heuristic to tell nested groups from users (errs toward
    incomplete); the mock directory always looks complete; the literal text "null" for absent AD attributes is
    handled in the export only (other `getMembersBy*` callers still stringify nulls).
-   - [ ] **Audited presigned download of the export** (service route + link on the run page; each download written to the
-     workflow event log). Decided yes, but **blocked on you checking the S3 bucket**: is it shared with profile photos,
-     is `workflow-exports/` private, and what retention/lifecycle rule applies to these personal-data snapshots?
+   - [ ] **Audited presigned download of the export** (service route + link on the run page, shown only on a SUCCEEDED
+     run to users who may run the workflow; clicking asks the UI, which checks permission and gets a ~5 minute
+     presigned URL from the service; every click is written to the workflow event log; the page holds no URL).
+     Decided yes. Still to confirm: who may download (default: anyone who can run it), link lifetime (default 5 min),
+     whether archive snapshots are downloadable (default: infra admins only).
+   - **S3 bucket checked 2026-10-13** (read-only, AWS CLI): the object-store bucket is shared with profile photos; it is
+     private (all public-access blocks on, no bucket policy, ACLs disabled), encrypted at rest (AES256), versioned,
+     has no access logging, and was empty. Its only lifecycle rules expire non-current versions after 30 days and abort
+     incomplete uploads after 1 day, so **current objects never expire**.
+   - [ ] **Retention rule for exports: you chose to set it yourself.** Recommended: a lifecycle rule scoped to the
+     prefix `workflow-exports/group-exports/` only (profile photos untouched; archive snapshots must go under a different
+     prefix so they are exempt): expire current objects after 90 days and non-current versions after 7 days.
+     Note versioning means a deleted export lingers as a hidden version for the non-current window.
    - Decided: any user with MANAGE_GROUPS may export any group in the two group OUs (no admin-OU exclusion, no
      per-group-admin path).
    - Open: no LDAP response timeout is configured, so a hung AD read is bounded only by the library default (~300 s);
