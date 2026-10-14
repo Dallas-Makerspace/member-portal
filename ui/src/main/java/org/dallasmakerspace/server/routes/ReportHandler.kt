@@ -12,6 +12,7 @@ import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.moodle.MOODLE_FEATURE_FLAG
 import org.dallasmakerspace.server.plugins.AuthException
+import org.dallasmakerspace.server.reports.ArchivedGroupsReport
 import org.dallasmakerspace.server.reports.ReportGraph
 import org.dallasmakerspace.server.reports.ReportNode
 
@@ -134,6 +135,16 @@ constructor(
     }
 
     if (parentSlug == "online-courses") addMoodleModel(templateData, queryParams)
+
+    if (parentSlug == ArchivedGroupsReport.PARENT_SLUG && childSlug == ArchivedGroupsReport.SLUG) {
+      templateData.putAll(
+          ArchivedGroupsReport.reportModel(
+              committeeSlug = queryParams["committee"],
+              canDownload = authz.can(Permission.DOWNLOAD_ARCHIVES.name),
+              fetch = { memberServiceClient.getArchivedGroups(it, session.sessionId) },
+              onFailure = { log.warn("Failed to load archived groups: {}", it.message) },
+          ))
+    }
 
     call.respond(ThymeleafContent("report", templateData))
   }

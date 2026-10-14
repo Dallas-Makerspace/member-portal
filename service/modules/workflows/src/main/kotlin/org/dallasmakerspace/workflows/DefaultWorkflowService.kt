@@ -14,13 +14,13 @@ class DefaultWorkflowService
 constructor(
     private val store: WorkflowStore,
     private val registry: WorkflowRegistry,
-    bus: WorkflowEventBus,
+    private val bus: WorkflowEventBus,
     private val settings: EngineSettings,
     private val wake: WorkflowWakeSignal,
     loggerFactory: LoggerFactory,
 ) : WorkflowService {
   private val log = loggerFactory.create(DefaultWorkflowService::class.java)
-  private val mapper = RunMapper(registry)
+  private val mapper = RunMapper(registry, settings.clock)
   private val publisher = RunPublisher(store, bus, mapper, log)
 
   override fun definitions() = registry.definitions()
@@ -86,6 +86,39 @@ constructor(
 
   override suspend fun activeRunFor(subject: WorkflowSubject) =
       store.activeRunForSubject(normalizeSubject(subject))?.let { mapper.toDto(it, null) }
+
+  override suspend fun resolveArtifact(
+      runId: Long,
+      stepIndex: Int,
+      artifactName: String,
+  ): ResolvedArtifact? {
+    val run = store.getRun(runId) ?: return null
+    val ref =
+        mapper.artifacts(run, store.getSteps(runId))[stepIndex]?.firstOrNull { it.name == artifactName }
+            ?: return null
+    return ResolvedArtifact(
+        name = ref.name,
+        label = ref.label,
+        contentType = ref.contentType,
+        namespace = ref.namespace,
+        key = ref.key,
+        infraOnly = ref.infraOnly,
+        workflowId = run.workflowId,
+        requiredPermission = registry.get(run.workflowId)?.permission,
+    )
+  }
+
+  override suspend fun recordArtifactDownload(
+      runId: Long,
+      stepIndex: Int,
+      artifactName: String,
+      actor: String,
+  ): WorkflowEventDto {
+    val event =
+        store.appendEvent(
+            runId, stepIndex, "INFO", "Artifact $artifactName download requested by $actor", actor)
+    return mapper.toDto(event).also(bus::publishEvent)
+  }
 
   override suspend fun adminInProgress(): WorkflowAdminInProgressDto {
     val runs = store.listInProgress()

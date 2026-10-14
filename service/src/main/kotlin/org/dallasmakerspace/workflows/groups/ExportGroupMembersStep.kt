@@ -19,6 +19,7 @@ import org.dallasmakerspace.storage.ObjectStoreException
 import org.dallasmakerspace.storage.ObjectStoreFactory
 import org.dallasmakerspace.storage.StorageNamespace
 import org.dallasmakerspace.storage.StoredObject
+import org.dallasmakerspace.workflows.ArtifactRef
 import org.dallasmakerspace.workflows.PermanentStepException
 import org.dallasmakerspace.workflows.PublicStep
 import org.dallasmakerspace.workflows.Reversibility
@@ -68,8 +69,15 @@ internal constructor(
       objectStoreFactory: ObjectStoreFactory,
   ) : this(activeDirectory, objectStoreFactory, Dispatchers.IO)
 
-  /** With [requireComplete], an incomplete export fails the step instead of being uploaded. */
-  data class Args(val groupName: String, val requireComplete: Boolean = false)
+  /**
+   * With [requireComplete], an incomplete export fails the step instead of being uploaded.
+   * [downloadInfraOnly] limits the download of the exported file to infrastructure admins.
+   */
+  data class Args(
+      val groupName: String,
+      val requireComplete: Boolean = false,
+      val downloadInfraOnly: Boolean = false,
+  )
 
   /** [key] is relative to [StorageNamespace.WORKFLOW_EXPORTS]. Never holds member data. */
   @Serializable
@@ -162,6 +170,17 @@ internal constructor(
 
   /** Keeps the snapshot: it may be the only copy of the member list. */
   override suspend fun rollback(ctx: StepContext, args: Args, output: Result) = Unit
+
+  override fun artifacts(args: Args, output: Result) =
+      listOf(
+          ArtifactRef(
+              name = MEMBER_LIST_ARTIFACT,
+              label = "Member list (JSON)",
+              contentType = "application/json",
+              namespace = StorageNamespace.WORKFLOW_EXPORTS.name,
+              key = output.key,
+              infraOnly = args.downloadInfraOnly,
+          ))
 
   override fun summarize(output: Result): String {
     val noun = if (output.memberCount == 1) "member" else "members"
@@ -264,6 +283,7 @@ internal constructor(
 
   companion object {
     const val SCHEMA_VERSION = 1
+    const val MEMBER_LIST_ARTIFACT = "member-list"
     private const val META_SHA256 = "sha256"
     private const val META_MEMBER_COUNT = "member-count"
     private const val META_SOURCE_COUNT = "source-member-count"

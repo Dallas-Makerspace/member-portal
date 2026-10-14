@@ -138,4 +138,13 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
   override fun updateBadgeNumber(username: String, newBadgeNumber: String) {
     // Do nothing
   }
+
+  /** {@inheritDoc} */
+  override fun deleteGroup(groupName: String): Boolean = true
+
+  /** {@inheritDoc} */
+  override fun createGroup(spec: AdGroupSpec): AdGroupCreateResult {
+    val plan = planGroupCreate(spec, emptyList()) as GroupCreatePlan.Create
+    return AdGroupCreateResult(plan.dn, "mock-guid-${spec.name}", created = true)
+  }
 }

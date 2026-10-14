@@ -13,6 +13,7 @@ import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.ProfileTable
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.and
 
 class GroupSettingsRepository
 @Inject
@@ -25,7 +26,12 @@ constructor(
   private val utcZone = ZoneId.of("UTC")
 
   override suspend fun getGroupId(name: String): Int? = suspendTransaction {
-    GroupDAO.find { GroupsTable.name eq name }.firstOrNull()?.id?.value
+    GroupDAO.find {
+          (GroupsTable.name eq name) and (GroupsTable.status neq GROUP_STATUS_ARCHIVED)
+        }
+        .firstOrNull()
+        ?.id
+        ?.value
   }
 
   override suspend fun getOrCreateGroupId(name: String, dn: String?): Int =

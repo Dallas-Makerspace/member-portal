@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Archived Groups</title>
+</head>
+<body>
+<div th:fragment="report">
+    <h2 class="mt-4 mb-3">Archived Groups</h2>
+
+    <div th:if="${archivedCommittee != null}" class="mb-3 d-flex flex-wrap align-items-center gap-2">
+        <span class="badge text-bg-secondary fs-6 d-inline-flex align-items-center gap-2" id="archived-committee-filter">
+            <span>Committee: <span th:text="${archivedCommittee.name}"></span></span>
+            <a href="/reports/it/archived-groups" class="text-reset text-decoration-none"
+               aria-label="Clear committee filter" title="Clear committee filter">&times;</a>
+        </span>
+        <a th:href="'/committees/' + ${archivedCommittee.slug}" class="small">Committee page</a>
+        <a href="/reports/it/archived-groups" class="small">All archived groups</a>
+    </div>
+
+    <div th:if="${archivedCommitteeSlug != null}" class="alert alert-warning" id="archived-committee-not-found">
+        Committee not found: <span th:text="${archivedCommitteeSlug}"></span>.
+        <a href="/reports/it/archived-groups">Show all archived groups</a>
+    </div>
+
+    <div th:if="${archivedLoadFailed}" class="alert alert-danger" id="archived-load-failed">
+        Archived groups could not be loaded right now. Try again in a moment.
+    </div>
+
+    <th:block th:if="${archivedCommitteeSlug == null and archivedLoadFailed == null}">
+        <div th:if="${archivedRows == null or archivedRows.empty}" class="text-muted" id="archived-empty">
+            <span th:if="${archivedCommittee != null}">
+                No archived groups for <span th:text="${archivedCommittee.name}"></span>.
+            </span>
+            <span th:if="${archivedCommittee == null}">No groups have been archived.</span>
+        </div>
+
+        <div th:if="${archivedRows != null and !archivedRows.empty}" class="table-responsive">
+            <table class="table table-sm align-middle" id="archived-groups-table">
+                <thead>
+                <tr>
+                    <th scope="col">Group</th>
+                    <th scope="col">Archived</th>
+                    <th scope="col">Archived by</th>
+                    <th scope="col">Reason</th>
+                    <th scope="col" th:if="${archivedShowDownload}">Download</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="row : ${archivedRows}">
+                    <td th:text="${row.name}"></td>
+                    <td class="text-nowrap" th:text="${row.archivedAt}"></td>
+                    <td th:text="${row.archivedBy}"></td>
+                    <td class="text-break" th:text="${row.reason}"></td>
+                    <td th:if="${archivedShowDownload}">
+                        <a th:if="${row.downloadUrl != null}" th:href="${row.downloadUrl}" download
+                           class="btn btn-sm btn-outline-secondary">Member list</a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </th:block>
+</div>
+</body>
+</html>

@@ -4,10 +4,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import org.dallasmakerspace.config.db.ConfigOverrideDAO
 import org.dallasmakerspace.config.db.IConfigOverrideRepository
 import org.dallasmakerspace.core.LoggerFactory
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.slf4j.Logger
@@ -75,4 +77,27 @@ class ConfigOverrideServiceTest {
       runBlocking {
         assertFalse(service.isFeatureEnabledFor(flagKey, "jdoe", listOf("Members")))
       }
+
+  private fun dao(raw: String, reset: Boolean = false, infraOnly: Boolean = false) =
+      mock<ConfigOverrideDAO> {
+        on { configValue } doReturn raw
+        on { isReset } doReturn reset
+        on { this.infraOnly } doReturn infraOnly
+      }
+
+  @Test
+  fun `getFresh returns the stored value even when it is infra-only`() = runBlocking {
+    val raw = service.serialize(FeatureFlagValue(enabledGroupNames = setOf("Some Group")), flagKey)
+    val stored = dao(raw, infraOnly = true)
+    whenever(repository.getCurrent(flagKey.key)).thenReturn(stored)
+    assertEquals(setOf("Some Group"), service.getFresh(flagKey).enabledGroupNames)
+  }
+
+  @Test
+  fun `getFresh falls back to the default when nothing is stored or it was reset`() = runBlocking {
+    assertEquals(flagKey.defaultValue, service.getFresh(flagKey))
+    val reset = dao("ignored", reset = true)
+    whenever(repository.getCurrent(flagKey.key)).thenReturn(reset)
+    assertEquals(flagKey.defaultValue, service.getFresh(flagKey))
+  }
 }

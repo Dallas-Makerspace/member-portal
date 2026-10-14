@@ -1,7 +1,20 @@
 package org.dallasmakerspace.members
 
+const val GROUP_STATUS_ACTIVE = "ACTIVE"
+const val GROUP_STATUS_DISABLED = "DISABLED"
+const val GROUP_STATUS_ARCHIVED = "ARCHIVED"
+
 /** The slice of a groups row that the resolution decision needs. */
-data class GroupRowRef(val id: Int, val name: String, val dn: String, val objectGuid: String?)
+data class GroupRowRef(
+    val id: Int,
+    val name: String,
+    val dn: String,
+    val objectGuid: String?,
+    val status: String = GROUP_STATUS_ACTIVE,
+) {
+  val isArchived: Boolean
+    get() = status.equals(GROUP_STATUS_ARCHIVED, ignoreCase = true)
+}
 
 sealed interface GroupSyncDecision {
   /** Use the row as is. */
@@ -21,16 +34,22 @@ sealed interface GroupSyncDecision {
 
 fun placeholderGroupDn(name: String) = "CN=$name,OU=Groups,DC=dms,DC=local"
 
-/** Pure lookup-order logic for [IGroupHistoryRepository.resolveGroup]: GUID first, then name. */
+/**
+ * Pure lookup-order logic for [IGroupHistoryRepository.resolveGroup]: GUID first, then name.
+ * ARCHIVED rows never match by name or DN, and a GUID match on one is reported but not changed.
+ */
 fun decideGroupSync(
     name: String,
     dn: String?,
     guid: String?,
     byGuid: GroupRowRef?,
-    byName: GroupRowRef?,
-    byDn: GroupRowRef?,
+    byNameRow: GroupRowRef?,
+    byDnRow: GroupRowRef?,
 ): GroupSyncDecision {
+  val byName = byNameRow?.takeUnless { it.isArchived }
+  val byDn = byDnRow?.takeUnless { it.isArchived }
   if (guid != null && byGuid != null) {
+    if (byGuid.isArchived) return GroupSyncDecision.Conflict(byGuid.id, "row is archived")
     val nameDiffers = !byGuid.name.equals(name, ignoreCase = true)
     val dnDiffers = dn != null && !byGuid.dn.equals(dn, ignoreCase = true)
     return when {

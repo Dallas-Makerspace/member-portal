@@ -1,13 +1,18 @@
 package org.dallasmakerspace.activedirectory
 
 import com.unboundid.asn1.ASN1OctetString
+import com.unboundid.ldap.sdk.Attribute
+import com.unboundid.ldap.sdk.Entry
 import com.unboundid.ldap.sdk.FailoverServerSet
 import com.unboundid.ldap.sdk.Filter
 import com.unboundid.ldap.sdk.LDAPConnectionPool
+import com.unboundid.ldap.sdk.LDAPException
 import com.unboundid.ldap.sdk.Modification
 import com.unboundid.ldap.sdk.ModificationType
+import com.unboundid.ldap.sdk.ResultCode
 import com.unboundid.ldap.sdk.SearchRequest
 import com.unboundid.ldap.sdk.SearchRequest.ALL_USER_ATTRIBUTES
+import com.unboundid.ldap.sdk.SearchResultEntry
 import com.unboundid.ldap.sdk.SearchScope
 import com.unboundid.ldap.sdk.SimpleBindRequest
 import com.unboundid.ldap.sdk.controls.SimplePagedResultsControl
@@ -241,6 +246,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
               "distinguishedName",
               "description",
               "member",
+              "memberOf",
               "objectGUID",
               "managedBy",
               "nTSecurityDescriptor",
@@ -253,7 +259,12 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       val group =
           groupEntry.attributes
               .associate {
-                it.name to if (it.name == "member") it.values else it.values.firstOrNull()
+                it.name to
+                    if (it.name == "member" || it.name == "memberOf") {
+                      it.values
+                    } else {
+                      it.values.firstOrNull()
+                    }
               }
               .withCanonicalGuid(groupEntry)
 
@@ -978,6 +989,78 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
     ldapPool.modify(userDN, mod)
     log.info("$TAG/updateBadgeNumber Updated badge number for $username to $newBadgeNumber")
   }
+
+  private fun searchGroupsNamed(name: String): List<SearchResultEntry> =
+      ldapPool
+          .search(
+              "DC=dms,DC=local",
+              SearchScope.SUB,
+              Filter.createANDFilter(
+                  Filter.createEqualityFilter("name", name),
+                  Filter.createEqualityFilter("objectCategory", "group"),
+              ),
+              "cn",
+              "distinguishedName",
+              "objectGUID",
+          )
+          .searchEntries
+
+  /** {@inheritDoc} */
+  override fun deleteGroup(groupName: String): Boolean {
+    val entry = selectGroupToDelete(groupName, searchGroupsNamed(groupName))
+    if (entry == null) {
+      log.info("$TAG/deleteGroup Group '$groupName' not found; nothing to delete")
+      return false
+    }
+    try {
+      ldapPool.delete(entry.dn)
+    } catch (e: LDAPException) {
+      if (e.resultCode == ResultCode.NO_SUCH_OBJECT) return false
+      log.error("$TAG/deleteGroup Failed to delete group '$groupName'", e)
+      throw e
+    }
+    log.info("$TAG/deleteGroup Deleted group '$groupName'")
+    return true
+  }
+
+  /** {@inheritDoc} */
+  override fun createGroup(spec: AdGroupSpec): AdGroupCreateResult {
+    val plan = planGroupCreate(spec, searchGroupsNamed(spec.name))
+    if (plan is GroupCreatePlan.Exists) return existingResult(plan.entry)
+    plan as GroupCreatePlan.Create
+
+    val attributes =
+        mutableListOf(
+            Attribute("objectClass", "top", "group"),
+            Attribute("sAMAccountName", spec.name),
+            Attribute("groupType", GLOBAL_SECURITY_GROUP_TYPE.toString()),
+        )
+    spec.description
+        ?.takeIf { it.isNotBlank() }
+        ?.let { attributes.add(Attribute("description", it)) }
+    spec.managedByDn
+        ?.takeIf { it.isNotBlank() }
+        ?.let { attributes.add(Attribute("managedBy", it)) }
+    try {
+      ldapPool.add(Entry(plan.dn, attributes))
+    } catch (e: LDAPException) {
+      if (e.resultCode != ResultCode.ENTRY_ALREADY_EXISTS) {
+        log.error("$TAG/createGroup Failed to create group '${spec.name}'", e)
+        throw e
+      }
+      val raced = planGroupCreate(spec, searchGroupsNamed(spec.name))
+      return existingResult((raced as? GroupCreatePlan.Exists)?.entry ?: throw e)
+    }
+    val created = ldapPool.getEntry(plan.dn, "distinguishedName", "objectGUID")
+    log.info("$TAG/createGroup Created group '${spec.name}'")
+    return AdGroupCreateResult(created?.dn ?: plan.dn, created?.let { guidOf(it) }, created = true)
+  }
+
+  private fun existingResult(entry: SearchResultEntry) =
+      AdGroupCreateResult(entry.dn, guidOf(entry), created = false)
+
+  private fun guidOf(entry: Entry): String? =
+      AdGuid.fromBytes(entry.getAttributeValueBytes("objectGUID"))
 
   private val duplicateNameWarning =
       OncePerName { log.warn("$TAG/getAllGroups duplicate name in two OUs: $it") }

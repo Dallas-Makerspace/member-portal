@@ -34,6 +34,10 @@ constructor(private val calendarRepository: CalendarRepository, loggerFactory: L
     return calendarRepository.hasPrerequisiteEvents(groupName)
   }
 
+  /** Read-only count of prerequisites and events tied to an AD group; throws if the lookup fails. */
+  suspend fun countPrerequisiteReferences(groupName: String): PrerequisiteReferences =
+      calendarRepository.countPrerequisiteReferences(groupName)
+
   /**
    * Gets upcoming prerequisite events for multiple AD groups.
    *

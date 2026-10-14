@@ -40,7 +40,35 @@ interface WorkflowService {
    * member add/remove, group settings) call this and return 409 while it is non-null.
    */
   suspend fun activeRunFor(subject: WorkflowSubject): WorkflowRunDto?
+
+  /**
+   * The file a SUCCEEDED/SKIPPED step declared under [artifactName], re-derived from the step's
+   * persisted output (never from client input), or null if there is no such run, step or artifact.
+   */
+  suspend fun resolveArtifact(runId: Long, stepIndex: Int, artifactName: String): ResolvedArtifact?
+
+  /** Appends and publishes the audit event for a download; returns it. */
+  suspend fun recordArtifactDownload(
+      runId: Long,
+      stepIndex: Int,
+      artifactName: String,
+      actor: String,
+  ): WorkflowEventDto
 }
+
+/** Server-side view of an artifact. [key] is relative to [namespace] and never leaves the service. */
+data class ResolvedArtifact(
+    val name: String,
+    val label: String,
+    val contentType: String,
+    /** A `StorageNamespace` enum name. */
+    val namespace: String,
+    val key: String,
+    val infraOnly: Boolean,
+    val workflowId: String,
+    /** Name of the Permission the workflow needs, as in [WorkflowDefinitionDto.requiredPermission]. */
+    val requiredPermission: String?,
+)
 
 sealed interface StartResult {
   data class Started(val run: WorkflowRunDto) : StartResult

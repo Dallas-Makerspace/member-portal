@@ -122,6 +122,20 @@ class WorkflowServiceClient(
   suspend fun operate(runId: Long, action: String, actor: String, sessionId: String?) =
       call(HttpMethod.Post, "/workflows/runs/$runId/$action", actor, sessionId, body = "{}")
 
+  /** Never log the response: on success its body holds a presigned URL. */
+  suspend fun artifactUrl(
+      runId: Long,
+      stepIndex: Int,
+      name: String,
+      actor: String,
+      sessionId: String?,
+  ) =
+      call(
+          HttpMethod.Get,
+          "/workflows/runs/$runId/steps/$stepIndex/artifacts/${enc(name)}/url",
+          actor,
+          sessionId)
+
   suspend fun rawAdminInProgress(actor: String?, sessionId: String?) =
       call(HttpMethod.Get, "/workflows/admin/in-progress", actor, sessionId)
 

@@ -67,4 +67,21 @@ interface IActiveDirectoryService {
    * @param newBadgeNumber The new badge number (employeeID) to set
    */
   fun updateBadgeNumber(username: String, newBadgeNumber: String)
+
+  /**
+   * Deletes the named group from AD. Blocking LDAP call: run it on Dispatchers.IO.
+   *
+   * @return true if a group was deleted, false if none existed (idempotent)
+   * @throws GroupDeletionRefusedException if the group is not inside the main group OU
+   */
+  fun deleteGroup(groupName: String): Boolean
+
+  /**
+   * Creates a global security group. Blocking LDAP call: run it on Dispatchers.IO. Succeeds without
+   * changes (created = false) if the group already exists at the same DN.
+   *
+   * @throws GroupCreateRefusedException if the parent is outside the main group OU or the name is
+   *   taken at another DN
+   */
+  fun createGroup(spec: AdGroupSpec): AdGroupCreateResult
 }

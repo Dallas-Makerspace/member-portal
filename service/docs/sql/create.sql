@@ -77,9 +77,16 @@ CREATE TABLE `groups` (
   `object_guid` varchar(36) DEFAULT NULL COMMENT 'AD objectGUID, canonical lowercase hyphenated; NULL until backfilled',
   `status` varchar(16) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE, DISABLED or ARCHIVED',
   `archived_at` timestamp NULL DEFAULT NULL COMMENT 'When the group was archived; NULL unless status is ARCHIVED',
+  `archived_by` varchar(100) DEFAULT NULL COMMENT 'Username of the member who archived the group; NULL unless status is ARCHIVED',
+  `archive_reason` varchar(255) DEFAULT NULL COMMENT 'Why the group was archived; NULL unless status is ARCHIVED',
+  `archive_run_id` bigint(20) DEFAULT NULL COMMENT 'Workflow run that archived the group; NULL unless status is ARCHIVED',
+  `active_name` varchar(255) GENERATED ALWAYS AS (if(`status` = 'ARCHIVED',NULL,`name`)) STORED COMMENT 'name, or NULL when ARCHIVED; carries the unique index',
+  `active_dn` varchar(512) GENERATED ALWAYS AS (if(`status` = 'ARCHIVED',NULL,`dn`)) STORED COMMENT 'dn, or NULL when ARCHIVED; carries the unique index',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `groups_name_UNQ` (`name`),
-  UNIQUE KEY `groups_dn_UNQ` (`dn`),
+  KEY `groups_name_IDX` (`name`),
+  KEY `groups_dn_IDX` (`dn`),
+  UNIQUE KEY `groups_active_name_UNQ` (`active_name`),
+  UNIQUE KEY `groups_active_dn_UNQ` (`active_dn`),
   UNIQUE KEY `groups_object_guid_UNQ` (`object_guid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Reference table for groups in Active Directory';
 /*!40101 SET character_set_client = @saved_cs_client */;

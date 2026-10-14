@@ -1,14 +1,17 @@
 package org.dallasmakerspace.workflows.routing
 
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveText
+import io.ktor.server.response.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import java.time.Duration
 import kotlinx.coroutines.Job
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -27,6 +30,10 @@ import org.dallasmakerspace.models.workflows.WorkflowRunStatus
 import org.dallasmakerspace.models.workflows.WorkflowStartRequest
 import org.dallasmakerspace.models.workflows.WorkflowStartResponse
 import org.dallasmakerspace.models.workflows.WorkflowSubject
+import org.dallasmakerspace.models.workflows.WorkflowArtifactUrlResponse
+import org.dallasmakerspace.storage.ObjectStoreException
+import org.dallasmakerspace.workflows.ArtifactHead
+import org.dallasmakerspace.workflows.ArtifactLinks
 import org.dallasmakerspace.workflows.InvalidWorkflowInputException
 import org.dallasmakerspace.workflows.OperateResult
 import org.dallasmakerspace.workflows.RunFilter
@@ -51,6 +58,10 @@ private const val DEFAULT_LIST_LIMIT = 100
 private const val MAX_LIST_LIMIT = 500
 private const val TRIGGERED_BY_UI = "UI"
 
+/** Lifetime of the presigned download URL handed out per click. */
+const val ARTIFACT_URL_TTL_SECONDS = 300L
+private val artifactLog = org.slf4j.LoggerFactory.getLogger("WorkflowArtifacts")
+
 /**
  * `/workflows` API, all requiring [Permission.RUN_WORKFLOWS]; call inside an `authenticate` block.
  * Bodies are encoded with kotlinx.serialization directly (not the app's Gson ContentNegotiation) so
@@ -62,6 +73,7 @@ fun Route.workflowRoutes(
     bus: WorkflowEventBus,
     streamsClosed: Job,
     heartbeatMillis: Long = DEFAULT_HEARTBEAT_MILLIS,
+    artifactLinks: ArtifactLinks? = null,
 ) {
   authorize(Permission.RUN_WORKFLOWS) {
     route("/workflows") {
@@ -117,6 +129,10 @@ fun Route.workflowRoutes(
             ListSerializer(WorkflowEventDto.serializer()),
             service.listEvents(runId, after ?: 0L),
         )
+      }
+
+      get("/runs/{runId}/steps/{index}/artifacts/{name}/url") {
+        call.artifactUrl(service, artifactLinks)
       }
 
       get("/runs/{runId}/stream") {
@@ -207,6 +223,44 @@ fun Route.workflowRoutes(
       }
     }
   }
+}
+
+/**
+ * Audited, short-lived download link. The object key comes from the step's persisted output via
+ * [WorkflowService.resolveArtifact], never from the request; the audit event is written before the
+ * URL is created, and the URL is never logged.
+ */
+private suspend fun ApplicationCall.artifactUrl(service: WorkflowService, links: ArtifactLinks?) {
+  val actor = actingUser() ?: return
+  val runId = runId() ?: return
+  val index = parameters["index"]?.toIntOrNull()
+  val name = parameters["name"].orEmpty()
+  if (index == null) return respondError(HttpStatusCode.BadRequest, "index must be a number")
+  val artifact =
+      service.resolveArtifact(runId, index, name)
+          ?: return respondError(HttpStatusCode.NotFound, "Artifact not found")
+  if (links == null) return respondError(HttpStatusCode.ServiceUnavailable, "Downloads unavailable")
+  val head =
+      try {
+        links.head(artifact.namespace, artifact.key)
+      } catch (e: ObjectStoreException) {
+        artifactLog.warn("Artifact check failed for run $runId step $index: ${e.message}")
+        return respondError(HttpStatusCode.BadGateway, "Object store unavailable")
+      }
+  when (head) {
+    ArtifactHead.INVALID -> return respondError(HttpStatusCode.NotFound, "Artifact not found")
+    ArtifactHead.MISSING -> return respondError(HttpStatusCode.Gone, "The file no longer exists")
+    ArtifactHead.PRESENT -> Unit
+  }
+  service.recordArtifactDownload(runId, index, artifact.name, actor)
+  val url =
+      links.presignedGet(
+          artifact.namespace, artifact.key, Duration.ofSeconds(ARTIFACT_URL_TTL_SECONDS))
+  response.header(HttpHeaders.CacheControl, "no-store")
+  respondJson(
+      HttpStatusCode.OK,
+      WorkflowArtifactUrlResponse.serializer(),
+      WorkflowArtifactUrlResponse(url.toString(), ARTIFACT_URL_TTL_SECONDS))
 }
 
 internal suspend fun <T> ApplicationCall.respondJson(

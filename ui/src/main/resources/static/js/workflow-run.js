@@ -8,6 +8,8 @@
 
     var runId = root.dataset.runId;
     var canOperate = root.dataset.canOperate === 'true';
+    var canDownload = root.dataset.canDownload === 'true';
+    var canDownloadArchives = root.dataset.canDownloadArchives === 'true';
     var run = null;
     var def = null;
     var events = {};
@@ -190,6 +192,21 @@
         return d;
     }
 
+    function artifactLinks(s) {
+        if (!canDownload) return null;
+        var list = (s.artifacts || []).filter(function (a) { return !a.infraOnly || canDownloadArchives; });
+        if (!list.length) return null;
+        return el('div', {class: 'mt-2 d-flex flex-wrap gap-2'}, list.map(function (a) {
+            return el('a', {
+                class: 'btn btn-sm btn-outline-secondary',
+                target: '_blank', rel: 'noopener',
+                href: '/api/workflows/runs/' + encodeURIComponent(runId) + '/steps/' + s.index +
+                    '/artifacts/' + encodeURIComponent(a.name) + '/download'
+            }, [el('span', {class: 'material-symbols-outlined me-1 align-middle', 'aria-hidden': 'true', text: 'download'}),
+                el('span', {class: 'align-middle', text: 'Download ' + a.label})]);
+        }));
+    }
+
     function renderTimeline() {
         timelineBox.textContent = '';
         var list = el('ol', {class: 'wf-timeline list-unstyled mb-0'});
@@ -209,6 +226,7 @@
                 ]),
                 s.outputSummary ? el('div', {class: 'small text-muted mt-1', text: s.outputSummary}) : null,
                 s.error ? el('pre', {class: 'wf-error small mt-2 mb-1', text: s.error}) : null,
+                artifactLinks(s),
                 evs.length ? details('step-' + s.index, 'Log (' + evs.length + ')', logList(evs)) : null
             ]);
             list.appendChild(el('li', {class: 'wf-step wf-step-' + s.status.toLowerCase() + (current ? ' wf-step-current' : '')}, [

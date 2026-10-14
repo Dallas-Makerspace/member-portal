@@ -6,6 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.dallasmakerspace.models.workflows.WorkflowAdminInProgressDto
+import org.dallasmakerspace.models.workflows.WorkflowArtifactDto
 import org.dallasmakerspace.models.workflows.WorkflowDefinitionDto
 import org.dallasmakerspace.models.workflows.WorkflowRunStatus
 import org.dallasmakerspace.server.auth.Authz
@@ -34,6 +35,43 @@ class WorkflowAccessTest {
     assertFalse(canUseWorkflow(member, def("MANAGE_GROUPS")))
     assertTrue(canUseWorkflow(officer, def("MANAGE_GROUPS")))
     assertTrue(canUseWorkflow(infra, def("MANAGE_GROUPS")))
+  }
+
+  private fun artifact(infraOnly: Boolean) =
+      WorkflowArtifactDto("member-list", "Member list", "application/json", infraOnly)
+
+  @Test
+  fun `artifact downloads need the workflow permission`() {
+    val d = def("MANAGE_GROUPS")
+    assertFalse(canDownloadArtifact(member, d, artifact(false)))
+    assertFalse(canDownloadArtifact(board, d, artifact(false)))
+    assertTrue(canDownloadArtifact(officer, d, artifact(false)))
+    assertFalse(canDownloadArtifact(officer, null, artifact(false)))
+  }
+
+  @Test
+  fun `infra-only artifacts need DOWNLOAD_ARCHIVES which the Board's MANAGE_CONFIG does not give`() {
+    val open = def(null)
+    assertFalse(canDownloadArtifact(member, open, artifact(true)))
+    assertFalse(canDownloadArtifact(officer, open, artifact(true)))
+    assertFalse(canDownloadArtifact(board, open, artifact(true)))
+    assertTrue(canDownloadArtifact(board, open, artifact(false)))
+    assertTrue(canDownloadArtifact(infra, open, artifact(true)))
+    assertTrue(canDownloadArchives(infra))
+    assertFalse(canDownloadArchives(board))
+  }
+
+  @Test
+  fun `artifact download routes are parsed strictly`() {
+    val path = "/api/workflows/runs/7/steps/2/artifacts/member-list/download"
+    assertEquals(WorkflowRoute.ArtifactDownload(7, 2, "member-list"), parseWorkflowRoute("GET", path))
+    assertNull(parseWorkflowRoute("POST", path))
+    assertNull(parseWorkflowRoute("GET", path.replace("/2/", "/-1/")))
+    assertNull(parseWorkflowRoute("GET", path.replace("/2/", "/x/")))
+    assertNull(parseWorkflowRoute("GET", path.replace("member-list", "Member_List")))
+    assertNull(parseWorkflowRoute("GET", path.replace("member-list", "..")))
+    assertNull(parseWorkflowRoute("GET", path.replace("/download", "/url")))
+    assertNull(parseWorkflowRoute("GET", path.replace("/runs/7", "/runs/x")))
   }
 
   @Test

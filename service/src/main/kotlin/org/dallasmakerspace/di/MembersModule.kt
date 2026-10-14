@@ -7,6 +7,8 @@ import dagger.multibindings.IntoSet
 import javax.inject.Singleton
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.members.GroupArchiveRepository
+import org.dallasmakerspace.members.GroupArchiveRepositoryMock
 import org.dallasmakerspace.members.GroupGuidBackfillStore
 import org.dallasmakerspace.members.GroupGuidBackfillStoreMock
 import org.dallasmakerspace.members.GroupGuidResolver
@@ -15,6 +17,7 @@ import org.dallasmakerspace.members.GroupHistoryRepositoryMock
 import org.dallasmakerspace.members.GroupSettingsRepository
 import org.dallasmakerspace.members.GroupSettingsRepositoryMock
 import org.dallasmakerspace.members.GroupSettingsService
+import org.dallasmakerspace.members.IGroupArchiveRepository
 import org.dallasmakerspace.members.IGroupGuidBackfillStore
 import org.dallasmakerspace.members.IGroupHistoryRepository
 import org.dallasmakerspace.members.IGroupSettingsRepository
@@ -58,6 +61,11 @@ abstract class MembersModule {
         } else {
           GroupHistoryRepository(guidResolver)
         }
+
+    @Provides
+    @Singleton
+    fun provideGroupArchiveRepository(appConfig: AppConfig): IGroupArchiveRepository =
+        if (useMockServices(appConfig)) GroupArchiveRepositoryMock() else GroupArchiveRepository()
 
     @Provides
     @Singleton

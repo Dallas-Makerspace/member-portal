@@ -505,6 +505,40 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
     } ?: emptyList()
   }
 
+  /**
+   * Counts the prerequisites tied to an AD group (case and surrounding spaces ignored) and the
+   * events that fulfill or require them, split into upcoming and past. Read-only. Unlike the other
+   * queries here it throws on any failure, because a caller deciding whether a group is safe to
+   * remove must not read an error as "no references".
+   */
+  suspend fun countPrerequisiteReferences(groupName: String): PrerequisiteReferences {
+    val literal = sqlStringLiteral(groupName.trim())
+    val query =
+        """
+      SET STATEMENT max_statement_time=5 FOR
+      SELECT
+          COUNT(DISTINCT p.id) AS prerequisites,
+          COUNT(DISTINCT CASE WHEN e.event_start >= NOW() THEN e.id END) AS upcoming_events,
+          COUNT(DISTINCT CASE WHEN e.event_start < NOW() THEN e.id END) AS past_events
+      FROM `dms-calendar`.prerequisites p
+      LEFT JOIN `dms-calendar`.events e
+          ON e.fulfills_prerequisite_id = p.id OR e.requires_prerequisite_id = p.id
+      WHERE LOWER(TRIM(p.ad_group)) = LOWER($literal)
+    """
+
+    log.debug("Counting prerequisite references to a group")
+    val row =
+        genericRepository.getReportData(query)?.data?.firstOrNull()
+            ?: error("No result counting prerequisite references")
+    fun count(column: String) =
+        (row[column] as? Number)?.toInt() ?: error("Missing $column in prerequisite count result")
+    return PrerequisiteReferences(
+        prerequisites = count("prerequisites"),
+        upcomingEvents = count("upcoming_events"),
+        pastEvents = count("past_events"),
+    )
+  }
+
   private fun Exception.isStatementTimeout() =
       message?.contains("max_statement_time exceeded") == true
 }
@@ -520,3 +554,20 @@ data class EventSummary(
     val eventStartUtcMs: Long? = null,
     val fulfillsPrerequisiteGroup: String? = null,
 )
+
+/** How many calendar prerequisites name an AD group, and how many events use them. */
+data class PrerequisiteReferences(
+    val prerequisites: Int,
+    val upcomingEvents: Int,
+    val pastEvents: Int,
+)
+
+/**
+ * A single-quoted SQL string literal for [value]. Quotes are doubled; backslashes and control
+ * characters are rejected rather than escaped, since their meaning depends on the server's
+ * sql_mode and no AD group name contains them.
+ */
+internal fun sqlStringLiteral(value: String): String {
+  require(value.none { it == '\\' || it.isISOControl() }) { "Unsupported character in value" }
+  return "'" + value.replace("'", "''") + "'"
+}

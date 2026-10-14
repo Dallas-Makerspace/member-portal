@@ -64,6 +64,7 @@ class TestStep(
   var validateFn: suspend (StepContext) -> Validation = { Validation.Ok }
   var runFn: suspend (StepContext) -> String = { "out-$id" }
   var rollbackFn: suspend (StepContext, String) -> Unit = { _, _ -> }
+  var artifactsFn: (String) -> List<ArtifactRef> = { emptyList() }
 
   /** Thrown, in order, by the next run() calls. */
   val failures = ArrayDeque<Throwable>()
@@ -84,6 +85,8 @@ class TestStep(
   }
 
   override fun summarize(output: String) = "summary of $id"
+
+  override fun artifacts(args: Unit, output: String) = artifactsFn(output)
 }
 
 class StepSpec(val step: TestStep, val dependsOn: TestStep? = null)

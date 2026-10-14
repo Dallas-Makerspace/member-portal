@@ -18,6 +18,7 @@ import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.models.getSlugFromName
 import org.dallasmakerspace.server.plugins.AuthException
+import org.dallasmakerspace.server.reports.ArchivedGroupsReport
 
 class CommitteeDetailHandler
 @Inject
@@ -101,6 +102,13 @@ constructor(
         log.warn("Failed to fetch all groups: {}", e.message)
         emptyList()
       }
+    }
+
+    val archivedCountDeferred = async {
+      ArchivedGroupsReport.committeeCount(
+          committee,
+          fetch = { memberService.getArchivedGroups(it, session.sessionId) },
+          onFailure = { log.warn("Failed to fetch archived groups: {}", it) })
     }
 
     val chairGroups = chairGroupsDeferred.await()
@@ -234,6 +242,12 @@ constructor(
             "upcomingEvents" to upcomingEvents,
             "sections" to sectionsDeferred.await(),
         )
+
+    val archivedCount = archivedCountDeferred.await()
+    if (archivedCount > 0) {
+      jsonMap["archivedGroupsCount"] = archivedCount
+      jsonMap["archivedGroupsUrl"] = ArchivedGroupsReport.committeeUrl(committee)
+    }
 
     call.respond(ThymeleafContent("committee-detail", jsonMap))
   }

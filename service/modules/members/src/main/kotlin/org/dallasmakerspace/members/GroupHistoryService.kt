@@ -82,7 +82,11 @@ constructor(
       return suspendTransaction {
         // Get or create group
         val group =
-            GroupDAO.find { GroupsTable.name eq groupName }.firstOrNull()
+            GroupDAO.find {
+                  (GroupsTable.name eq groupName) and
+                      (GroupsTable.status neq GROUP_STATUS_ARCHIVED)
+                }
+                .firstOrNull()
                 ?: GroupDAO.new {
                   name = groupName
                   // Store the full DN if available, otherwise use a constructed one
@@ -148,6 +152,7 @@ constructor(
           )
           .select {
             (groupsAlias[GroupsTable.name] eq groupName) and
+                (groupsAlias[GroupsTable.status] neq GROUP_STATUS_ARCHIVED) and
                 (GroupHistoryTable.eventTimestamp greaterEq sixMonthsAgo)
           }
           .orderBy(GroupHistoryTable.eventTimestamp, SortOrder.DESC)

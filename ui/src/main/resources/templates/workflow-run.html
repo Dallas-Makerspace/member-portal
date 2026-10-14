@@ -19,7 +19,7 @@
 <body>
 <header class="top-nav" th:replace="~{fragments/header :: header}"></header>
 
-<div class="container pb-8" id="wf-run-root" th:attr="data-run-id=${runId},data-can-operate=${canOperate}">
+<div class="container pb-8" id="wf-run-root" th:attr="data-run-id=${runId},data-can-operate=${canOperate},data-can-download=${canDownload},data-can-download-archives=${canDownloadArchives}">
     <nav aria-label="breadcrumb" class="mt-4">
         <ol class="breadcrumb mb-2">
             <li class="breadcrumb-item" th:if="${isInfraUser}"><a href="/admin/workflows">Workflows</a></li>

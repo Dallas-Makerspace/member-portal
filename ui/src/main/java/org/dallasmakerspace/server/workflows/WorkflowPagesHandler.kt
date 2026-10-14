@@ -102,7 +102,9 @@ constructor(
                 "username" to username,
                 "runId" to runId,
                 "runTitle" to run.displayName,
-                "canOperate" to canOperateWorkflow(authz, def))))
+                "canOperate" to canOperateWorkflow(authz, def),
+                "canDownload" to (def != null && canUseWorkflow(authz, def)),
+                "canDownloadArchives" to canDownloadArchives(authz))))
   }
 
   companion object {

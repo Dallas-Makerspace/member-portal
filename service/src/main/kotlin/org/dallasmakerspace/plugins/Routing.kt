@@ -55,6 +55,7 @@ import org.dallasmakerspace.members.GroupSettingsService
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.db.ProfileDAO
+import org.dallasmakerspace.members.routing.archivedGroupsRoutes
 import org.dallasmakerspace.members.routing.groupSelfMembershipRoutes
 import org.dallasmakerspace.members.routing.profilePhotoRoutes
 import org.dallasmakerspace.models.AskAiFeedbackRequest
@@ -1195,6 +1196,7 @@ fun Application.configureRouting() {
           workflowService,
           AppComponentHolder.instance.getWorkflowEventBus(),
           AppComponentHolder.instance.getWorkflowStreamLifecycle().streamsClosed,
+          artifactLinks = AppComponentHolder.instance.getWorkflowArtifactLinks(),
       )
 
       /** DMS Learn (Moodle) — course catalog and a member's own course progress * */
@@ -1221,6 +1223,9 @@ fun Application.configureRouting() {
     /** Member self-service join/leave, gated per group by allow_self_add_remove * */
     groupSelfMembershipRoutes(
         groupSettingsService, memberService, groupLockMessage = workflowService::groupLockMessage)
+
+    /** Archived groups report data (GET /groups/archived) * */
+    archivedGroupsRoutes(AppComponentHolder.instance.getGroupArchiveRepository())
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */
     featureFlagRoutes(featureFlagService)

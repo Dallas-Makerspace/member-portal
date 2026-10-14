@@ -14,6 +14,36 @@ class GroupSyncDecisionTest {
       g: String? = null,
   ) = GroupRowRef(id, name, dn, g)
 
+  private fun archived(id: Int, name: String, g: String? = null) =
+      GroupRowRef(id, name, "CN=$name,OU=Test,DC=example,DC=test", g, "ARCHIVED")
+
+  @Test
+  fun `an archived row found by name is ignored and a fresh row is created`() {
+    val dn = "CN=Team A,OU=Test,DC=example,DC=test"
+    val d = decideGroupSync("Team A", dn, guid, null, archived(1, "Team A", otherGuid), null)
+    assertEquals(GroupSyncDecision.Create(dn), d)
+  }
+
+  @Test
+  fun `an archived row found by dn does not force the placeholder dn`() {
+    val dn = "CN=Team A,OU=Test,DC=example,DC=test"
+    val d = decideGroupSync("Team A", dn, guid, null, null, archived(1, "Team A"))
+    assertEquals(GroupSyncDecision.Create(dn), d)
+  }
+
+  @Test
+  fun `an archived name holder does not block healing another row`() {
+    val d =
+        decideGroupSync("New", null, guid, row(1, "Old", g = guid), archived(2, "New"), null)
+    assertEquals(GroupSyncDecision.Heal(1, "New", null), d)
+  }
+
+  @Test
+  fun `a guid match on an archived row is a conflict, never a heal`() {
+    val d = decideGroupSync("New", null, guid, archived(1, "Old", guid), null, null)
+    assertEquals(GroupSyncDecision.Conflict(1, "row is archived"), d)
+  }
+
   @Test
   fun `no row and no guid creates with placeholder dn`() {
     val d = decideGroupSync("Team A", null, null, null, null, null)

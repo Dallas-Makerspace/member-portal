@@ -67,6 +67,16 @@ constructor(
     return configKey.defaultValue
   }
 
+  /**
+   * The stored value straight from the repository: skips the cache and shows infra-only overrides.
+   * For read-only reference checks; leaves the cache untouched.
+   */
+  suspend fun <T> getFresh(configKey: ConfigKey<T>): T {
+    val dao = repository.getCurrent(configKey.key)
+    if (dao == null || dao.isReset) return configKey.defaultValue
+    return deserialize(dao.configValue, configKey)
+  }
+
   suspend fun <T> set(
       configKey: ConfigKey<T>,
       value: T,

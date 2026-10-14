@@ -102,6 +102,8 @@ internal interface ErasedStep {
 
   /** [outputJson] null is only valid for steps whose output is Unit. */
   suspend fun rollback(ctx: StepContext, outputJson: String?)
+
+  fun artifacts(ctx: StepContext, outputJson: String): List<ArtifactRef>
 }
 
 internal class BoundStep<I : Any, A, O>(
@@ -143,6 +145,9 @@ internal class BoundStep<I : Any, A, O>(
         }
     step.rollback(ctx, args(ctx), out)
   }
+
+  override fun artifacts(ctx: StepContext, outputJson: String): List<ArtifactRef> =
+      step.artifacts(args(ctx), EngineJson.decodeFromString(step.outputSerializer, outputJson))
 
   private fun encode(o: O) = EngineJson.encodeToString(step.outputSerializer, o)
 }

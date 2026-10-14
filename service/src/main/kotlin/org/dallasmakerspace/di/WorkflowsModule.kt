@@ -7,10 +7,12 @@ import dagger.multibindings.IntoSet
 import dagger.multibindings.Multibinds
 import javax.inject.Singleton
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.workflows.ArtifactLinks
 import org.dallasmakerspace.workflows.DefaultWorkflowExecutor
 import org.dallasmakerspace.workflows.DefaultWorkflowService
 import org.dallasmakerspace.workflows.InMemoryWorkflowStore
 import org.dallasmakerspace.workflows.InProcessWorkflowEventBus
+import org.dallasmakerspace.workflows.ObjectStoreArtifactLinks
 import org.dallasmakerspace.workflows.Workflow
 import org.dallasmakerspace.workflows.WorkflowEventBus
 import org.dallasmakerspace.workflows.WorkflowExecutor
@@ -28,6 +30,8 @@ abstract class WorkflowsModule {
   @Binds
   @IntoSet
   abstract fun bindGroupExportMembers(workflow: GroupExportMembersWorkflow): Workflow<*>
+
+  @Binds abstract fun bindArtifactLinks(links: ObjectStoreArtifactLinks): ArtifactLinks
 
   @Binds abstract fun bindEventBus(bus: InProcessWorkflowEventBus): WorkflowEventBus
 

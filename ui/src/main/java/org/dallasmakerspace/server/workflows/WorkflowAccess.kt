@@ -1,5 +1,6 @@
 package org.dallasmakerspace.server.workflows
 
+import org.dallasmakerspace.models.workflows.WorkflowArtifactDto
 import org.dallasmakerspace.models.workflows.WorkflowDefinitionDto
 import org.dallasmakerspace.server.auth.Authz
 import org.dallasmakerspace.server.auth.Permission
@@ -27,6 +28,15 @@ fun canViewWorkflow(authz: Authz, def: WorkflowDefinitionDto?): Boolean =
 fun canOperateWorkflow(authz: Authz, def: WorkflowDefinitionDto?): Boolean =
     def != null && canUseWorkflow(authz, def)
 
+/**
+ * Downloading a step's file needs the workflow's own permission, plus [Permission.DOWNLOAD_ARCHIVES]
+ * (not just MANAGE_CONFIG, which Board members hold) for infra-only artifacts.
+ */
+fun canDownloadArtifact(authz: Authz, def: WorkflowDefinitionDto?, artifact: WorkflowArtifactDto) =
+    def != null && canUseWorkflow(authz, def) && (!artifact.infraOnly || canDownloadArchives(authz))
+
+fun canDownloadArchives(authz: Authz): Boolean = authz.can(Permission.DOWNLOAD_ARCHIVES.name)
+
 sealed interface WorkflowRoute {
   data object Definitions : WorkflowRoute
 
@@ -51,7 +61,12 @@ sealed interface WorkflowRoute {
   data class RunStream(val runId: Long) : WorkflowRoute
 
   data object AdminStream : WorkflowRoute
+
+  data class ArtifactDownload(val runId: Long, val stepIndex: Int, val name: String) :
+      WorkflowRoute
 }
+
+private val ARTIFACT_NAME = Regex("[a-z0-9][a-z0-9._-]{0,63}")
 
 val OPERATOR_ACTIONS = setOf("retry", "skip", "rollback", "abandon", "cancel")
 
@@ -82,8 +97,15 @@ private fun parseRunRoute(get: Boolean, post: Boolean, seg: List<String>): Workf
     get && seg.size == 3 && seg[2] == "events" -> WorkflowRoute.RunEvents(runId)
     get && seg.size == 3 && seg[2] == "stream" -> WorkflowRoute.RunStream(runId)
     post && seg.size == 3 && seg[2] in OPERATOR_ACTIONS -> WorkflowRoute.Operate(runId, seg[2])
+    get && seg.size == 7 && seg[2] == "steps" && seg[4] == "artifacts" && seg[6] == "download" ->
+        artifactRoute(runId, seg[3], seg[5])
     else -> null
   }
+}
+
+private fun artifactRoute(runId: Long, index: String, name: String): WorkflowRoute? {
+  val step = index.toIntOrNull()?.takeIf { it >= 0 } ?: return null
+  return if (ARTIFACT_NAME.matches(name)) WorkflowRoute.ArtifactDownload(runId, step, name) else null
 }
 
 private val LAST_EVENT_ID = Regex("^[0-9]{1,18}$")

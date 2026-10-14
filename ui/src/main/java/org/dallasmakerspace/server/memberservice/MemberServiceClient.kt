@@ -13,6 +13,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeout
+import org.dallasmakerspace.models.ArchivedGroup
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.models.FeaturedProject
@@ -186,6 +187,36 @@ constructor(
       throw MemberServiceException("Failed to get all groups", ex)
     }
   }
+
+  /** Archived groups, newest first; [prefixes] filter by name, empty means all. */
+  suspend fun getArchivedGroups(prefixes: List<String>, sessionId: String?): List<ArchivedGroup> {
+    return try {
+      val query =
+          prefixes.joinToString("&", prefix = if (prefixes.isEmpty()) "" else "?") {
+            "prefix=${java.net.URLEncoder.encode(it, "UTF-8")}"
+          }
+      val result = dmsHttpClient.getJson("$baseUrl/groups/archived$query", getApiHeaders(sessionId))
+      val data =
+          (if (result is Map<*, *>) result["data"] else result) as? List<*>
+              ?: throw MemberServiceException("data attribute missing required")
+      data.map { archivedGroupFromMap(it as Map<*, *>) }
+    } catch (ex: Exception) {
+      log.warn("Failed to get archived groups", ex)
+      throw MemberServiceException("Failed to get archived groups", ex)
+    }
+  }
+
+  private fun archivedGroupFromMap(m: Map<*, *>) =
+      ArchivedGroup(
+          id = (m["id"] as Number).toInt(),
+          name = m["name"] as String,
+          archivedAt = m["archivedAt"] as String,
+          archivedBy = m["archivedBy"] as String,
+          reason = m["reason"] as String,
+          runId = (m["runId"] as? Number)?.toLong(),
+          artifactStepIndex = (m["artifactStepIndex"] as? Number)?.toInt(),
+          artifactName = m["artifactName"] as? String,
+      )
 
   suspend fun getMultipleGroups(groupSlugs: List<String>, sessionId: String?): List<DMSGroup> {
     return try {

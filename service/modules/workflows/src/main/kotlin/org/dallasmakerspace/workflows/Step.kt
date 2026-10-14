@@ -19,6 +19,25 @@ internal val EngineJson = Json {
   encodeDefaults = true
 }
 
+/**
+ * A file a step produced. [namespace] is a `StorageNamespace` enum name and [key] is relative to
+ * it. Never sent to clients: they get name, label and content type only.
+ */
+data class ArtifactRef(
+    /** Unique within the step: lowercase letters, digits, dots, dashes; e.g. "member-list". */
+    val name: String,
+    val label: String,
+    val contentType: String,
+    val namespace: String,
+    val key: String,
+    /** Only infrastructure admins may download it. */
+    val infraOnly: Boolean = false,
+) {
+  companion object {
+    val NAME_PATTERN = Regex("[a-z0-9][a-z0-9._-]{0,63}")
+  }
+}
+
 /** Result of [Step.check]. Read-only: would run() do anything? */
 sealed interface StepCheck<out O> {
   data class WillRun(val summary: String? = null) : StepCheck<Nothing>
@@ -163,6 +182,12 @@ interface Step<A, O> {
 
   /** Short human-readable result shown in the timeline (never bulk data). */
   fun summarize(output: O): String? = null
+
+  /**
+   * Files this step produced, derived only from its args and persisted [output] (called on demand,
+   * for SUCCEEDED/SKIPPED steps). Must be pure and cheap.
+   */
+  fun artifacts(args: A, output: O): List<ArtifactRef> = emptyList()
 }
 
 /** Marker for reusable steps; a step that does not implement it is private to its workflow. */

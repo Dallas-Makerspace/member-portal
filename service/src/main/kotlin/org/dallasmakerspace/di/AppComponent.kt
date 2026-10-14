@@ -27,6 +27,7 @@ import org.dallasmakerspace.doorcontroller.DoorControllerService
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
 import org.dallasmakerspace.members.GroupSettingsService
+import org.dallasmakerspace.members.IGroupArchiveRepository
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.ProfilePhotoService
@@ -43,11 +44,13 @@ import org.dallasmakerspace.smartwaiver.SmartwaiverModule
 import org.dallasmakerspace.storage.ObjectStoreFactory
 import org.dallasmakerspace.webhook.WebhookRouter
 import org.dallasmakerspace.webhook.di.WebhookModule
+import org.dallasmakerspace.workflows.ArtifactLinks
 import org.dallasmakerspace.workflows.EngineSettings
 import org.dallasmakerspace.workflows.WorkflowEventBus
 import org.dallasmakerspace.workflows.WorkflowExecutor
 import org.dallasmakerspace.workflows.WorkflowService
 import org.dallasmakerspace.workflows.WorkflowStreamLifecycle
+import org.dallasmakerspace.workflows.groups.references.GroupReferenceChecker
 
 @Singleton
 @Component(
@@ -72,7 +75,8 @@ import org.dallasmakerspace.workflows.WorkflowStreamLifecycle
             NotificationsModule::class,
             StorageModule::class,
             WebhookModule::class,
-            WorkflowsModule::class])
+            WorkflowsModule::class,
+            GroupReferencesModule::class])
 @Suppress("TooManyFunctions")
 interface AppComponent {
   fun inject(application: Application)
@@ -160,4 +164,10 @@ interface AppComponent {
   fun getWorkflowEngineSettings(): EngineSettings
 
   fun getWorkflowStreamLifecycle(): WorkflowStreamLifecycle
+
+  fun getWorkflowArtifactLinks(): ArtifactLinks
+
+  fun getGroupReferenceChecker(): GroupReferenceChecker
+
+  fun getGroupArchiveRepository(): IGroupArchiveRepository
 }

@@ -115,6 +115,12 @@ object ReportGraph {
                                         "sampled periodically via WinRM into Elasticsearch",
                                 urlSlug = "ad-replication-health",
                             ),
+                            ReportNode(
+                                name = "Archived Groups",
+                                description =
+                                    "Groups archived through the portal, overall or per committee",
+                                urlSlug = ArchivedGroupsReport.SLUG,
+                            ),
                         ),
                 ),
                 ReportNode(

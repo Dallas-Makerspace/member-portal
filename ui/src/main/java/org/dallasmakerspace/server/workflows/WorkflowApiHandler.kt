@@ -9,6 +9,7 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
@@ -24,6 +25,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.dallasmakerspace.models.workflows.WorkflowArtifactUrlResponse
 import org.dallasmakerspace.models.workflows.WorkflowDefinitionDto
 import org.dallasmakerspace.models.workflows.WorkflowRunStatus
 import org.dallasmakerspace.server.auth.Authz
@@ -120,6 +122,7 @@ constructor(
         }
         call.relay(client.operate(route.runId, route.action, username, sid))
       }
+      is WorkflowRoute.ArtifactDownload -> downloadArtifact(call, route, username)
       WorkflowRoute.AdminInProgress -> {
         if (!call.requireAdmin()) return
         call.relay(client.rawAdminInProgress(username, sid))
@@ -139,6 +142,45 @@ constructor(
       WorkflowRoute.AdminStream -> {
         if (!call.requireAdmin()) return
         stream(call, "/workflows/admin/stream", emptyMap(), username) { isWorkflowAdmin(it) }
+      }
+    }
+  }
+
+  /** Checks rights, asks the service for a fresh presigned URL (audited there) and redirects. */
+  private suspend fun downloadArtifact(
+      call: ApplicationCall,
+      route: WorkflowRoute.ArtifactDownload,
+      username: String,
+  ) {
+    val sid = session.sessionId
+    val run =
+        client.run(route.runId, username, sid)
+            ?: return call.respondMessage(HttpStatusCode.NotFound, "Not found")
+    val def = client.definition(run.workflowId, sid)
+    val artifact =
+        run.steps.getOrNull(route.stepIndex)?.artifacts?.firstOrNull { it.name == route.name }
+    if (def == null || !canUseWorkflow(authz, def)) {
+      return call.respondMessage(HttpStatusCode.Forbidden, "Not allowed to download from this workflow")
+    }
+    if (artifact == null) return call.respondMessage(HttpStatusCode.NotFound, "Not found")
+    if (!canDownloadArtifact(authz, def, artifact)) {
+      return call.respondMessage(HttpStatusCode.Forbidden, "Not allowed to download this file")
+    }
+    val resp = client.artifactUrl(route.runId, route.stepIndex, route.name, username, sid)
+    when {
+      resp.status == HttpStatusCode.Gone.value ->
+          call.respondMessage(HttpStatusCode.Gone, "The file no longer exists")
+      resp.status == HttpStatusCode.NotFound.value ->
+          call.respondMessage(HttpStatusCode.NotFound, "Not found")
+      !resp.isSuccess -> call.respondMessage(HttpStatusCode.BadGateway, "Download unavailable")
+      else -> {
+        val url = presignedUrl(resp.body)
+        if (url == null) {
+          call.respondMessage(HttpStatusCode.BadGateway, "Download unavailable")
+        } else {
+          call.response.header(HttpHeaders.CacheControl, "no-store")
+          call.respondRedirect(url, permanent = false)
+        }
       }
     }
   }
@@ -312,6 +354,17 @@ constructor(
   companion object {
     private const val MAX_LIMIT = 200
     private const val MAX_TOKEN = 100
+
+    /** The URL from the service answer, or null; failures never carry the body into logs. */
+    private fun presignedUrl(body: String): String? =
+        try {
+          WorkflowServiceClient.json
+              .decodeFromString(WorkflowArtifactUrlResponse.serializer(), body)
+              .url
+              .takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        } catch (@Suppress("SwallowedException") e: IllegalArgumentException) {
+          null
+        }
 
     private fun runWorkflowId(runJson: String): String? =
         try {

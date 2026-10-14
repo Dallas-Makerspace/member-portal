@@ -142,6 +142,8 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
         nestedGroups = nestedGroups,
         sourceMemberCount = parsed.sourceCount,
         unresolvedMemberCount = parsed.unresolvedCount,
+        managedBy = adResult["managedBy"]?.toString()?.takeIf { it.isNotBlank() },
+        parentGroups = attributeStrings(adResult["memberOf"]),
     )
   }
 
@@ -164,6 +166,7 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
           membersListIncomplete = (groupData["member"] as Array<*>).size > MAX_GROUP_MEMBERS,
           administrators = administrators,
           nestedGroups = nestedGroups,
+          managedBy = groupData["managedBy"]?.toString()?.takeIf { it.isNotBlank() },
       )
     }
   }
@@ -317,4 +320,21 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
   override fun updateBadgeNumber(username: String, newBadgeNumber: String) {
     activeDirectoryClient.updateBadgeNumber(username, newBadgeNumber)
   }
+
+  /** {@inheritDoc} */
+  override fun deleteGroup(groupName: String): Boolean =
+      activeDirectoryClient.deleteGroup(groupName)
+
+  /** {@inheritDoc} */
+  override fun createGroup(spec: AdGroupSpec): AdGroupCreateResult =
+      activeDirectoryClient.createGroup(spec)
 }
+
+/** A multi-valued LDAP attribute as strings: an array or collection, a single value, or empty. */
+internal fun attributeStrings(value: Any?): List<String> =
+    when (value) {
+      null -> emptyList()
+      is Array<*> -> value.mapNotNull { it?.toString() }
+      is Collection<*> -> value.mapNotNull { it?.toString() }
+      else -> listOf(value.toString())
+    }

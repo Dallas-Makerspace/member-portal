@@ -39,10 +39,15 @@ import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.plugins.UserSession
 import org.dallasmakerspace.server.routes.IRouteHandler
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver
+import org.mockito.Mockito.mockingDetails
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+
+private const val PRESIGNED =
+    "https://objects.example.invalid/bucket/workflow-exports/x.json?X-Amz-Signature=sig-secret"
 
 class WorkflowApiHandlerTest {
   private val definitionsJson =
@@ -58,6 +63,14 @@ class WorkflowApiHandlerTest {
         "status":"$status","input":{},"subjects":[{"type":"group","key":"example-group"}],
         "actor":"jdoe","triggeredBy":"UI","currentStepIndex":1,"stepCount":3,
         "createdAt":"2026-01-02T03:04:05Z"}"""
+
+  /** Run with one SUCCEEDED step offering a public and an infra-only file. */
+  private fun artifactRunJson(id: Long, workflowId: String) =
+      runJson(id, workflowId, "SUCCEEDED").trimEnd().removeSuffix("}") +
+          ""","steps":[{"index":0,"stepId":"group.export-members","displayName":"Export",
+        "status":"SUCCEEDED","attempts":1,"reversibility":"REVERSIBLE","artifacts":[
+          {"name":"member-list","label":"Member list (JSON)","contentType":"application/json","infraOnly":false},
+          {"name":"archive-copy","label":"Archive copy","contentType":"application/json","infraOnly":true}]}]}"""
 
   private val sseBody = "id: 5\nevent: run\ndata: {\"type\":\"run\"}\n\n"
 
@@ -90,6 +103,16 @@ class WorkflowApiHandlerTest {
                 """{"safeToDeploy":$adminSafe,"runs":$adminRuns,"generatedAt":"2026-01-02T03:04:05Z"}""")
         path == "/workflows/runs/7" -> json(runJson(7))
         path == "/workflows/runs/8" -> json(runJson(8, "open.thing", "RUNNING"))
+        path == "/workflows/runs/21" -> json(artifactRunJson(21, "group.archive"))
+        path == "/workflows/runs/22" -> json(artifactRunJson(22, "open.thing"))
+        path == "/workflows/runs/23" -> json(artifactRunJson(23, "group.archive"))
+        path == "/workflows/runs/24" -> json(artifactRunJson(24, "group.archive"))
+        path.startsWith("/workflows/runs/23/steps/") ->
+            json("""{"message":"gone"}""", HttpStatusCode.Gone)
+        path.startsWith("/workflows/runs/24/steps/") ->
+            json("""{"message":"boom"}""", HttpStatusCode.InternalServerError)
+        path.matches(Regex("/workflows/runs/2[12]/steps/0/artifacts/[a-z-]+/url")) ->
+            json("""{"url":"$PRESIGNED","expiresInSeconds":300}""")
         path == "/workflows/runs/404" -> json("""{"message":"Run 404 not found"}""", HttpStatusCode.NotFound)
         path == "/workflows/runs/7/events" -> json("[]")
         path == "/workflows/runs/7/retry" -> json(runJson(7, status = "RUNNING"))
@@ -130,7 +153,11 @@ class WorkflowApiHandlerTest {
     return provider
   }
 
-  private fun withApi(flagOn: Boolean = true, block: suspend ApplicationTestBuilder.() -> Unit) {
+  private fun withApi(
+      flagOn: Boolean = true,
+      loggerFactory: LoggerFactory = LoggerFactory(),
+      block: suspend ApplicationTestBuilder.() -> Unit,
+  ) {
     val mockEngine = MockEngine { request -> fakeService(request) }
     val client =
         WorkflowServiceClient(
@@ -138,15 +165,15 @@ class WorkflowApiHandlerTest {
             authHeaders = mapOf("X-Api-Key" to "k", "X-Api-Client" to "c"),
             http = HttpClient(mockEngine),
             streamHttp = HttpClient(mockEngine),
-            loggerFactory = LoggerFactory(),
+            loggerFactory = loggerFactory,
         )
     // The flag is cached for 60s per (flag, username), so each test uses its own usernames via a prefix.
     val handler =
         WorkflowApiHandler(
-            LoggerFactory(), userInfoProvider(), memberServiceClient(flagOn), client)
+            loggerFactory, userInfoProvider(), memberServiceClient(flagOn), client)
     val pages =
         WorkflowPagesHandler(
-            LoggerFactory(), userInfoProvider(), memberServiceClient(flagOn), client)
+            loggerFactory, userInfoProvider(), memberServiceClient(flagOn), client)
     testApplication {
       application {
         install(Sessions) { cookie<UserSession>("user_session") }
@@ -415,6 +442,121 @@ class WorkflowApiHandlerTest {
       assertTrue("""data-can-operate="true"""" in operator)
       val admin = getAs("bea", "/workflows/runs/7").bodyAsText()
       assertTrue("""data-can-operate="false"""" in admin)
+    }
+  }
+
+  private suspend fun ApplicationTestBuilder.downloadAs(user: String, path: String): HttpResponse =
+      createClient { followRedirects = false }.get(path) { header("X-Test-User", user) }
+
+  private fun artifactPath(run: Int, name: String, step: Int = 0) =
+      "/api/workflows/runs/$run/steps/$step/artifacts/$name/download"
+
+  private fun urlCalls() =
+      serviceCalls("/workflows/runs").filter { it.url.encodedPath.endsWith("/url") }
+
+  @Test
+  fun `a permitted download redirects to a fresh presigned url without caching`() {
+    withApi {
+      val resp = downloadAs("olive", artifactPath(21, "member-list"))
+
+      assertEquals(HttpStatusCode.Found, resp.status)
+      assertEquals(PRESIGNED, resp.headers[HttpHeaders.Location])
+      assertEquals("no-store", resp.headers[HttpHeaders.CacheControl])
+      assertFalse(PRESIGNED in resp.bodyAsText())
+      val call = urlCalls().single()
+      assertEquals("/workflows/runs/21/steps/0/artifacts/member-list/url", call.url.encodedPath)
+      assertEquals("olive", call.headers[ACTING_USER_HEADER])
+    }
+  }
+
+  @Test
+  fun `downloads need the workflow permission`() {
+    withApi {
+      assertEquals(HttpStatusCode.Forbidden, downloadAs("mia", artifactPath(21, "member-list")).status)
+      assertEquals(HttpStatusCode.Forbidden, downloadAs("bea", artifactPath(21, "member-list")).status)
+      assertTrue(urlCalls().isEmpty(), "the service must not be asked for a link")
+    }
+  }
+
+  @Test
+  fun `infra-only files need DOWNLOAD_ARCHIVES, not just MANAGE_CONFIG`() {
+    withApi {
+      // officer: has the workflow permission but not the archive permission
+      assertEquals(HttpStatusCode.Forbidden, downloadAs("olive", artifactPath(21, "archive-copy")).status)
+      // Board: MANAGE_CONFIG only; the open workflow removes the workflow-permission reason
+      assertEquals(HttpStatusCode.Forbidden, downloadAs("bea", artifactPath(22, "archive-copy")).status)
+      assertTrue(urlCalls().isEmpty())
+      assertEquals(HttpStatusCode.Found, downloadAs("bea", artifactPath(22, "member-list")).status)
+      assertEquals(HttpStatusCode.Found, downloadAs("ivy", artifactPath(21, "archive-copy")).status)
+      assertEquals(HttpStatusCode.Found, downloadAs("ivy", artifactPath(22, "archive-copy")).status)
+    }
+  }
+
+  @Test
+  fun `unknown runs steps and artifacts are 404 and never ask the service for a link`() {
+    withApi {
+      assertEquals(HttpStatusCode.NotFound, downloadAs("ivy", artifactPath(404, "member-list")).status)
+      assertEquals(HttpStatusCode.NotFound, downloadAs("ivy", artifactPath(21, "other")).status)
+      assertEquals(
+          HttpStatusCode.NotFound, downloadAs("ivy", artifactPath(21, "member-list", step = 5)).status)
+      assertEquals(HttpStatusCode.NotFound, downloadAs("ivy", artifactPath(21, "Bad_Name")).status)
+      assertEquals(
+          HttpStatusCode.NotFound, downloadAs("ivy", artifactPath(21, "member-list", step = -1)).status)
+      assertTrue(urlCalls().isEmpty())
+    }
+  }
+
+  @Test
+  fun `a gone file is 410 and a service failure is 502, with no redirect`() {
+    withApi {
+      val gone = downloadAs("olive", artifactPath(23, "member-list"))
+      assertEquals(HttpStatusCode.Gone, gone.status)
+      assertNull(gone.headers[HttpHeaders.Location])
+      val failed = downloadAs("olive", artifactPath(24, "member-list"))
+      assertEquals(HttpStatusCode.BadGateway, failed.status)
+      assertNull(failed.headers[HttpHeaders.Location])
+    }
+  }
+
+  @Test
+  fun `downloads are a 404 while the flag is off`() {
+    withApi(flagOn = false) {
+      assertEquals(HttpStatusCode.NotFound, downloadAs("zed", artifactPath(21, "member-list")).status)
+      assertTrue(seen.isEmpty())
+    }
+  }
+
+  @Test
+  fun `the presigned url is never logged`() {
+    val logger = mock<io.ktor.util.logging.Logger>()
+    val factory = mock<LoggerFactory> { on { create(any()) } doReturn logger }
+    withApi(loggerFactory = factory) {
+      assertEquals(HttpStatusCode.Found, downloadAs("olive", artifactPath(21, "member-list")).status)
+      assertEquals(HttpStatusCode.Forbidden, downloadAs("olive", artifactPath(21, "archive-copy")).status)
+    }
+    val logged =
+        mockingDetails(logger).invocations.joinToString("\n") { inv ->
+          java.util.Arrays.deepToString(inv.arguments)
+        }
+    assertFalse("sig-secret" in logged, logged)
+    assertFalse(PRESIGNED in logged)
+  }
+
+  @Test
+  fun `the run page tells the script which downloads to offer`() {
+    withApi {
+      val officer = getAs("olive", "/workflows/runs/21").bodyAsText()
+      assertTrue("""data-can-download="true"""" in officer)
+      assertTrue("""data-can-download-archives="false"""" in officer)
+      val board = getAs("bea", "/workflows/runs/21").bodyAsText()
+      assertTrue("""data-can-download="false"""" in board)
+      assertTrue("""data-can-download-archives="false"""" in board)
+      val boardOpen = getAs("bea", "/workflows/runs/22").bodyAsText()
+      assertTrue("""data-can-download="true"""" in boardOpen)
+      assertTrue("""data-can-download-archives="false"""" in boardOpen)
+      val infra = getAs("ivy", "/workflows/runs/21").bodyAsText()
+      assertTrue("""data-can-download="true"""" in infra)
+      assertTrue("""data-can-download-archives="true"""" in infra)
     }
   }
 

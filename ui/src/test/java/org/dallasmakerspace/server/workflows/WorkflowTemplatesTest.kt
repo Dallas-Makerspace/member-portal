@@ -63,6 +63,26 @@ class WorkflowTemplatesTest {
   }
 
   @Test
+  fun `the run page carries the download flags and the script gates links on them`() {
+    val html =
+        render(
+            "workflow-run",
+            mapOf(
+                "runId" to 42L,
+                "runTitle" to "Archive group",
+                "canOperate" to false,
+                "canDownload" to true,
+                "canDownloadArchives" to false))
+    assertTrue("""data-can-download="true"""" in html)
+    assertTrue("""data-can-download-archives="false"""" in html)
+    val js = resource("static/js/workflow-run.js")
+    assertTrue("if (!canDownload) return null" in js)
+    assertTrue("!a.infraOnly || canDownloadArchives" in js)
+    assertTrue("'/artifacts/'" in js && "'/download'" in js)
+    assertFalse("X-Amz" in js || "presigned" in js.lowercase())
+  }
+
+  @Test
   fun `the admin page has the table and banner hooks its script needs`() {
     val html = render("admin-workflows", mapOf("username" to "jdoe"))
     listOf("wf-admin-root", "wf-admin-banner", "wf-admin-rows", "wf-admin-conn", "workflow-admin.js").forEach {

@@ -98,6 +98,23 @@ class DMSHttpClient @Inject constructor(loggerFactory: LoggerFactory) {
     }
   }
 
+  /** Like [get] for a body that may be a JSON object (Map) or a bare array (List). */
+  suspend fun getJson(
+      url: String,
+      customHeaders: StringValues,
+      timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+  ): Any {
+    val resp =
+        client.get(url) {
+          headers { appendAll(customHeaders) }
+          timeout { requestTimeoutMillis = timeoutMs }
+        }
+    if (resp.status.isSuccess()) return resp.body<Any>()
+    val body = resp.body<String>()
+    log.error("getJson: HTTP request failed: $body")
+    throw HttpException("Status: ${resp.status}, Response: $body", resp.status.value)
+  }
+
   suspend fun post(
       url: String,
       authHeaders: StringValues,

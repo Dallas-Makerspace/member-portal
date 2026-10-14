@@ -119,7 +119,24 @@ data class WorkflowStepRunDto(
     val error: String? = null,
     /** Short human-readable result (never bulk data). */
     val outputSummary: String? = null,
+    /** Files this step produced; names and labels only, never storage keys. */
+    val artifacts: List<WorkflowArtifactDto> = emptyList(),
 )
+
+/** A downloadable file produced by a step. The download URL is created on click, never stored. */
+@Serializable
+data class WorkflowArtifactDto(
+    /** Unique within the step, e.g. "member-list". */
+    val name: String,
+    val label: String,
+    val contentType: String,
+    /** Only infrastructure admins may download it; the UI enforces this. */
+    val infraOnly: Boolean = false,
+)
+
+/** Answer of the artifact URL route; the URL is secret-bearing, so never log or store it. */
+@Serializable
+data class WorkflowArtifactUrlResponse(val url: String, val expiresInSeconds: Long)
 
 @Serializable
 data class WorkflowRunDto(

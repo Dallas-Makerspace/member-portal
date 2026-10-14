@@ -1,6 +1,7 @@
 package org.dallasmakerspace.server.memberservice
 
 import javax.inject.Inject
+import org.dallasmakerspace.models.ArchivedGroup
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.server.common.HttpException
@@ -149,6 +150,10 @@ constructor(
 
   suspend fun getAllGroups(sessionId: String?): List<DMSGroup> {
     return memberServiceClient.getAllGroups(sessionId)
+  }
+
+  suspend fun getArchivedGroups(prefixes: List<String>, sessionId: String?): List<ArchivedGroup> {
+    return memberServiceClient.getArchivedGroups(prefixes, sessionId)
   }
 
   suspend fun getMultipleGroups(groupSlugs: List<String>, sessionId: String?): List<DMSGroup> {

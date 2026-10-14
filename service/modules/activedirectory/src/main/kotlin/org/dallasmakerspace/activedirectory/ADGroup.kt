@@ -13,4 +13,8 @@ data class ADGroup(
     val sourceMemberCount: Int? = null,
     /** User-looking member DNs the directory did not resolve to a user. */
     val unresolvedMemberCount: Int = 0,
+    /** The `managedBy` DN alone (administrators also lists Domain Admins); null if unset. */
+    val managedBy: String? = null,
+    /** DNs of the groups this group is itself a member of (its `memberOf`). */
+    val parentGroups: List<String> = emptyList(),
 )

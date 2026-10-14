@@ -118,4 +118,20 @@ class FakeWorkflowService : WorkflowService {
     if (lockLookupFails) error("store down")
     return locks[normalizeSubject(subject)]
   }
+
+  val artifacts = mutableMapOf<Triple<Long, Int, String>, ResolvedArtifact>()
+  val downloadAudits = mutableListOf<List<Any>>()
+
+  override suspend fun resolveArtifact(runId: Long, stepIndex: Int, artifactName: String) =
+      artifacts[Triple(runId, stepIndex, artifactName)]
+
+  override suspend fun recordArtifactDownload(
+      runId: Long,
+      stepIndex: Int,
+      artifactName: String,
+      actor: String,
+  ): WorkflowEventDto {
+    downloadAudits += listOf(runId, stepIndex, artifactName, actor)
+    return testEvent(1, runId, "Artifact $artifactName download requested by $actor")
+  }
 }

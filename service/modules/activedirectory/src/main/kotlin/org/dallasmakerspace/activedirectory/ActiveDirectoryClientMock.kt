@@ -26,4 +26,9 @@ class ActiveDirectoryClientMock : IActiveDirectoryClient {
   override fun getAllActiveUsersWithBadges(): Map<String, Map<String, Any?>> = emptyMap()
 
   override fun updateBadgeNumber(username: String, newBadgeNumber: String) = Unit
+
+  override fun deleteGroup(groupName: String): Boolean = false
+
+  override fun createGroup(spec: AdGroupSpec): AdGroupCreateResult =
+      AdGroupCreateResult(buildGroupDn(spec.name, spec.parentOuDn), null, created = true)
 }

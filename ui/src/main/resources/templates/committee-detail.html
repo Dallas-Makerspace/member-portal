@@ -190,6 +190,12 @@
                         <div th:if="${committeeGroups == null or committeeGroups.empty}" class="text-muted">
                             No groups found for this committee.
                         </div>
+                        <div th:if="${archivedGroupsUrl != null}" class="mt-3">
+                            <a th:href="${archivedGroupsUrl}" class="btn btn-sm btn-outline-secondary"
+                               id="archived-groups-button">
+                                Archived Groups (<span th:text="${archivedGroupsCount}"></span>)
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -9,4 +9,6 @@ enum class Permission {
   EXECUTE_CRON,
   USE_ASKAI,
   MANAGE_REMOTE_ACCESS,
+  /** Infra-only (roles holding every permission): download archived group member lists. */
+  DOWNLOAD_ARCHIVES,
 }

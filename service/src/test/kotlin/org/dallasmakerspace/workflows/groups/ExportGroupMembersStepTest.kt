@@ -708,6 +708,31 @@ class ExportGroupMembersStepTest {
   }
 
   @Test
+  fun `declares the member list artifact from the persisted output key`() = runBlocking<Unit> {
+    val output = step().run(ctx(), args)
+
+    val artifact = step().artifacts(args, output).single()
+
+    assertEquals("member-list", artifact.name)
+    assertEquals("Member list (JSON)", artifact.label)
+    assertEquals("application/json", artifact.contentType)
+    assertEquals(StorageNamespace.WORKFLOW_EXPORTS.name, artifact.namespace)
+    assertEquals(output.key, artifact.key)
+    assertFalse(artifact.infraOnly)
+  }
+
+  @Test
+  fun `the artifact is infra only when the step arg says so and old args stay compatible`() {
+    val output = ExportGroupMembersStep.Result("group-exports/7/x.json", 1, "abc", true, 1, 0)
+
+    val locked = ExportGroupMembersStep.Args("Test Group", downloadInfraOnly = true)
+
+    assertTrue(step().artifacts(locked, output).single().infraOnly)
+    assertFalse(ExportGroupMembersStep.Args("Test Group").downloadInfraOnly)
+    assertFalse(ExportGroupMembersStep.Args("Test Group", requireComplete = true).downloadInfraOnly)
+  }
+
+  @Test
   fun `slug keeps only lowercase letters digits and single dashes`() {
     assertEquals("test-group", ExportGroupMembersStep.slug("Test Group"))
     assertEquals("a-b-c", ExportGroupMembersStep.slug("a / b \\ c"))

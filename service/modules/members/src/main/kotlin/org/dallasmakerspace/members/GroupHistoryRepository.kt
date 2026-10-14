@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.Op
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.select
 import org.slf4j.LoggerFactory
@@ -88,6 +89,7 @@ class GroupHistoryRepository @Inject constructor(private val guidResolver: Group
             )
             .select {
               (groupsAlias[GroupsTable.name] eq groupName) and
+                  (groupsAlias[GroupsTable.status] neq GROUP_STATUS_ARCHIVED) and
                   (GroupHistoryTable.eventTimestamp greaterEq sixMonthsAgo)
             }
             .orderBy(GroupHistoryTable.eventTimestamp, SortOrder.DESC)
@@ -225,8 +227,8 @@ class GroupHistoryRepository @Inject constructor(private val guidResolver: Group
     val guid = objectGuid?.let { AdGuid.normalize(it) }
     return suspendTransaction {
       val byGuid = guid?.let { findRow(GroupsTable.objectGuid eq it) }
-      val byName = findRow(GroupsTable.name eq name)
-      val byDn = dn?.let { findRow(GroupsTable.dn eq it) }
+      val byName = findRow(notArchived(GroupsTable.name eq name))
+      val byDn = dn?.let { findRow(notArchived(GroupsTable.dn eq it)) }
       val decision = decideGroupSync(name, dn, guid, byGuid?.ref(), byName?.ref(), byDn?.ref())
       when (decision) {
         is GroupSyncDecision.Use -> decision.id
@@ -259,7 +261,10 @@ class GroupHistoryRepository @Inject constructor(private val guidResolver: Group
 
   private fun findRow(op: Op<Boolean>): GroupDAO? = GroupDAO.find { op }.firstOrNull()
 
-  private fun GroupDAO.ref() = GroupRowRef(id.value, name, dn, objectGuid)
+  private fun notArchived(op: Op<Boolean>): Op<Boolean> =
+      op and (GroupsTable.status neq GROUP_STATUS_ARCHIVED)
+
+  private fun GroupDAO.ref() = GroupRowRef(id.value, name, dn, objectGuid, status)
 
   override suspend fun hasPortalInitiatedRecord(
       memberId: Int,

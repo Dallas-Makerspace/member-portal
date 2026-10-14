@@ -6,7 +6,7 @@ import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.GroupsTable
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.update
 import org.slf4j.LoggerFactory
 
@@ -30,12 +30,13 @@ class GroupGuidBackfillStore : IGroupGuidBackfillStore {
   private val logger = LoggerFactory.getLogger(GroupGuidBackfillStore::class.java)
 
   override suspend fun listRows(): List<GroupRowRef> = suspendTransaction {
-    GroupsTable.selectAll().map {
+    GroupsTable.select { GroupsTable.status neq GROUP_STATUS_ARCHIVED }.map {
       GroupRowRef(
           it[GroupsTable.idColumn].value,
           it[GroupsTable.name],
           it[GroupsTable.dn],
-          it[GroupsTable.objectGuid])
+          it[GroupsTable.objectGuid],
+          it[GroupsTable.status])
     }
   }
 

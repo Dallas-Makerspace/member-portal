@@ -54,4 +54,20 @@ interface IActiveDirectoryClient {
    * @throws Exception if the user is not found or update fails
    */
   fun updateBadgeNumber(username: String, newBadgeNumber: String)
+
+  /**
+   * Deletes the named group, found domain-wide (earliest group OU first).
+   *
+   * @return true if a group was deleted, false if none exists (idempotent)
+   * @throws GroupDeletionRefusedException if the group is not inside the main group OU
+   */
+  fun deleteGroup(groupName: String): Boolean
+
+  /**
+   * Creates a global security group; succeeds without changes if it already exists at the same DN.
+   *
+   * @throws GroupCreateRefusedException if the parent is outside the main group OU or the name is
+   *   taken at another DN
+   */
+  fun createGroup(spec: AdGroupSpec): AdGroupCreateResult
 }
