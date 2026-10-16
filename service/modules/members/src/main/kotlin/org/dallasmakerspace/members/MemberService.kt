@@ -987,13 +987,18 @@ constructor(
   /** DN of the one Infrastructure group (in the main group OU), resolved once from AD. */
   @Volatile private var infraGroupDn: String? = null
 
+  /** Until this time (ms) a failed resolution is not retried, so a broken lookup fails fast. */
+  @Volatile private var infraResolveRetryAt: Long = 0
+
+  internal var nowMillis: () -> Long = System::currentTimeMillis
+
   /**
    * True if the user is a member of the Infrastructure group: the actual group in the main group
    * OU, matched by DN, not any group that merely has the same name elsewhere. Fails closed.
    */
   fun isUserInInfraGroup(username: String): Boolean {
     return try {
-      val infraDn = infraGroupDn ?: resolveInfraGroupDn()
+      val infraDn = infraGroupDn ?: resolveInfraGroupDn() ?: return false
       activeDirectoryService.getMemberByUsername(username).groups.any {
         DirectoryOus.sameDn(it.distinguishedName, infraDn)
       }
@@ -1003,13 +1008,22 @@ constructor(
     }
   }
 
-  private fun resolveInfraGroupDn(): String {
-    val group =
-        activeDirectoryService.getGroupStrict(org.dallasmakerspace.groups.Constants.INFRASTRUCTURE)
-    check(DirectoryOus.isInMainGroupOu(group.distinguishedName)) {
-      "The Infrastructure group is not in the main group OU"
+  /** Null (fail closed) if the group cannot be resolved; that outcome is cached for a while. */
+  private fun resolveInfraGroupDn(): String? {
+    if (nowMillis() < infraResolveRetryAt) return null
+    return try {
+      val group =
+          activeDirectoryService.getGroupStrict(
+              org.dallasmakerspace.groups.Constants.INFRASTRUCTURE)
+      check(DirectoryOus.isInMainGroupOu(group.distinguishedName)) {
+        "The Infrastructure group is not in the main group OU"
+      }
+      group.distinguishedName.also { infraGroupDn = it }
+    } catch (e: Exception) {
+      infraResolveRetryAt = nowMillis() + INFRA_RESOLVE_BACKOFF_MS
+      log.warn("Could not resolve the Infrastructure group; denying infra checks for a while", e)
+      null
     }
-    return group.distinguishedName.also { infraGroupDn = it }
   }
 
   /** Throws [GroupNotFoundException] before any portal row is written for a missing AD group. */
@@ -1250,6 +1264,9 @@ private const val LOGISTICS_CHAIR_GROUP_CN = "Logistics Committee Chair"
 // Guardrail for MemberService.isGroupAdmin: bounds the AD group-nesting walk so a misconfigured
 // or deeply-nested group tree can't turn it into an unbounded traversal.
 private const val MAX_GROUP_ADMIN_DEPTH = 2
+
+/** How long a failed Infrastructure-group lookup is remembered before AD is asked again. */
+private const val INFRA_RESOLVE_BACKOFF_MS = 5 * 60 * 1000L
 
 // AD's distinguishedNameMatch equality rule is case-insensitive, and the same DN can come back
 // with different casing depending on which attribute (memberOf vs. member/managedBy) it was read

@@ -146,6 +146,14 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
   override fun getGroupStrict(groupname: String): ADGroup = getGroup(groupname)
 
   /** {@inheritDoc} */
+  override fun findGroupByGuid(objectGuid: String): GroupIdentity? = null
+
+  /** {@inheritDoc} */
+  override fun addUsersToGroupByDn(dmsUsernames: List<String>, groupDn: String) {
+    // Do nothing
+  }
+
+  /** {@inheritDoc} */
   override fun groupExists(groupName: String): Boolean = true
 
   /** {@inheritDoc} */

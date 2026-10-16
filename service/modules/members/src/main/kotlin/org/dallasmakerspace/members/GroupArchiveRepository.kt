@@ -75,6 +75,10 @@ class GroupArchiveRepository(
         }
       }
 
+  override suspend fun objectGuidOf(groupName: String): String? = suspendTransaction {
+    GroupsTable.select { anyLiveRow(groupName) }.firstOrNull()?.get(GroupsTable.objectGuid)
+  }
+
   override suspend fun statusOf(groupName: String): String? = suspendTransaction {
     val statuses =
         GroupsTable.select { GroupsTable.name eq groupName }.map { it[GroupsTable.status] }

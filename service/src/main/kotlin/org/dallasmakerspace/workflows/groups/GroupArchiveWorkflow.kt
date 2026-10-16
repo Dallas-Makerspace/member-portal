@@ -106,8 +106,9 @@ internal constructor(
               "Infrastructure members can download it.",
           "The group is deleted from Active Directory. Members lose any access the group grants.",
           "If a run is rolled back after the deletion, the group is recreated with a new " +
-              "identity and its members are re-added. Memberships of this group in other " +
-              "groups cannot be restored.",
+              "identity, its members are re-added and its memberships in other groups under the " +
+              "main group location are restored. Memberships in groups elsewhere cannot be " +
+              "restored.",
       )
 
   override fun subjects(input: GroupArchiveInput) =
@@ -137,7 +138,13 @@ internal constructor(
       )
 
   override fun validateInput(input: GroupArchiveInput): List<String> = buildList {
-    if (input.groupName.isBlank()) add("groupName is required")
+    when {
+      input.groupName.isBlank() -> add("groupName is required")
+      input.groupName.trim().length > MAX_GROUP_NAME ->
+          add("groupName must be at most $MAX_GROUP_NAME characters")
+      input.groupName.any { it.isISOControl() } ->
+          add("groupName must not contain control characters")
+    }
     val reason = input.reason.trim().length
     if (reason < MIN_REASON || reason > MAX_REASON) {
       add("reason must be between $MIN_REASON and $MAX_REASON characters")
@@ -148,6 +155,7 @@ internal constructor(
     const val ID = "group.archive"
     const val MIN_REASON = 10
     const val MAX_REASON = 200
+    const val MAX_GROUP_NAME = 256
   }
 }
 
@@ -226,9 +234,12 @@ internal class CheckGroupArchivableStep(
         .forEach { blocked += "${it.system}: ${it.detail}" }
     warnings += found.notes
     if (group.parentGroups.isNotEmpty()) {
+      val outside = group.parentGroups.count { !DirectoryOus.isInMainGroupOu(it) }
       warnings +=
           "The group is a member of ${group.parentGroups.size} other group(s). Deleting it " +
-              "removes those memberships, and a rollback cannot restore them"
+              "removes those memberships; a rollback restores them only for groups under the " +
+              "main group location" +
+              if (outside > 0) " ($outside outside it cannot be restored)" else ""
     }
     return Assessment(blocked, warnings)
   }

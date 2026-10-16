@@ -8,6 +8,7 @@ import org.dallasmakerspace.models.ArchivedGroup
 class GroupArchiveRepositoryMock : IGroupArchiveRepository {
   private val statuses = ConcurrentHashMap<String, String>()
   private val archived = ConcurrentHashMap<String, ArchivedGroup>()
+  private val guids = ConcurrentHashMap<String, String>()
 
   private fun key(name: String) = name.lowercase()
 
@@ -49,8 +50,13 @@ class GroupArchiveRepositoryMock : IGroupArchiveRepository {
     return true
   }
 
-  override suspend fun updateObjectGuid(groupName: String, objectGuid: String): Boolean =
-      statuses[key(groupName)].let { it == GROUP_STATUS_ACTIVE || it == GROUP_STATUS_DISABLED }
+  override suspend fun updateObjectGuid(groupName: String, objectGuid: String): Boolean {
+    val live = statuses[key(groupName)].let { it == GROUP_STATUS_ACTIVE || it == GROUP_STATUS_DISABLED }
+    if (live) guids[key(groupName)] = objectGuid.lowercase()
+    return live
+  }
+
+  override suspend fun objectGuidOf(groupName: String): String? = guids[key(groupName)]
 
   override suspend fun statusOf(groupName: String): String? = statuses[key(groupName)]
 

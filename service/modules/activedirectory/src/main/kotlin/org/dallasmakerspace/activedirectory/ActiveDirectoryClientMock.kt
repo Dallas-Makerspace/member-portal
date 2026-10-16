@@ -6,6 +6,10 @@ class ActiveDirectoryClientMock : IActiveDirectoryClient {
 
   override fun getGroup(groupname: String): Map<String, Any?> = emptyMap()
 
+  override fun findGroupByGuid(objectGuid: String): GroupIdentity? = null
+
+  override fun addUsersToGroupByDn(dmsUsernames: List<String>, groupDn: String) = Unit
+
   override fun getGroupStrict(groupname: String): Map<String, Any?> = emptyMap()
 
   override fun groupExists(groupName: String): Boolean = false

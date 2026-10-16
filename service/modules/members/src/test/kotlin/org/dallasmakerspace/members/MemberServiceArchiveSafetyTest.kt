@@ -121,25 +121,81 @@ class MemberServiceArchiveSafetyTest {
   }
 
   @Test
-  fun `a duplicated or misplaced Infrastructure group, or a directory error, fails closed and is retried`() {
+  fun `a duplicated or misplaced Infrastructure group, or a directory error, fails closed`() {
+    var now = 0L
+    service.nowMillis = { now }
     whenever(directory.getMemberByUsername("actor")).thenReturn(user(MAIN_INFRA_DN))
     doAnswer { throw AmbiguousGroupException("Infrastructure", 2) }
         .whenever(directory)
         .getGroupStrict("Infrastructure")
     assertFalse(service.isUserInInfraGroup("actor"))
 
+    now = 10 * 60 * 1000
     doReturn(group("Infrastructure", ADMIN_INFRA_DN))
         .whenever(directory)
         .getGroupStrict("Infrastructure")
     assertFalse(service.isUserInInfraGroup("actor"))
 
+    now = 20 * 60 * 1000
     doAnswer { throw IOException("down") }.whenever(directory).getGroupStrict("Infrastructure")
     assertFalse(service.isUserInInfraGroup("actor"))
 
+    now = 30 * 60 * 1000
     doReturn(group("Infrastructure", MAIN_INFRA_DN))
         .whenever(directory)
         .getGroupStrict("Infrastructure")
     assertTrue(service.isUserInInfraGroup("actor"))
+  }
+
+  @Test
+  fun `a failed resolution is remembered for a few minutes, then retried`() {
+    var now = 1_000L
+    service.nowMillis = { now }
+    whenever(directory.getMemberByUsername("actor")).thenReturn(user(MAIN_INFRA_DN))
+    doAnswer { throw AmbiguousGroupException("Infrastructure", 2) }
+        .whenever(directory)
+        .getGroupStrict("Infrastructure")
+
+    repeat(5) { assertFalse(service.isUserInInfraGroup("actor")) }
+    verify(directory, org.mockito.kotlin.times(1)).getGroupStrict("Infrastructure")
+
+    now += 4 * 60 * 1000
+    assertFalse(service.isUserInInfraGroup("actor"))
+    verify(directory, org.mockito.kotlin.times(1)).getGroupStrict("Infrastructure")
+
+    now += 2 * 60 * 1000
+    doReturn(group("Infrastructure", MAIN_INFRA_DN))
+        .whenever(directory)
+        .getGroupStrict("Infrastructure")
+    assertTrue(service.isUserInInfraGroup("actor"))
+    verify(directory, org.mockito.kotlin.times(2)).getGroupStrict("Infrastructure")
+  }
+
+  @Test
+  fun `the failed lookup is logged once per window, not once per call`() {
+    val loggerFactory: LoggerFactory = mock()
+    val logger: org.slf4j.Logger = mock()
+    whenever(loggerFactory.create(any<Class<*>>())).thenReturn(logger)
+    val quiet =
+        MemberService(
+            loggerFactory = loggerFactory,
+            discourseService = mock(),
+            discourseAvatarService = mock(),
+            memberRepository = mock(),
+            whmcsDataService = mock(),
+            activityLogService = mock(),
+            makerManagerDataService = mock(),
+            activeDirectoryService = directory,
+            voterRegistrationManager = mock(),
+            groupHistoryRepository = history,
+            doorEventsRepository = mock(),
+        )
+    whenever(directory.getMemberByUsername("actor")).thenReturn(user(MAIN_INFRA_DN))
+    doAnswer { throw IOException("down") }.whenever(directory).getGroupStrict("Infrastructure")
+
+    repeat(5) { quiet.isUserInInfraGroup("actor") }
+
+    verify(logger, org.mockito.kotlin.times(1)).warn(any<String>(), any<Throwable>())
   }
 
   // M4: no portal rows for groups that are not in AD

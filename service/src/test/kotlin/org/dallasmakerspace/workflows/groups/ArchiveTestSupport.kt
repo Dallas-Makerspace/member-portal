@@ -4,7 +4,10 @@ import java.util.concurrent.CopyOnWriteArrayList
 import org.dallasmakerspace.activedirectory.ADGroup
 import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.AdGroupCreateResult
+import com.unboundid.ldap.sdk.LDAPException
+import com.unboundid.ldap.sdk.ResultCode
 import org.dallasmakerspace.activedirectory.AmbiguousGroupException
+import org.dallasmakerspace.activedirectory.GroupIdentity
 import org.dallasmakerspace.activedirectory.GroupGuidNotFoundException
 import org.dallasmakerspace.activedirectory.GroupMembershipRefusedException
 import org.dallasmakerspace.activedirectory.ManagedObjectCounts
@@ -21,6 +24,9 @@ import org.dallasmakerspace.members.IGroupHistoryRepository
 import org.dallasmakerspace.models.DirectoryOus
 import org.dallasmakerspace.workflows.groups.references.GroupReference
 import org.dallasmakerspace.workflows.groups.references.GroupReferenceFinder
+
+private val READS =
+    listOf("getGroup", "getMembers", "findGroupByGuid", "groupExists", "countManagedObjects")
 
 val MAIN_OU: String = DirectoryOus.GROUP_OUS.first()
 val ADMIN_OU: String = DirectoryOus.GROUP_OUS[1]
@@ -75,6 +81,9 @@ class FakeDirectory : IActiveDirectoryService {
   /** DNs of parent groups that no longer exist. */
   val missingParents = mutableSetOf<String>()
 
+  /** A parent DN whose next membership add fails once, as a flaky directory would. */
+  var failParentAddOnce: String? = null
+
   /** The GUIDs passed to deleteGroup, in order. */
   val deleteGuids = CopyOnWriteArrayList<String>()
 
@@ -100,7 +109,7 @@ class FakeDirectory : IActiveDirectoryService {
   private fun named(name: String) =
       (groups.values + twins).filter { it.name.equals(name.trim(), ignoreCase = true) }
 
-  fun writes() = calls.filter { !it.startsWith("getGroup") && !it.startsWith("getMembers") }
+  fun writes() = calls.filter { call -> READS.none { call.startsWith(it) } }
 
   private fun toAd(g: FakeGroup) =
       ADGroup(
@@ -155,6 +164,10 @@ class FakeDirectory : IActiveDirectoryService {
       throw GroupMembershipRefusedException(groupName, "outside the main group OU")
     }
     if (parentGroupDn in missingParents) throw GroupNotFoundException(parentGroupDn)
+    if (parentGroupDn == failParentAddOnce) {
+      failParentAddOnce = null
+      throw java.io.IOException("directory hiccup")
+    }
     if (child.parents.any { DirectoryOus.sameDn(it, parentGroupDn) }) return false
     child.parents = child.parents + parentGroupDn
     return true
@@ -212,10 +225,33 @@ class FakeDirectory : IActiveDirectoryService {
     return AdGroupCreateResult(dn, guid, true)
   }
 
+  /** Like the by-name directory write: a member that is already in the group is an error. */
   override fun addUsersToGroup(dmsUsernames: List<String>, group: String) {
     calls += "addUsersToGroup:$group:${dmsUsernames.joinToString(",")}"
     val g = find(group) ?: throw GroupNotFoundException(group)
-    if (!ignoreAdds) dmsUsernames.filter { it in knownUsers }.forEach { g.members += it }
+    if (ignoreAdds) return
+    dmsUsernames.filter { it in knownUsers }.forEach {
+      if (!g.members.add(it)) throw LDAPException(ResultCode.ENTRY_ALREADY_EXISTS)
+    }
+  }
+
+  override fun addUsersToGroupByDn(dmsUsernames: List<String>, groupDn: String) {
+    calls += "addUsersToGroupByDn:$groupDn:${dmsUsernames.joinToString(",")}"
+    if (!DirectoryOus.isInMainGroupOu(groupDn)) {
+      throw GroupMembershipRefusedException(groupDn, "outside the main group OU")
+    }
+    val g =
+        (groups.values + twins).firstOrNull { DirectoryOus.sameDn(it.dn, groupDn) }
+            ?: throw GroupNotFoundException(groupDn)
+    if (ignoreAdds) return
+    dmsUsernames.filter { it in knownUsers }.forEach { g.members += it }
+  }
+
+  override fun findGroupByGuid(objectGuid: String): GroupIdentity? {
+    calls += "findGroupByGuid:$objectGuid"
+    return (groups.values + twins)
+        .singleOrNull { it.guid.equals(objectGuid, ignoreCase = true) }
+        ?.let { GroupIdentity(it.name, it.dn, it.guid) }
   }
 
   override fun getMembersByUsernameList(usernameList: List<String>): Map<String, ADUser?> {

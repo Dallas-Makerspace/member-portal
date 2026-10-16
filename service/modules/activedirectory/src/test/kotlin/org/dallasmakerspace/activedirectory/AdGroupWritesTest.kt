@@ -262,6 +262,42 @@ class AdGroupWritesTest {
   }
 
   @Test
+  fun `create treats an existing group as already there only when it is the only one of that name`() {
+    val exact = entry("Test Group", main)
+
+    assertIs<GroupCreatePlan.Exists>(planGroupCreate(spec(), listOf(exact)))
+    assertFailsWith<GroupCreateRefusedException> {
+      planGroupCreate(spec(), listOf(exact, entry("Test Group", "OU=Sub,$main")))
+    }
+    assertFailsWith<GroupCreateRefusedException> {
+      planGroupCreate(spec(), listOf(exact, entry("Test Group", admin)))
+    }
+    // a same-named group outside the group OUs does not count as a twin
+    assertIs<GroupCreatePlan.Exists>(
+        planGroupCreate(spec(), listOf(exact, entry("Test Group", "CN=Builtin,DC=dms,DC=local"))))
+  }
+
+  @Test
+  fun `both LDAP duplicate-member codes mean the member is already there`() {
+    assertEquals(true, isAlreadyMember(com.unboundid.ldap.sdk.ResultCode.ATTRIBUTE_OR_VALUE_EXISTS))
+    // what Active Directory answers (ERROR_MEMBER_IN_GROUP surfaces as entryAlreadyExists, 68)
+    assertEquals(true, isAlreadyMember(com.unboundid.ldap.sdk.ResultCode.ENTRY_ALREADY_EXISTS))
+    assertEquals(false, isAlreadyMember(com.unboundid.ldap.sdk.ResultCode.NO_SUCH_OBJECT))
+    assertEquals(false, isAlreadyMember(com.unboundid.ldap.sdk.ResultCode.INSUFFICIENT_ACCESS_RIGHTS))
+    assertEquals(68, com.unboundid.ldap.sdk.ResultCode.ENTRY_ALREADY_EXISTS.intValue())
+  }
+
+  @Test
+  fun `log text loses control characters and is bounded`() {
+    assertEquals("Shop", logSafe("Shop"))
+    assertEquals("a_b_c_d_e", logSafe("a\nb\rc\u0000d\u001be"))
+    assertEquals("", logSafe(null))
+    val long = logSafe("x".repeat(500))
+    assertEquals(203, long.length)
+    assertEquals(true, long.endsWith("..."))
+  }
+
+  @Test
   fun `service delegates deletes and creates to the client`() {
     val result = AdGroupCreateResult("CN=Test Group,$main", "guid", created = true)
     val client: IActiveDirectoryClient = mock {

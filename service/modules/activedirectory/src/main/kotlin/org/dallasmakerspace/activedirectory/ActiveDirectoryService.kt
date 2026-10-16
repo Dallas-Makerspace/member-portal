@@ -334,6 +334,14 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
       activeDirectoryClient.deleteGroup(groupName, expectedObjectGuid)
 
   /** {@inheritDoc} */
+  override fun findGroupByGuid(objectGuid: String): GroupIdentity? =
+      activeDirectoryClient.findGroupByGuid(objectGuid)
+
+  /** {@inheritDoc} */
+  override fun addUsersToGroupByDn(dmsUsernames: List<String>, groupDn: String) =
+      activeDirectoryClient.addUsersToGroupByDn(dmsUsernames, groupDn)
+
+  /** {@inheritDoc} */
   override fun groupExists(groupName: String): Boolean =
       activeDirectoryClient.groupExists(groupName)
 

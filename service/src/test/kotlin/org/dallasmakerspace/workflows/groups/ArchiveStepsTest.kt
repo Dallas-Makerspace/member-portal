@@ -361,7 +361,7 @@ class ArchiveStepsTest {
         assertEquals(
             listOf(
                 "createGroup:$GROUP",
-                "addUsersToGroup:$GROUP:asmith,bsmith,csmith",
+                "addUsersToGroupByDn:CN=$GROUP,$MAIN_OU:asmith,bsmith,csmith",
                 "addGroupToParentGroup:$GROUP:CN=Parent,$MAIN_OU"),
             env.directory.writes())
       }
@@ -376,7 +376,7 @@ class ArchiveStepsTest {
 
     env.delete.rollback(ctx(), args, out)
 
-    assertEquals(listOf("createGroup:$GROUP"), env.directory.writes())
+    assertEquals(emptyList(), env.directory.writes(), "the recreated group is resumed, not redone")
     assertEquals(setOf("asmith", "bsmith", "csmith"), env.group().members)
   }
 
@@ -391,7 +391,7 @@ class ArchiveStepsTest {
     env.delete.rollback(ctx(), args, DeleteAdGroupStep.Result(GROUP, null, true))
 
     assertEquals(
-        listOf("createGroup:$GROUP", "addUsersToGroup:$GROUP:bsmith"), env.directory.writes())
+        listOf("addUsersToGroupByDn:CN=$GROUP,$MAIN_OU:bsmith"), env.directory.writes())
   }
 
   @Test
@@ -438,6 +438,11 @@ class ArchiveStepsTest {
         env.store.put(ObjectKey(snap.key), wrongPlace.toByteArray(), "application/json")
         assertFailsWith<PermanentStepException> { env.delete.rollback(ctx(), args, out) }
         assertNull(env.directory.find(GROUP))
+        val resealed = snap.copy(sha256 = ExportGroupMembersStep.sha256Hex(wrongPlace.toByteArray()))
+        assertFailsWith<PermanentStepException> {
+          env.delete.rollback(ctx(), DeleteAdGroupStep.Args(GROUP, resealed), out)
+        }
+        assertNull(env.directory.find(GROUP))
 
         env.store.delete(ObjectKey(snap.key))
         assertFailsWith<PermanentStepException> { env.delete.rollback(ctx(), args, out) }
@@ -455,13 +460,13 @@ class ArchiveStepsTest {
                 .decodeFromString(
                     GroupExportDocument.serializer(), stored.bytes.decodeToString())
         val moved = doc.copy(groupDn = "CN=$GROUP,OU=Elsewhere,DC=example,DC=invalid")
-        env.store.put(
-            ObjectKey(snap.key),
-            Json.encodeToString(GroupExportDocument.serializer(), moved).toByteArray(),
-            "application/json")
+        val bytes = Json.encodeToString(GroupExportDocument.serializer(), moved).toByteArray()
+        env.store.put(ObjectKey(snap.key), bytes, "application/json")
+        val resealed = snap.copy(sha256 = ExportGroupMembersStep.sha256Hex(bytes))
 
         assertFailsWith<PermanentStepException> {
-          env.delete.rollback(ctx(), args, DeleteAdGroupStep.Result(GROUP, null, true))
+          env.delete.rollback(
+              ctx(), DeleteAdGroupStep.Args(args.groupName, resealed), DeleteAdGroupStep.Result(GROUP, null, true))
         }
 
         assertTrue(env.directory.writes().none { it.startsWith("createGroup") })
@@ -528,7 +533,7 @@ class ArchiveStepsTest {
 
     val result = assertIs<Validation.Blocked>(env.validateDelete(snap))
 
-    assertTrue(result.messages.single().contains("not the group that was snapshotted"))
+    assertTrue(result.messages.single().contains("renamed or moved"))
   }
 
   @Test
@@ -780,5 +785,173 @@ class ArchiveStepsTest {
         }
 
     assertEquals("Directory: 1 user(s) managed by this group", thrown.message)
+  }
+
+  // rollback ordering, resume and strangers
+
+  @Test
+  fun `the portal row gets the new GUID before members and parents are restored`() =
+      runBlocking<Unit> {
+        val env = Env()
+        env.group().parents = listOf("CN=Parent A,$MAIN_OU")
+        val (_, args) = env.deleteGroup()
+        env.directory.ignoreAdds = true
+
+        assertFailsWith<TransientStepException> {
+          env.delete.rollback(ctx(), args, DeleteAdGroupStep.Result(GROUP, null, true))
+        }
+
+        assertEquals(GROUP to env.group().guid, env.archive.guidUpdates.single())
+        assertTrue(env.group().parents.isEmpty(), "failed before the parents step")
+      }
+
+  @Test
+  fun `rolling back twice after a partial parent restore completes without duplicates`() =
+      runBlocking<Unit> {
+        val env = Env()
+        val parents = listOf("CN=Parent A,$MAIN_OU", "CN=Parent B,$MAIN_OU", "CN=Parent C,$MAIN_OU")
+        env.group().parents = parents
+        val (_, args) = env.deleteGroup()
+        env.directory.failParentAddOnce = parents[1]
+        val out = DeleteAdGroupStep.Result(GROUP, null, true)
+
+        assertFailsWith<java.io.IOException> { env.delete.rollback(ctx(), args, out) }
+        assertEquals(listOf(parents[0]), env.group().parents)
+
+        env.delete.rollback(ctx(), args, out)
+        env.delete.rollback(ctx(), args, out)
+
+        assertEquals(parents, env.group().parents)
+        assertEquals(setOf("asmith", "bsmith", "csmith"), env.group().members)
+        assertEquals(1, env.directory.calls.count { it.startsWith("createGroup") })
+      }
+
+  @Test
+  fun `members are added to the recreated group by its exact DN`() = runBlocking<Unit> {
+    val env = Env()
+    val (_, args) = env.deleteGroup()
+
+    env.delete.rollback(ctx(), args, DeleteAdGroupStep.Result(GROUP, null, true))
+
+    assertTrue(env.directory.calls.none { it.startsWith("addUsersToGroup:") })
+    assertEquals(
+        listOf("addUsersToGroupByDn:CN=$GROUP,$MAIN_OU:asmith,bsmith,csmith"),
+        env.directory.calls.filter { it.startsWith("addUsersToGroupByDn") })
+  }
+
+  @Test
+  fun `a group of the same name that is not ours is never touched or filled`() =
+      runBlocking<Unit> {
+        listOf(
+                FakeGroup(GROUP, dn = "CN=$GROUP,OU=Sub,$MAIN_OU", guid = "bbbbbbbb-0000-0000-0000-000000000002"),
+                FakeGroup(GROUP, dn = "CN=$GROUP,$ADMIN_OU", guid = "dddddddd-0000-0000-0000-000000000004"),
+                FakeGroup(GROUP, dn = "CN=$GROUP,$MAIN_OU", guid = "cccccccc-0000-0000-0000-000000000003"),
+            )
+            .forEach { stranger ->
+              val env = Env()
+              val (_, args) = env.deleteGroup()
+              env.directory.add(stranger)
+              env.directory.calls.clear()
+
+              assertFailsWith<PermanentStepException> {
+                env.delete.rollback(ctx(), args, DeleteAdGroupStep.Result(GROUP, null, true))
+              }
+
+              assertEquals(emptyList(), env.directory.writes(), stranger.dn)
+              assertTrue(env.archive.guidUpdates.isEmpty())
+            }
+      }
+
+  @Test
+  fun `a twin that appears after the recreation stops the rollback before it adds anyone`() =
+      runBlocking<Unit> {
+        val env = Env()
+        val (_, args) = env.deleteGroup()
+        val out = DeleteAdGroupStep.Result(GROUP, null, true)
+        env.delete.rollback(ctx(), args, out)
+        env.group().members -= "bsmith"
+        env.directory.twins += subOuTwin()
+        env.directory.calls.clear()
+
+        assertFailsWith<PermanentStepException> { env.delete.rollback(ctx(), args, out) }
+
+        assertEquals(emptyList(), env.directory.writes())
+      }
+
+  @Test
+  fun `rollback leaves a group alone when the snapshotted group still exists`() =
+      runBlocking<Unit> {
+        val env = Env()
+        val snap = env.snapshot()
+        val args = DeleteAdGroupStep.Args(GROUP, snap)
+        env.archive.markDisabled(GROUP)
+
+        env.delete.rollback(ctx(), args, DeleteAdGroupStep.Result(GROUP, null, false))
+
+        assertEquals(emptyList(), env.directory.writes())
+        assertTrue(env.archive.guidUpdates.isEmpty())
+      }
+
+  // absence is decided by GUID
+
+  @Test
+  fun `check treats the snapshotted group as absent by GUID, whatever now carries its name`() =
+      runBlocking<Unit> {
+        val env = Env()
+        val snap = env.snapshot()
+        env.directory.groups.remove(GROUP.lowercase())
+        env.directory.add(FakeGroup(GROUP, guid = "cccccccc-0000-0000-0000-000000000003"))
+
+        val check = env.delete.check(ctx(), DeleteAdGroupStep.Args(GROUP, snap))
+
+        assertIs<StepCheck.NoOp<DeleteAdGroupStep.Result>>(check)
+      }
+
+  @Test
+  fun `a group renamed since the snapshot is not a no-op and validation blocks`() =
+      runBlocking<Unit> {
+        val env = Env()
+        val snap = env.snapshot()
+        env.directory.groups.remove(GROUP.lowercase())
+        env.directory.add(
+            FakeGroup(
+                "Renamed Group",
+                dn = "CN=Renamed Group,$MAIN_OU",
+                guid = snap.groupObjectGuid!!))
+        val args = DeleteAdGroupStep.Args(GROUP, snap)
+
+        assertIs<StepCheck.WillRun>(env.delete.check(ctx(), args))
+        val blocked = assertIs<Validation.Blocked>(env.delete.validate(ctx(), args))
+
+        assertTrue(blocked.messages.single().contains("renamed or moved"))
+        assertTrue(env.directory.writes().isEmpty())
+      }
+
+  @Test
+  fun `check without a snapshot still goes by name while planning`() = runBlocking<Unit> {
+    val env = Env()
+
+    assertIs<StepCheck.WillRun>(env.delete.check(ctx(StepMode.PREFLIGHT), DeleteAdGroupStep.Args(GROUP, null)))
+    assertIs<StepCheck.NoOp<DeleteAdGroupStep.Result>>(
+        env.delete.check(ctx(StepMode.PREFLIGHT), DeleteAdGroupStep.Args("Nope", null)))
+  }
+
+  // the gate's warning text
+
+  @Test
+  fun `the gate says which parent memberships a rollback restores`() = runBlocking<Unit> {
+    val env = Env()
+    env.group().parents = listOf("CN=Parent A,$MAIN_OU", "CN=Parent C,$ADMIN_OU")
+
+    val warnings =
+        assertIs<Validation.Warnings>(
+                env.check.validate(ctx(StepMode.PREFLIGHT), CheckGroupArchivableStep.Args(GROUP)))
+            .messages
+            .single { it.contains("other group(s)") }
+
+    assertTrue(warnings.contains("member of 2 other group(s)"))
+    assertTrue(warnings.contains("restores them only for groups under the main group location"))
+    assertTrue(warnings.contains("(1 outside it cannot be restored)"))
+    assertFalse(warnings.contains("Parent"))
   }
 }

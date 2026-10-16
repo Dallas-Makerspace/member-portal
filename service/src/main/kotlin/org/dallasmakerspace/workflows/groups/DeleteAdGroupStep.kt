@@ -11,11 +11,13 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.activedirectory.ADGroup
+import org.dallasmakerspace.activedirectory.AdGroupCreateResult
 import org.dallasmakerspace.activedirectory.AdGroupSpec
 import org.dallasmakerspace.activedirectory.AdGuid
 import org.dallasmakerspace.activedirectory.AmbiguousGroupException
 import org.dallasmakerspace.activedirectory.GroupCreateRefusedException
 import org.dallasmakerspace.activedirectory.GroupDeletionRefusedException
+import org.dallasmakerspace.activedirectory.GroupIdentity
 import org.dallasmakerspace.activedirectory.GroupGuidNotFoundException
 import org.dallasmakerspace.activedirectory.GroupMembershipRefusedException
 import org.dallasmakerspace.activedirectory.GroupNotFoundException
@@ -95,9 +97,10 @@ internal constructor(
 
   override suspend fun check(ctx: StepContext, args: Args): StepCheck<Result> {
     val name = args.groupName.trim()
-    if (lookup(name) != Lookup.Absent) {
-      return StepCheck.WillRun("Delete the group from the directory")
-    }
+    val guid = args.snapshot?.groupObjectGuid?.takeIf { it.isNotBlank() }
+    // With a snapshot "absent" means the snapshotted group (by GUID) is gone, whatever its name.
+    val absent = if (guid != null) findByGuid(guid) == null else lookup(name) == Lookup.Absent
+    if (!absent) return StepCheck.WillRun("Delete the group from the directory")
     return StepCheck.NoOp(
         "The group is already absent from the directory", resultOf(name, args, deleted = false))
   }
@@ -105,6 +108,10 @@ internal constructor(
   override suspend fun validate(ctx: StepContext, args: Args): Validation {
     val name = args.groupName.trim()
     if (name.isEmpty()) return Validation.Blocked(listOf("A group name is required"))
+    args.snapshot?.let { snap ->
+      val renamed = renamedSinceSnapshot(name, snap)
+      if (renamed != null) return Validation.Blocked(listOf(renamed))
+    }
     val group =
         when (val found = lookup(name)) {
           Lookup.Absent -> return Validation.Ok
@@ -145,19 +152,25 @@ internal constructor(
     if (ExportGroupMembersStep.membersDigest(usernames) != snapshot.membersSha256) {
       throw PermanentStepException("The stored snapshot does not match the recorded checksum")
     }
-    val created = recreate(name, doc)
-    val missing = missingMembers(name, usernames)
-    missing.chunked(ADD_BATCH).forEach { batch ->
-      ctx.checkCancelled()
-      withContext(directoryDispatcher) { activeDirectory.addUsersToGroup(batch, name) }
+    val oldGuid = snapshot.groupObjectGuid?.takeIf { it.isNotBlank() }
+    if (oldGuid != null && findByGuid(oldGuid) != null) {
+      log.info("The snapshotted group still exists; there is nothing to restore")
+      return
     }
-    verifyMembers(name, usernames)
-    restoreParents(ctx, doc.groupName.ifBlank { name }, doc.parentGroups)
+    val created = recreateOrResume(name, doc)
+    // Record the new identity first, so a later failure and retry still leave the row consistent.
     created.objectGuid?.let {
       if (!archive.updateObjectGuid(name, it)) {
         throw TransientStepException("Could not update the portal record with the new identity")
       }
     } ?: log.warn("Recreated group has no GUID; the portal record keeps the old one")
+    val dn = created.distinguishedName
+    missingMembers(name, dn, usernames).chunked(ADD_BATCH).forEach { batch ->
+      ctx.checkCancelled()
+      withContext(directoryDispatcher) { activeDirectory.addUsersToGroupByDn(batch, dn) }
+    }
+    verifyMembers(name, dn, usernames)
+    restoreParents(ctx, doc.groupName.ifBlank { name }, doc.parentGroups)
   }
 
   override fun summarize(output: Result): String {
@@ -229,6 +242,45 @@ internal constructor(
     return canonical(a) == canonical(b)
   }
 
+  /** Null if the snapshotted group (by GUID) is gone or still has its name and place. */
+  private suspend fun renamedSinceSnapshot(
+      name: String,
+      snapshot: ExportGroupMembersStep.Result,
+  ): String? {
+    val guid = snapshot.groupObjectGuid?.takeIf { it.isNotBlank() } ?: return null
+    val found = findByGuid(guid) ?: return null
+    val same =
+        found.name.equals(name, ignoreCase = true) &&
+            DirectoryOus.sameDn(found.distinguishedName, snapshot.groupDn)
+    return if (same) null else "The group was renamed or moved since the snapshot was taken"
+  }
+
+  /**
+   * The group to restore into: a fresh one, or the one an earlier attempt of this rollback already
+   * created (recognised by the GUID recorded on the portal row). Any other group of that name is a
+   * stranger and is never touched.
+   */
+  private suspend fun recreateOrResume(
+      name: String,
+      doc: GroupExportDocument,
+  ): AdGroupCreateResult =
+      when (val existing = lookup(name)) {
+        is Lookup.Ambiguous ->
+            throw PermanentStepException("More than one group of that name exists; not restoring")
+        is Lookup.Found -> {
+          val group = existing.group
+          val ours =
+              DirectoryOus.sameDn(group.distinguishedName, doc.groupDn) &&
+                  sameGuid(group.objectGuid, archive.objectGuidOf(name))
+          if (!ours) {
+            throw PermanentStepException(
+                "A different group of that name already exists; it was not touched")
+          }
+          AdGroupCreateResult(group.distinguishedName, group.objectGuid, created = false)
+        }
+        Lookup.Absent -> recreate(name, doc)
+      }
+
   private suspend fun recreate(name: String, doc: GroupExportDocument) =
       try {
         val parent =
@@ -276,20 +328,27 @@ internal constructor(
   }
 
   /** Usernames from the snapshot that the recreated group does not hold yet. */
-  private suspend fun missingMembers(name: String, usernames: List<String>): List<String> {
-    val current = currentUsernames(name)
+  private suspend fun missingMembers(
+      name: String,
+      groupDn: String,
+      usernames: List<String>,
+  ): List<String> {
+    val current = currentUsernames(name, groupDn)
     return usernames.filter { it.lowercase() !in current }
   }
 
-  private suspend fun currentUsernames(name: String): Set<String> =
-      withContext(directoryDispatcher) { activeDirectory.getGroup(name) }
-          .members
-          .map { it.sAMAccountName.lowercase() }
-          .toSet()
+  /** Members of the group at exactly [groupDn]; refuses if the name now leads somewhere else. */
+  private suspend fun currentUsernames(name: String, groupDn: String): Set<String> {
+    val group = withContext(directoryDispatcher) { activeDirectory.getGroupStrict(name) }
+    if (!DirectoryOus.sameDn(group.distinguishedName, groupDn)) {
+      throw PermanentStepException("The group is no longer at the restored location")
+    }
+    return group.members.map { it.sAMAccountName.lowercase() }.toSet()
+  }
 
   /** Members that no longer exist in the directory are skipped; any other gap fails the step. */
-  private suspend fun verifyMembers(name: String, usernames: List<String>) {
-    val still = missingMembers(name, usernames)
+  private suspend fun verifyMembers(name: String, groupDn: String, usernames: List<String>) {
+    val still = missingMembers(name, groupDn, usernames)
     if (still.isEmpty()) return
     val found =
         withContext(directoryDispatcher) { activeDirectory.getMembersByUsernameList(still) }
@@ -307,12 +366,25 @@ internal constructor(
         } catch (e: ObjectStoreException) {
           throw TransientStepException("Object store request failed: ${e.message}", e)
         } ?: throw PermanentStepException("The member snapshot no longer exists in the store")
+    if (ExportGroupMembersStep.sha256Hex(content.bytes) != snapshot.sha256) {
+      throw PermanentStepException("The stored snapshot does not match its recorded checksum")
+    }
     return try {
       readJson.decodeFromString(GroupExportDocument.serializer(), content.bytes.decodeToString())
     } catch (e: SerializationException) {
       throw PermanentStepException("The member snapshot could not be read", e)
     }
   }
+
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun findByGuid(guid: String): GroupIdentity? =
+      try {
+        withContext(directoryDispatcher) { activeDirectory.findGroupByGuid(guid) }
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        throw TransientStepException("Could not read the group from the directory", e)
+      }
 
   @Suppress("TooGenericExceptionCaught")
   private suspend fun lookup(name: String): Lookup =

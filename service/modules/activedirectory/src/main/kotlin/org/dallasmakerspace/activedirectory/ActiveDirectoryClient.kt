@@ -230,7 +230,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       try {
         connectedServer = getConnectedServerInfo(connection)
         log.info(
-            "$TAG/getGroup Starting fetch for group '$groupname' using AD server: $connectedServer")
+            "$TAG/getGroup Starting fetch for group '${logSafe(groupname)}' using AD server: $connectedServer")
       } finally {
         ldapPool.releaseConnection(connection)
       }
@@ -296,13 +296,13 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
       val duration = System.currentTimeMillis() - startTime
       log.info(
-          "$TAG/getGroup Successfully fetched group '$groupname' from AD server $connectedServer in ${duration}ms")
+          "$TAG/getGroup Successfully fetched group '${logSafe(groupname)}' from AD server $connectedServer in ${duration}ms")
 
       return updatedGroup
     } catch (e: Exception) {
       val duration = System.currentTimeMillis() - startTime
       log.error(
-          "$TAG/getGroup Failed to fetch group '$groupname' from AD server $connectedServer after ${duration}ms",
+          "$TAG/getGroup Failed to fetch group '${logSafe(groupname)}' from AD server $connectedServer after ${duration}ms",
           e)
       throw e
     }
@@ -418,7 +418,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
    * @return List of distinguished names of all members
    */
   private fun getAllGroupMembers(groupDN: String): List<String> {
-    log.info("$TAG/getAllGroupMembers Fetching members for group: $groupDN")
+    log.info("$TAG/getAllGroupMembers Fetching members for group: ${logSafe(groupDN)}")
 
     val allMembers = mutableListOf<String>()
 
@@ -436,7 +436,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       val rangeEnd = if (rangeStart == 0) rangeSize - 1 else "*"
       val attributeName = "member;range=$rangeStart-$rangeEnd"
 
-      log.info("$TAG/getAllGroupMembers Fetching range $rangeStart-$rangeEnd for group: $groupDN")
+      log.info("$TAG/getAllGroupMembers Fetching range $rangeStart-$rangeEnd for group: ${logSafe(groupDN)}")
 
       val searchRequest =
           SearchRequest("DC=dms,DC=local", SearchScope.SUB, groupFilter, attributeName)
@@ -674,7 +674,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       try {
         connectedServer = getConnectedServerInfo(connection)
         log.info(
-            "$TAG/removeUsersFromGroup Removing users $dmsUsernames from group '$group' using AD server: $connectedServer")
+            "$TAG/removeUsersFromGroup Removing users $dmsUsernames from group '${logSafe(group)}' using AD server: $connectedServer")
       } finally {
         ldapPool.releaseConnection(connection)
       }
@@ -737,11 +737,11 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
       val duration = System.currentTimeMillis() - startTime
       log.info(
-          "$TAG/removeUsersFromGroup Successfully removed ${usersToRemove.size} users from group '$group' using AD server $connectedServer in ${duration}ms")
+          "$TAG/removeUsersFromGroup Successfully removed ${usersToRemove.size} users from group '${logSafe(group)}' using AD server $connectedServer in ${duration}ms")
     } catch (e: Exception) {
       val duration = System.currentTimeMillis() - startTime
       log.error(
-          "$TAG/removeUsersFromGroup Failed to remove users from group '$group' using AD server $connectedServer after ${duration}ms",
+          "$TAG/removeUsersFromGroup Failed to remove users from group '${logSafe(group)}' using AD server $connectedServer after ${duration}ms",
           e)
       throw e
     }
@@ -758,7 +758,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       try {
         connectedServer = getConnectedServerInfo(connection)
         log.info(
-            "$TAG/addUsersToGroup Adding users $dmsUsernames to group '$group' using AD server: $connectedServer")
+            "$TAG/addUsersToGroup Adding users $dmsUsernames to group '${logSafe(group)}' using AD server: $connectedServer")
       } finally {
         ldapPool.releaseConnection(connection)
       }
@@ -828,11 +828,11 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
 
       val duration = System.currentTimeMillis() - startTime
       log.info(
-          "$TAG/addUsersToGroup Successfully added ${usersToAdd.size} users to group '$group' using AD server $connectedServer in ${duration}ms")
+          "$TAG/addUsersToGroup Successfully added ${usersToAdd.size} users to group '${logSafe(group)}' using AD server $connectedServer in ${duration}ms")
     } catch (e: Exception) {
       val duration = System.currentTimeMillis() - startTime
       log.error(
-          "$TAG/addUsersToGroup Failed to add users to group '$group' using AD server $connectedServer after ${duration}ms",
+          "$TAG/addUsersToGroup Failed to add users to group '${logSafe(group)}' using AD server $connectedServer after ${duration}ms",
           e)
       throw e
     }
@@ -1037,6 +1037,67 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
   }
 
   /** {@inheritDoc} */
+  override fun findGroupByGuid(objectGuid: String): GroupIdentity? {
+    val guidBytes = AdGuid.toBytes(objectGuid) ?: return null
+    val entry =
+        ldapPool
+            .search(
+                "DC=dms,DC=local",
+                SearchScope.SUB,
+                Filter.createANDFilter(
+                    Filter.createEqualityFilter("objectGUID", guidBytes),
+                    Filter.createEqualityFilter("objectCategory", "group"),
+                ),
+                "cn",
+                "distinguishedName",
+                "objectGUID",
+            )
+            .searchEntries
+            .singleOrNull() ?: return null
+    return GroupIdentity(
+        name = entry.getAttributeValue("cn").orEmpty(),
+        distinguishedName = entry.dn,
+        objectGuid = AdGuid.fromBytes(entry.getAttributeValueBytes("objectGUID")) ?: objectGuid)
+  }
+
+  /** {@inheritDoc} */
+  override fun addUsersToGroupByDn(dmsUsernames: List<String>, groupDn: String) {
+    if (!DirectoryOus.isInMainGroupOu(groupDn)) {
+      throw GroupMembershipRefusedException(groupDn, "it is not in the main group OU")
+    }
+    if (dmsUsernames.isEmpty()) return
+    if (ldapPool.getEntry(groupDn, "distinguishedName") == null) {
+      throw GroupNotFoundException(groupDn)
+    }
+    val users =
+        ldapPool
+            .search(
+                SearchRequest(
+                    "DC=dms,DC=local",
+                    SearchScope.SUB,
+                    Filter.createANDFilter(
+                        Filter.createEqualityFilter("objectCategory", "person"),
+                        Filter.createEqualityFilter("objectClass", "user"),
+                        Filter.createORFilter(
+                            dmsUsernames.map { Filter.createEqualityFilter("sAMAccountName", it) }),
+                    ),
+                    "sAMAccountName",
+                    "distinguishedName"))
+            .searchEntries
+            .filter { it.getAttributeValue("sAMAccountName") in dmsUsernames }
+    val missing = dmsUsernames.size - users.size
+    if (missing > 0) log.error("$TAG/addUsersToGroupByDn $missing users not found in AD")
+    users.forEach { user ->
+      try {
+        ldapPool.modify(groupDn, Modification(ModificationType.ADD, "member", user.dn))
+      } catch (e: LDAPException) {
+        if (!isAlreadyMember(e.resultCode)) throw e
+      }
+    }
+    log.info("$TAG/addUsersToGroupByDn Added ${users.size} users to ${logSafe(groupDn)}")
+  }
+
+  /** {@inheritDoc} */
   override fun addGroupToParentGroup(groupName: String, parentGroupDn: String): Boolean {
     val child =
         selectUniqueGroup(groupName, searchGroupsNamed(groupName))
@@ -1045,13 +1106,13 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
     try {
       ldapPool.modify(parentGroupDn, Modification(ModificationType.ADD, "member", child.dn))
     } catch (e: LDAPException) {
-      when (e.resultCode) {
-        ResultCode.ATTRIBUTE_OR_VALUE_EXISTS -> return false
-        ResultCode.NO_SUCH_OBJECT -> throw GroupNotFoundException(parentGroupDn)
+      when {
+        isAlreadyMember(e.resultCode) -> return false
+        e.resultCode == ResultCode.NO_SUCH_OBJECT -> throw GroupNotFoundException(parentGroupDn)
         else -> throw e
       }
     }
-    log.info("$TAG/addGroupToParentGroup Added '$groupName' to a parent group")
+    log.info("$TAG/addGroupToParentGroup Added '${logSafe(groupName)}' to a parent group")
     return true
   }
 
@@ -1084,10 +1145,10 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       ldapPool.delete(entry.dn)
     } catch (e: LDAPException) {
       if (e.resultCode == ResultCode.NO_SUCH_OBJECT) return false
-      log.error("$TAG/deleteGroup Failed to delete group '$groupName'", e)
+      log.error("$TAG/deleteGroup Failed to delete group '${logSafe(groupName)}'", e)
       throw e
     }
-    log.info("$TAG/deleteGroup Deleted group '$groupName'")
+    log.info("$TAG/deleteGroup Deleted group '${logSafe(groupName)}'")
     return true
   }
 
@@ -1113,14 +1174,14 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       ldapPool.add(Entry(plan.dn, attributes))
     } catch (e: LDAPException) {
       if (e.resultCode != ResultCode.ENTRY_ALREADY_EXISTS) {
-        log.error("$TAG/createGroup Failed to create group '${spec.name}'", e)
+        log.error("$TAG/createGroup Failed to create group '${logSafe(spec.name)}'", e)
         throw e
       }
       val raced = planGroupCreate(spec, searchGroupsNamed(spec.name))
       return existingResult((raced as? GroupCreatePlan.Exists)?.entry ?: throw e)
     }
     val created = ldapPool.getEntry(plan.dn, "distinguishedName", "objectGUID")
-    log.info("$TAG/createGroup Created group '${spec.name}'")
+    log.info("$TAG/createGroup Created group '${logSafe(spec.name)}'")
     return AdGroupCreateResult(created?.dn ?: plan.dn, created?.let { guidOf(it) }, created = true)
   }
 
@@ -1131,7 +1192,7 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
       AdGuid.fromBytes(entry.getAttributeValueBytes("objectGUID"))
 
   private val duplicateNameWarning =
-      OncePerName { log.warn("$TAG/getAllGroups duplicate name in two OUs: $it") }
+      OncePerName { log.warn("$TAG/getAllGroups duplicate name in two OUs: ${logSafe(it)}") }
 
   companion object {
     private const val TAG = "ActiveDirectoryClient"

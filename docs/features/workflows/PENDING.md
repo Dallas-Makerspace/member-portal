@@ -33,6 +33,9 @@ Key behaviours to remember:
 - `groups` has `object_guid` (unique), `status` (default ACTIVE), `archived_at`. 166 rows, 165 with a GUID, all ACTIVE.
   The one NULL row is id 54, a built-in group outside both group OUs; it stays NULL on purpose.
 - 12 stale groups (not in AD) and their 102 `group_history` rows were deleted on 2026-10-12.
+- Stage 4 SQL (`groups-archive-migration.sql`) was applied on 2026-10-15: unique indexes now live on generated
+  `active_name`/`active_dn` (NULL for ARCHIVED rows), plain indexes on `name`/`dn`, plus `archived_by`,
+  `archive_reason`, `archive_run_id`. Backup: `groups_backup_20261015` (170 rows).
 - **Backup tables still in the DB** (drop when you are sure): `groups_backup_20261012` (166 rows, pre-GUID-backfill),
   `groups_backup_20261013` (166 rows, pre-DN-backfill), `groups_dropped_20261012` (12 rows),
   `group_history_dropped_20261012` (102 rows).
@@ -102,7 +105,7 @@ Key behaviours to remember:
 7. [ ] Remaining use cases (offboarding, onboarding, badge replacement, group merge, data export/erasure), approval
    gates, notifications on completion, dashboard polish.
 
-### 3.3 groups objectGUID stage 4 (not started)
+### 3.3 groups objectGUID stage 4 (SQL APPLIED to prod 2026-10-15; code ships with the archive feature)
 
 Stage 4 is the only unfinished stage. Lookup is already GUID-first, so what remains is:
 

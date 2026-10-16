@@ -286,6 +286,18 @@ class GroupArchiveRepositoryTest {
   }
 
   @Test
+  fun `objectGuidOf reads the live row only`() = runBlocking {
+    insertGroup("Team A", "DISABLED", guid)
+    insertGroup("Team B", "ARCHIVED", otherGuid)
+    insertGroup("Team C")
+
+    assertEquals(guid, archive.objectGuidOf("team a"))
+    assertNull(archive.objectGuidOf("Team B"))
+    assertNull(archive.objectGuidOf("Team C"))
+    assertNull(archive.objectGuidOf("Nope"))
+  }
+
+  @Test
   fun `updateObjectGuid ignores archived rows, missing groups and malformed GUIDs`() = runBlocking {
     val archived = insertGroup("Team A", "ARCHIVED", guid)
     val live = insertGroup("Team B", "ACTIVE", otherGuid)

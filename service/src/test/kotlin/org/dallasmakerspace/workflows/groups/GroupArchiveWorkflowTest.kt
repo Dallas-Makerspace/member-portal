@@ -296,6 +296,22 @@ class GroupArchiveWorkflowTest {
   }
 
   @Test
+  fun `the group name is bounded and free of control characters`() {
+    val wf = ArchiveEngine().workflow
+
+    fun problems(group: String) = wf.validateInput(GroupArchiveInput(group, REASON))
+
+    assertTrue(problems("g".repeat(256)).isEmpty())
+    assertTrue(problems("  Test Group  ").isEmpty())
+    assertTrue(problems("g".repeat(257)).single().contains("256"))
+    assertTrue(problems("").single().contains("groupName"))
+    assertTrue(problems("   ").single().contains("groupName"))
+    listOf("a\nb", "a\rb", "a\u0000b", "a\tb", "a\u001bb").forEach {
+      assertTrue(problems(it).single().contains("control"), it)
+    }
+  }
+
+  @Test
   fun `an out of range reason or missing group is rejected before anything is evaluated`() =
       runBlocking<Unit> {
         val engine = ArchiveEngine()
@@ -395,7 +411,8 @@ class GroupArchiveWorkflowTest {
     assertTrue(plan.canStart)
     assertTrue(
         plan.steps[0].messages.any {
-          it.contains("member of 2 other group(s)") && it.contains("cannot restore")
+          it.contains("member of 2 other group(s)") &&
+              it.contains("restores them only for groups under the main group location")
         })
   }
 
@@ -569,7 +586,8 @@ class GroupArchiveWorkflowTest {
           engine.directory.calls.all {
             it == "deleteGroup:$GROUP" ||
                 it == "getGroup:$GROUP" ||
-                it == "getGroupStrict:$GROUP"
+                it == "getGroupStrict:$GROUP" ||
+                it.startsWith("findGroupByGuid:")
           },
           engine.directory.calls.toString())
     }
@@ -648,7 +666,7 @@ class GroupArchiveWorkflowTest {
   }
 
   @Test
-  fun `a group recreated under the same name while the run is paused is not deleted`() {
+  fun `a group replaced under the same name while the run is paused is left alone`() {
     val engine = ArchiveEngine()
     engine.directory.failDelete = GroupDeletionRefusedException(GROUP, "refused")
     withExecutor(engine) {
@@ -659,9 +677,10 @@ class GroupArchiveWorkflowTest {
 
       val retried = with(engine) { operateAndAwait(paused.id, WorkflowOperatorAction.RETRY) }
 
-      assertEquals(WorkflowRunStatus.PAUSED, retried.status)
-      assertTrue(retried.steps[3].error!!.contains("not the group that was snapshotted"))
-      assertNotNull(engine.directory.find(GROUP))
+      // the snapshotted group is gone (by GUID), so the delete is a no-op and the stranger stays
+      assertEquals(WorkflowRunStatus.SUCCEEDED, retried.status)
+      assertEquals(WorkflowStepStatus.SUCCEEDED, retried.steps[3].status)
+      assertEquals("cccccccc-0000-0000-0000-000000000003", engine.directory.find(GROUP)!!.guid)
       assertEquals(1, engine.directory.deleteGuids.size)
     }
   }

@@ -37,6 +37,9 @@ interface IGroupArchiveRepository {
    */
   suspend fun updateObjectGuid(groupName: String, objectGuid: String): Boolean
 
+  /** The GUID stored on the group's live (ACTIVE/DISABLED) row, or null if none or unset. */
+  suspend fun objectGuidOf(groupName: String): String?
+
   /** Status of the group's live row, else ARCHIVED if only archived rows exist, else null. */
   suspend fun statusOf(groupName: String): String?
 

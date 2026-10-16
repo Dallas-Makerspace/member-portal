@@ -73,6 +73,17 @@ interface IActiveDirectoryClient {
    */
   fun countManagedObjects(groupName: String): ManagedObjectCounts
 
+  /** The group with this objectGUID, if one exists (read-only; no member load). */
+  fun findGroupByGuid(objectGuid: String): GroupIdentity?
+
+  /**
+   * Adds users to the group at exactly [groupDn] (idempotent; members already there are skipped).
+   *
+   * @throws GroupMembershipRefusedException if the group is outside the main group OU
+   * @throws GroupNotFoundException if there is no group at that DN
+   */
+  fun addUsersToGroupByDn(dmsUsernames: List<String>, groupDn: String)
+
   /**
    * Adds the named group as a member of [parentGroupDn] (idempotent). Both must be inside the main
    * group OU.

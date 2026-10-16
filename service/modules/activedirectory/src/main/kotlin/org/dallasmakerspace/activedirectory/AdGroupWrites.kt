@@ -2,6 +2,7 @@ package org.dallasmakerspace.activedirectory
 
 import com.unboundid.ldap.sdk.DN
 import com.unboundid.ldap.sdk.RDN
+import com.unboundid.ldap.sdk.ResultCode
 import com.unboundid.ldap.sdk.SearchResultEntry
 import org.dallasmakerspace.models.DirectoryOus
 import org.dallasmakerspace.models.ProtectedGroups
@@ -103,6 +104,22 @@ internal fun selectUniqueGroup(
   return inOus.singleOrNull() ?: preferredByGroupOu(entries)
 }
 
+/** A group found by objectGUID: just enough to tell whether it is still the one we meant. */
+data class GroupIdentity(val name: String, val distinguishedName: String, val objectGuid: String)
+
+private const val LOG_NAME_MAX = 200
+
+/** Control characters become '_' and long text is cut, so a name cannot forge or flood a log. */
+internal fun logSafe(value: String?): String {
+  val text = value.orEmpty()
+  val cleaned = text.take(LOG_NAME_MAX).map { if (it.isISOControl()) '_' else it }.joinToString("")
+  return if (text.length > LOG_NAME_MAX) "$cleaned..." else cleaned
+}
+
+/** The result codes LDAP and AD answer when the member is already in the group. */
+internal fun isAlreadyMember(code: ResultCode): Boolean =
+    code == ResultCode.ATTRIBUTE_OR_VALUE_EXISTS || code == ResultCode.ENTRY_ALREADY_EXISTS
+
 /** Guards a parent-membership write: both groups must be inside the main group OU. */
 internal fun requireMainOuMembership(groupName: String, childDn: String, parentDn: String) {
   if (!DirectoryOus.isInMainGroupOu(childDn)) {
@@ -163,6 +180,9 @@ internal fun planGroupCreate(
   val dn = buildGroupDn(spec.name, spec.parentOuDn)
   val wanted = DN(dn)
   sameNameEntries.firstOrNull { DN(it.dn) == wanted }?.let {
+    if (sameNameEntries.count { e -> DirectoryOus.isInGroupOu(e.dn) } > 1) {
+      throw GroupCreateRefusedException(spec.name, "more than one group with that name exists")
+    }
     return GroupCreatePlan.Exists(it)
   }
   if (sameNameEntries.isNotEmpty()) {
