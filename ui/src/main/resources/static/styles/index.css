@@ -101,6 +101,51 @@
     }
 }
 
+/* ── Members to Follow ── */
+#membersToFollowGrid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#membersToFollowGrid .dms-member-grid-item {
+    flex: 0 1 215px;
+    min-width: 0;
+}
+
+/* Skeleton card, same footprint as a mini member card */
+#membersToFollowGrid .member-skeleton {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.member-skeleton-avatar {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    border-radius: 50%;
+}
+
+.member-skeleton-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.member-skeleton-lines .shimmer-title,
+.member-skeleton-lines .shimmer-meta {
+    width: 80%;
+}
+
+/* Two per row on phones (grid gap is 12px) */
+@media screen and (max-width: 576px) {
+    #membersToFollowGrid .dms-member-grid-item {
+        flex: 0 0 calc(50% - 6px);
+    }
+}
+
 /* ── Suggested Events Widget ── */
 .suggested-events-section {
     margin: 2rem 0;

@@ -1214,7 +1214,11 @@ fun Application.configureRouting() {
     val profileSubscriptionService by lazy {
       AppComponentHolder.instance.getProfileSubscriptionService()
     }
-    profileSubscriptionRoutes(profileSubscriptionService, featureFlagService)
+    val followSuggestionService by lazy {
+      AppComponentHolder.instance.getFollowSuggestionService()
+    }
+    profileSubscriptionRoutes(
+        profileSubscriptionService, featureFlagService, followSuggestionService)
 
     /** Upload/remove/serve a member's profile photo * */
     val profilePhotoService by lazy { AppComponentHolder.instance.getProfilePhotoService() }

@@ -62,6 +62,7 @@ import org.dallasmakerspace.server.routes.SignOutHandler
 import org.dallasmakerspace.server.routes.SmartWaiverWebhookHandler
 import org.dallasmakerspace.server.routes.DiscourseWebhookHandler
 import org.dallasmakerspace.server.routes.SparkPostWebhookHandler
+import org.dallasmakerspace.server.routes.MembersToFollowHandler
 import org.dallasmakerspace.server.routes.SuggestedEventsHandler
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
 import org.dallasmakerspace.server.workflows.WorkflowApiHandler
@@ -377,6 +378,15 @@ class RoutesModule {
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
   ): IRouteHandler = SettingsBannerHandler(loggerFactory, userInfoProvider, memberService)
+
+  @IntoMap
+  @Provides
+  @StringKey("/api/members-to-follow")
+  fun providesMembersToFollowHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler = MembersToFollowHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
   @IntoMap
   @Provides

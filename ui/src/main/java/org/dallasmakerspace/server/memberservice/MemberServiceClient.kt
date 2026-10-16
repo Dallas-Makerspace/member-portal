@@ -524,6 +524,36 @@ constructor(
     }
   }
 
+  /** Usernames suggested for [username] to follow; empty when the follow feature is off. */
+  suspend fun getFollowSuggestions(
+      username: String,
+      sessionId: String?,
+      limit: Int = 6,
+  ): List<String> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val url = "$baseUrl/members/$username/follow-suggestions?limit=$limit"
+      val result = dmsHttpClient.get(url, apiHeaders)
+      (result["data"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+    } catch (ex: Exception) {
+      log.warn("Failed to get follow suggestions for: $username", ex)
+      emptyList()
+    }
+  }
+
+  /** Follow-suggestion breakdown for [username] (infra debug panel); null on failure. */
+  suspend fun getFollowSuggestionsDebug(username: String, sessionId: String?): Map<*, *>? {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId)
+      val result =
+          dmsHttpClient.get("$baseUrl/members/$username/follow-suggestions/debug", apiHeaders)
+      result["data"] as? Map<*, *>
+    } catch (ex: Exception) {
+      log.warn("Failed to get follow suggestion debug for: $username", ex)
+      null
+    }
+  }
+
   /** Usernames that follow [username]. */
   suspend fun getFollowers(username: String, sessionId: String?): List<String> {
     return try {

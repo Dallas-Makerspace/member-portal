@@ -88,6 +88,18 @@ constructor(private val calendarRepository: CalendarRepository, loggerFactory: L
     return calendarRepository.getAttendedOrganizers(username, limit)
   }
 
+  /** Gets members who attended a same-named event as [username] in the last 6 months. */
+  suspend fun getClassmates(username: String): List<String> {
+    log.info("Getting classmates for: $username")
+    return calendarRepository.getClassmates(username)
+  }
+
+  /** Gets the top organizers by events run in the last 6 months, most active first. */
+  suspend fun getTopOrganizers(limit: Int = 30): List<String> {
+    log.info("Getting top organizers")
+    return calendarRepository.getTopOrganizers(limit = limit)
+  }
+
   /**
    * Gets upcoming events organized by any of the given organizer usernames.
    *

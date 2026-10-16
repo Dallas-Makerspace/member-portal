@@ -139,6 +139,9 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.SUGGESTED_COURSES.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.MEMBERS_TO_FOLLOW.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.COMMITTEE_COURSES.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

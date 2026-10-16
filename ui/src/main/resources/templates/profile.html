@@ -489,6 +489,22 @@
                 </div>
             </details>
 
+            <!-- Members to Follow Debug Widget (infra only) -->
+            <details id="profileFollowDetails" class="card shadow-sm overflow-hidden mt-4 suggested-debug-widget"
+                     th:if="${authz.can('MANAGE_MEMBERS')}">
+                <summary class="card-body pt-3 pb-3 suggested-debug-summary">
+                    <span class="fw-semibold">Members to Follow</span>
+                    <span class="text-sm text-danger ms-2">[Infra only]</span>
+                    <span class="text-muted small ms-2" th:text="'for @' + ${preferred_username}"></span>
+                </summary>
+                <div class="card-body pt-0">
+                    <div id="profileFollowDebug" class="suggested-debug-panel" style="display:none;"></div>
+                    <div id="profileFollowContent" class="dms-member-grid mt-3" style="display:none;"></div>
+                    <p id="profileFollowEmpty" class="suggested-events-empty" style="display:none;">No members to
+                        suggest.</p>
+                </div>
+            </details>
+
         </div>
         <div class="col-md-8">
             <!-- Link Accounts card: one call to action per account not linked yet (unlink is in Settings) -->
@@ -1168,6 +1184,84 @@
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
+    })();
+</script>
+
+<!-- Members to Follow Debug Widget (infra only) -->
+<script th:if="${authz.can('MANAGE_MEMBERS')}" type="module" src="/static/js/dms-member-card.js"></script>
+<script th:if="${authz.can('MANAGE_MEMBERS')}" th:inline="javascript">
+    (function() {
+        'use strict';
+
+        const username = /*[[${preferred_username}]]*/ '';
+        const details = document.getElementById('profileFollowDetails');
+        if (!details) return;
+
+        const content = document.getElementById('profileFollowContent');
+        const empty = document.getElementById('profileFollowEmpty');
+        const debugPanel = document.getElementById('profileFollowDebug');
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function row(label, value) {
+            return '<div class="suggested-debug-row"><span class="suggested-debug-label">' + label + ':</span> ' + value + '</div>';
+        }
+
+        function list(items) {
+            return escapeHtml((items || []).join(', ') || '—');
+        }
+
+        let loaded = false;
+        details.addEventListener('toggle', function() {
+            if (!details.open || loaded) return;
+            loaded = true;
+
+            fetch('/api/members-to-follow?username=' + encodeURIComponent(username))
+                .then(function(res) { return res.ok ? res.json() : Promise.reject(res.status); })
+                .then(function(data) {
+                    var debug = data.debug || {};
+                    var flag = debug.flagEnabled ? '<span class="text-success">On</span>' : '<span class="text-danger">Off</span>';
+                    var cached = debug.cached ? '<span class="text-success">Yes (served from daily cache)</span>' : 'No';
+                    debugPanel.innerHTML =
+                        (debug.error ? '<div class="suggested-debug-row text-danger">Service debug call failed</div>' : '') +
+                        row('Follow flag for @' + escapeHtml(username), flag) +
+                        row('Day (Chicago)', escapeHtml(debug.date || '—')) +
+                        row('Cached', cached) +
+                        row('Classmates found', escapeHtml(debug.classmateCount == null ? '—' : debug.classmateCount)) +
+                        row('Followed by classmates', list(debug.tierOne)) +
+                        row('Top organizers (shuffled)', list(debug.tierTwo)) +
+                        row('Candidate pool', list(debug.candidates)) +
+                        row('Already following', escapeHtml(debug.following == null ? '—' : debug.following)) +
+                        row('Dropped (disabled/unresolved)', list(debug.disabledDropped));
+                    debugPanel.style.display = '';
+
+                    var members = data.members || [];
+                    if (!members.length) {
+                        empty.style.display = '';
+                        return;
+                    }
+                    members.forEach(function(m) {
+                        var item = document.createElement('div');
+                        item.className = 'dms-member-grid-item';
+                        var card = document.createElement('dms-member-card');
+                        card.setAttribute('username', m.username);
+                        card.setAttribute('state', 'mini');
+                        item.appendChild(card);
+                        content.appendChild(item);
+                    });
+                    content.style.display = '';
+                })
+                .catch(function() {
+                    loaded = false;
+                    empty.textContent = 'Could not load suggestions.';
+                    empty.style.display = '';
+                });
+        });
     })();
 </script>
 

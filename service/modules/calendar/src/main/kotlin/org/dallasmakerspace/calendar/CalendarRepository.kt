@@ -264,6 +264,94 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   }
 
   /**
+   * Fetches usernames of members who attended an event with the same name as one [username]
+   * attended, both within the last [months] months. Excludes [username].
+   */
+  suspend fun getClassmates(username: String, months: Int = 6, limit: Int = 500): List<String> {
+    val escaped = username.replace("'", "''")
+    val query =
+        """
+      SET STATEMENT max_statement_time=1.5 FOR
+      SELECT DISTINCT r2.ad_username
+      FROM `dms-calendar`.registrations r
+      JOIN `dms-calendar`.events e ON r.event_id = e.id
+      JOIN `dms-calendar`.events e2 ON e2.name = e.name
+      JOIN `dms-calendar`.registrations r2 ON r2.event_id = e2.id
+      WHERE r.ad_username = '$escaped'
+        AND r.attended = 1
+        AND e.event_start >= NOW() - INTERVAL $months MONTH
+        AND e2.event_start >= NOW() - INTERVAL $months MONTH
+        AND r2.attended = 1
+        AND r2.ad_username IS NOT NULL
+        AND r2.ad_username <> '$escaped'
+      LIMIT $limit
+    """
+
+    log.debug("Fetching classmates for member: $username (months: $months)")
+
+    val result =
+        try {
+          genericRepository.getReportData(query)
+        } catch (ex: Exception) {
+          if (ex.isStatementTimeout()) {
+            log.warn("Query timed out fetching classmates for member: $username")
+          } else {
+            log.warn("Failed fetching classmates for member: $username - ${ex.message}")
+          }
+          return emptyList()
+        }
+
+    val classmates =
+        result?.data?.mapNotNull { row ->
+          row["ad_username"]?.toString()?.takeIf { it.isNotBlank() }
+        } ?: emptyList()
+    log.debug("Found ${classmates.size} classmates for member: $username")
+    return classmates
+  }
+
+  /**
+   * Fetches organizer usernames ranked by the number of events they ran in the last [months]
+   * months (events already started), most active first.
+   */
+  suspend fun getTopOrganizers(months: Int = 6, limit: Int = 30): List<String> {
+    val query =
+        """
+      SET STATEMENT max_statement_time=1.5 FOR
+      SELECT c.ad_username
+      FROM `dms-calendar`.events e
+      JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
+      WHERE e.event_start >= NOW() - INTERVAL $months MONTH
+        AND e.event_start <= NOW()
+        AND e.status = 'approved'
+        AND c.ad_username IS NOT NULL
+      GROUP BY c.ad_username
+      ORDER BY COUNT(*) DESC
+      LIMIT $limit
+    """
+
+    log.debug("Fetching top organizers (months: $months, limit: $limit)")
+
+    val result =
+        try {
+          genericRepository.getReportData(query)
+        } catch (ex: Exception) {
+          if (ex.isStatementTimeout()) {
+            log.warn("Query timed out fetching top organizers")
+          } else {
+            log.warn("Failed fetching top organizers - ${ex.message}")
+          }
+          return emptyList()
+        }
+
+    val organizers =
+        result?.data?.mapNotNull { row ->
+          row["ad_username"]?.toString()?.takeIf { it.isNotBlank() }
+        } ?: emptyList()
+    log.debug("Found ${organizers.size} top organizers (months: $months)")
+    return organizers
+  }
+
+  /**
    * Fetches upcoming events organized by any of the given organizer usernames.
    *
    * @param organizers The list of organizer AD usernames to fetch events for.

@@ -21,6 +21,9 @@ import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.api.ApiResponse
+import org.dallasmakerspace.notifications.FollowSuggestionDebug
+import org.dallasmakerspace.notifications.FollowSuggestionResult
+import org.dallasmakerspace.notifications.FollowSuggestionService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.junit.Before
 import org.junit.Test
@@ -32,10 +35,12 @@ class ProfileSubscriptionRoutesTest {
 
   private lateinit var mockService: ProfileSubscriptionService
   private lateinit var mockFeatureFlagService: FeatureFlagService
+  private lateinit var mockSuggestionService: FollowSuggestionService
 
   @Before
   fun setUp() {
     mockService = mock()
+    mockSuggestionService = mock()
     mockFeatureFlagService = mock()
     runBlocking {
       whenever(mockFeatureFlagService.isEnabledForUsername(ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
@@ -58,7 +63,9 @@ class ProfileSubscriptionRoutesTest {
       install(Authentication) {
         apiKey(appConfig(), ApiKeyAuthProvider.X_API_KEY) { validate { null } }
       }
-      routing { profileSubscriptionRoutes(mockService, mockFeatureFlagService) }
+      routing {
+        profileSubscriptionRoutes(mockService, mockFeatureFlagService, mockSuggestionService)
+      }
     }
     client = createClient {
       install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
@@ -204,6 +211,84 @@ class ProfileSubscriptionRoutesTest {
     assertEquals(listOf("jane", "bob"), apiResponse.data)
     Unit
   }
+
+  @Test
+  fun `get follow-suggestions should return suggestions when the feature is enabled`() =
+      testApplication {
+        configureApp()
+        runBlocking {
+          whenever(mockSuggestionService.suggest("jdoe", 6)).thenReturn(listOf("asmith", "bkim"))
+        }
+
+        val response =
+            client.get("/members/jdoe/follow-suggestions") {
+              header("X-Api-Key", "test-key")
+              header("X-Api-Client", "test-client")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val apiResponse = response.body<ApiResponse<List<String>>>()
+        assertEquals(listOf("asmith", "bkim"), apiResponse.data)
+        Unit
+      }
+
+  @Test
+  fun `get follow-suggestions should be empty when the feature is disabled`() = testApplication {
+    configureApp()
+    runBlocking {
+      whenever(
+              mockFeatureFlagService.isEnabledForUsername(
+                  ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
+          .thenReturn(false)
+    }
+
+    val response =
+        client.get("/members/jdoe/follow-suggestions") {
+          header("X-Api-Key", "test-key")
+          header("X-Api-Client", "test-client")
+        }
+
+    assertEquals(HttpStatusCode.OK, response.status)
+    val apiResponse = response.body<ApiResponse<List<String>>>()
+    assertEquals(emptyList<String>(), apiResponse.data)
+    Unit
+  }
+
+  @Test
+  fun `get follow-suggestions debug computes and reports the flag even when disabled`() =
+      testApplication {
+        configureApp()
+        runBlocking {
+          whenever(
+                  mockFeatureFlagService.isEnabledForUsername(
+                      ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
+              .thenReturn(false)
+          whenever(mockSuggestionService.explain("jdoe", 6))
+              .thenReturn(
+                  FollowSuggestionResult(
+                      listOf("asmith"),
+                      FollowSuggestionDebug(
+                          date = "2026-10-16",
+                          cached = false,
+                          classmateCount = 3,
+                          tierOne = listOf("asmith"),
+                          tierTwo = emptyList(),
+                          candidates = listOf("asmith"),
+                          following = 0)))
+        }
+
+        val response =
+            client.get("/members/jdoe/follow-suggestions/debug") {
+              header("X-Api-Key", "test-key")
+              header("X-Api-Client", "test-client")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val data = response.body<ApiResponse<Map<String, Any?>>>().data!!
+        assertEquals(listOf("asmith"), data["suggestions"])
+        assertEquals(false, data["flagEnabled"])
+        Unit
+      }
 
   @Test
   fun `get followers should return the usernames following the member`() = testApplication {

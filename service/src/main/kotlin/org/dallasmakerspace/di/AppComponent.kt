@@ -34,6 +34,7 @@ import org.dallasmakerspace.members.ProfilePhotoService
 import org.dallasmakerspace.moodle.MoodleCatalogService
 import org.dallasmakerspace.moodle.MoodleMemberCoursesService
 import org.dallasmakerspace.notifications.DigestProcessor
+import org.dallasmakerspace.notifications.FollowSuggestionService
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationWorker
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
@@ -150,6 +151,8 @@ interface AppComponent {
   fun getDigestProcessor(): DigestProcessor
 
   fun getProfileSubscriptionService(): ProfileSubscriptionService
+
+  fun getFollowSuggestionService(): FollowSuggestionService
 
   fun getObjectStoreFactory(): ObjectStoreFactory
 

@@ -70,6 +70,44 @@
     </div>
 </section>
 
+<!-- Members to Follow: skeleton cards until the suggestions load; hidden if there are none -->
+<section th:if="${followsMenuEnabled}" id="membersToFollowSection"
+         class="suggested-events-section members-to-follow-section">
+    <div class="container">
+        <h2 class="suggested-events-heading">Members to Follow</h2>
+        <div id="membersToFollowGrid" class="dms-member-grid">
+            <div class="dms-member-grid-item member-skeleton" aria-hidden="true">
+                <div class="shimmer-line member-skeleton-avatar"></div>
+                <div class="member-skeleton-lines">
+                    <div class="shimmer-line shimmer-title"></div>
+                    <div class="shimmer-line shimmer-meta"></div>
+                </div>
+            </div>
+            <div class="dms-member-grid-item member-skeleton" aria-hidden="true">
+                <div class="shimmer-line member-skeleton-avatar"></div>
+                <div class="member-skeleton-lines">
+                    <div class="shimmer-line shimmer-title"></div>
+                    <div class="shimmer-line shimmer-meta"></div>
+                </div>
+            </div>
+            <div class="dms-member-grid-item member-skeleton" aria-hidden="true">
+                <div class="shimmer-line member-skeleton-avatar"></div>
+                <div class="member-skeleton-lines">
+                    <div class="shimmer-line shimmer-title"></div>
+                    <div class="shimmer-line shimmer-meta"></div>
+                </div>
+            </div>
+            <div class="dms-member-grid-item member-skeleton" aria-hidden="true">
+                <div class="shimmer-line member-skeleton-avatar"></div>
+                <div class="member-skeleton-lines">
+                    <div class="shimmer-line shimmer-title"></div>
+                    <div class="shimmer-line shimmer-meta"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- Suggested Events Widget -->
 <section class="suggested-events-section">
     <div class="container">
@@ -179,6 +217,33 @@
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
+    });
+</script>
+
+<script th:if="${followsMenuEnabled}" type="module" src="/static/js/dms-member-card.js"></script>
+<script th:if="${followsMenuEnabled}">
+    document.addEventListener('DOMContentLoaded', function () {
+        var VISIBLE = 4;
+        var section = document.getElementById('membersToFollowSection');
+        function hideSection() { section.style.display = 'none'; }
+        fetch('/api/members-to-follow')
+            .then(function (res) { return res.ok ? res.json() : Promise.reject(res.status); })
+            .then(function (data) {
+                var members = ((data && data.enabled && data.members) || []).slice(0, VISIBLE);
+                if (members.length === 0) { hideSection(); return; }
+                var grid = document.getElementById('membersToFollowGrid');
+                grid.replaceChildren();
+                members.forEach(function (m) {
+                    var item = document.createElement('div');
+                    item.className = 'dms-member-grid-item';
+                    var card = document.createElement('dms-member-card');
+                    card.setAttribute('username', m.username);
+                    card.setAttribute('state', 'mini');
+                    item.appendChild(card);
+                    grid.appendChild(item);
+                });
+            })
+            .catch(hideSection);
     });
 </script>
 

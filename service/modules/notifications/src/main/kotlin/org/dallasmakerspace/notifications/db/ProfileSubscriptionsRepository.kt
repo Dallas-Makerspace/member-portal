@@ -8,6 +8,7 @@ import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.ProfileResolver
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
@@ -88,6 +89,28 @@ class ProfileSubscriptionsRepository @Inject constructor(loggerFactory: LoggerFa
             .map { it[ProfileSubscriptionsTable.profileId] }
     ProfileResolver.resolveUsernames(followerIds).values.sorted()
   }
+
+  /**
+   * Enabled members followed by any of [followerUsernames], most-followed-by-that-group first (ties
+   * by username). The followers themselves are not excluded - callers filter as needed.
+   */
+  suspend fun getMostFollowedBy(followerUsernames: Collection<String>, limit: Int): List<String> =
+      suspendTransaction {
+        val followerIds = ProfileResolver.findProfileIds(followerUsernames).values
+        if (followerIds.isEmpty()) return@suspendTransaction emptyList()
+        val counts =
+            ProfileSubscriptionsTable.select {
+                  ProfileSubscriptionsTable.profileId inList followerIds
+                }
+                .groupingBy { it[ProfileSubscriptionsTable.followedProfileId] }
+                .eachCount()
+        val usernames = ProfileResolver.resolveEnabledUsernames(counts.keys)
+        counts.entries
+            .mapNotNull { (id, count) -> usernames[id]?.let { it to count } }
+            .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
+            .take(limit)
+            .map { it.first }
+      }
 
   private fun isDuplicateKey(e: Exception): Boolean =
       e.message?.contains("Duplicate") == true || e.message?.contains("unique") == true

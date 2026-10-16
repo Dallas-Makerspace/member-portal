@@ -15,6 +15,7 @@ import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.core.api.ApiResponse
 import org.dallasmakerspace.core.api.Status
+import org.dallasmakerspace.notifications.FollowSuggestionService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 
 /**
@@ -30,6 +31,7 @@ import org.dallasmakerspace.notifications.ProfileSubscriptionService
 fun Route.profileSubscriptionRoutes(
     service: ProfileSubscriptionService,
     featureFlagService: FeatureFlagService,
+    suggestionService: FollowSuggestionService,
 ) {
   authenticate(ApiKeyAuthProvider.X_API_KEY) {
     authorize(Permission.MANAGE_MEMBERS) {
@@ -76,6 +78,8 @@ fun Route.profileSubscriptionRoutes(
         call.respond(ApiResponse(Status.SUCCESS, "$username follows ${following.size}", following))
       }
 
+      followSuggestionsRoute(featureFlagService, suggestionService)
+
       get("/members/{username}/followers") {
         val username = call.parameters["username"] ?: return@get call.respondBadRequest()
         val followers = service.getFollowers(username)
@@ -83,6 +87,43 @@ fun Route.profileSubscriptionRoutes(
             ApiResponse(Status.SUCCESS, "$username has ${followers.size} followers", followers))
       }
     }
+  }
+}
+
+private const val DEFAULT_SUGGESTION_LIMIT = 6
+private const val MAX_SUGGESTION_LIMIT = 15
+
+/** `{username}` is the member the suggestions are for; empty when they don't have the feature. */
+private fun Route.followSuggestionsRoute(
+    featureFlagService: FeatureFlagService,
+    suggestionService: FollowSuggestionService,
+) {
+  get("/members/{username}/follow-suggestions") {
+    val username = call.parameters["username"] ?: return@get call.respondBadRequest()
+    val limit =
+        (call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_SUGGESTION_LIMIT)
+            .coerceIn(1, MAX_SUGGESTION_LIMIT)
+    val enabled =
+        featureFlagService.isEnabledForUsername(ConfigRegistry.FOLLOW_FEATURE_ENABLED, username)
+    val suggestions = if (enabled) suggestionService.suggest(username, limit) else emptyList()
+    call.respond(
+        ApiResponse(Status.SUCCESS, "${suggestions.size} suggestions for $username", suggestions))
+  }
+
+  // Infra debug: always computes, and reports whether the feature is on for the member.
+  get("/members/{username}/follow-suggestions/debug") {
+    val username = call.parameters["username"] ?: return@get call.respondBadRequest()
+    val result = suggestionService.explain(username, DEFAULT_SUGGESTION_LIMIT)
+    val flagEnabled =
+        featureFlagService.isEnabledForUsername(ConfigRegistry.FOLLOW_FEATURE_ENABLED, username)
+    call.respond(
+        ApiResponse(
+            Status.SUCCESS,
+            "Follow suggestion debug for $username",
+            mapOf(
+                "suggestions" to result.usernames,
+                "debug" to result.debug,
+                "flagEnabled" to flagEnabled)))
   }
 }
 

@@ -114,6 +114,7 @@ object RouteFactory {
     ACTION_TRACK("/api/track"),
     SUGGESTED_EVENTS("/api/suggested-events"),
     SUGGESTED_COURSES("/api/suggested-courses"),
+    MEMBERS_TO_FOLLOW("/api/members-to-follow"),
     COMMITTEE_COURSES("/api/committee-courses"),
     SETTINGS_BANNER("/api/settings-banner"),
     ATTENTION("/api/attention"),
