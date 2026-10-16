@@ -13,6 +13,7 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toKotlinLocalDate
+import org.dallasmakerspace.activedirectory.GroupNotFoundException
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.activedirectory.isGroupDN
 import org.dallasmakerspace.activedirectory.parseCNFromDN
@@ -26,6 +27,7 @@ import org.dallasmakerspace.doorcontroller.DoorEventsRepository
 import org.dallasmakerspace.models.ActivityLogEvent
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.DirectoryOus
 import org.dallasmakerspace.voterregistration.VoterRegistrationManager
 
 @Suppress("LongParameterList")
@@ -786,6 +788,7 @@ constructor(
       actorUsername: String? = null,
   ) {
     val groupname = Groups.getNameFromSlug(groupslug)
+    requireGroupInDirectory(groupname)
     val groupId = groupHistoryRepository.getOrCreateGroup(groupname)
     val now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC)
 
@@ -849,6 +852,7 @@ constructor(
       actorUsername: String? = null,
   ) {
     val groupname = Groups.getNameFromSlug(groupslug)
+    requireGroupInDirectory(groupname)
     val groupId = groupHistoryRepository.getOrCreateGroup(groupname)
     val now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC)
 
@@ -980,14 +984,38 @@ constructor(
     }
   }
 
+  /** DN of the one Infrastructure group (in the main group OU), resolved once from AD. */
+  @Volatile private var infraGroupDn: String? = null
+
+  /**
+   * True if the user is a member of the Infrastructure group: the actual group in the main group
+   * OU, matched by DN, not any group that merely has the same name elsewhere. Fails closed.
+   */
   fun isUserInInfraGroup(username: String): Boolean {
     return try {
+      val infraDn = infraGroupDn ?: resolveInfraGroupDn()
       activeDirectoryService.getMemberByUsername(username).groups.any {
-        it.cn == org.dallasmakerspace.groups.Constants.INFRASTRUCTURE
+        DirectoryOus.sameDn(it.distinguishedName, infraDn)
       }
     } catch (e: Exception) {
       log.warn("Could not check infra group membership for '$username', defaulting to false", e)
       false
+    }
+  }
+
+  private fun resolveInfraGroupDn(): String {
+    val group =
+        activeDirectoryService.getGroupStrict(org.dallasmakerspace.groups.Constants.INFRASTRUCTURE)
+    check(DirectoryOus.isInMainGroupOu(group.distinguishedName)) {
+      "The Infrastructure group is not in the main group OU"
+    }
+    return group.distinguishedName.also { infraGroupDn = it }
+  }
+
+  /** Throws [GroupNotFoundException] before any portal row is written for a missing AD group. */
+  private suspend fun requireGroupInDirectory(groupname: String) {
+    if (!withContext(Dispatchers.IO) { activeDirectoryService.groupExists(groupname) }) {
+      throw GroupNotFoundException(groupname)
     }
   }
 

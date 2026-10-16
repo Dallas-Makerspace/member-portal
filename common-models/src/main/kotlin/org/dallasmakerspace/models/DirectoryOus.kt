@@ -21,6 +21,16 @@ object DirectoryOus {
   fun isMainGroupOuOrChild(ou: String?): Boolean =
       !ou.isNullOrBlank() && (dnParts(ou) == mainGroupOuParts || isBelow(ou, mainGroupOuParts))
 
+  /** Index of the first [GROUP_OUS] entry containing [dn]; outside all of them sorts last. */
+  fun groupOuRank(dn: String?): Int {
+    val rank = groupOuParts.indexOfFirst { isBelow(dn, it) }
+    return if (rank >= 0) rank else Int.MAX_VALUE
+  }
+
+  /** True if both are the same DN, ignoring case and spacing around commas (escape-aware). */
+  fun sameDn(a: String?, b: String?): Boolean =
+      !a.isNullOrBlank() && !b.isNullOrBlank() && dnParts(a) == dnParts(b)
+
   private fun isBelow(dn: String?, ouParts: List<String>): Boolean {
     if (dn.isNullOrBlank()) return false
     val parts = dnParts(dn)

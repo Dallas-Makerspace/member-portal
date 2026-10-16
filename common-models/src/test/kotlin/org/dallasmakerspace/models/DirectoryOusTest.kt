@@ -88,4 +88,27 @@ class DirectoryOusTest {
     assertFalse(DirectoryOus.isInGroupOu(""))
     assertFalse(DirectoryOus.isInGroupOu("   "))
   }
+
+  @Test
+  fun groupOuRankOrdersByGroupOuAndIsEscapeAware() {
+    assertEquals(0, DirectoryOus.groupOuRank("CN=A,OU=Groups,DC=dms,DC=local"))
+    assertEquals(0, DirectoryOus.groupOuRank("CN=A,OU=Sub,OU=Groups,DC=dms,DC=local"))
+    assertEquals(1, DirectoryOus.groupOuRank("cn=a, ou=sub, ou=groups, ou=admin, dc=DMS, dc=Local"))
+    assertEquals(Int.MAX_VALUE, DirectoryOus.groupOuRank("CN=A,CN=Users,DC=dms,DC=local"))
+    assertEquals(Int.MAX_VALUE, DirectoryOus.groupOuRank(null))
+    assertEquals(Int.MAX_VALUE, DirectoryOus.groupOuRank("OU=Groups,DC=dms,DC=local"))
+    assertEquals(Int.MAX_VALUE, DirectoryOus.groupOuRank("CN=A\\,OU=Groups,DC=dms,DC=local"))
+  }
+
+  @Test
+  fun sameDnIgnoresCaseAndSpacingButNotStructure() {
+    assertTrue(
+        DirectoryOus.sameDn("CN=A,OU=Groups,DC=dms,DC=local", "cn=a, ou=groups, dc=DMS, dc=Local"))
+    assertFalse(DirectoryOus.sameDn("CN=A,OU=Groups,DC=dms,DC=local", "CN=A,OU=Sub,OU=Groups,DC=dms,DC=local"))
+    assertFalse(
+        DirectoryOus.sameDn(
+            "CN=A\\,B,OU=Groups,DC=dms,DC=local", "CN=A,B,OU=Groups,DC=dms,DC=local"))
+    assertFalse(DirectoryOus.sameDn(null, null))
+    assertFalse(DirectoryOus.sameDn("", ""))
+  }
 }

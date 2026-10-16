@@ -97,6 +97,9 @@ class TestWorkflow(
     onFailure: FailurePolicy = FailurePolicy.PAUSE,
     retry: RetryPolicy = RetryPolicy(maxAttempts = 3, backoff = Backoff.Fixed(10.seconds), attemptTimeout = null),
     id: String = "test.flow",
+    authorization: String? = null,
+    confirmTypingField: String? = null,
+    inputFields: List<WorkflowInputField> = listOf(WorkflowInputField("name", "Name")),
 ) :
     Workflow<TestInput>(
         id = id,
@@ -104,9 +107,11 @@ class TestWorkflow(
         displayName = "Test flow",
         permission = "MANAGE_THINGS",
         inputSerializer = TestInput.serializer(),
-        inputFields = listOf(WorkflowInputField("name", "Name")),
+        inputFields = inputFields,
         onFailure = onFailure,
         retry = retry,
+        authorization = authorization,
+        confirmTypingField = confirmTypingField,
     ) {
   override fun subjects(input: TestInput) = listOf(Subject("thing", input.name))
 
@@ -130,6 +135,7 @@ class Harness(
     val store: WorkflowStore = InMemoryWorkflowStore(clock),
     val bus: RecordingBus = RecordingBus(),
     instanceId: String = "inst-a",
+    authorizers: Map<String, WorkflowStartAuthorizer> = emptyMap(),
 ) {
   val wake = WorkflowWakeSignal()
   val registry = WorkflowRegistry(setOf(workflow))
@@ -140,7 +146,8 @@ class Harness(
         leaseSeconds = 30
         sleep = {}
       }
-  val service = DefaultWorkflowService(store, registry, bus, settings, wake, LoggerFactory())
+  val service =
+      DefaultWorkflowService(store, registry, bus, settings, wake, LoggerFactory(), authorizers)
   val executor = DefaultWorkflowExecutor(store, registry, bus, settings, wake, LoggerFactory())
 
   /** Another engine instance on the same store (own instance id, same clock). */

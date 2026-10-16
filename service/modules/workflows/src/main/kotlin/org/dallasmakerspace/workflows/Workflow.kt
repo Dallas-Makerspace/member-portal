@@ -27,6 +27,10 @@ abstract class Workflow<I : Any>(
     val inputFields: List<WorkflowInputField> = emptyList(),
     val onFailure: FailurePolicy = FailurePolicy.PAUSE,
     val retry: RetryPolicy = RetryPolicy(),
+    /** Per-subject authorization mode (see `WorkflowAuthorization`); null = none. */
+    val authorization: String? = null,
+    /** Input field whose exact value the user must type to confirm; null = none. */
+    val confirmTypingField: String? = null,
 ) {
   abstract fun subjects(input: I): List<Subject>
 

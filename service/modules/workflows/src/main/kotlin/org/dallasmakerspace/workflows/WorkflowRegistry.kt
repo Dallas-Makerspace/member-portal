@@ -29,6 +29,11 @@ class WorkflowRegistry @Inject constructor(workflows: Set<@JvmSuppressWildcards 
     require(steps.isNotEmpty()) { "Workflow '${wf.id}' has no steps" }
     val dup = steps.groupBy { it.id }.filterValues { it.size > 1 }.keys
     require(dup.isEmpty()) { "Workflow '${wf.id}' repeats step ids $dup" }
+    wf.confirmTypingField?.let { field ->
+      require(wf.inputFields.any { it.name == field }) {
+        "Workflow '${wf.id}' confirmTypingField '$field' is not an input field"
+      }
+    }
     if (wf.onFailure == FailurePolicy.AUTO_ROLLBACK) {
       val unsafe = steps.filter { it.reversibility != WorkflowReversibility.REVERSIBLE }
       require(unsafe.isEmpty()) {
@@ -45,6 +50,8 @@ class WorkflowRegistry @Inject constructor(workflows: Set<@JvmSuppressWildcards 
           description = wf.description,
           requiredPermission = wf.permission,
           inputFields = wf.inputFields,
+          authorization = wf.authorization,
+          confirmTypingField = wf.confirmTypingField,
           steps =
               wf.bindings.map {
                 WorkflowStepDefinitionDto(

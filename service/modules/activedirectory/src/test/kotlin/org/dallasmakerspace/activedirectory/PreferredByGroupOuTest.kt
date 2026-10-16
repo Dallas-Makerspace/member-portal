@@ -23,6 +23,13 @@ class PreferredByGroupOuTest {
   }
 
   @Test
+  fun `rank is escape aware so a crafted cn cannot pose as a group ou`() {
+    assertEquals(Int.MAX_VALUE, groupOuRank("CN=A\\,OU=Groups,DC=dms,DC=local"))
+    assertEquals(Int.MAX_VALUE, groupOuRank("CN=A\\,OU=Groups\\,OU=Admin,DC=dms,DC=local"))
+    assertEquals(0, groupOuRank("CN=A\\, B,OU=Groups,DC=dms,DC=local"))
+  }
+
+  @Test
   fun `earliest group ou wins regardless of result order`() {
     val admin = entry("Shop", second)
     val main = entry("Shop", first)

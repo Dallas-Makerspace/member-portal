@@ -127,6 +127,15 @@ class WorkflowTemplatesTest {
     assertTrue("""data-label="Archive group"""" in html)
     assertTrue("""data-btn-class="btn-outline-danger"""" in html)
     assertTrue("&quot;groupName&quot;" in html)
+    assertTrue("/static/js/workflow-fields.js" in html)
+    assertTrue(html.indexOf("workflow-fields.js") < html.indexOf("workflow-launch.js"))
+    assertTrue(html.indexOf("workflow-common.js") < html.indexOf("workflow-fields.js"))
     assertTrue("/static/js/workflow-launch.js" in html)
+  }
+
+  @Test
+  fun `the demo page loads the field helpers before the launch script`() {
+    val html = resource("templates/workflow-demo.html")
+    assertTrue(html.indexOf("workflow-fields.js") in 0 until html.indexOf("workflow-launch.js"))
   }
 }

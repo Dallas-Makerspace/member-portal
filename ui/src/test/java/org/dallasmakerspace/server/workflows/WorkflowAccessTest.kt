@@ -12,7 +12,7 @@ import org.dallasmakerspace.models.workflows.WorkflowRunStatus
 import org.dallasmakerspace.server.auth.Authz
 
 class WorkflowAccessTest {
-  private fun def(permission: String?) =
+  private fun def(permission: String?, authorization: String? = null) =
       WorkflowDefinitionDto(
           id = "demo.flow",
           version = 1,
@@ -20,7 +20,8 @@ class WorkflowAccessTest {
           description = "",
           requiredPermission = permission,
           inputFields = emptyList(),
-          steps = emptyList())
+          steps = emptyList(),
+          authorization = authorization)
 
   private fun authzFor(vararg groups: String) =
       Authz.fromUserInfo(mapOf("groups" to groups.toList()))
@@ -77,6 +78,92 @@ class WorkflowAccessTest {
   @Test
   fun `a workflow with no required permission is open to any member`() {
     assertTrue(canUseWorkflow(member, def(null)))
+  }
+
+  @Test
+  fun `a per-item authorized workflow needs no global permission but is not open to unknown modes`() {
+    val scoped = def(null, "GROUP_ADMIN")
+    assertTrue(canUseWorkflow(member, scoped))
+    assertTrue(canUseWorkflow(infra, scoped))
+    assertFalse(canUseWorkflow(infra, def(null, "SOMETHING_ELSE")))
+    assertFalse(canUseWorkflow(infra, def(null, "")))
+  }
+
+  @Test
+  fun `an authorization mode never replaces a required permission`() {
+    val both = def("MANAGE_GROUPS", "GROUP_ADMIN")
+    assertFalse(canUseWorkflow(member, both))
+    assertTrue(canUseWorkflow(officer, both))
+  }
+
+  @Test
+  fun `listing or streaming a per-item authorized workflow needs ARCHIVE_ANY_GROUP`() {
+    val scoped = def(null, "GROUP_ADMIN")
+    assertFalse(canViewWorkflow(member, scoped))
+    assertFalse(canViewWorkflow(officer, scoped))
+    assertFalse(canViewWorkflow(board, scoped))
+    assertTrue(canViewWorkflow(infra, scoped))
+    // Unchanged for ordinary workflows: admins and operators.
+    assertTrue(canViewWorkflow(board, def("MANAGE_GROUPS")))
+    assertTrue(canViewWorkflow(member, def(null)))
+  }
+
+  private fun viewRun(
+      authz: Authz,
+      def: WorkflowDefinitionDto?,
+      username: String = "viewer",
+      actor: String = "someone-else",
+      groupAdmin: Boolean = false,
+  ) = kotlinx.coroutines.runBlocking { canViewRun(authz, def, username, actor) { groupAdmin } }
+
+  @Test
+  fun `a per-item run is visible to infra, its actor and its group's admins only`() {
+    val scoped = def(null, "GROUP_ADMIN")
+    assertTrue(viewRun(infra, scoped))
+    assertTrue(viewRun(member, scoped, username = "jdoe", actor = "jdoe"))
+    assertTrue(viewRun(member, scoped, groupAdmin = true))
+    assertFalse(viewRun(member, scoped))
+    assertFalse(viewRun(board, scoped))
+    assertFalse(viewRun(officer, scoped))
+    assertFalse(viewRun(member, scoped, username = "", actor = ""))
+    assertFalse(viewRun(member, scoped, username = "jdoe", actor = "JDOE"))
+  }
+
+  @Test
+  fun `a per-item run of a mode or permission the user fails stays hidden even for its actor`() {
+    assertFalse(viewRun(member, def(null, "SOMETHING_ELSE"), username = "jdoe", actor = "jdoe"))
+    assertFalse(viewRun(member, def("MANAGE_GROUPS", "GROUP_ADMIN"), username = "jdoe", actor = "jdoe"))
+    assertFalse(viewRun(member, null, username = "jdoe", actor = "jdoe"))
+  }
+
+  @Test
+  fun `ordinary workflow runs keep the old view rule`() {
+    val d = def("MANAGE_GROUPS")
+    assertTrue(viewRun(board, d))
+    assertTrue(viewRun(officer, d))
+    assertFalse(viewRun(member, d, username = "jdoe", actor = "jdoe"))
+    assertTrue(viewRun(board, null))
+    assertFalse(viewRun(officer, null))
+  }
+
+  @Test
+  fun `operating a per-item authorized run is infra only`() {
+    val scoped = def(null, "GROUP_ADMIN")
+    assertFalse(canOperateWorkflow(member, scoped))
+    assertFalse(canOperateWorkflow(officer, scoped))
+    assertFalse(canOperateWorkflow(board, scoped))
+    assertTrue(canOperateWorkflow(infra, scoped))
+    // Unchanged for workflows without an authorization mode.
+    assertTrue(canOperateWorkflow(member, def(null)))
+    assertTrue(canOperateWorkflow(officer, def("MANAGE_GROUPS")))
+  }
+
+  @Test
+  fun `ARCHIVE_ANY_GROUP is held only by roles with every permission`() {
+    assertTrue(infra.can("ARCHIVE_ANY_GROUP"))
+    assertFalse(board.can("ARCHIVE_ANY_GROUP"))
+    assertFalse(officer.can("ARCHIVE_ANY_GROUP"))
+    assertFalse(member.can("ARCHIVE_ANY_GROUP"))
   }
 
   @Test

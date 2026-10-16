@@ -11,7 +11,11 @@ import org.dallasmakerspace.models.workflows.*
 interface WorkflowService {
   fun definitions(): List<WorkflowDefinitionDto>
 
-  /** Read-only plan: check() + validate() on every step. Throws [UnknownWorkflowException]. */
+  /**
+   * Read-only plan: check() + validate() on every step. Throws [UnknownWorkflowException],
+   * [InvalidWorkflowInputException], and [WorkflowForbiddenException] when the workflow's
+   * authorization mode denies [actor].
+   */
   suspend fun preflight(workflowId: String, input: JsonObject, actor: String): WorkflowPreflightResponse
 
   /** Re-runs preflight; refuses to start if blocked. Same token => returns the existing run. */
@@ -78,6 +82,9 @@ sealed interface StartResult {
   data class Blocked(val plan: WorkflowPreflightResponse) : StartResult
 
   data class SubjectLocked(val activeRun: WorkflowRunDto) : StartResult
+
+  /** The workflow's authorization mode denied the actor; [reason] is generic and safe to show. */
+  data class Forbidden(val reason: String) : StartResult
 }
 
 sealed interface OperateResult {
@@ -92,6 +99,30 @@ sealed interface OperateResult {
 class UnknownWorkflowException(workflowId: String) : RuntimeException("Unknown workflow: $workflowId")
 
 class InvalidWorkflowInputException(message: String) : RuntimeException(message)
+
+/** Thrown by preflight when the actor is not authorized; [reason] is generic, never leaks state. */
+class WorkflowForbiddenException(val reason: String) : RuntimeException(reason)
+
+/** Authorization modes a workflow can name in its `authorization`. */
+object WorkflowAuthorization {
+  /** The actor must administer the group named by the "groupName" input. */
+  const val GROUP_ADMIN = "GROUP_ADMIN"
+}
+
+sealed interface AuthorizationDecision {
+  data object Allowed : AuthorizationDecision
+
+  /** [reason] is shown to the actor: keep it generic. */
+  data class Denied(val reason: String) : AuthorizationDecision
+}
+
+/**
+ * Per-subject check for workflows that name an `authorization` mode; the engine fails closed when
+ * no authorizer is registered for the mode or the authorizer throws or times out.
+ */
+interface WorkflowStartAuthorizer {
+  suspend fun authorize(workflowId: String, input: JsonObject, actor: String): AuthorizationDecision
+}
 
 /**
  * In-process pub/sub used by the executor/service (publishers) and the SSE routes (subscribers).

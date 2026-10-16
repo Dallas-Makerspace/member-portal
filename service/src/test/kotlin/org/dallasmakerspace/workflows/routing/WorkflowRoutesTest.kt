@@ -180,6 +180,26 @@ class WorkflowRoutesTest {
   }
 
   @Test
+  fun `start that is not authorized returns 403 with the generic reason and no run`() = withApp {
+    service.startResult = { StartResult.Forbidden("You are not allowed to run this workflow") }
+    val response = post("/workflows/test.flow/runs", startBody)
+    assertEquals(HttpStatusCode.Forbidden, response.status)
+    val parsed = json.decodeFromString(WorkflowErrorResponse.serializer(), response.bodyAsText())
+    assertEquals("You are not allowed to run this workflow", parsed.message)
+    assertNull(parsed.activeRun)
+  }
+
+  @Test
+  fun `preflight that is not authorized returns 403`() = withApp {
+    service.preflightResult = { throw WorkflowForbiddenException("not allowed") }
+    val response = post("/workflows/test.flow/preflight", """{"input":{"groupName":"Test Group"}}""")
+    assertEquals(HttpStatusCode.Forbidden, response.status)
+    assertEquals(
+        "not allowed",
+        json.decodeFromString(WorkflowErrorResponse.serializer(), response.bodyAsText()).message)
+  }
+
+  @Test
   fun `start validates workflow, input, token and acting user`() = withApp {
     service.startResult = { throw UnknownWorkflowException("nope") }
     assertEquals(HttpStatusCode.NotFound, post("/workflows/nope/runs", startBody).status)

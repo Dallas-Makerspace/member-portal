@@ -63,6 +63,18 @@ class GroupArchiveRepository(
     changed > 0 || (runId != null && archivedByRun(groupName, runId))
   }
 
+  override suspend fun updateObjectGuid(groupName: String, objectGuid: String): Boolean =
+      suspendTransaction {
+        val guid = AdGuid.normalize(objectGuid)
+        if (guid == null) {
+          false
+        } else {
+          GroupsTable.update({ anyLiveRow(groupName) }) { it[GroupsTable.objectGuid] = guid }
+          !GroupsTable.select { anyLiveRow(groupName) and (GroupsTable.objectGuid eq guid) }
+              .empty()
+        }
+      }
+
   override suspend fun statusOf(groupName: String): String? = suspendTransaction {
     val statuses =
         GroupsTable.select { GroupsTable.name eq groupName }.map { it[GroupsTable.status] }

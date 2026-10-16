@@ -140,7 +140,19 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
   }
 
   /** {@inheritDoc} */
-  override fun deleteGroup(groupName: String): Boolean = true
+  override fun deleteGroup(groupName: String, expectedObjectGuid: String): Boolean = true
+
+  /** {@inheritDoc} */
+  override fun getGroupStrict(groupname: String): ADGroup = getGroup(groupname)
+
+  /** {@inheritDoc} */
+  override fun groupExists(groupName: String): Boolean = true
+
+  /** {@inheritDoc} */
+  override fun countManagedObjects(groupName: String): ManagedObjectCounts = ManagedObjectCounts()
+
+  /** {@inheritDoc} */
+  override fun addGroupToParentGroup(groupName: String, parentGroupDn: String): Boolean = true
 
   /** {@inheritDoc} */
   override fun createGroup(spec: AdGroupSpec): AdGroupCreateResult {

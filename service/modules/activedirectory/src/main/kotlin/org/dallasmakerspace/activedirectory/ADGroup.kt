@@ -17,4 +17,8 @@ data class ADGroup(
     val managedBy: String? = null,
     /** DNs of the groups this group is itself a member of (its `memberOf`). */
     val parentGroups: List<String> = emptyList(),
+    /** The group's own sAMAccountName (may differ from [cn]); null if the directory gave none. */
+    val samAccountName: String? = null,
+    /** The raw AD `groupType` flags (scope and security bit); null if not known. */
+    val groupType: Int? = null,
 )

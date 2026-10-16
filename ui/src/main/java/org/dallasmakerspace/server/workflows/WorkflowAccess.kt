@@ -1,32 +1,119 @@
 package org.dallasmakerspace.server.workflows
 
+import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import org.dallasmakerspace.models.workflows.WorkflowArtifactDto
 import org.dallasmakerspace.models.workflows.WorkflowDefinitionDto
+import org.dallasmakerspace.models.workflows.WorkflowRunDto
 import org.dallasmakerspace.server.auth.Authz
 import org.dallasmakerspace.server.auth.Permission
+import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.models.getSlugFromName
+import org.dallasmakerspace.server.plugins.getCachedFeatureFlag
 
 const val WORKFLOWS_FEATURE_FLAG = "workflows.enabled"
+const val ARCHIVE_FEATURE_FLAG = "groups.archive.enabled"
+
+/** Workflows that also need their own per-user feature flag (on top of [WORKFLOWS_FEATURE_FLAG]). */
+private val WORKFLOW_FLAGS = mapOf(GroupWorkflowLaunch.ARCHIVE_ID to ARCHIVE_FEATURE_FLAG)
+
+/** True unless [def] has its own feature flag that is off for [username]; fails closed. */
+suspend fun isWorkflowFlagOn(
+    client: MemberServiceClient,
+    def: WorkflowDefinitionDto,
+    username: String,
+    sessionId: String?,
+): Boolean {
+  val flag = WORKFLOW_FLAGS[def.id] ?: return true
+  return try {
+    getCachedFeatureFlag(client, flag, username, sessionId)
+  } catch (e: CancellationException) {
+    throw e
+  } catch (e: Exception) {
+    false
+  }
+}
+
+/** Group name in a run's input (the "groupName" field), or null. */
+fun runGroupName(run: WorkflowRunDto): String? =
+    (run.input["groupName"] as? kotlinx.serialization.json.JsonPrimitive)
+        ?.contentOrNull
+        ?.takeIf { it.isNotBlank() }
+
+/** Whether [username] administers [groupName] (same check as the group page); false on any doubt. */
+suspend fun administersGroup(
+    client: MemberServiceClient,
+    username: String,
+    groupName: String?,
+    sessionId: String?,
+): Boolean {
+  if (groupName.isNullOrBlank()) return false
+  return try {
+    client.isGroupAdmin(username, getSlugFromName(groupName.trim()), sessionId)
+  } catch (e: CancellationException) {
+    throw e
+  } catch (e: Exception) {
+    false
+  }
+}
 
 /** Same gate the header uses for infra-only menu items (MANAGE_CONFIG). */
 fun isWorkflowAdmin(authz: Authz): Boolean = authz.can(Permission.MANAGE_CONFIG.name)
 
+/** The only per-item authorization mode the UI knows; the service decides each item. */
+const val AUTHORIZATION_GROUP_ADMIN = "GROUP_ADMIN"
+
 /**
- * Whether the user may preflight, start and operate runs of [def]. A permission name the UI does
- * not know (it is a service Permission name) is denied, so a typo or a service-only permission can
- * never open a workflow up.
+ * Whether the user may preflight and start [def]. A permission name the UI does not know (it is a
+ * service Permission name) is denied, so a typo or a service-only permission can never open a
+ * workflow up. A definition with an `authorization` mode needs no global permission of its own
+ * (the service checks the user against the item and answers 403), but an unknown mode is denied.
  */
 fun canUseWorkflow(authz: Authz, def: WorkflowDefinitionDto): Boolean {
   val required = def.requiredPermission
-  return required == null || authz.can(required)
+  if (required != null && !authz.can(required)) return false
+  return def.authorization == null || def.authorization == AUTHORIZATION_GROUP_ADMIN
 }
 
-/** Viewing a run (detail, events, stream) is allowed to admins as well as workflow operators. */
+/**
+ * Viewing a workflow's runs in general (unfiltered lists and streams). Admins and operators for
+ * ordinary workflows; for per-item authorized ones only holders of [Permission.ARCHIVE_ANY_GROUP]
+ * (individual runs are decided by [canViewRun]).
+ */
 fun canViewWorkflow(authz: Authz, def: WorkflowDefinitionDto?): Boolean =
-    isWorkflowAdmin(authz) || (def != null && canUseWorkflow(authz, def))
+    if (def?.authorization != null) {
+      canUseWorkflow(authz, def) && authz.can(Permission.ARCHIVE_ANY_GROUP.name)
+    } else {
+      isWorkflowAdmin(authz) || (def != null && canUseWorkflow(authz, def))
+    }
 
-/** Operator actions need the workflow's own permission; admins alone only get to look. */
+/**
+ * Viewing one run (detail, events, stream, files). For per-item authorized workflows: holders of
+ * [Permission.ARCHIVE_ANY_GROUP], the run's own [runActor], or whoever [administersRunGroup].
+ */
+suspend fun canViewRun(
+    authz: Authz,
+    def: WorkflowDefinitionDto?,
+    username: String?,
+    runActor: String?,
+    administersRunGroup: suspend () -> Boolean,
+): Boolean {
+  if (def?.authorization == null || canViewWorkflow(authz, def)) return canViewWorkflow(authz, def)
+  if (!canUseWorkflow(authz, def)) return false
+  if (!username.isNullOrBlank() && runActor == username) return true
+  return administersRunGroup()
+}
+
+/**
+ * Operator actions need the workflow's own permission; admins alone only get to look. Per-item
+ * authorized workflows (retry, skip, rollback, abandon, cancel) are infra-only, since the UI
+ * cannot tell who administers the run's item.
+ */
 fun canOperateWorkflow(authz: Authz, def: WorkflowDefinitionDto?): Boolean =
-    def != null && canUseWorkflow(authz, def)
+    def != null &&
+        canUseWorkflow(authz, def) &&
+        (def.authorization == null || authz.can(Permission.ARCHIVE_ANY_GROUP.name))
 
 /**
  * Downloading a step's file needs the workflow's own permission, plus [Permission.DOWNLOAD_ARCHIVES]

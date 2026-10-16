@@ -39,6 +39,7 @@ import org.dallasmakerspace.workflows.OperateResult
 import org.dallasmakerspace.workflows.RunFilter
 import org.dallasmakerspace.workflows.StartResult
 import org.dallasmakerspace.workflows.UnknownWorkflowException
+import org.dallasmakerspace.workflows.WorkflowForbiddenException
 import org.dallasmakerspace.workflows.WorkflowEventBus
 import org.dallasmakerspace.workflows.WorkflowService
 
@@ -171,6 +172,8 @@ fun Route.workflowRoutes(
           call.respondError(HttpStatusCode.NotFound, e.message ?: "Unknown workflow")
         } catch (e: InvalidWorkflowInputException) {
           call.respondError(HttpStatusCode.BadRequest, e.message ?: "Invalid input")
+        } catch (e: WorkflowForbiddenException) {
+          call.respondError(HttpStatusCode.Forbidden, e.reason)
         }
       }
 
@@ -210,6 +213,7 @@ fun Route.workflowRoutes(
                   WorkflowPreflightResponse.serializer(),
                   result.plan,
               )
+          is StartResult.Forbidden -> call.respondError(HttpStatusCode.Forbidden, result.reason)
           is StartResult.SubjectLocked ->
               call.respondJson(
                   HttpStatusCode.Conflict,

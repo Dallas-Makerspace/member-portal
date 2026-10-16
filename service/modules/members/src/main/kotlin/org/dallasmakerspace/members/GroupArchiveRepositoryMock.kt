@@ -49,6 +49,9 @@ class GroupArchiveRepositoryMock : IGroupArchiveRepository {
     return true
   }
 
+  override suspend fun updateObjectGuid(groupName: String, objectGuid: String): Boolean =
+      statuses[key(groupName)].let { it == GROUP_STATUS_ACTIVE || it == GROUP_STATUS_DISABLED }
+
   override suspend fun statusOf(groupName: String): String? = statuses[key(groupName)]
 
   override suspend fun listArchived(prefixes: List<String>): List<ArchivedGroup> =

@@ -7,6 +7,7 @@ import dagger.multibindings.Multibinds
 import org.dallasmakerspace.workflows.groups.references.CalendarReferenceFinder
 import org.dallasmakerspace.workflows.groups.references.ConfigReferenceFinder
 import org.dallasmakerspace.workflows.groups.references.GroupReferenceFinder
+import org.dallasmakerspace.workflows.groups.references.ManagedObjectsReferenceFinder
 import org.dallasmakerspace.workflows.groups.references.MoodleReferenceFinder
 import org.dallasmakerspace.workflows.groups.references.ProtectedGroupReferenceFinder
 import org.dallasmakerspace.workflows.groups.references.RemoteAccessReferenceFinder
@@ -18,6 +19,10 @@ abstract class GroupReferencesModule {
   @Multibinds abstract fun finders(): Set<@JvmSuppressWildcards GroupReferenceFinder>
 
   @Binds @IntoSet abstract fun calendar(finder: CalendarReferenceFinder): GroupReferenceFinder
+
+  @Binds
+  @IntoSet
+  abstract fun managedObjects(finder: ManagedObjectsReferenceFinder): GroupReferenceFinder
 
   @Binds @IntoSet abstract fun moodle(finder: MoodleReferenceFinder): GroupReferenceFinder
 

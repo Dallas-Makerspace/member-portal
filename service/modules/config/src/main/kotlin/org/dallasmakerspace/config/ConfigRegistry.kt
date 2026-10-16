@@ -187,6 +187,17 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val GROUPS_ARCHIVE_ENABLED =
+      ConfigKey(
+          key = "groups.archive.enabled",
+          description =
+              "Allow archiving groups (the group.archive workflow deletes the Active Directory " +
+                  "group); can be piloted for specific usernames/AD groups before a full rollout",
+          category = "Groups",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -206,5 +217,6 @@ object ConfigRegistry {
           PROFILE_PHOTO_ENABLED,
           ACCOUNT_MENU_ENABLED,
           WORKFLOWS_ENABLED,
+          GROUPS_ARCHIVE_ENABLED,
       )
 }

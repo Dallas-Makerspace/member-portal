@@ -119,8 +119,14 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
   }
 
   /** {@inheritDoc} */
-  override fun getGroup(groupname: String): ADGroup {
-    val adResult = activeDirectoryClient.getGroup(groupname)
+  override fun getGroup(groupname: String): ADGroup =
+      toGroup(activeDirectoryClient.getGroup(groupname))
+
+  /** {@inheritDoc} */
+  override fun getGroupStrict(groupname: String): ADGroup =
+      toGroup(activeDirectoryClient.getGroupStrict(groupname))
+
+  private fun toGroup(adResult: Map<String, Any?>): ADGroup {
 
     // Extract administrators from the result if available
     val administrators =
@@ -144,6 +150,8 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
         unresolvedMemberCount = parsed.unresolvedCount,
         managedBy = adResult["managedBy"]?.toString()?.takeIf { it.isNotBlank() },
         parentGroups = attributeStrings(adResult["memberOf"]),
+        samAccountName = adResult["sAMAccountName"]?.toString()?.takeIf { it.isNotBlank() },
+        groupType = adResult["groupType"]?.toString()?.toIntOrNull(),
     )
   }
 
@@ -322,8 +330,20 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
   }
 
   /** {@inheritDoc} */
-  override fun deleteGroup(groupName: String): Boolean =
-      activeDirectoryClient.deleteGroup(groupName)
+  override fun deleteGroup(groupName: String, expectedObjectGuid: String): Boolean =
+      activeDirectoryClient.deleteGroup(groupName, expectedObjectGuid)
+
+  /** {@inheritDoc} */
+  override fun groupExists(groupName: String): Boolean =
+      activeDirectoryClient.groupExists(groupName)
+
+  /** {@inheritDoc} */
+  override fun countManagedObjects(groupName: String): ManagedObjectCounts =
+      activeDirectoryClient.countManagedObjects(groupName)
+
+  /** {@inheritDoc} */
+  override fun addGroupToParentGroup(groupName: String, parentGroupDn: String): Boolean =
+      activeDirectoryClient.addGroupToParentGroup(groupName, parentGroupDn)
 
   /** {@inheritDoc} */
   override fun createGroup(spec: AdGroupSpec): AdGroupCreateResult =

@@ -178,3 +178,7 @@
         animation: none;
     }
 }
+
+.wf-prewrap {
+    white-space: pre-wrap;
+}

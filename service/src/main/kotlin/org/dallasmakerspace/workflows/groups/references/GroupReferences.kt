@@ -21,6 +21,9 @@ object GroupReferenceKinds {
   const val CONFIG_VALUE = "CONFIG_VALUE"
   const val REMOTE_ACCESS = "REMOTE_ACCESS"
 
+  /** Directory objects (groups, users, computers) name this group as their manager. */
+  const val MANAGED_OBJECTS = "MANAGED_OBJECTS"
+
   /** A finder failed, so its system could not be checked. */
   const val UNKNOWN = "UNKNOWN"
 }

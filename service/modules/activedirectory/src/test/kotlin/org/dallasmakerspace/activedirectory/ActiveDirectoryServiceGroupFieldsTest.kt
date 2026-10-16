@@ -48,6 +48,29 @@ class ActiveDirectoryServiceGroupFieldsTest {
   }
 
   @Test
+  fun `getGroup carries the sAMAccountName and group type, null when absent or unparsable`() {
+    val full = service(mapOf("sAMAccountName" to "shop-saws", "groupType" to "-2147483640"))
+    val group = full.getGroup("Test Group")
+    assertEquals("shop-saws", group.samAccountName)
+    assertEquals(-2147483640, group.groupType)
+
+    val bare = service(mapOf("sAMAccountName" to " ", "groupType" to "x")).getGroup("Test Group")
+    assertNull(bare.samAccountName)
+    assertNull(bare.groupType)
+  }
+
+  @Test
+  fun `getGroupStrict goes through the strict client lookup`() {
+    val client: IActiveDirectoryClient = mock {
+      on { getGroupStrict(any()) } doReturn
+          mapOf<String, Any?>(
+              "cn" to "Test Group", "distinguishedName" to dn, "member" to emptyArray<String>())
+    }
+
+    assertEquals(dn, ActiveDirectoryService(client).getGroupStrict("Test Group").distinguishedName)
+  }
+
+  @Test
   fun `a blank managedBy counts as unset`() {
     assertNull(service(mapOf("managedBy" to " ")).getGroup("Test Group").managedBy)
   }

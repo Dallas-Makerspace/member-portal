@@ -53,7 +53,10 @@ constructor(
   private suspend fun demoPage(call: ApplicationCall, username: String) {
     val defs =
         try {
-          client.definitions(session.sessionId).filter { canUseWorkflow(authz, it) }
+          client.definitions(session.sessionId).filter {
+            canUseWorkflow(authz, it) &&
+                isWorkflowFlagOn(memberServiceClient, it, username, session.sessionId)
+          }
         } catch (e: Exception) {
           log.warn("Workflow definitions unavailable for demo page", e)
           emptyList()
@@ -91,7 +94,11 @@ constructor(
       return
     }
     val def = client.definition(run.workflowId, session.sessionId)
-    if (!canViewWorkflow(authz, def)) {
+    val mayView =
+        canViewRun(authz, def, username, run.actor) {
+          administersGroup(memberServiceClient, username, runGroupName(run), session.sessionId)
+        }
+    if (!mayView) {
       call.respond(HttpStatusCode.Forbidden)
       return
     }

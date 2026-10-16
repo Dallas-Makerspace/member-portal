@@ -3,7 +3,7 @@ package org.dallasmakerspace.members
 import org.dallasmakerspace.models.ArchivedGroup
 
 /** Where an archived group's member-list snapshot sits among its run's step artifacts. */
-const val ARCHIVE_ARTIFACT_STEP_INDEX = 0
+const val ARCHIVE_ARTIFACT_STEP_INDEX = 1
 const val ARCHIVE_ARTIFACT_NAME = "member-list"
 
 /**
@@ -30,6 +30,12 @@ interface IGroupArchiveRepository {
       runId: Long?,
       objectGuid: String? = null,
   ): Boolean
+
+  /**
+   * Sets the GUID of the group's live (ACTIVE/DISABLED) row, e.g. after a rollback recreated the
+   * group in AD with a new identity. True if the row holds [objectGuid] afterwards.
+   */
+  suspend fun updateObjectGuid(groupName: String, objectGuid: String): Boolean
 
   /** Status of the group's live row, else ARCHIVED if only archived rows exist, else null. */
   suspend fun statusOf(groupName: String): String?

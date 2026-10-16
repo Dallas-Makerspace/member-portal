@@ -200,6 +200,12 @@ class WorkflowServiceClient(
 
   companion object {
     internal val json = Json { ignoreUnknownKeys = true }
+
+    /** For the browser: defaults are written out so a missing `required` is never read as false. */
+    internal val browserJson = Json {
+      ignoreUnknownKeys = true
+      encodeDefaults = true
+    }
     private const val DEFINITIONS_TTL_MS = 60_000L
     private const val REQUEST_TIMEOUT_MS = 30_000L
     private const val CONNECT_TIMEOUT_S = 10L

@@ -14,7 +14,8 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Copies an upstream SSE body to the browser line by line (no buffering beyond one line), adds a
  * heartbeat comment whenever the stream is idle at an event boundary, and stops when [stillAllowed]
- * turns false (checked on every heartbeat tick).
+ * turns false (checked on every heartbeat tick). [rewrite] maps each single-line `data:` payload
+ * (used to drop runs the viewer may not see).
  */
 object SseRelay {
   const val HEARTBEAT_MS = 15_000L
@@ -26,13 +27,20 @@ object SseRelay {
       upstream: ByteReadChannel,
       out: ByteWriteChannel,
       heartbeatMs: Long = HEARTBEAT_MS,
+      rewrite: ((String) -> String)? = null,
       stillAllowed: suspend () -> Boolean = { true },
   ) = coroutineScope {
     val mutex = Mutex()
     var atBoundary = true
     val reader = launch {
       while (true) {
-        val line = upstream.readUTF8Line() ?: break
+        val raw = upstream.readUTF8Line() ?: break
+        val line =
+            if (rewrite != null && raw.startsWith("data:")) {
+              "data: " + rewrite(raw.removePrefix("data:").trimStart())
+            } else {
+              raw
+            }
         mutex.withLock {
           out.writeStringUtf8(line + "\n")
           out.flush()

@@ -268,11 +268,33 @@ class GroupArchiveRepositoryTest {
     assertEquals("asmith", shop.archivedBy)
     assertEquals("retired Shop Saws", shop.reason)
     assertEquals(9L, shop.runId)
-    assertEquals(0, shop.artifactStepIndex)
+    assertEquals(ARCHIVE_ARTIFACT_STEP_INDEX, shop.artifactStepIndex)
     assertEquals("member-list", shop.artifactName)
     assertNull(lab.runId)
     assertNull(lab.artifactStepIndex)
     assertNull(lab.artifactName)
+  }
+
+  @Test
+  fun `updateObjectGuid replaces the GUID of a live row and is idempotent`() = runBlocking {
+    val id = insertGroup("Team A", "DISABLED", guid)
+
+    assertTrue(archive.updateObjectGuid("team a", otherGuid.uppercase()))
+    assertEquals(otherGuid, MembersGroupsTestDb.row(id)!!.third)
+    assertTrue(archive.updateObjectGuid("Team A", otherGuid))
+    assertEquals(otherGuid, MembersGroupsTestDb.row(id)!!.third)
+  }
+
+  @Test
+  fun `updateObjectGuid ignores archived rows, missing groups and malformed GUIDs`() = runBlocking {
+    val archived = insertGroup("Team A", "ARCHIVED", guid)
+    val live = insertGroup("Team B", "ACTIVE", otherGuid)
+
+    assertFalse(archive.updateObjectGuid("Team A", otherGuid))
+    assertFalse(archive.updateObjectGuid("Nope", otherGuid))
+    assertFalse(archive.updateObjectGuid("Team B", "not-a-guid"))
+    assertEquals(guid, MembersGroupsTestDb.row(archived)!!.third)
+    assertEquals(otherGuid, MembersGroupsTestDb.row(live)!!.third)
   }
 
   @Test

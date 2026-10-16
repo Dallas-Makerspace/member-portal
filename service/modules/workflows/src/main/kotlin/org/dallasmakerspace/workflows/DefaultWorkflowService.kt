@@ -18,6 +18,8 @@ constructor(
     private val settings: EngineSettings,
     private val wake: WorkflowWakeSignal,
     loggerFactory: LoggerFactory,
+    private val authorizers: Map<String, @JvmSuppressWildcards WorkflowStartAuthorizer> =
+        emptyMap(),
 ) : WorkflowService {
   private val log = loggerFactory.create(DefaultWorkflowService::class.java)
   private val mapper = RunMapper(registry, settings.clock)
@@ -32,6 +34,7 @@ constructor(
   ): WorkflowPreflightResponse {
     val wf = workflow(workflowId)
     val prepared = wf.prepare(input)
+    forbiddenReason(wf, input, actor)?.let { throw WorkflowForbiddenException(it) }
     val active = activeRun(prepared.subjects)
     return buildPlan(wf, prepared, actor, active?.let { mapper.toDto(it, null) })
   }
@@ -45,6 +48,7 @@ constructor(
   ): StartResult {
     val wf = workflow(workflowId)
     val prepared = wf.prepare(input)
+    forbiddenReason(wf, input, actor)?.let { return StartResult.Forbidden(it) }
     // A locked subject skips preflight: createRun answers Existing (same token) or SubjectLocked.
     if (activeRun(prepared.subjects) == null) {
       val plan = buildPlan(wf, prepared, actor, null)
@@ -235,6 +239,36 @@ constructor(
 
   private fun workflow(id: String) = registry.get(id) ?: throw UnknownWorkflowException(id)
 
+  /** Null if allowed. Fails closed: unknown mode, no authorizer, error, timeout all deny. */
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun forbiddenReason(wf: Workflow<*>, input: JsonObject, actor: String): String? {
+    val mode = wf.authorization ?: return null
+    val authorizer = authorizers[mode]
+    if (authorizer == null) {
+      log.warn("Workflow ${wf.id} requires unknown authorization mode '$mode'; denying")
+      return DENIED
+    }
+    return try {
+      val decision =
+          withTimeoutOrNull(settings.preflightStepTimeoutMillis) {
+            authorizer.authorize(wf.id, input, actor)
+          }
+      when (decision) {
+        AuthorizationDecision.Allowed -> null
+        is AuthorizationDecision.Denied -> decision.reason.ifBlank { DENIED }
+        null -> {
+          log.warn("Authorizer for ${wf.id} timed out; denying")
+          DENIED
+        }
+      }
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      log.warn("Authorizer for ${wf.id} failed (${e::class.simpleName}); denying")
+      DENIED
+    }
+  }
+
   private suspend fun activeRun(subjects: List<Subject>) =
       subjects.firstNotNullOfOrNull { store.activeRunForSubject(normalizeSubject(it)) }
 
@@ -306,6 +340,8 @@ constructor(
   }
 
   private companion object {
+    const val DENIED = "You are not allowed to run this workflow for that subject"
+
     val ABANDONABLE =
         setOf(
             WorkflowRunStatus.PAUSED,

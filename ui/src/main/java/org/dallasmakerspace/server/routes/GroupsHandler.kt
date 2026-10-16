@@ -4,6 +4,7 @@ import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.thymeleaf.*
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.models.ActorDisplayResolver
@@ -21,6 +22,8 @@ import org.dallasmakerspace.server.models.parseCNFromDN
 import org.dallasmakerspace.server.moodle.MOODLE_FEATURE_FLAG
 import org.dallasmakerspace.server.moodle.MoodleCourses
 import org.dallasmakerspace.server.plugins.AuthException
+import org.dallasmakerspace.server.plugins.getCachedFeatureFlag
+import org.dallasmakerspace.server.workflows.ARCHIVE_FEATURE_FLAG
 import org.dallasmakerspace.server.workflows.GroupWorkflowLaunch
 
 class GroupsHandler
@@ -65,9 +68,28 @@ constructor(
     // Lets a group's own AD-designated admin (e.g. a "managedBy" group like "CA Teachers") manage
     // membership even without the site-wide MANAGE_GROUPS permission — see GroupAuthz.kt.
     val isGroupAdminDeferred = async {
-      actorUsername?.let {
-        memberServiceClient.isGroupAdmin(it, requestedGroupSlug, session.sessionId)
-      } ?: false
+      try {
+        actorUsername?.let {
+          memberServiceClient.isGroupAdmin(it, requestedGroupSlug, session.sessionId)
+        } ?: false
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        log.warn("Group admin lookup failed for $requestedGroupSlug", e)
+        false
+      }
+    }
+    val archiveFlagDeferred = async {
+      try {
+        actorUsername?.let {
+          getCachedFeatureFlag(memberServiceClient, ARCHIVE_FEATURE_FLAG, it, session.sessionId)
+        } ?: false
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        log.warn("Archive flag lookup failed", e)
+        false
+      }
     }
     val selfMembershipDeferred = async {
       actorUsername?.let {
@@ -101,6 +123,10 @@ constructor(
     // "groups.settings-enabled" rollout flag rather than the member-management one.
     val canManageGroupSettings = groupSettingsFeatureEnabled && authz.can(Permission.MANAGE_GROUPS.name)
 
+    val canArchiveGroup =
+        archiveFlagDeferred.await() &&
+            GroupWorkflowLaunch.canArchive(requestedGroup.distinguishedName, isGroupAdmin, authz)
+
     log.debug("Group: {}", requestedGroup)
     val jsonMap: MutableMap<String, Any> =
         mutableMapOf(
@@ -117,9 +143,13 @@ constructor(
                   else -> "join"
                 },
             "memberUsernamesJson" to "[]",
-            "workflowSubject" to GroupWorkflowLaunch.subject(requestedGroupName),
-            "exportMembersInput" to GroupWorkflowLaunch.exportMembersInput(requestedGroupName),
         )
+    if (canArchiveGroup) {
+      jsonMap["canArchiveGroup"] = true
+      val archiveName = requestedGroup.name.ifBlank { requestedGroupName }
+      jsonMap["workflowSubject"] = GroupWorkflowLaunch.subject(archiveName)
+      jsonMap["archiveInput"] = GroupWorkflowLaunch.archiveInput(archiveName)
+    }
     if (requestedGroup.members.isNotEmpty()) {
       // Create a map of username to most recent timestamp from history
       val memberTimestamps =

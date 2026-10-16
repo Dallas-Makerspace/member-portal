@@ -1,5 +1,7 @@
 package org.dallasmakerspace.workflows.groups
 
+import java.net.URLDecoder
+import java.net.URLEncoder
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,6 +40,15 @@ internal data class GroupExportDocument(
     val exportedAt: String,
     val groupName: String,
     val groupObjectGuid: String?,
+    /** What a rollback needs to recreate the group (schema 2). */
+    val groupDn: String = "",
+    val description: String? = null,
+    val managedBy: String? = null,
+    /** DNs of the groups this group was a member of. */
+    val parentGroups: List<String> = emptyList(),
+    /** The group's own sAMAccountName and AD groupType flags, for recreating it (schema 2). */
+    val samAccountName: String? = null,
+    val groupType: Int? = null,
     val memberCount: Int,
     val members: List<GroupExportMember>,
     /** Raw member attribute count the directory reported. */
@@ -72,14 +83,23 @@ internal constructor(
   /**
    * With [requireComplete], an incomplete export fails the step instead of being uploaded.
    * [downloadInfraOnly] limits the download of the exported file to infrastructure admins.
+   * [keyPrefix] is the object-key prefix inside the namespace (archives use their own).
    */
   data class Args(
       val groupName: String,
       val requireComplete: Boolean = false,
       val downloadInfraOnly: Boolean = false,
-  )
+      val keyPrefix: String = DEFAULT_KEY_PREFIX,
+  ) {
+    init {
+      require(KEY_PREFIX_PATTERN.matches(keyPrefix)) { "Invalid key prefix" }
+    }
+  }
 
-  /** [key] is relative to [StorageNamespace.WORKFLOW_EXPORTS]. Never holds member data. */
+  /**
+   * [key] is relative to [StorageNamespace.WORKFLOW_EXPORTS]. Never holds member data:
+   * [membersSha256] is only a digest of the sorted lowercase usernames (see [membersDigest]).
+   */
   @Serializable
   data class Result(
       val key: String,
@@ -88,6 +108,14 @@ internal constructor(
       val complete: Boolean,
       val sourceMemberCount: Int,
       val nestedGroupCount: Int,
+      val membersSha256: String = "",
+      val unresolvedMemberCount: Int = 0,
+      val groupObjectGuid: String? = null,
+      /** The group's DN when exported; lets a later step confirm it still targets this group. */
+      val groupDn: String? = null,
+      /** Counts only: parent groups, and those outside the main group OU. */
+      val parentGroupCount: Int = 0,
+      val parentGroupsOutsideMainCount: Int = 0,
   )
 
   private val store = objectStoreFactory.forNamespace(StorageNamespace.WORKFLOW_EXPORTS)
@@ -99,7 +127,7 @@ internal constructor(
 
   override suspend fun check(ctx: StepContext, args: Args): StepCheck<Result> {
     if (ctx.mode == StepMode.PREFLIGHT) return StepCheck.WillRun("Export the group members")
-    val key = objectKey(ctx.runId, args.groupName)
+    val key = objectKey(ctx.runId, args.groupName, args.keyPrefix)
     val head = storage { store.head(key) } ?: return StepCheck.WillRun("Export the group members")
     val stored = storedResult(key, head) ?: return StepCheck.WillRun("Replace an incomplete export")
     if (args.requireComplete && !stored.complete) {
@@ -144,6 +172,12 @@ internal constructor(
             exportedAt = ctx.clock.instant().toString(),
             groupName = group.cn,
             groupObjectGuid = group.objectGuid,
+            groupDn = group.distinguishedName,
+            description = group.description,
+            managedBy = group.managedBy,
+            parentGroups = group.parentGroups,
+            samAccountName = group.samAccountName,
+            groupType = group.groupType,
             memberCount = snap.members.size,
             members = snap.members,
             sourceMemberCount = snap.sourceMemberCount,
@@ -154,12 +188,19 @@ internal constructor(
     val bytes = json.encodeToString(GroupExportDocument.serializer(), document).toByteArray()
     val result =
         Result(
-            key = objectKey(ctx.runId, args.groupName).value,
+            key = objectKey(ctx.runId, args.groupName, args.keyPrefix).value,
             memberCount = snap.members.size,
             sha256 = sha256Hex(bytes),
             complete = snap.complete,
             sourceMemberCount = snap.sourceMemberCount,
             nestedGroupCount = snap.nestedGroups.size,
+            membersSha256 = membersDigest(snap.members.map { it.username }),
+            unresolvedMemberCount = snap.unresolved,
+            groupObjectGuid = group.objectGuid,
+            groupDn = group.distinguishedName,
+            parentGroupCount = group.parentGroups.size,
+            parentGroupsOutsideMainCount =
+                group.parentGroups.count { !DirectoryOus.isInMainGroupOu(it) },
         )
     ctx.checkCancelled()
     storage {
@@ -255,7 +296,14 @@ internal constructor(
           META_NESTED_COUNT to result.nestedGroupCount.toString(),
           META_COMPLETE to result.complete.toString(),
           META_SIZE to size.toString(),
-      )
+          META_MEMBERS_SHA256 to result.membersSha256,
+          META_UNRESOLVED_COUNT to result.unresolvedMemberCount.toString(),
+          META_PARENT_COUNT to result.parentGroupCount.toString(),
+          META_PARENT_OUTSIDE_COUNT to result.parentGroupsOutsideMainCount.toString(),
+      ) +
+          listOfNotNull(
+              result.groupObjectGuid?.let { META_GUID to it },
+              result.groupDn?.let { META_GROUP_DN to URLEncoder.encode(it, Charsets.UTF_8) })
 
   /** The earlier upload's result, from its metadata alone; null if absent or inconsistent. */
   private fun storedResult(key: ObjectKey, head: StoredObject): Result? {
@@ -269,6 +317,13 @@ internal constructor(
         complete = m[META_COMPLETE]?.toBooleanStrictOrNull() ?: return null,
         sourceMemberCount = m[META_SOURCE_COUNT]?.toIntOrNull() ?: return null,
         nestedGroupCount = m[META_NESTED_COUNT]?.toIntOrNull() ?: return null,
+        membersSha256 = m[META_MEMBERS_SHA256]?.takeIf { it.isNotBlank() } ?: return null,
+        unresolvedMemberCount = m[META_UNRESOLVED_COUNT]?.toIntOrNull() ?: return null,
+        groupObjectGuid = m[META_GUID]?.takeIf { it.isNotBlank() },
+        groupDn =
+            m[META_GROUP_DN]?.takeIf { it.isNotBlank() }?.let { URLDecoder.decode(it, Charsets.UTF_8) },
+        parentGroupCount = m[META_PARENT_COUNT]?.toIntOrNull() ?: 0,
+        parentGroupsOutsideMainCount = m[META_PARENT_OUTSIDE_COUNT]?.toIntOrNull() ?: 0,
     )
   }
 
@@ -282,8 +337,19 @@ internal constructor(
   private fun String?.usable() = this?.trim()?.takeIf { it.isNotEmpty() && it != "null" }
 
   companion object {
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
     const val MEMBER_LIST_ARTIFACT = "member-list"
+    const val DEFAULT_KEY_PREFIX = "group-exports"
+
+    /** Archive snapshots live apart from exports so an export expiry rule never touches them. */
+    const val ARCHIVE_KEY_PREFIX = "group-archives"
+    internal val KEY_PREFIX_PATTERN = Regex("[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*)*")
+    private const val META_MEMBERS_SHA256 = "members-sha256"
+    private const val META_UNRESOLVED_COUNT = "unresolved-member-count"
+    private const val META_GUID = "group-object-guid"
+    private const val META_GROUP_DN = "group-dn"
+    private const val META_PARENT_COUNT = "parent-group-count"
+    private const val META_PARENT_OUTSIDE_COUNT = "parent-group-outside-count"
     private const val META_SHA256 = "sha256"
     private const val META_MEMBER_COUNT = "member-count"
     private const val META_SOURCE_COUNT = "source-member-count"
@@ -298,8 +364,21 @@ internal constructor(
     private val nonSlugChars = Regex("[^a-z0-9]+")
 
     /** Derived from the run id, so a retry or crash-resume recomputes the same key. */
-    fun objectKey(runId: Long, groupName: String): ObjectKey =
-        ObjectKey("group-exports/$runId/${slug(groupName)}.json")
+    fun objectKey(
+        runId: Long,
+        groupName: String,
+        prefix: String = DEFAULT_KEY_PREFIX,
+    ): ObjectKey = ObjectKey("$prefix/$runId/${slug(groupName)}.json")
+
+    /** SHA-256 over the distinct, sorted, lowercase usernames, one per line; no member data. */
+    fun membersDigest(usernames: Collection<String>): String =
+        sha256Hex(
+            usernames
+                .map { it.trim().lowercase() }
+                .distinct()
+                .sorted()
+                .joinToString("\n")
+                .toByteArray(Charsets.UTF_8))
 
     /** Lowercase letters, digits and single dashes only, so the raw name never reaches a key. */
     fun slug(groupName: String): String =

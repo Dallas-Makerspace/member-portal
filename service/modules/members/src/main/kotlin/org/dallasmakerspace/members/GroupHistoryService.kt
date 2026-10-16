@@ -79,20 +79,33 @@ constructor(
       val actorId = actorProfile.id
       val memberId = memberProfile.id
 
+      // A stale call for a group that is gone from AD must not insert a placeholder group row.
+      val inDirectory =
+          withContext(Dispatchers.IO) { activeDirectoryService.groupExists(groupName) }
+
       return suspendTransaction {
-        // Get or create group
-        val group =
+        val existing =
             GroupDAO.find {
                   (GroupsTable.name eq groupName) and
                       (GroupsTable.status neq GROUP_STATUS_ARCHIVED)
                 }
                 .firstOrNull()
-                ?: GroupDAO.new {
-                  name = groupName
-                  // Store the full DN if available, otherwise use a constructed one
-                  dn = "CN=$groupName,OU=Groups,DC=dms,DC=local"
-                  created = LocalDateTime.now()
+        val group =
+            existing
+                ?: if (inDirectory) {
+                  GroupDAO.new {
+                    name = groupName
+                    // Store the full DN if available, otherwise use a constructed one
+                    dn = "CN=$groupName,OU=Groups,DC=dms,DC=local"
+                    created = LocalDateTime.now()
+                  }
+                } else {
+                  null
                 }
+        if (group == null) {
+          logger.warn("Not recording history: the group is not in the directory")
+          return@suspendTransaction false
+        }
 
         // Record the history event
         GroupHistoryDAO.new {

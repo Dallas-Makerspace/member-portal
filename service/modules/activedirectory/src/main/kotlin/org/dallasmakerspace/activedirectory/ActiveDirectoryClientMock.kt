@@ -6,6 +6,14 @@ class ActiveDirectoryClientMock : IActiveDirectoryClient {
 
   override fun getGroup(groupname: String): Map<String, Any?> = emptyMap()
 
+  override fun getGroupStrict(groupname: String): Map<String, Any?> = emptyMap()
+
+  override fun groupExists(groupName: String): Boolean = false
+
+  override fun countManagedObjects(groupName: String): ManagedObjectCounts = ManagedObjectCounts()
+
+  override fun addGroupToParentGroup(groupName: String, parentGroupDn: String): Boolean = false
+
   override fun getMultipleGroups(groupnames: List<String>): Map<String, Map<String, Any?>> =
       emptyMap()
 
@@ -27,7 +35,7 @@ class ActiveDirectoryClientMock : IActiveDirectoryClient {
 
   override fun updateBadgeNumber(username: String, newBadgeNumber: String) = Unit
 
-  override fun deleteGroup(groupName: String): Boolean = false
+  override fun deleteGroup(groupName: String, expectedObjectGuid: String): Boolean = false
 
   override fun createGroup(spec: AdGroupSpec): AdGroupCreateResult =
       AdGroupCreateResult(buildGroupDn(spec.name, spec.parentOuDn), null, created = true)

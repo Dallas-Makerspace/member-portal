@@ -35,6 +35,23 @@ class SseRelayTest {
   }
 
   @Test
+  fun `data payloads are rewritten and other lines are left alone`() = runBlocking {
+    withTimeout(5_000) {
+      val upstream = ByteChannel(autoFlush = true)
+      val out = ByteChannel(autoFlush = true)
+      val job =
+          async {
+            SseRelay.relay(upstream, out, heartbeatMs = 10_000, rewrite = { it.uppercase() })
+          }
+      upstreamWrite(upstream, "id: 7\nevent: run\ndata: {\"a\":\"b\"}\n\n")
+      upstream.close()
+      job.await()
+      out.close()
+      assertEquals("id: 7\nevent: run\ndata: {\"A\":\"B\"}\n\n", out.readRemaining().readString())
+    }
+  }
+
+  @Test
   fun `an idle stream gets heartbeat comments`() = runBlocking {
     withTimeout(5_000) {
       val upstream = ByteChannel(autoFlush = true)

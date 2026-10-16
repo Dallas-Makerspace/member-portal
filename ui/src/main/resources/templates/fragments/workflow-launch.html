@@ -12,7 +12,9 @@
 
   The button stays hidden unless the workflows.enabled flag is on for the user and they hold the
   workflow's required permission (the UI re-checks both on every call). The input argument holds
-  prefilled field values as a JSON object; fields that are not prefilled are asked for in the dialog.
+  prefilled field values as a JSON object; fields that are not prefilled are asked for in the dialog
+  (multiline, min/max length with counter, and hint come from the definition; a definition with
+  confirmTypingField also asks the user to type that input's value before the primary button enables).
 -->
 <th:block th:fragment="styles">
     <link rel="stylesheet" href="/static/styles/workflows.css"/>
@@ -23,6 +25,7 @@
 
 <th:block th:fragment="scripts">
     <script src="/static/js/workflow-common.js"></script>
+    <script src="/static/js/workflow-fields.js"></script>
     <script src="/static/js/workflow-launch.js"></script>
 </th:block>
 </body>

@@ -37,6 +37,33 @@ interface IActiveDirectoryService {
   /** Gets the ADGroup object for the given groupname. */
   fun getGroup(groupname: String): ADGroup
 
+  /**
+   * Like [getGroup], but refuses when two or more groups of that name exist in the group OUs.
+   *
+   * @throws AmbiguousGroupException on such a duplicate
+   */
+  fun getGroupStrict(groupname: String): ADGroup
+
+  /** True if a group of this name exists anywhere in the domain (cheap, no member load). */
+  fun groupExists(groupName: String): Boolean
+
+  /**
+   * Counts the objects whose managedBy is the named group (read-only, blocking).
+   *
+   * @throws GroupNotFoundException if there is no such group
+   * @throws AmbiguousGroupException if the name is duplicated in the group OUs
+   */
+  fun countManagedObjects(groupName: String): ManagedObjectCounts
+
+  /**
+   * Adds the named group as a member of [parentGroupDn] (idempotent; blocking). Both must be inside
+   * the main group OU.
+   *
+   * @return true if the membership was added, false if it already existed
+   * @throws GroupMembershipRefusedException if either group is outside the main group OU
+   */
+  fun addGroupToParentGroup(groupName: String, parentGroupDn: String): Boolean
+
   /** Gets multiple ADGroup objects for the given list of group names with their members. */
   fun getMultipleGroups(groupnames: List<String>): List<ADGroup>
 
@@ -69,12 +96,16 @@ interface IActiveDirectoryService {
   fun updateBadgeNumber(username: String, newBadgeNumber: String)
 
   /**
-   * Deletes the named group from AD. Blocking LDAP call: run it on Dispatchers.IO.
+   * Deletes the group whose objectGUID is [expectedObjectGuid] and whose name is [groupName].
+   * Blocking LDAP call: run it on Dispatchers.IO.
    *
-   * @return true if a group was deleted, false if none existed (idempotent)
-   * @throws GroupDeletionRefusedException if the group is not inside the main group OU
+   * @return true if a group was deleted, false if it vanished meanwhile
+   * @throws GroupGuidNotFoundException if no group has that GUID (never falls back to the name)
+   * @throws GroupDeletionRefusedException if it is outside the main group OU, protected, or has a
+   *   different name
+   * @throws AmbiguousGroupException if the name is duplicated in the group OUs
    */
-  fun deleteGroup(groupName: String): Boolean
+  fun deleteGroup(groupName: String, expectedObjectGuid: String): Boolean
 
   /**
    * Creates a global security group. Blocking LDAP call: run it on Dispatchers.IO. Succeeds without

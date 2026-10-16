@@ -51,6 +51,12 @@ data class WorkflowInputField(
     val required: Boolean = true,
     /** "string" only for now. */
     val type: String = "string",
+    /** Render as a multi-line text box. */
+    val multiline: Boolean = false,
+    val minLength: Int? = null,
+    val maxLength: Int? = null,
+    /** Helper text shown under the field (e.g. who can read what is entered). */
+    val hint: String? = null,
 )
 
 @Serializable
@@ -73,6 +79,14 @@ data class WorkflowDefinitionDto(
     val requiredPermission: String?,
     val inputFields: List<WorkflowInputField>,
     val steps: List<WorkflowStepDefinitionDto>,
+    /**
+     * Per-subject authorization on top of [requiredPermission]; null = none. "GROUP_ADMIN": the
+     * user must administer the group named by the "groupName" input (listed group admin, Domain
+     * Admins or Infrastructure member). Enforced by the UI and re-checked by the service.
+     */
+    val authorization: String? = null,
+    /** Name of the input field whose exact value the user must type to confirm; null = none. */
+    val confirmTypingField: String? = null,
 )
 
 @Serializable data class WorkflowPreflightRequest(val input: JsonObject)

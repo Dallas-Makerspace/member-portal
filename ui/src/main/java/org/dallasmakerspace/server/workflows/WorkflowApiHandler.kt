@@ -27,8 +27,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.dallasmakerspace.models.workflows.WorkflowArtifactUrlResponse
 import org.dallasmakerspace.models.workflows.WorkflowDefinitionDto
+import org.dallasmakerspace.models.workflows.WorkflowAdminInProgressDto
+import org.dallasmakerspace.models.workflows.WorkflowRunDto
 import org.dallasmakerspace.models.workflows.WorkflowRunStatus
+import org.dallasmakerspace.models.workflows.WorkflowStreamMessage
 import org.dallasmakerspace.server.auth.Authz
+import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.HttpException
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -87,27 +91,27 @@ constructor(
     val sid = session.sessionId
     when (route) {
       WorkflowRoute.Definitions -> {
-        val defs = client.definitions(sid).filter { canUseWorkflow(authz, it) }
+        val defs = client.definitions(sid).filter { canUseNow(it, username) }
         call.respondRaw(
             HttpStatusCode.OK,
-            WorkflowServiceClient.json.encodeToString(
+            WorkflowServiceClient.browserJson.encodeToString(
                 ListSerializer(WorkflowDefinitionDto.serializer()), defs))
       }
       is WorkflowRoute.Preflight -> {
         val body = call.requireBody(needToken = false) ?: return
-        val def = call.requireUsableDefinition(route.workflowId) ?: return
+        val def = call.requireUsableDefinition(route.workflowId, username) ?: return
         call.relay(client.preflight(def.id, body, username, sid))
       }
       is WorkflowRoute.Start -> {
         val body = call.requireBody(needToken = true) ?: return
-        val def = call.requireUsableDefinition(route.workflowId) ?: return
+        val def = call.requireUsableDefinition(route.workflowId, username) ?: return
         call.relay(client.start(def.id, body, username, sid))
       }
       WorkflowRoute.ListRuns -> listRuns(call, username)
       is WorkflowRoute.Run -> {
         val resp = client.rawRun(route.runId, username, sid)
         if (!resp.isSuccess) return call.relay(resp)
-        call.requireViewable(resp.body) ?: return
+        call.requireViewable(resp.body, username) ?: return
         call.relay(resp)
       }
       is WorkflowRoute.RunEvents -> {
@@ -125,23 +129,33 @@ constructor(
       is WorkflowRoute.ArtifactDownload -> downloadArtifact(call, route, username)
       WorkflowRoute.AdminInProgress -> {
         if (!call.requireAdmin()) return
-        call.relay(client.rawAdminInProgress(username, sid))
+        val resp = client.rawAdminInProgress(username, sid)
+        val hidden = hiddenAdminRuns(username)
+        if (!resp.isSuccess || hidden == null) return call.relay(resp)
+        call.respondRaw(HttpStatusCode.OK, filterAdminJson(resp.body, hidden))
       }
       WorkflowRoute.AdminSummary -> {
         if (!call.requireAdmin()) return
-        call.respondRaw(HttpStatusCode.OK, adminSummary(client.adminInProgress(username, sid)).toString())
+        val dto = client.adminInProgress(username, sid)
+        val hidden = hiddenAdminRuns(username)
+        val shown = if (hidden == null) dto else dto.copy(runs = dto.runs.filterNot(hidden))
+        call.respondRaw(HttpStatusCode.OK, adminSummary(shown).toString())
       }
       WorkflowRoute.SubjectStream -> subjectStream(call, username)
       is WorkflowRoute.RunStream -> {
         val run = call.requireViewableRun(route.runId, username) ?: return
         val def = client.definition(run.workflowId, sid)
+        // Per-item authorized runs were decided once at open; others are re-checked on heartbeats.
+        val scoped = def?.authorization != null
         stream(call, "/workflows/runs/${route.runId}/stream", emptyMap(), username) {
-          canViewWorkflow(it, def)
+          scoped || canViewWorkflow(it, def)
         }
       }
       WorkflowRoute.AdminStream -> {
         if (!call.requireAdmin()) return
-        stream(call, "/workflows/admin/stream", emptyMap(), username) { isWorkflowAdmin(it) }
+        val hidden = hiddenAdminRuns(username)
+        val rewrite: ((String) -> String)? = hidden?.let { h -> { data -> filterStreamMessage(data, h) } }
+        stream(call, "/workflows/admin/stream", emptyMap(), username, rewrite) { isWorkflowAdmin(it) }
       }
     }
   }
@@ -159,7 +173,7 @@ constructor(
     val def = client.definition(run.workflowId, sid)
     val artifact =
         run.steps.getOrNull(route.stepIndex)?.artifacts?.firstOrNull { it.name == route.name }
-    if (def == null || !canUseWorkflow(authz, def)) {
+    if (def == null || !canUseWorkflow(authz, def) || !canSee(def, run, username)) {
       return call.respondMessage(HttpStatusCode.Forbidden, "Not allowed to download from this workflow")
     }
     if (artifact == null) return call.respondMessage(HttpStatusCode.NotFound, "Not found")
@@ -192,7 +206,7 @@ constructor(
       if (!call.requireAdmin()) return
     } else {
       val def = client.definition(workflow, session.sessionId)
-      if (!canViewWorkflow(authz, def)) {
+      if (!canViewList(def, q["subject"], username)) {
         return call.respondMessage(HttpStatusCode.Forbidden, "Not allowed to view this workflow")
       }
     }
@@ -208,7 +222,10 @@ constructor(
     q["actor"]?.takeIf { it.isNotBlank() }?.let { query["actor"] = it }
     q["active"]?.takeIf { it == "true" }?.let { query["active"] = it }
     q["limit"]?.toIntOrNull()?.let { query["limit"] = it.coerceIn(1, MAX_LIMIT).toString() }
-    call.relay(client.listRuns(query, username, session.sessionId))
+    val resp = client.listRuns(query, username, session.sessionId)
+    val hidden = if (workflow == null) hiddenAdminRuns(username) else null
+    if (!resp.isSuccess || hidden == null) return call.relay(resp)
+    call.respondRaw(HttpStatusCode.OK, filterRunListJson(resp.body, hidden))
   }
 
   private suspend fun subjectStream(call: ApplicationCall, username: String) {
@@ -218,9 +235,11 @@ constructor(
       return call.respondMessage(HttpStatusCode.BadRequest, "workflow is required")
     }
     val def = client.definition(workflow, session.sessionId)
-    if (!canViewWorkflow(authz, def)) {
+    if (!canViewList(def, q["subject"], username)) {
       return call.respondMessage(HttpStatusCode.Forbidden, "Not allowed to view this workflow")
     }
+    // A group admin's access to a per-item authorized stream is decided once, at open.
+    val subjectGrant = def?.authorization != null && !canViewWorkflow(authz, def)
     val query = linkedMapOf("workflow" to workflow)
     q["subject"]?.takeIf { it.isNotBlank() }?.let {
       if (!isValidSubject(it)) {
@@ -228,7 +247,9 @@ constructor(
       }
       query["subject"] = it
     }
-    stream(call, "/workflows/runs/stream", query, username) { canViewWorkflow(it, def) }
+    stream(call, "/workflows/runs/stream", query, username) {
+      subjectGrant || canViewWorkflow(it, def)
+    }
   }
 
   private suspend fun stream(
@@ -236,6 +257,7 @@ constructor(
       path: String,
       query: Map<String, String>,
       username: String,
+      rewrite: ((String) -> String)? = null,
       allowed: (Authz) -> Boolean,
   ) {
     val lastEventId =
@@ -250,7 +272,7 @@ constructor(
       try {
         client.openStream(path, query, lastEventId, username, sid) { status, body ->
           if (status in 200..299) {
-            SseRelay.relay(body, out) { stillAllowed(token, allowed) }
+            SseRelay.relay(body, out, rewrite = rewrite) { stillAllowed(token, allowed) }
           } else {
             SseRelay.writeEvent(out, SseRelay.ERROR_EVENT, """{"status":$status}""")
           }
@@ -287,23 +309,73 @@ constructor(
     return false
   }
 
-  private suspend fun ApplicationCall.requireUsableDefinition(id: String): WorkflowDefinitionDto? {
+  /** Permission and mode checks plus the workflow's own per-user flag, when it has one. */
+  private suspend fun canUseNow(def: WorkflowDefinitionDto, username: String) =
+      canUseWorkflow(authz, def) &&
+          isWorkflowFlagOn(memberServiceClient, def, username, session.sessionId)
+
+  private suspend fun canSee(def: WorkflowDefinitionDto?, run: WorkflowRunDto, username: String) =
+      canViewRun(authz, def, username, run.actor) {
+        administersGroup(memberServiceClient, username, runGroupName(run), session.sessionId)
+      }
+
+  /**
+   * Whether the user may list or stream [def]'s runs. Per-item authorized workflows need
+   * ARCHIVE_ANY_GROUP, unless the request is filtered to one `group:<name>` subject the user
+   * administers.
+   */
+  private suspend fun canViewList(
+      def: WorkflowDefinitionDto?,
+      subject: String?,
+      username: String,
+  ): Boolean {
+    if (canViewWorkflow(authz, def)) return true
+    if (def?.authorization == null || !canUseWorkflow(authz, def)) return false
+    val parts = subject?.trim()?.split(':', limit = 2)
+    if (parts == null || parts.size != 2 || parts[0] != "group" || parts[1].isBlank()) return false
+    return administersGroup(memberServiceClient, username, parts[1], session.sessionId)
+  }
+
+  /**
+   * Runs the admin pages must not show: those of per-item authorized workflows the user may not
+   * see (no ARCHIVE_ANY_GROUP, not their own). Null when nothing needs hiding.
+   */
+  private suspend fun hiddenAdminRuns(username: String): ((WorkflowRunDto) -> Boolean)? {
+    val scoped =
+        client
+            .definitions(session.sessionId)
+            .filter { it.authorization != null }
+            .map { it.id }
+            .toSet()
+    if (scoped.isEmpty() || authz.can(Permission.ARCHIVE_ANY_GROUP.name)) return null
+    return { run -> run.workflowId in scoped && run.actor != username }
+  }
+
+  private suspend fun ApplicationCall.requireUsableDefinition(
+      id: String,
+      username: String,
+  ): WorkflowDefinitionDto? {
     val def = client.definition(id, session.sessionId)
     if (def == null) {
       respondMessage(HttpStatusCode.NotFound, "Unknown workflow")
       return null
     }
-    if (!canUseWorkflow(authz, def)) {
+    if (!canUseNow(def, username)) {
       respondMessage(HttpStatusCode.Forbidden, "Not allowed to use this workflow")
       return null
     }
     return def
   }
 
-  private suspend fun ApplicationCall.requireViewable(runJson: String): Unit? {
-    val workflowId = runWorkflowId(runJson)
-    val def = workflowId?.let { client.definition(it, session.sessionId) }
-    if (!canViewWorkflow(authz, def)) {
+  private suspend fun ApplicationCall.requireViewable(runJson: String, username: String): Unit? {
+    val run =
+        try {
+          WorkflowServiceClient.json.decodeFromString(WorkflowRunDto.serializer(), runJson)
+        } catch (e: IllegalArgumentException) {
+          null
+        }
+    val def = run?.let { client.definition(it.workflowId, session.sessionId) }
+    if (run == null || !canSee(def, run, username)) {
       respondMessage(HttpStatusCode.Forbidden, "Not allowed to view this run")
       return null
     }
@@ -315,7 +387,7 @@ constructor(
         if (run == null) {
           respondMessage(HttpStatusCode.NotFound, "Run $runId not found")
           null
-        } else if (!canViewWorkflow(authz, client.definition(run.workflowId, session.sessionId))) {
+        } else if (!canSee(client.definition(run.workflowId, session.sessionId), run, username)) {
           respondMessage(HttpStatusCode.Forbidden, "Not allowed to view this run")
           null
         } else {
@@ -366,15 +438,42 @@ constructor(
           null
         }
 
-    private fun runWorkflowId(runJson: String): String? =
+    /** Drops [hidden] runs from an admin in-progress body; an unreadable body shows no runs. */
+    internal fun filterAdminJson(body: String, hidden: (WorkflowRunDto) -> Boolean): String =
         try {
-          WorkflowServiceClient.json
-              .parseToJsonElement(runJson)
-              .jsonObject["workflowId"]
-              ?.jsonPrimitive
-              ?.contentOrNull
+          val dto = WorkflowServiceClient.json.decodeFromString(WorkflowAdminInProgressDto.serializer(), body)
+          WorkflowServiceClient.json.encodeToString(
+              WorkflowAdminInProgressDto.serializer(), dto.copy(runs = dto.runs.filterNot(hidden)))
         } catch (e: IllegalArgumentException) {
-          null
+          buildJsonObject {
+                put("safeToDeploy", false)
+                put("runs", kotlinx.serialization.json.JsonArray(emptyList()))
+              }
+              .toString()
+        }
+
+    internal fun filterRunListJson(body: String, hidden: (WorkflowRunDto) -> Boolean): String =
+        try {
+          val runs =
+              WorkflowServiceClient.json.decodeFromString(ListSerializer(WorkflowRunDto.serializer()), body)
+          WorkflowServiceClient.json.encodeToString(
+              ListSerializer(WorkflowRunDto.serializer()), runs.filterNot(hidden))
+        } catch (e: IllegalArgumentException) {
+          "[]"
+        }
+
+    /** One SSE data payload with [hidden] runs removed; an unreadable payload becomes empty. */
+    internal fun filterStreamMessage(data: String, hidden: (WorkflowRunDto) -> Boolean): String =
+        try {
+          val msg = WorkflowServiceClient.json.decodeFromString(WorkflowStreamMessage.serializer(), data)
+          val cleaned =
+              msg.copy(
+                  run = msg.run?.takeUnless(hidden),
+                  runs = msg.runs?.filterNot(hidden),
+                  admin = msg.admin?.let { it.copy(runs = it.runs.filterNot(hidden)) })
+          WorkflowServiceClient.json.encodeToString(WorkflowStreamMessage.serializer(), cleaned)
+        } catch (e: IllegalArgumentException) {
+          "{\"type\":\"filtered\"}"
         }
 
     fun adminSummary(dto: org.dallasmakerspace.models.workflows.WorkflowAdminInProgressDto) =

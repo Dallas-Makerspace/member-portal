@@ -347,7 +347,18 @@ class GroupExportMembersWorkflowTest {
       val output = Json.parseToJsonElement(assertNotNull(record.outputJson)).jsonObject
       assertEquals(
           setOf(
-              "key", "memberCount", "sha256", "complete", "sourceMemberCount", "nestedGroupCount"),
+              "key",
+              "memberCount",
+              "sha256",
+              "complete",
+              "sourceMemberCount",
+              "nestedGroupCount",
+              "membersSha256",
+              "unresolvedMemberCount",
+              "groupObjectGuid",
+              "groupDn",
+              "parentGroupCount",
+              "parentGroupsOutsideMainCount"),
           output.keys)
       assertEquals(
           "group-exports/${first.id}/test-group.json", output["key"]!!.jsonPrimitive.content)

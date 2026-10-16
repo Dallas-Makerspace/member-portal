@@ -56,12 +56,42 @@ interface IActiveDirectoryClient {
   fun updateBadgeNumber(username: String, newBadgeNumber: String)
 
   /**
-   * Deletes the named group, found domain-wide (earliest group OU first).
+   * Like [getGroup], but refuses when two or more groups of that name exist in the group OUs.
    *
-   * @return true if a group was deleted, false if none exists (idempotent)
-   * @throws GroupDeletionRefusedException if the group is not inside the main group OU
+   * @throws AmbiguousGroupException on such a duplicate
    */
-  fun deleteGroup(groupName: String): Boolean
+  fun getGroupStrict(groupname: String): Map<String, Any?>
+
+  /** True if a group of this name exists anywhere in the domain. */
+  fun groupExists(groupName: String): Boolean
+
+  /**
+   * Counts the objects whose managedBy is the named group (read-only).
+   *
+   * @throws GroupNotFoundException if there is no such group
+   * @throws AmbiguousGroupException if the name is duplicated in the group OUs
+   */
+  fun countManagedObjects(groupName: String): ManagedObjectCounts
+
+  /**
+   * Adds the named group as a member of [parentGroupDn] (idempotent). Both must be inside the main
+   * group OU.
+   *
+   * @return true if the membership was added, false if it already existed
+   * @throws GroupMembershipRefusedException if either group is outside the main group OU
+   */
+  fun addGroupToParentGroup(groupName: String, parentGroupDn: String): Boolean
+
+  /**
+   * Deletes the group whose objectGUID is [expectedObjectGuid] and whose name is [groupName].
+   *
+   * @return true if a group was deleted, false if it vanished meanwhile
+   * @throws GroupGuidNotFoundException if no group has that GUID
+   * @throws GroupDeletionRefusedException if it is outside the main group OU, protected, or has a
+   *   different name
+   * @throws AmbiguousGroupException if the name is duplicated in the group OUs
+   */
+  fun deleteGroup(groupName: String, expectedObjectGuid: String): Boolean
 
   /**
    * Creates a global security group; succeeds without changes if it already exists at the same DN.

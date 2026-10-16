@@ -15,6 +15,18 @@ object AdGuid {
     return format(hex)
   }
 
+  /** The raw 16-byte objectGUID (Microsoft mixed-endian layout) for a textual GUID, else null. */
+  fun toBytes(raw: String?): ByteArray? {
+    val canonical = normalize(raw) ?: return null
+    val hex = canonical.replace("-", "")
+    val order = intArrayOf(3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15)
+    val bytes = ByteArray(GUID_BYTES)
+    order.forEachIndexed { textIndex, byteIndex ->
+      bytes[byteIndex] = hex.substring(textIndex * 2, textIndex * 2 + 2).toInt(16).toByte()
+    }
+    return bytes
+  }
+
   /** Normalizes a textual GUID (hyphenated, braced or bare hex, any case), else null. */
   fun normalize(raw: String?): String? {
     val trimmed = raw?.trim()?.removePrefix("{")?.removeSuffix("}")?.lowercase() ?: return null

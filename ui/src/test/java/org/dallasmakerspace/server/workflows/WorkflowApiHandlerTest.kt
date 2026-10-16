@@ -55,14 +55,37 @@ class WorkflowApiHandlerTest {
         {"id":"group.archive","version":1,"displayName":"Archive group","description":"d",
          "requiredPermission":"MANAGE_GROUPS","inputFields":[],"steps":[]},
         {"id":"open.thing","version":1,"displayName":"Open thing","description":"d",
-         "requiredPermission":null,"inputFields":[],"steps":[]}
+         "requiredPermission":null,"inputFields":[],"steps":[]},
+        {"id":"scoped.thing","version":1,"displayName":"Scoped thing","description":"d",
+         "requiredPermission":null,"authorization":"GROUP_ADMIN","confirmTypingField":"groupName",
+         "inputFields":[
+           {"name":"groupName","label":"Group name"},
+           {"name":"reason","label":"Reason","multiline":true,"minLength":10,"maxLength":200,
+            "hint":"Everyone can read this."}],
+         "steps":[]},
+        {"id":"odd.thing","version":1,"displayName":"Odd thing","description":"d",
+         "requiredPermission":null,"authorization":"FUTURE_MODE","inputFields":[],"steps":[]}
       ]"""
 
-  private fun runJson(id: Long, workflowId: String = "group.archive", status: String = "PAUSED") =
+  private fun runJson(
+      id: Long,
+      workflowId: String = "group.archive",
+      status: String = "PAUSED",
+      actor: String = "jdoe",
+      input: String = "{}",
+  ) =
       """{"id":$id,"workflowId":"$workflowId","workflowVersion":1,"displayName":"Archive group",
-        "status":"$status","input":{},"subjects":[{"type":"group","key":"example-group"}],
-        "actor":"jdoe","triggeredBy":"UI","currentStepIndex":1,"stepCount":3,
+        "status":"$status","input":$input,"subjects":[{"type":"group","key":"example-group"}],
+        "actor":"$actor","triggeredBy":"UI","currentStepIndex":1,"stepCount":3,
         "createdAt":"2026-01-02T03:04:05Z"}"""
+
+  // Runs of the per-item authorized workflow: 31 by jdoe for Alpha Group, 32 by ann for Beta Group,
+  // 33 by jdoe with no group in its input.
+  private val scopedRuns =
+      mapOf(
+          31L to runJson(31, "scoped.thing", actor = "jdoe", input = """{"groupName":"Alpha Group"}"""),
+          32L to runJson(32, "scoped.thing", actor = "ann", input = """{"groupName":"Beta Group"}"""),
+          33L to runJson(33, "scoped.thing", actor = "jdoe"))
 
   /** Run with one SUCCEEDED step offering a public and an infra-only file. */
   private fun artifactRunJson(id: Long, workflowId: String) =
@@ -103,6 +126,17 @@ class WorkflowApiHandlerTest {
                 """{"safeToDeploy":$adminSafe,"runs":$adminRuns,"generatedAt":"2026-01-02T03:04:05Z"}""")
         path == "/workflows/runs/7" -> json(runJson(7))
         path == "/workflows/runs/8" -> json(runJson(8, "open.thing", "RUNNING"))
+        path == "/workflows/runs/25" -> json(runJson(25, "scoped.thing", "PAUSED"))
+        Regex("/workflows/runs/(3[123])").matchEntire(path) != null ->
+            json(scopedRuns.getValue(path.substringAfterLast('/').toLong()))
+        Regex("/workflows/runs/3[123]/events").matches(path) -> json("[]")
+        path == "/workflows/runs/25/retry" -> json(runJson(25, "scoped.thing", "RUNNING"))
+        path == "/workflows/scoped.thing/preflight" || path == "/workflows/scoped.thing/runs" ->
+            when (request.headers[ACTING_USER_HEADER]) {
+              "mia" -> json("""{"message":"Forbidden"}""", HttpStatusCode.Forbidden)
+              "bea" -> json("""{"message":"Group is locked by run 5"}""", HttpStatusCode.Conflict)
+              else -> json("""{"workflowId":"scoped.thing","canStart":true,"steps":[],"notes":[]}""")
+            }
         path == "/workflows/runs/21" -> json(artifactRunJson(21, "group.archive"))
         path == "/workflows/runs/22" -> json(artifactRunJson(22, "open.thing"))
         path == "/workflows/runs/23" -> json(artifactRunJson(23, "group.archive"))
@@ -116,7 +150,12 @@ class WorkflowApiHandlerTest {
         path == "/workflows/runs/404" -> json("""{"message":"Run 404 not found"}""", HttpStatusCode.NotFound)
         path == "/workflows/runs/7/events" -> json("[]")
         path == "/workflows/runs/7/retry" -> json(runJson(7, status = "RUNNING"))
-        path == "/workflows/runs" -> json("[${runJson(7)}]")
+        path == "/workflows/runs" ->
+            if (request.url.parameters["workflow"] == "scoped.thing") {
+              json("[${scopedRuns.getValue(31)},${scopedRuns.getValue(32)}]")
+            } else {
+              json("[${runJson(7)},${scopedRuns.getValue(31)},${scopedRuns.getValue(32)}]")
+            }
         path == "/workflows/group.archive/preflight" ->
             json("""{"workflowId":"group.archive","canStart":true,"steps":[],"notes":[]}""")
         path == "/workflows/group.archive/runs" ->
@@ -132,12 +171,21 @@ class WorkflowApiHandlerTest {
           "olive" to listOf("/President"), // officer: MANAGE_GROUPS
           "bea" to listOf("/Board"), // admin: MANAGE_CONFIG only
           "ivy" to listOf("/Infrastructure"),
-          "zed" to listOf("/Infrastructure")) // only used with the flag off (flag results are cached)
+          "zed" to listOf("/Infrastructure"), // only used with the flag off (flag results are cached)
+          "gus" to listOf<String>(), // plain member who administers Alpha Group
+          "ann" to listOf<String>(), // plain member, actor of run 32
+          "jdoe" to listOf<String>(), // plain member, actor of runs 31 and 33
+          "fay" to listOf("/President")) // officer with the archive flag off
 
   private fun memberServiceClient(flagOn: Boolean): MemberServiceClient {
     val client = mock<MemberServiceClient>()
     runBlocking {
       whenever(client.isFeatureEnabled(eq(WORKFLOWS_FEATURE_FLAG), any(), any())).thenReturn(flagOn)
+      whenever(client.isFeatureEnabled(eq(ARCHIVE_FEATURE_FLAG), any(), any())).thenReturn(flagOn)
+      whenever(client.isFeatureEnabled(eq(ARCHIVE_FEATURE_FLAG), eq("fay"), any())).thenReturn(false)
+      whenever(client.isGroupAdmin(any(), any(), any())).thenReturn(false)
+      whenever(client.isGroupAdmin(eq("gus"), eq("Alpha+Group"), any())).thenReturn(true)
+      whenever(client.isGroupAdmin(eq("gus"), eq("alpha+group"), any())).thenReturn(true)
     }
     return client
   }
@@ -239,8 +287,214 @@ class WorkflowApiHandlerTest {
     withApi {
       val member = getAs("mia", "/api/workflows/definitions").bodyAsText()
       assertTrue("open.thing" in member && "group.archive" !in member, member)
+      assertTrue("scoped.thing" in member, member)
       val officer = getAs("olive", "/api/workflows/definitions").bodyAsText()
       assertTrue("open.thing" in officer && "group.archive" in officer, officer)
+    }
+  }
+
+  @Test
+  fun `definitions relay the field metadata and authorization to the browser`() {
+    withApi {
+      val body = getAs("mia", "/api/workflows/definitions").bodyAsText()
+      listOf(
+              """"authorization":"GROUP_ADMIN"""",
+              """"confirmTypingField":"groupName"""",
+              """"required":true""",
+              """"multiline":true""",
+              """"minLength":10""",
+              """"maxLength":200""",
+              """"hint":"Everyone can read this."""")
+          .forEach { assertTrue(it in body, "$it missing from $body") }
+      // A definition with a mode the UI does not know is not offered.
+      assertTrue("odd.thing" !in body, body)
+    }
+  }
+
+  @Test
+  fun `a per-item authorized workflow passes service 403 and 409 answers through`() {
+    withApi {
+      val denied = postAs("mia", "/api/workflows/scoped.thing/preflight", """{"input":{"groupName":"x"}}""")
+      assertEquals(HttpStatusCode.Forbidden, denied.status)
+      assertTrue("Forbidden" in denied.bodyAsText())
+      assertEquals(1, serviceCalls("/workflows/scoped.thing/preflight").size)
+
+      val deniedStart =
+          postAs("mia", "/api/workflows/scoped.thing/runs", """{"input":{},"idempotencyToken":"t"}""")
+      assertEquals(HttpStatusCode.Forbidden, deniedStart.status)
+
+      val locked = postAs("bea", "/api/workflows/scoped.thing/runs", """{"input":{},"idempotencyToken":"t"}""")
+      assertEquals(HttpStatusCode.Conflict, locked.status)
+      assertTrue("locked" in locked.bodyAsText())
+
+      val ok = postAs("olive", "/api/workflows/scoped.thing/preflight", """{"input":{}}""")
+      assertEquals(HttpStatusCode.OK, ok.status)
+      assertEquals("olive", serviceCalls("/workflows/scoped.thing/preflight").last().headers[ACTING_USER_HEADER])
+    }
+  }
+
+  @Test
+  fun `a workflow with an unknown authorization mode is refused before reaching the service`() {
+    withApi {
+      val resp = postAs("ivy", "/api/workflows/odd.thing/preflight", """{"input":{}}""")
+      assertEquals(HttpStatusCode.Forbidden, resp.status)
+      assertTrue(serviceCalls("/workflows/odd.thing").isEmpty())
+    }
+  }
+
+  @Test
+  fun `group archive is unusable for a user without the archive flag`() {
+    withApi {
+      val defs = getAs("fay", "/api/workflows/definitions").bodyAsText()
+      assertTrue("group.archive" !in defs, defs)
+      assertTrue("open.thing" in defs, defs)
+      assertEquals(
+          HttpStatusCode.Forbidden,
+          postAs("fay", "/api/workflows/group.archive/preflight", """{"input":{}}""").status)
+      assertEquals(
+          HttpStatusCode.Forbidden,
+          postAs("fay", "/api/workflows/group.archive/runs", """{"input":{},"idempotencyToken":"t"}""").status)
+      assertTrue(serviceCalls("/workflows/group.archive").isEmpty())
+      // Another officer with the flag is unaffected.
+      assertEquals(
+          HttpStatusCode.OK,
+          postAs("olive", "/api/workflows/group.archive/preflight", """{"input":{}}""").status)
+    }
+  }
+
+  @Test
+  fun `a plain member cannot list, view, stream or download another user's per-item run`() {
+    withApi {
+      listOf("/api/workflows/runs/31", "/api/workflows/runs/32", "/api/workflows/runs/31/events",
+              "/api/workflows/runs/31/stream", "/api/workflows/runs?workflow=scoped.thing",
+              "/api/workflows/runs?workflow=scoped.thing&subject=group:alpha group",
+              "/api/workflows/stream?workflow=scoped.thing",
+              "/api/workflows/stream?workflow=scoped.thing&subject=group:alpha group",
+              "/api/workflows/runs/31/steps/0/artifacts/member-list/download")
+          .forEach { assertEquals(HttpStatusCode.Forbidden, getAs("mia", it).status, it) }
+      assertTrue(serviceCalls("/workflows/runs/stream").isEmpty())
+      assertTrue(serviceCalls("/workflows/runs/31/stream").isEmpty())
+    }
+  }
+
+  @Test
+  fun `the board's admin rights do not open per-item authorized runs`() {
+    withApi {
+      assertEquals(HttpStatusCode.Forbidden, getAs("bea", "/api/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("bea", "/api/workflows/runs?workflow=scoped.thing").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("bea", "/api/workflows/stream?workflow=scoped.thing").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("bea", "/api/workflows/runs/31/stream").status)
+    }
+  }
+
+  @Test
+  fun `the actor sees their own per-item run and no other`() {
+    withApi {
+      assertEquals(HttpStatusCode.OK, getAs("jdoe", "/api/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.OK, getAs("jdoe", "/api/workflows/runs/33").status)
+      assertEquals(HttpStatusCode.OK, getAs("jdoe", "/api/workflows/runs/31/events").status)
+      assertEquals(sseBody, getAs("jdoe", "/api/workflows/runs/31/stream").bodyAsText())
+      assertEquals(HttpStatusCode.Forbidden, getAs("jdoe", "/api/workflows/runs/32").status)
+      assertEquals(HttpStatusCode.OK, getAs("ann", "/api/workflows/runs/32").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("ann", "/api/workflows/runs/31").status)
+      // Being an actor does not open the unfiltered lists.
+      assertEquals(HttpStatusCode.Forbidden, getAs("ann", "/api/workflows/runs?workflow=scoped.thing").status)
+    }
+  }
+
+  @Test
+  fun `a group admin sees runs for their group only, and status for that one subject`() {
+    withApi {
+      assertEquals(HttpStatusCode.OK, getAs("gus", "/api/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.OK, getAs("gus", "/api/workflows/runs/31/events").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("gus", "/api/workflows/runs/32").status)
+      // No group in the input: cannot be determined, so closed.
+      assertEquals(HttpStatusCode.Forbidden, getAs("gus", "/api/workflows/runs/33").status)
+      assertEquals(
+          HttpStatusCode.OK,
+          getAs("gus", "/api/workflows/runs?workflow=scoped.thing&subject=group:alpha group").status)
+      assertEquals(
+          HttpStatusCode.Forbidden,
+          getAs("gus", "/api/workflows/runs?workflow=scoped.thing&subject=group:beta group").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("gus", "/api/workflows/runs?workflow=scoped.thing").status)
+      assertEquals(
+          HttpStatusCode.Forbidden,
+          getAs("gus", "/api/workflows/runs?workflow=scoped.thing&subject=team:alpha group").status)
+      assertEquals(
+          HttpStatusCode.OK,
+          getAs("gus", "/api/workflows/stream?workflow=scoped.thing&subject=group:alpha group").status)
+      assertEquals(
+          HttpStatusCode.Forbidden,
+          getAs("gus", "/api/workflows/stream?workflow=scoped.thing&subject=group:beta group").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("gus", "/api/workflows/stream?workflow=scoped.thing").status)
+      assertEquals(sseBody, getAs("gus", "/api/workflows/runs/31/stream").bodyAsText())
+      assertEquals(HttpStatusCode.Forbidden, getAs("gus", "/api/workflows/runs/32/stream").status)
+    }
+  }
+
+  @Test
+  fun `infra sees every per-item run and the unfiltered lists`() {
+    withApi {
+      listOf("/api/workflows/runs/31", "/api/workflows/runs/32", "/api/workflows/runs/33",
+              "/api/workflows/runs/32/events", "/api/workflows/runs?workflow=scoped.thing",
+              "/api/workflows/stream?workflow=scoped.thing", "/api/workflows/runs/32/stream")
+          .forEach { assertEquals(HttpStatusCode.OK, getAs("ivy", it).status, it) }
+    }
+  }
+
+  @Test
+  fun `the unfiltered admin lists hide other users' per-item runs from the board`() {
+    adminRuns =
+        "[${runJson(1, status = "PAUSED")},${runJson(41, "scoped.thing", actor = "ann")}," +
+            "${runJson(42, "scoped.thing", actor = "bea")}]"
+    withApi {
+      val board = getAs("bea", "/api/workflows/admin/in-progress").bodyAsText()
+      assertTrue("\"id\":1," in board && "\"id\":42," in board && "\"id\":41," !in board, board)
+      val summary = getAs("bea", "/api/workflows/admin/summary").bodyAsText()
+      assertTrue("\"inProgress\":2" in summary, summary)
+      val list = getAs("bea", "/api/workflows/runs").bodyAsText()
+      assertTrue("\"id\":7," in list && "\"id\":31," !in list && "\"id\":32," !in list, list)
+
+      val infra = getAs("ivy", "/api/workflows/admin/in-progress").bodyAsText()
+      assertTrue("\"id\":41," in infra, infra)
+      assertTrue("\"inProgress\":3" in getAs("ivy", "/api/workflows/admin/summary").bodyAsText())
+      val infraList = getAs("ivy", "/api/workflows/runs").bodyAsText()
+      assertTrue("\"id\":31," in infraList && "\"id\":32," in infraList, infraList)
+    }
+  }
+
+  @Test
+  fun `admin stream messages drop runs the viewer may not see`() {
+    val hidden: (org.dallasmakerspace.models.workflows.WorkflowRunDto) -> Boolean = { it.workflowId == "scoped.thing" }
+    val data =
+        """{"type":"admin","admin":{"safeToDeploy":true,"generatedAt":"2026-01-02T03:04:05Z",
+          "runs":[${runJson(1)},${runJson(41, "scoped.thing")}]}}"""
+    val out = WorkflowApiHandler.filterStreamMessage(data, hidden)
+    assertTrue("\"id\":1," in out && "\"id\":41," !in out && "\"safeToDeploy\":true" in out, out)
+    val single = WorkflowApiHandler.filterStreamMessage("""{"type":"run","run":${runJson(41, "scoped.thing")}}""", hidden)
+    assertFalse("scoped.thing" in single, single)
+    assertEquals("""{"type":"filtered"}""", WorkflowApiHandler.filterStreamMessage("not json", hidden))
+  }
+
+  @Test
+  fun `a per-item run page is limited to admins of its group, its actor and infra`() {
+    withApi {
+      assertEquals(HttpStatusCode.Forbidden, getAs("mia", "/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("bea", "/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.OK, getAs("gus", "/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.OK, getAs("jdoe", "/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.OK, getAs("ivy", "/workflows/runs/31").status)
+      assertEquals(HttpStatusCode.Forbidden, getAs("gus", "/workflows/runs/32").status)
+    }
+  }
+
+  @Test
+  fun `operating a per-item authorized run is infra only`() {
+    withApi {
+      assertEquals(HttpStatusCode.Forbidden, postAs("mia", "/api/workflows/runs/25/retry").status)
+      assertEquals(HttpStatusCode.Forbidden, postAs("bea", "/api/workflows/runs/25/retry").status)
+      assertTrue(serviceCalls("/workflows/runs/25/retry").isEmpty())
+      assertEquals(HttpStatusCode.OK, postAs("ivy", "/api/workflows/runs/25/retry").status)
     }
   }
 

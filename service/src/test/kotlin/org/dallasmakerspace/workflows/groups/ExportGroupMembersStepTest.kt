@@ -183,6 +183,12 @@ class ExportGroupMembersStepTest {
                 "exportedAt",
                 "groupName",
                 "groupObjectGuid",
+                "groupDn",
+                "description",
+                "managedBy",
+                "parentGroups",
+                "samAccountName",
+                "groupType",
                 "memberCount",
                 "members",
                 "sourceMemberCount",
@@ -191,7 +197,7 @@ class ExportGroupMembersStepTest {
                 "complete",
             ),
             doc.keys)
-        assertEquals(1, doc.int("schemaVersion"))
+        assertEquals(2, doc.int("schemaVersion"))
         assertEquals("2030-01-02T03:04:05Z", doc.getValue("exportedAt").jsonPrimitive.content)
         assertEquals("Test Group", doc.getValue("groupName").jsonPrimitive.content)
         assertEquals(
@@ -258,10 +264,22 @@ class ExportGroupMembersStepTest {
     val s = step()
     val output = s.run(ctx(), args)
 
-    val json = Json.encodeToString(s.outputSerializer, output)
+    val json = Json { encodeDefaults = true }.encodeToString(s.outputSerializer, output)
     val parsed = Json.parseToJsonElement(json).jsonObject
     assertEquals(
-        setOf("key", "memberCount", "sha256", "complete", "sourceMemberCount", "nestedGroupCount"),
+        setOf(
+            "key",
+            "memberCount",
+            "sha256",
+            "complete",
+            "sourceMemberCount",
+            "nestedGroupCount",
+            "membersSha256",
+            "unresolvedMemberCount",
+            "groupObjectGuid",
+            "groupDn",
+            "parentGroupCount",
+            "parentGroupsOutsideMainCount"),
         parsed.keys)
     listOf("asmith", "bsmith", "Display", "Given", "Family", "example.invalid").forEach {
       assertFalse(json.contains(it), "output leaks '$it'")
@@ -447,7 +465,9 @@ class ExportGroupMembersStepTest {
             "source-member-count" to "1",
             "nested-group-count" to "0",
             "complete" to "true",
-            "size-bytes" to "2"))
+            "size-bytes" to "2",
+            "members-sha256" to "abc",
+            "unresolved-member-count" to "0"))
     assertIs<StepCheck.WillRun>(step().check(ctx(), args))
   }
 

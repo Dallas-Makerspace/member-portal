@@ -215,7 +215,12 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
         this
       }
 
-  override fun getGroup(groupname: String): Map<String, Any?> {
+  override fun getGroup(groupname: String): Map<String, Any?> = fetchGroup(groupname, strict = false)
+
+  override fun getGroupStrict(groupname: String): Map<String, Any?> =
+      fetchGroup(groupname, strict = true)
+
+  private fun fetchGroup(groupname: String, strict: Boolean): Map<String, Any?> {
     val startTime = System.currentTimeMillis()
     var connectedServer = "unknown"
 
@@ -250,11 +255,16 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
               "objectGUID",
               "managedBy",
               "nTSecurityDescriptor",
+              "sAMAccountName",
+              "groupType",
           )
 
       val groupEntry =
-          preferredByGroupOu(searchResult.searchEntries)
-              ?: throw GroupNotFoundException(groupname)
+          (if (strict) {
+            selectUniqueGroup(groupname, searchResult.searchEntries)
+          } else {
+            preferredByGroupOu(searchResult.searchEntries)
+          }) ?: throw GroupNotFoundException(groupname)
 
       val group =
           groupEntry.attributes
@@ -1006,12 +1016,70 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
           .searchEntries
 
   /** {@inheritDoc} */
-  override fun deleteGroup(groupName: String): Boolean {
-    val entry = selectGroupToDelete(groupName, searchGroupsNamed(groupName))
-    if (entry == null) {
-      log.info("$TAG/deleteGroup Group '$groupName' not found; nothing to delete")
-      return false
+  override fun groupExists(groupName: String): Boolean = searchGroupsNamed(groupName).isNotEmpty()
+
+  /** {@inheritDoc} */
+  override fun countManagedObjects(groupName: String): ManagedObjectCounts {
+    val group =
+        selectUniqueGroup(groupName, searchGroupsNamed(groupName))
+            ?: throw GroupNotFoundException(groupName)
+    val managed =
+        ldapPool
+            .search(
+                "DC=dms,DC=local",
+                SearchScope.SUB,
+                Filter.createEqualityFilter("managedBy", group.dn),
+                "objectClass",
+            )
+            .searchEntries
+            .filterNot { DirectoryOus.sameDn(it.dn, group.dn) }
+    return classifyManagedObjects(managed)
+  }
+
+  /** {@inheritDoc} */
+  override fun addGroupToParentGroup(groupName: String, parentGroupDn: String): Boolean {
+    val child =
+        selectUniqueGroup(groupName, searchGroupsNamed(groupName))
+            ?: throw GroupNotFoundException(groupName)
+    requireMainOuMembership(groupName, child.dn, parentGroupDn)
+    try {
+      ldapPool.modify(parentGroupDn, Modification(ModificationType.ADD, "member", child.dn))
+    } catch (e: LDAPException) {
+      when (e.resultCode) {
+        ResultCode.ATTRIBUTE_OR_VALUE_EXISTS -> return false
+        ResultCode.NO_SUCH_OBJECT -> throw GroupNotFoundException(parentGroupDn)
+        else -> throw e
+      }
     }
+    log.info("$TAG/addGroupToParentGroup Added '$groupName' to a parent group")
+    return true
+  }
+
+  /** {@inheritDoc} */
+  override fun deleteGroup(groupName: String, expectedObjectGuid: String): Boolean {
+    val guidBytes =
+        AdGuid.toBytes(expectedObjectGuid)
+            ?: throw GroupGuidNotFoundException(groupName)
+    val byGuid =
+        ldapPool
+            .search(
+                "DC=dms,DC=local",
+                SearchScope.SUB,
+                Filter.createANDFilter(
+                    Filter.createEqualityFilter("objectGUID", guidBytes),
+                    Filter.createEqualityFilter("objectCategory", "group"),
+                ),
+                "cn",
+                "distinguishedName",
+                "objectGUID",
+            )
+            .searchEntries
+    if (byGuid.isEmpty()) {
+      log.info("$TAG/deleteGroup No group with the expected identity; refusing to delete by name")
+      throw GroupGuidNotFoundException(groupName)
+    }
+    val entry =
+        selectGroupToDelete(groupName, expectedObjectGuid, byGuid, searchGroupsNamed(groupName))
     try {
       ldapPool.delete(entry.dn)
     } catch (e: LDAPException) {
@@ -1032,8 +1100,8 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
     val attributes =
         mutableListOf(
             Attribute("objectClass", "top", "group"),
-            Attribute("sAMAccountName", spec.name),
-            Attribute("groupType", GLOBAL_SECURITY_GROUP_TYPE.toString()),
+            Attribute("sAMAccountName", samAccountNameFor(spec)),
+            Attribute("groupType", groupTypeFor(spec).toString()),
         )
     spec.description
         ?.takeIf { it.isNotBlank() }
@@ -1070,16 +1138,8 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
   }
 }
 
-private val normalizedGroupOus = DirectoryOus.GROUP_OUS.map(::normalizeDnForOu)
-
-private fun normalizeDnForOu(dn: String) = dn.split(',').joinToString(",") { it.trim().lowercase() }
-
 /** Index of the first GROUP_OUS entry containing [dn]; outside all of them sorts last. */
-internal fun groupOuRank(dn: String): Int {
-  val normalized = normalizeDnForOu(dn)
-  val rank = normalizedGroupOus.indexOfFirst { normalized.endsWith(",$it") }
-  return if (rank >= 0) rank else Int.MAX_VALUE
-}
+internal fun groupOuRank(dn: String): Int = DirectoryOus.groupOuRank(dn)
 
 /** Picks the entry in the earliest group OU; ties and non-group-OU entries keep list order. */
 internal fun preferredByGroupOu(
