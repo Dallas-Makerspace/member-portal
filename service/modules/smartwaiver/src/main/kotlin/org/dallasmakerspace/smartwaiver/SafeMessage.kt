@@ -18,7 +18,9 @@ fun Throwable.safeMessage(): String {
 /** True when a write failed because the row already exists (a unique or primary key). */
 internal fun Throwable.isDuplicateKey(): Boolean =
     generateSequence(this) { it.cause }.filterIsInstance<SQLException>().any {
-      it.sqlState?.startsWith("23") == true || it.errorCode == MYSQL_DUPLICATE_ENTRY
+      // MariaDB uses SQL state 23000 for NOT NULL and foreign-key errors too, so go by the error code.
+      it.errorCode == MYSQL_DUPLICATE_ENTRY || it.sqlState == H2_UNIQUE_VIOLATION
     }
 
 private const val MYSQL_DUPLICATE_ENTRY = 1062
+private const val H2_UNIQUE_VIOLATION = "23505"

@@ -55,7 +55,8 @@ private const val DEFAULT_DAILY_BUDGET = 25_000
 private const val DEFAULT_INTERVAL_MS = 3_000L
 private const val ENRICH_PASSES = 2 // one retry pass for waivers that failed
 private const val MAX_ETA_DAYS = 400
-private const val MAX_RETRIES = 8
+private const val STARTUP_CHECK_TRIES = 10
+private const val MAX_RETRIES = 150 // five growing waits, then 10 minutes each: about a day
 private val RETRY_BACKOFF_MS = listOf(30_000L, 60_000L, 120_000L, 300_000L, 600_000L)
 
 // Time a unit takes besides the API calls and their pacing: database round trips over the VPN, S3.
@@ -186,8 +187,8 @@ internal fun etaSeconds(
  *   as TRIAL, which is never resumed.
  * - Only one copy runs. Starting a copy makes it the owner in the run's saved state; a copy that is
  *   no longer the owner (a deploy overlap, or `stop`) notices at its next checkpoint and ends.
- * - A failed step is retried with growing waits; only a bad key, bad configuration, or running out
- *   of retries ends the run as FAILED.
+ * - A failed step is retried with growing waits, then every 10 minutes for about a day; only a bad
+ *   key, bad configuration, or running out of that day ends the run as FAILED.
  */
 @Singleton
 class SmartWaiverBackfill
@@ -339,20 +340,28 @@ internal constructor(
   /** After a restart of the service: carry on if the previous run was cut off (a trial is not resumed). */
   @Suppress("TooGenericExceptionCaught")
   suspend fun resumeIfInterrupted() {
-    try {
-      when (repository.getState(RUN_STATE_NAME)?.status) {
-        RunState.RUNNING.name,
-        RunState.WAITING.name -> {
-          log.info("SmartWaiver backfill was running when the service stopped; resuming")
-          start()
+    // The database may be unreachable for a moment right after a deploy, so try again with waits;
+    // giving up after one failure would leave the run saved as running with nothing running it.
+    for (attempt in 1..STARTUP_CHECK_TRIES) {
+      try {
+        when (repository.getState(RUN_STATE_NAME)?.status) {
+          RunState.RUNNING.name,
+          RunState.WAITING.name -> {
+            log.info("SmartWaiver backfill was running when the service stopped; resuming")
+            start()
+          }
+          RunState.PAUSED.name -> {
+            log.info("SmartWaiver backfill was paused when the service stopped; resuming it paused")
+            start(startPaused = true)
+          }
         }
-        RunState.PAUSED.name -> {
-          log.info("SmartWaiver backfill was paused when the service stopped; resuming it paused")
-          start(startPaused = true)
-        }
+        return
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        log.warn("Could not check for an interrupted SmartWaiver backfill (try $attempt of $STARTUP_CHECK_TRIES): ${e.safeMessage()}")
+        if (attempt < STARTUP_CHECK_TRIES) sleep(RETRY_BACKOFF_MS[minOf(attempt - 1, RETRY_BACKOFF_MS.size - 1)])
       }
-    } catch (e: Exception) {
-      log.warn("Could not check for an interrupted SmartWaiver backfill: ${e.safeMessage()}")
     }
   }
 
@@ -583,6 +592,7 @@ internal constructor(
     var capped = false
     var pass = 0
     var failedThisPass: Int
+    var stillMissing = 0
     while (true) {
       pass++
       failedThisPass = 0
@@ -629,8 +639,12 @@ internal constructor(
         }
       }
       // Waivers that failed (a hiccup at the time) get one more pass before the step is called done.
-      if (capped || maxUnits != null || failedThisPass == 0 || pass >= ENRICH_PASSES) break
-      log.info("SmartWaiver enrich: $failedThisPass waivers failed; trying them once more")
+      // What is still missing is read from the database, not remembered, so a restart in the middle
+      // of the first pass still ends up giving the failures their second try.
+      if (capped || maxUnits != null) break
+      stillMissing = repository.countNeedingMirror()
+      if (stillMissing == 0 || pass >= ENRICH_PASSES) break
+      log.info("SmartWaiver enrich: $stillMissing waivers are still missing; trying them once more")
       cursor = 0
       // Save the restart now: otherwise a restart during this pass resumes at the end of the last
       // one, finds nothing left, and calls the step done with the failures still outstanding.
@@ -642,9 +656,9 @@ internal constructor(
     }
     // A trial never marks the step done, even if it ran out of waivers: discovery may find more.
     if (maxUnits != null) return
-    val note = if (failedThisPass > 0) "$failedThisPass waivers could not be mirrored; see the errors list" else null
+    val note = if (stillMissing > 0) "$stillMissing waivers could not be mirrored; see the errors list" else null
     checkpoint(STAGE_ENRICH, RunState.DONE.name, cursor.toString(), done, total, note)
-    log.info("SmartWaiver enrich finished: ${progress.mirrored} mirrored, ${progress.gone} gone, $failedThisPass failed")
+    log.info("SmartWaiver enrich finished: ${progress.mirrored} mirrored, ${progress.gone} gone, $stillMissing still missing")
   }
 
   private suspend fun checkins() {

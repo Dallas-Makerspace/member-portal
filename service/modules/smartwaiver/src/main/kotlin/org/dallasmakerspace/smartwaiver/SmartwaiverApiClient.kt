@@ -318,8 +318,13 @@ internal constructor(
 
     return when (response.status) {
       HttpStatusCode.OK -> {
+        // The parse error would quote part of the body (names, emails), so it is not passed on.
         val waiverResponse =
-            json.decodeFromString<SmartwaiverFullWaiverResponse>(response.bodyAsText())
+            try {
+              json.decodeFromString<SmartwaiverFullWaiverResponse>(response.bodyAsText())
+            } catch (e: kotlinx.serialization.SerializationException) {
+              throw SmartwaiverApiException("Could not read the response for waiver $waiverId")
+            }
         waiverResponse.waiver
             ?: throw SmartwaiverApiException("Waiver missing in response for id: $waiverId")
       }
@@ -376,7 +381,12 @@ internal constructor(
     return when (response.status) {
       HttpStatusCode.OK -> {
         val responseBody = response.bodyAsText()
-        val photosResponse = json.decodeFromString<SmartwaiverPhotosResponse>(responseBody)
+        val photosResponse =
+            try {
+              json.decodeFromString<SmartwaiverPhotosResponse>(responseBody)
+            } catch (e: kotlinx.serialization.SerializationException) {
+              throw SmartwaiverApiException("Could not read the photos response for waiver $waiverId")
+            }
         val photos = photosResponse.photos?.photos ?: emptyList()
         if (photos.isEmpty()) {
           val prettyJson = Json { prettyPrint = true; ignoreUnknownKeys = true }

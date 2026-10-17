@@ -89,9 +89,13 @@ How it keeps going on its own over several days:
 - **One copy only.** The saved run records which copy owns it. A deploy briefly runs two containers; whichever
   started last owns the run and the other ends at its next checkpoint without writing. `stop` releases the run, so
   it also stops a copy running in another container.
-- **Errors.** A failed step is retried after 30 s, 1, 2, 5 and then 10 minutes (up to 8 tries without any progress).
-  Only a rejected API key, a configuration error, or running out of tries ends the run as FAILED; fix the cause and
-  `start` again to continue.
+- **Errors.** A failed step is retried after 30 s, 1, 2, 5 and then every 10 minutes, for about a day without any
+  progress (so an overnight VPN or database outage is waited out). Only a rejected API key, a configuration error,
+  or running out of that day ends the run as FAILED; fix the cause and `start` again to continue. At startup the
+  check for an interrupted run is also retried, since the database may not answer for a moment after a deploy.
+- **Known limits.** A pause sent while the job is waiting or retrying is saved only when that wait ends. If a deploy
+  is rolled back after the new container claimed the run, the older container ends as superseded and nothing runs
+  until the next `start`.
 - **Failed waivers.** One that fails is tried again in a second pass; any still failing are listed by `errors`
   (in memory) and the log, and `start --retry` runs just the waiver-copying step again. A waiver SmartWaiver answers
   404 for is marked gone (`mirrorVersion` 0, photo status GONE) and no longer counts as work to do.

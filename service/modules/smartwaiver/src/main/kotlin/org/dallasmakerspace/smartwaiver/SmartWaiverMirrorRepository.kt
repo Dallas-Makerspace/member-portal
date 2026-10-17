@@ -574,6 +574,7 @@ class SmartWaiverMirrorRepository @Inject constructor() {
         exec(
             "SELECT LEFT(dateCompleted, $MONTH_LENGTH), COUNT(*) " +
                 "FROM `dms-makermanager`.smartwaiver_data " +
+                "WHERE mirrorVersion IS NULL OR mirrorVersion <> 0 " +
                 "GROUP BY LEFT(dateCompleted, $MONTH_LENGTH)") { rs ->
               while (rs.next()) counts[rs.getString(1)] = rs.getInt(2)
             }

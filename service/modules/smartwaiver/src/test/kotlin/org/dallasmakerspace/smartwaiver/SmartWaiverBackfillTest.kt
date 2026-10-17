@@ -144,6 +144,19 @@ class SmartWaiverBackfillTest {
     return b
   }
 
+  private fun backfillWith(client: ISmartwaiverApiClient, statsFrom: FakeClient): SmartWaiverBackfill {
+    val service = SmartWaiverMirrorService(client, repo, InMemoryObjectStore(), LoggerFactory())
+    val b =
+        SmartWaiverBackfill(
+            client, repo, service, SmartWaiverCheckinSync(client, repo, LoggerFactory()), LoggerFactory(), 1000, 3_000L, clock,
+            sleep = {
+              sleeps += it
+              clock.now = clock.now.plusMillis(it)
+            })
+    created += b
+    return b
+  }
+
   private fun awaitState(b: SmartWaiverBackfill, vararg states: RunState): BackfillProgress =
       runBlocking {
         withTimeout(20_000) {
@@ -279,7 +292,27 @@ class SmartWaiverBackfillTest {
     assertTrue(done.lastError.orEmpty().contains("in a row"), done.lastError)
     assertTrue(b.recentErrors().size >= 10)
     assertTrue(30_000L in sleeps && 60_000L in sleeps && 600_000L in sleeps, "waits: ${sleeps.filter { it >= 30_000 }}")
+    // About a day of retries (five growing waits, then 10 minutes each) before giving up.
+    assertTrue(sleeps.filter { it >= 30_000 }.sum() > 20 * 3_600_000L, "total wait: ${sleeps.filter { it >= 30_000 }.sum()}")
     assertEquals("FAILED", runRow()?.status)
+  }
+
+  @Test
+  fun `a check-in data error does not retry forever, it ends the run after the retry allowance`() {
+    val client =
+        object : ISmartwaiverApiClient by FakeClient(threeWaivers()) {
+          override suspend fun getCheckins(from: LocalDateTime, to: LocalDateTime) =
+              SmartwaiverCheckinPage(listOf(SmartwaiverCheckin(1, "fakewaiver01", "garbage", null, 0, "t", 0)), true)
+        }
+    val inner = FakeClient(threeWaivers())
+    val b = backfillWith(client, inner)
+
+    b.start()
+    val done = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.FAILED, done.state)
+    assertTrue(done.lastError.orEmpty().contains("can't be read"), done.lastError)
+    assertEquals(null, runBlocking { repo.getState("checkins") }?.cursorValue, "a bad page must not save a position")
   }
 
   @Test

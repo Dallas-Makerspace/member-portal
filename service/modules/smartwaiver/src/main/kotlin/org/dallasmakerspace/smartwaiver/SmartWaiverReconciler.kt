@@ -54,6 +54,7 @@ constructor(
     val partial = repository.countIncompletePhotos()
     val noParticipants = repository.countMirroredWithoutParticipants()
     val checkins = repository.countCheckins()
+    val gone = repository.countGone()
     val ok = gaps == 0 && waiting == 0 && partial == 0 && noParticipants == 0
     return buildString {
       appendLine("SmartWaiver mirror reconciliation")
@@ -64,6 +65,7 @@ constructor(
       appendLine("waivers with incomplete photos: $partial")
       appendLine("mirrored waivers without participants: $noParticipants")
       appendLine("check-ins mirrored: $checkins")
+      appendLine("waivers SmartWaiver no longer has (left out of the counts above): $gone")
       appendLine()
       appendLine(if (ok) "RESULT: OK, no gaps" else "RESULT: GAPS FOUND")
     }
