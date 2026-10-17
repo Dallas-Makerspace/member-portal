@@ -548,7 +548,8 @@ class SmartWaiverBackfillTest {
 
     assertEquals(RunState.RUNNING, right.state)
     assertEquals(5, right.limit)
-    assertEquals("Starting", right.activity)
+    // The job may already have moved from "Starting" to planning by the time this is read.
+    assertTrue(right.activity in setOf("Starting", "Planning the run", "Counting waivers on SmartWaiver to plan the run"), right.activity)
     runBlocking { b.stop() }
   }
 

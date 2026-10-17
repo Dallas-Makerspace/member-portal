@@ -70,8 +70,8 @@ Writes are select-then-update-or-insert because the service user has no DELETE a
 6. **Run the backfill**: `python backfill_smartwaiver.py start --tunnel dms-docker-h0-root --client
    jenkins-member-refresh --log-file backfill.log` with `SW_API_KEY` set to that client's key. It prints a plan
    (the three steps, their sizes, one overall estimate), then two live lines: progress and what it is doing now.
-   About 92k API calls at 25,000/day and one call per 3 s is roughly four days; it waits for the next Chicago day
-   when it reaches the daily limit.
+   It makes one API call every 5 s (about 100k calls in all), which measured out at roughly five days; it waits for
+   the next Chicago day if it ever reaches the daily limit.
    **Ctrl+C stops the copy on the server too** (it keeps its place; the next `start` continues). Use
    `--keep-running` to close the window and leave it running. `attach` re-opens the view, and `pause`, `resume`,
    `stop`, `status` and `errors` work from any terminal.

@@ -24,7 +24,8 @@ Connecting
     Credentials:     the API key and name of a client allowed to run cron jobs, e.g. the Jenkins one:
                      SW_API_KEY (or --key-file) and --client jenkins-member-refresh. The key is never
                      printed. Putting it in an environment variable keeps it out of the process list.
-    Log file:        --log-file PATH keeps a dated copy of what this prints.
+    Log file:        --log-file PATH keeps a dated copy of what is printed (plain text, no colour).
+    Colour:          on in a terminal; --no-color or the NO_COLOR environment variable turns it off.
 """
 
 import argparse
@@ -55,15 +56,26 @@ def log_line(text):
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {text}\n")
 
 
-def say(text=""):
-    """Print a line right away and keep it in the log file."""
-    print(text, flush=True)
-    if text:
-        log_line(text)
-
-
 LIVE_DRAWN = False
 USE_ANSI = sys.stdout.isatty()
+COLOR = USE_ANSI and "NO_COLOR" not in os.environ
+if COLOR and os.name == "nt":
+    os.system("")  # lets older Windows consoles interpret ANSI escape codes
+CODES = {"bold": "1", "dim": "2", "red": "31", "green": "32", "yellow": "33", "blue": "34", "cyan": "36"}
+
+
+def c(text, *styles):
+    """Colour text for the terminal; plain when colour is off. Never used for the log file."""
+    if not COLOR or not styles:
+        return text
+    return "\033[" + ";".join(CODES[s] for s in styles) + "m" + text + "\033[0m"
+
+
+def say(text="", *styles):
+    """Print a line right away (coloured on a terminal) and keep it, plain, in the log file."""
+    print(c(text, *styles), flush=True)
+    if text:
+        log_line(text)
 
 
 def clear_live():
@@ -75,7 +87,38 @@ def clear_live():
     LIVE_DRAWN = False
 
 
-def redraw_live(line1, line2):
+def style_for(part):
+    """The colour of one part of the summary line, chosen by what it says."""
+    if part.startswith(("Step ", "Getting ready")):
+        return ("bold",)
+    if "problems" in part:
+        return ("bold", "red")
+    if part.startswith(("daily call limit", "paused")) or "slowed down" in part or "continuing in" in part:
+        return ("yellow",)
+    if part.startswith("all done in"):
+        return ("bold", "cyan")
+    if part.startswith("this step"):
+        return ("cyan",)
+    if " of " in part and "%" in part:
+        return ("green",)
+    return ()
+
+
+def colour_summary(text, width):
+    """Fit [HH:MM:SS] + the summary into width, then colour each part (the overall estimate stays visible)."""
+    parts = text.split(" · ")
+    stamp_len = len(stamp()) + 3  # "[HH:MM:SS] "
+    while len(parts) > 1 and stamp_len + len(" · ".join(parts)) > width:
+        # Drop the least important (last) part first, but never the overall estimate.
+        drop = next((i for i in range(len(parts) - 1, 0, -1) if not parts[i].startswith("all done in")), None)
+        if drop is None:
+            break
+        parts.pop(drop)
+    parts[0] = parts[0][: max(0, width - stamp_len)]
+    return c(f"[{stamp()}]", "dim") + " " + c(" · ", "dim").join(c(p, *style_for(p)) for p in parts)
+
+
+def redraw_live(text, activity):
     """Two live lines that update in place: the summary, and what is happening right now."""
     global LIVE_DRAWN
     if not USE_ANSI:
@@ -83,7 +126,7 @@ def redraw_live(line1, line2):
     width = shutil.get_terminal_size((120, 20)).columns - 1
     if LIVE_DRAWN:
         sys.stdout.write("\r\033[2K\033[F")
-    sys.stdout.write("\r\033[2K" + line1[:width] + "\n\033[2K" + (line2 or "")[:width])
+    sys.stdout.write("\r\033[2K" + colour_summary(text, width) + "\n\033[2K" + c((activity or "")[:width], "dim"))
     sys.stdout.flush()
     LIVE_DRAWN = True
 
@@ -136,7 +179,7 @@ class Tunnel:
         time.sleep(2)
         if self.proc.poll() is not None:
             raise ConnectionError("the ssh tunnel closed right away")
-        say("Connected.")
+        say("Connected.", "green")
 
     def alive(self):
         return self.proc is not None and self.proc.poll() is None
@@ -192,18 +235,20 @@ def print_overview(p):
         return
     trial = p.get("limit")
     say()
-    say("Copying SmartWaiver data into our database" + (f" (trial: {trial} waivers only)" if trial else ""))
+    say("Copying SmartWaiver data into our database" + (f" (trial: {trial} waivers only)" if trial else ""), "bold")
     say("What will happen:")
     for i, step in enumerate(plan, 1):
         units = step.get("units")
         size = f"{units:,} {step.get('unit')}" if units is not None else "size unknown"
         approx = "~" if step.get("approximate") and units is not None else ""
-        say(f"  Step {i} of {len(plan)}: {step.get('title')} ({approx}{size}), {short(step.get('etaSeconds'))}")
+        line = f"  Step {i} of {len(plan)}: {step.get('title')} ({approx}{size}), {short(step.get('etaSeconds'))}"
+        print(c(f"  Step {i} of {len(plan)}:", "bold", "cyan") + line[len(f"  Step {i} of {len(plan)}:"):], flush=True)
+        log_line(line)
     pace = p.get("paceCallsPerMinute", 0)
     say(f"It makes about {pace:.0f} calls a minute to SmartWaiver and at most {p.get('dailyBudget', 0):,} a day,")
     say("and waits for the next day when it reaches that limit.")
-    say(f"Estimated total time: {short(p.get('etaOverallSeconds'))}.")
-    say("Ctrl+C stops it; the next start carries on where it left off.")
+    say(f"Estimated total time: {short(p.get('etaOverallSeconds'))}.", "bold", "cyan")
+    say("Ctrl+C stops it; the next start carries on where it left off.", "dim")
     say()
 
 
@@ -268,8 +313,8 @@ def attach(client, expected_limit=None, keep_running=False):
                     if expected_limit and p.get("limit") != expected_limit:
                         clear_live()
                         say(f"ERROR: the running copy does not have the trial limit of {expected_limit} "
-                            "(the service may be an older version, or it was restarted).")
-                        say("Stopping it so it doesn't copy everything.")
+                            "(the service may be an older version, or it was restarted).", "bold", "red")
+                        say("Stopping it so it doesn't copy everything.", "yellow")
                         stop_job(client)
                         return False
                     if p.get("state") == "IDLE":
@@ -277,7 +322,7 @@ def attach(client, expected_limit=None, keep_running=False):
                         if saw_activity:
                             say(p.get("message") or "The copy was stopped (by 'stop', or another copy took over).")
                             return True
-                        say("No copy is running. Start one with: start")
+                        say("No copy is running. Start one with: start", "yellow")
                         return False
                     saw_activity = True
                     if p.get("plan") and not overview_shown:
@@ -290,49 +335,49 @@ def attach(client, expected_limit=None, keep_running=False):
                     more_failures = p.get("failed", 0) > last.get("failed", 0)
                     more_429 = p.get("rateLimitHits", 0) > last.get("rateLimitHits", 0)
                     if changed or more_failures or more_429 or now - last_log >= STATUS_LOG_SECONDS:
-                        note = ("  <- SmartWaiver asked us to slow down" if more_429 else "") + \
-                               ("  <- a waiver could not be copied" if more_failures else "")
+                        note429 = "  <- SmartWaiver asked us to slow down" if more_429 else ""
+                        notefail = "  <- a waiver could not be copied" if more_failures else ""
                         clear_live()
-                        print(f"[{stamp()}] {text}{note}", flush=True)
-                        log_line(text + note)
+                        print(colour_summary(text, 10_000) + c(note429, "bold", "yellow") + c(notefail, "bold", "red"), flush=True)
+                        log_line(text + note429 + notefail)
                         last_log = now
                     redraw_live(f"[{stamp()}] {text}", activity)
                     last = p
                     if p.get("state") in ("DONE", "FAILED"):
                         clear_live()
                         if p.get("state") == "FAILED":
-                            say(f"The copy stopped because of an error: {p.get('lastError')}")
-                            say("Fix the problem and run 'start' again to continue where it stopped.")
+                            say(f"The copy stopped because of an error: {p.get('lastError')}", "bold", "red")
+                            say("Fix the problem and run 'start' again to continue where it stopped.", "yellow")
                         else:
-                            say(p.get("message") or "Finished.")
+                            say(p.get("message") or "Finished.", "bold", "green")
                         return p.get("state") == "DONE"
         except KeyboardInterrupt:
             clear_live()
             print()
             if keep_running:
-                say("Closed this window. The copy keeps running on the server (use 'stop' to stop it).")
+                say("Closed this window. The copy keeps running on the server (use 'stop' to stop it).", "yellow")
             else:
                 try:
                     stop_job(client)
-                    say("Stopped. Run 'start' again to carry on where it left off.")
+                    say("Stopped. Run 'start' again to carry on where it left off.", "yellow")
                 except KeyboardInterrupt:
                     say("Interrupted again; run 'stop' to be sure the copy is stopped.")
             return True
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
-                say(f"ERROR: the service answered HTTP {e.code}; check --client and the API key.")
+                say(f"ERROR: the service answered HTTP {e.code}; check --client and the API key.", "bold", "red")
                 return False
             if 400 <= e.code < 500:
                 # Not a key problem and retrying won't help (e.g. 404: the service has no such page).
-                say(f"ERROR: the service answered HTTP {e.code}; it may be an older version.")
+                say(f"ERROR: the service answered HTTP {e.code}; it may be an older version.", "bold", "red")
                 return False
             clear_live()
-            print(f"[{stamp()}] the service returned HTTP {e.code}; retrying in {RETRY_SECONDS}s")
+            print(c(f"[{stamp()}] the service returned HTTP {e.code}; retrying in {RETRY_SECONDS}s", "yellow"))
             log_line(f"service returned HTTP {e.code}; retrying")
             time.sleep(RETRY_SECONDS)
         except (urllib.error.URLError, ConnectionError, OSError, subprocess.TimeoutExpired) as e:
             clear_live()
-            print(f"[{stamp()}] lost the connection ({e}); retrying in {RETRY_SECONDS}s")
+            print(c(f"[{stamp()}] lost the connection ({e}); retrying in {RETRY_SECONDS}s", "yellow"))
             log_line(f"lost the connection ({e}); retrying")
             client.reset_tunnel()
             time.sleep(RETRY_SECONDS)
@@ -351,9 +396,12 @@ def main():
     ap.add_argument("--key-file", help="file holding the API key (or set SW_API_KEY)")
     ap.add_argument("--client", help="API client name (or set SW_API_CLIENT)")
     ap.add_argument("--log-file", help="keep a dated copy of what is printed in this file")
+    ap.add_argument("--no-color", action="store_true", help="plain output, no colour")
     args = ap.parse_args()
-    global LOG_FILE
+    global LOG_FILE, COLOR
     LOG_FILE = args.log_file
+    if args.no_color:
+        COLOR = False
     if args.limit is not None and args.limit < 1:
         ap.error("--limit must be a whole number of 1 or more")
 
@@ -368,7 +416,7 @@ def main():
                                  f"limit={args.limit}" if args.limit is not None else "") if q]
             reply = client.text(BASE_PATH + ("?" + "&".join(query) if query else ""))
             if reply.startswith(("HTTP ", "Refusing")):
-                say(f"Could not start: {reply}")
+                say(f"Could not start: {reply}", "bold", "red")
                 return 1  # refused (flag off, mock mode, bad key): don't sit on an idle stream
             started = True
             already = reply.startswith("ALREADY_RUNNING")

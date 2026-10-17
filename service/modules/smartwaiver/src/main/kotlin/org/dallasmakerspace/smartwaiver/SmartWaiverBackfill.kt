@@ -52,7 +52,8 @@ private const val FIFTEEN_MINUTES_MS = 15 * ONE_MINUTE_MS
 private const val KEEP_ALIVE_MS = 15_000L
 private const val SLOW_MODE_FACTOR = 2L
 private const val DEFAULT_DAILY_BUDGET = 25_000
-private const val DEFAULT_INTERVAL_MS = 3_000L
+// One call every 5 s keeps the full copy (about 46k waivers) to roughly five days and well under any limit.
+private const val DEFAULT_INTERVAL_MS = 5_000L
 private const val ENRICH_PASSES = 2 // one retry pass for waivers that failed
 private const val MAX_ETA_DAYS = 400
 private const val STARTUP_CHECK_TRIES = 10
@@ -61,7 +62,7 @@ private val RETRY_BACKOFF_MS = listOf(30_000L, 60_000L, 120_000L, 300_000L, 600_
 
 // Time a unit takes besides the API calls and their pacing: database round trips over the VPN, S3.
 private const val DB_OVERHEAD_DISCOVER_S = 2.0
-private const val DB_OVERHEAD_ENRICH_S = 3.0
+private const val DB_OVERHEAD_ENRICH_S = 1.6 // measured in the 20-waiver trial
 private const val DB_OVERHEAD_CHECKIN_S = 1.5
 
 enum class RunState {
