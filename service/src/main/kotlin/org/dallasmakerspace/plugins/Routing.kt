@@ -18,6 +18,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
@@ -43,8 +44,9 @@ import org.dallasmakerspace.cron.MemberRefreshCronJob
 import org.dallasmakerspace.cron.MemberRefreshCronJobParams
 import org.dallasmakerspace.cron.ShowAndTellCronJob
 import org.dallasmakerspace.cron.ShowAndTellCronJobParams
-import org.dallasmakerspace.cron.SmartWaiverBackfillJob
 import org.dallasmakerspace.cron.SmartWaiverProcessQueueJob
+import org.dallasmakerspace.smartwaiver.SmartWaiverBackfill
+import org.dallasmakerspace.smartwaiver.SmartWaiverReconciler
 import org.dallasmakerspace.dataviz.DataVizRouter
 import org.dallasmakerspace.di.AppComponentHolder
 import org.dallasmakerspace.discourse.FeaturedProjectsService
@@ -123,6 +125,17 @@ fun Application.configureRouting() {
       AppComponentHolder.instance.getConfigOverrideService()
   launch { configOverrideService.warmCache() }
 
+  // Carry on a SmartWaiver backfill that was cut off by a restart or deploy.
+  val smartWaiverBackfillOnStartup: SmartWaiverBackfill =
+      AppComponentHolder.instance.getSmartWaiverBackfill()
+  launch {
+    runCatching {
+      if (smartWaiverBackfillRefusal(appConfig, configOverrideService) == null) {
+        smartWaiverBackfillOnStartup.resumeIfInterrupted()
+      }
+    }
+  }
+
   // Notification worker: polls the outbox and sends due notifications (mock notifier in dev).
   val notificationWorker: org.dallasmakerspace.notifications.NotificationWorker =
       AppComponentHolder.instance.getNotificationWorker()
@@ -185,8 +198,11 @@ fun Application.configureRouting() {
     val adReplicationHealthCronJob: AdReplicationHealthCronJob by lazy {
       AppComponentHolder.instance.getAdReplicationHealthCronJob()
     }
-    val backfillJob: SmartWaiverBackfillJob by lazy {
-      AppComponentHolder.instance.getSmartWaiverBackfillJob()
+    val smartWaiverBackfill: SmartWaiverBackfill by lazy {
+      AppComponentHolder.instance.getSmartWaiverBackfill()
+    }
+    val smartWaiverReconciler: SmartWaiverReconciler by lazy {
+      AppComponentHolder.instance.getSmartWaiverReconciler()
     }
     val processQueueJob: SmartWaiverProcessQueueJob by lazy {
       AppComponentHolder.instance.getSmartWaiverProcessQueueJob()
@@ -762,9 +778,57 @@ fun Application.configureRouting() {
           call.respond(result)
         }
 
+        // The SmartWaiver mirror backfill runs inside the service for days; these routes start,
+        // steer and watch it. It needs smartwaiver.mirror.enabled (the migration must be applied).
         get("/cron/backfill-smartwaiver") {
-          val result = backfillJob.run()
-          call.respondText(result.toText(), ContentType.Text.Plain)
+          val restart = "true".equals(call.request.queryParameters["restart"], ignoreCase = true)
+          val refusal = smartWaiverBackfillRefusal(appConfig, configOverrideService)
+          if (refusal != null) {
+            call.respondText(refusal, ContentType.Text.Plain, HttpStatusCode.Conflict)
+          } else {
+            val started = smartWaiverBackfill.start(restart)
+            call.respondText(
+                "$started\n" + Json.encodeToString(smartWaiverBackfill.status()),
+                ContentType.Text.Plain)
+          }
+        }
+
+        get("/cron/backfill-smartwaiver/status") {
+          call.respondText(Json.encodeToString(smartWaiverBackfill.status()), ContentType.Application.Json)
+        }
+
+        get("/cron/backfill-smartwaiver/pause") {
+          smartWaiverBackfill.pause()
+          call.respondText("pausing at the next waiver", ContentType.Text.Plain)
+        }
+
+        get("/cron/backfill-smartwaiver/resume") {
+          smartWaiverBackfill.resume()
+          call.respondText("resuming", ContentType.Text.Plain)
+        }
+
+        get("/cron/backfill-smartwaiver/stop") {
+          smartWaiverBackfill.stop()
+          call.respondText("stopped; start again to continue from the saved cursors", ContentType.Text.Plain)
+        }
+
+        get("/cron/backfill-smartwaiver/errors") {
+          call.respondText(smartWaiverBackfill.recentErrors().joinToString("\n"), ContentType.Text.Plain)
+        }
+
+        // Server-sent events: every progress change, plus a keep-alive comment every 15 s.
+        get("/cron/backfill-smartwaiver/stream") {
+          call.response.headers.append(HttpHeaders.CacheControl, "no-cache")
+          call.respondTextWriter(ContentType.Text.EventStream) {
+            smartWaiverBackfill.frames().collect { frame ->
+              write(frame)
+              flush()
+            }
+          }
+        }
+
+        get("/cron/smartwaiver-reconcile") {
+          call.respondText(smartWaiverReconciler.report(), ContentType.Text.Plain)
         }
 
         // Dry run unless dryRun=false is passed exactly; a typo must not trigger writes.

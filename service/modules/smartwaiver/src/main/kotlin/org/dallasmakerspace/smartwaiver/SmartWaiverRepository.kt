@@ -1,6 +1,5 @@
 package org.dallasmakerspace.smartwaiver
 
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -16,11 +15,16 @@ import org.jetbrains.exposed.sql.update
 private val DATETIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 private const val QUEUE_LOOKBACK_DAYS = 30L
 
+/**
+ * The original, minimal SmartWaiver storage (one thin row per waiver) and the webhook queue. The
+ * full mirror is [SmartWaiverMirrorRepository]; this path stays until `smartwaiver.mirror.enabled`
+ * is on everywhere.
+ */
 @Singleton
 class SmartWaiverRepository @Inject constructor() {
 
   private fun doInsert(waiver: SmartwaiverFullWaiver) {
-    val customFields = waiver.customWaiverFields.values.toList()
+    val referral = referralFrom(waiver)
     SmartWaiverTable.insert {
       it[firstName] = waiver.firstName.orEmpty()
       it[lastName] = waiver.lastName.orEmpty()
@@ -31,60 +35,13 @@ class SmartWaiverRepository @Inject constructor() {
       it[waiverStatus] = "Completed At Kiosk"
       it[documentTitle] = waiver.title
       it[checkinCount] = 1
-      it[referralType] = customFields.getOrNull(0)?.value
-      it[referralSource] = customFields.getOrNull(1)?.value
+      it[referralType] = referral.type
+      it[referralSource] = referral.source
       it[requestedWaiverEmail] = 1
       it[guardianFirstName] = ""
       it[guardianLastName] = ""
     }
   }
-
-  suspend fun insertSmartWaiver(waiver: SmartwaiverFullWaiver) =
-      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) { doInsert(waiver) }
-
-  suspend fun insertSmartWaiverBatch(waivers: List<SmartwaiverFullWaiver>) =
-      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-        waivers.forEach { doInsert(it) }
-      }
-
-  // Batch existence check — one IN query instead of N individual SELECTs
-  suspend fun findExistingWaiverIds(waiverIds: List<String>): Set<String> {
-    if (waiverIds.isEmpty()) return emptySet()
-    return newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-      SmartWaiverTable.slice(SmartWaiverTable.waiverId)
-          .select { SmartWaiverTable.waiverId inList waiverIds }
-          .map { it[SmartWaiverTable.waiverId] }
-          .toSet()
-    }
-  }
-
-  // Insert from summary data — skips getWaiver API calls; customWaiverFields will be null
-  suspend fun insertSmartWaiverBatchFromSummaries(summaries: List<SmartwaiverSummary>) =
-      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-        summaries.forEach { s ->
-          SmartWaiverTable.insert {
-            it[firstName] = s.firstName.orEmpty()
-            it[lastName] = s.lastName.orEmpty()
-            it[email] = s.email
-            it[birthDate] = s.dob.orEmpty()
-            it[dateCompleted] = s.createdOn
-            it[waiverId] = s.waiverId
-            it[waiverStatus] = "Completed At Kiosk"
-            it[documentTitle] = s.title
-            it[checkinCount] = 1
-            it[referralType] = null
-            it[referralSource] = null
-            it[requestedWaiverEmail] = 1
-            it[guardianFirstName] = ""
-            it[guardianLastName] = ""
-          }
-        }
-      }
-
-  suspend fun existsByWaiverId(waiverId: String): Boolean =
-      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-        SmartWaiverTable.select { SmartWaiverTable.waiverId eq waiverId }.firstOrNull() != null
-      }
 
   suspend fun insertWebhookQueueEntry(uniqueId: String, event: String): Boolean =
       newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
@@ -132,14 +89,4 @@ class SmartWaiverRepository @Inject constructor() {
           it[updatedAt] = now
         }
       }
-
-  suspend fun getMaxDateCompleted(): LocalDate? {
-    var maxDate: LocalDate? = null
-    newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-      exec("SELECT MAX(dateCompleted) FROM `dms-makermanager`.smartwaiver_data") { rs ->
-        if (rs.next()) maxDate = rs.getString(1)?.take(10)?.let { LocalDate.parse(it) }
-      }
-    }
-    return maxDate
-  }
 }

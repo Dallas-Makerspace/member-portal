@@ -47,6 +47,9 @@ data class MirroredPhoto(
     val sizeBytes: Int,
 )
 
+/** A stored waiver: its row id (the Enrich cursor) and its SmartWaiver id. */
+data class WaiverRef(val rowId: Long, val waiverId: String)
+
 /** A webhook row waiting to be processed. */
 data class QueueEntry(val id: Int, val uniqueId: String, val event: String)
 
@@ -244,14 +247,18 @@ class SmartWaiverMirrorRepository @Inject constructor() {
     }
   }
 
-  /** Waiver ids whose full mirror is missing or was made by an older [MIRROR_VERSION]. */
-  suspend fun waiverIdsNeedingMirror(limit: Int): List<String> =
+  /**
+   * Waivers whose full mirror is missing or was made by an older [MIRROR_VERSION], in row-id order
+   * starting after [afterId]. Walking by id (rather than always taking the first rows) means a
+   * waiver that keeps failing can't starve the ones behind it.
+   */
+  suspend fun waiversNeedingMirror(afterId: Long, limit: Int): List<WaiverRef> =
       newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-        SmartWaiverMirrorTable.slice(SmartWaiverMirrorTable.waiverId)
-            .select(needsMirror())
+        SmartWaiverMirrorTable.slice(SmartWaiverMirrorTable.id, SmartWaiverMirrorTable.waiverId)
+            .select { (SmartWaiverMirrorTable.id greater afterId) and needsMirror()() }
             .orderBy(SmartWaiverMirrorTable.id to SortOrder.ASC)
             .limit(limit)
-            .map { it[SmartWaiverMirrorTable.waiverId] }
+            .map { WaiverRef(it[SmartWaiverMirrorTable.id], it[SmartWaiverMirrorTable.waiverId]) }
       }
 
   suspend fun countNeedingMirror(): Int =
@@ -263,6 +270,29 @@ class SmartWaiverMirrorRepository @Inject constructor() {
     SmartWaiverMirrorTable.mirrorVersion.isNull() or
         (SmartWaiverMirrorTable.mirrorVersion less MIRROR_VERSION)
   }
+
+  /** Waivers that were fully mirrored but have no participant row, which should not happen. */
+  suspend fun countMirroredWithoutParticipants(): Int =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+        var count = 0
+        exec(
+            "SELECT COUNT(*) FROM `dms-makermanager`.smartwaiver_data d " +
+                "WHERE d.mirrorVersion IS NOT NULL AND NOT EXISTS " +
+                "(SELECT 1 FROM `dms-makermanager`.smartwaiver_participants p WHERE p.waiverId = d.waiverId)") { rs ->
+              if (rs.next()) count = rs.getInt(1)
+            }
+        count
+      }
+
+  suspend fun countCheckins(): Int =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+        SmartWaiverCheckinsTable.selectAll().count().toInt()
+      }
+
+  suspend fun countWaivers(): Int =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+        SmartWaiverMirrorTable.selectAll().count().toInt()
+      }
 
   /** Stores check-ins not seen before (they never change). Returns how many were new. */
   suspend fun insertNewCheckins(checkins: List<SmartwaiverCheckin>, now: LocalDateTime = nowUtc()): Int {

@@ -164,8 +164,12 @@ class SmartWaiverMirrorRepositoryTest {
     assertEquals(2, runBlocking { repo.insertMissingSummaries(summaries) })
     assertEquals(0, runBlocking { repo.insertMissingSummaries(summaries) })
 
-    assertEquals(listOf("fakewaiver000002", "fakewaiver000003"), runBlocking { repo.waiverIdsNeedingMirror(10) })
+    val needing = runBlocking { repo.waiversNeedingMirror(0, 10) }
+    assertEquals(listOf("fakewaiver000002", "fakewaiver000003"), needing.map { it.waiverId })
     assertEquals(2, runBlocking { repo.countNeedingMirror() })
+    // Walking by row id: after the first, only the second remains; after the last, nothing.
+    assertEquals(listOf("fakewaiver000003"), runBlocking { repo.waiversNeedingMirror(needing[0].rowId, 10) }.map { it.waiverId })
+    assertEquals(emptyList(), runBlocking { repo.waiversNeedingMirror(needing[1].rowId, 10) })
     val added = rows().first { it[SmartWaiverMirrorTable.waiverId] == "fakewaiver000002" }
     assertEquals("Completed Online", added[SmartWaiverMirrorTable.waiverStatus])
     assertNull(added[SmartWaiverMirrorTable.mirrorVersion])

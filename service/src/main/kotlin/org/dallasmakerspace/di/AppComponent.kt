@@ -18,7 +18,6 @@ import org.dallasmakerspace.cron.AdReplicationHealthCronJob
 import org.dallasmakerspace.cron.DoorSwipesCronJob
 import org.dallasmakerspace.cron.MemberRefreshCronJob
 import org.dallasmakerspace.cron.ShowAndTellCronJob
-import org.dallasmakerspace.cron.SmartWaiverBackfillJob
 import org.dallasmakerspace.cron.SmartWaiverProcessQueueJob
 import org.dallasmakerspace.dataviz.DataVizRouter
 import org.dallasmakerspace.dataviz.di.DataVizModule
@@ -41,6 +40,8 @@ import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.notifications.di.NotificationsModule
 import org.dallasmakerspace.remoteaccess.RemoteAccessService
 import org.dallasmakerspace.shortlinks.ShortLinksService
+import org.dallasmakerspace.smartwaiver.SmartWaiverBackfill
+import org.dallasmakerspace.smartwaiver.SmartWaiverReconciler
 import org.dallasmakerspace.smartwaiver.SmartwaiverModule
 import org.dallasmakerspace.storage.ObjectStoreFactory
 import org.dallasmakerspace.webhook.WebhookRouter
@@ -114,7 +115,9 @@ interface AppComponent {
 
   fun getAdReplicationHealthCronJob(): AdReplicationHealthCronJob
 
-  fun getSmartWaiverBackfillJob(): SmartWaiverBackfillJob
+  fun getSmartWaiverBackfill(): SmartWaiverBackfill
+
+  fun getSmartWaiverReconciler(): SmartWaiverReconciler
 
   fun getSmartWaiverProcessQueueJob(): SmartWaiverProcessQueueJob
 

@@ -18,6 +18,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.async
@@ -87,6 +88,20 @@ internal constructor(
 
   private val log = loggerFactory.create(javaClass)
 
+  private val requestCount = AtomicLong()
+  private val rateLimitCount = AtomicLong()
+
+  override fun stats() = ApiClientStats(requestCount.get(), rateLimitCount.get())
+
+  override suspend fun countWaivers(fromDate: LocalDate, toDate: LocalDate): Int =
+      try {
+        initiateSearch(fromDate, toDate).count ?: 0
+      } catch (e: IOException) {
+        throw SmartwaiverApiException("Failed to count waivers", e)
+      } catch (e: kotlinx.serialization.SerializationException) {
+        throw SmartwaiverApiException("Failed to parse waiver count response", e)
+      }
+
   private val json = Json {
     ignoreUnknownKeys = true
     coerceInputValues = true
@@ -107,6 +122,7 @@ internal constructor(
     val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
     repeat(MAX_RATE_LIMIT_ATTEMPTS) { attempt ->
       throttle.acquire(category)
+      requestCount.incrementAndGet()
       val response =
           client.request(url) {
             method = HttpMethod.Get
@@ -114,6 +130,7 @@ internal constructor(
             configure()
           }
       if (response.status != HttpStatusCode.TooManyRequests) return response
+      rateLimitCount.incrementAndGet()
       val seconds =
           parseRetryAfterSeconds(response.headers["Retry-After"], response.bodyAsText())
       log.warn(

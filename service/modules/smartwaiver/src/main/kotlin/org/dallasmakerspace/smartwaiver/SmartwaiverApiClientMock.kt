@@ -144,6 +144,13 @@ class SmartwaiverApiClientMock @Inject constructor(loggerFactory: LoggerFactory)
     )
   }
 
+  private val mockRequests = java.util.concurrent.atomic.AtomicLong()
+
+  override fun stats() = ApiClientStats(mockRequests.incrementAndGet(), 0)
+
+  override suspend fun countWaivers(fromDate: LocalDate, toDate: LocalDate): Int =
+      getWaiverDetails(fromDate, toDate).size
+
   override suspend fun getCheckins(from: LocalDateTime, to: LocalDateTime): SmartwaiverCheckinPage {
     log.info("Mock: Fetching check-ins")
     val today = LocalDate.now()

@@ -44,4 +44,13 @@ interface ISmartwaiverApiClient {
    * [SmartwaiverCheckinPage.moreCheckins] is true, ask again starting at the last check-in's date.
    */
   suspend fun getCheckins(from: LocalDateTime, to: LocalDateTime): SmartwaiverCheckinPage
+
+  /** How many waivers SmartWaiver holds for the window, from one search call (no result pages). */
+  suspend fun countWaivers(fromDate: LocalDate, toDate: LocalDate): Int
+
+  /** Running totals since startup, for the backfill's request budget. */
+  fun stats(): ApiClientStats
 }
+
+/** [requests] counts every API call made (retries included); [rateLimitHits] counts the 429s. */
+data class ApiClientStats(val requests: Long, val rateLimitHits: Long)
