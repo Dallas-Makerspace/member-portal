@@ -5,6 +5,7 @@ The job keeps going if this script exits or the connection drops; this is only a
 of controls. Standard library only.
 
     backfill_smartwaiver.py start [--restart]   start (or continue) the backfill, then watch it
+    backfill_smartwaiver.py start --limit N     trial: fully mirror only N stored waivers, then stop
     backfill_smartwaiver.py attach              watch a running backfill (the default)
     backfill_smartwaiver.py status              print one snapshot and exit
     backfill_smartwaiver.py pause | resume      hold / release it at the next waiver
@@ -161,10 +162,11 @@ def summary_line(p):
     rate = p.get("requestsPerMinute1", 0.0)
     eta = fmt_duration(p.get("etaStageSeconds")) if p.get("etaStageSeconds") is not None else "?"
     slow = " SLOW-MODE" if p.get("slowMode") else ""
+    note = f" | {p['message']}" if p.get("message") else ""
     return (f"{head} | {stage} {count}{pct} | {rate:.1f} req/min | today "
             f"{p.get('requestsToday', 0):,}/{p.get('dailyBudget', 0):,} | ETA stage {eta} | "
             f"mirrored {p.get('mirrored', 0):,} photos {p.get('photosStored', 0):,} "
-            f"checkins {p.get('checkinsAdded', 0):,} failed {p.get('failed', 0)}{slow}")
+            f"checkins {p.get('checkinsAdded', 0):,} failed {p.get('failed', 0)}{slow}{note}")
 
 
 def attach(client):
@@ -222,6 +224,7 @@ def main():
     ap.add_argument("command", nargs="?", default="attach",
                     choices=["start", "attach", "status", "pause", "resume", "stop", "errors"])
     ap.add_argument("--restart", action="store_true", help="with start: clear the cursors and begin again")
+    ap.add_argument("--limit", type=int, help="with start: mirror only this many waivers as a trial, then stop")
     ap.add_argument("--url", default="http://localhost:8081")
     ap.add_argument("--tunnel", metavar="SSH_HOST", help="reach the service through ssh -L to its container")
     ap.add_argument("--key-file", help="file holding the API key (or set SW_API_KEY)")
@@ -234,7 +237,9 @@ def main():
     client = Client(args)
     try:
         if args.command in ("start",):
-            reply = client.text(BASE_PATH + ("?restart=true" if args.restart else ""))
+            query = [q for q in ("restart=true" if args.restart else "",
+                                 f"limit={args.limit}" if args.limit else "") if q]
+            reply = client.text(BASE_PATH + ("?" + "&".join(query) if query else ""))
             print(reply)
             log_line(f"start: {reply.splitlines()[0] if reply else ''}")
             if reply.startswith(("HTTP ", "Refusing")):

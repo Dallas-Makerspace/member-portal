@@ -63,14 +63,17 @@ Writes are select-then-update-or-insert because the service user has no DELETE a
 4. Turn on SmartWaiver's check-in webhook (one `PUT /v4/webhooks/configure` with `checkinWebhook=true`, keeping the
    other settings). The payload for check-in events is not documented well, so any event containing "checkin" only
    queues a catch-up that reads recent check-ins from the API.
-5. **Run the backfill** from a terminal with `backfill_smartwaiver.py` (see its `--help`):
+5. **Try a small batch first**: `python backfill_smartwaiver.py start --limit 20 ...` fully mirrors 20 of the
+   already-stored waivers (oldest first; no discovery, no check-ins), then stops. Check one in the DB and the S3
+   bucket. A later `start` without `--limit` carries on from where the trial stopped.
+6. **Run the backfill** from a terminal with `backfill_smartwaiver.py` (see its `--help`):
    `python backfill_smartwaiver.py start --tunnel dms-docker-h0-root --key-file <file>`.
    About 92k API calls at 25,000/day and one call per 3 s is roughly four days. Ctrl-C only detaches.
    `pause`, `resume`, `stop`, `errors` and `status` work from any terminal.
-6. **Reconcile**: `GET /cron/smartwaiver-reconcile` compares SmartWaiver's counts with the mirror per year (and per
+7. **Reconcile**: `GET /cron/smartwaiver-reconcile` compares SmartWaiver's counts with the mirror per year (and per
    month where a year differs). It must report `RESULT: OK` before anything is cut over. Also re-run the last check
    in the migration script (removed legacy rows that must exist in `smartwaiver_participants`).
-7. **Compare, then cut over**: call the two reports with `source=local` and `source=api` and compare; then turn on
+8. **Compare, then cut over**: call the two reports with `source=local` and `source=api` and compare; then turn on
    `smartwaiver.local-reads.enabled`. Once it has run cleanly for a while, the live-read client methods can go.
 
 The backfill resumes by itself after a deploy or restart (it saves its cursors and state). A stopped run is saved as

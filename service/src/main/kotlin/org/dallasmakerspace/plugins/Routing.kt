@@ -782,11 +782,12 @@ fun Application.configureRouting() {
         // steer and watch it. It needs smartwaiver.mirror.enabled (the migration must be applied).
         get("/cron/backfill-smartwaiver") {
           val restart = "true".equals(call.request.queryParameters["restart"], ignoreCase = true)
+          val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.takeIf { it > 0 }
           val refusal = smartWaiverBackfillRefusal(appConfig, configOverrideService)
           if (refusal != null) {
             call.respondText(refusal, ContentType.Text.Plain, HttpStatusCode.Conflict)
           } else {
-            val started = smartWaiverBackfill.start(restart)
+            val started = smartWaiverBackfill.start(restart, limit)
             call.respondText(
                 "$started\n" + Json.encodeToString(smartWaiverBackfill.status()),
                 ContentType.Text.Plain)

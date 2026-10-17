@@ -202,15 +202,23 @@ internal constructor(
     paused.value = false
   }
 
-  /** Starts the run, or continues from the saved cursors; [restart] clears them and begins again. */
-  fun start(restart: Boolean = false): StartResult {
+  /**
+   * Starts the run, or continues from the saved cursors; [restart] clears them and begins again.
+   * With [limit], only that many already-stored waivers are mirrored in full (no discovery, no
+   * check-ins) and the stages are left unfinished, so a later full run carries on from there.
+   */
+  fun start(restart: Boolean = false, limit: Int? = null): StartResult {
     synchronized(lock) {
       if (job?.isActive == true) return StartResult.ALREADY_RUNNING
       log.info(
-          "SmartWaiver backfill starting (restart=$restart, budget $dailyBudget calls/day, " +
-              "one call per ${intervalMs}ms)")
+          "SmartWaiver backfill starting (restart=$restart, limit=$limit, budget $dailyBudget " +
+              "calls/day, one call per ${intervalMs}ms)")
       paused.value = false
-      job = scope.launch { runAll(restart) }
+      // Replace the previous run's snapshot now, so a client that attaches right after start()
+      // doesn't see that run's DONE and leave.
+      progress = BackfillProgress(dailyBudget = dailyBudget, state = RunState.RUNNING)
+      publish()
+      job = scope.launch { runAll(restart, limit) }
     }
     return StartResult.STARTED
   }
@@ -248,9 +256,15 @@ internal constructor(
   // ---- the run ----
 
   @Suppress("TooGenericExceptionCaught")
-  private suspend fun runAll(restart: Boolean) {
+  private suspend fun runAll(restart: Boolean, limit: Int?) {
     try {
       begin(restart)
+      if (limit != null) {
+        enrich(limit)
+        progress = progress.copy(message = "Trial of up to $limit waivers finished; start again without a limit for the rest")
+        finish(RunState.DONE, null)
+        return
+      }
       if (!stageDone(STAGE_DISCOVER)) discover()
       if (!stageDone(STAGE_ENRICH)) enrich()
       if (!stageDone(STAGE_CHECKINS)) checkins()
@@ -309,17 +323,24 @@ internal constructor(
   }
 
   @Suppress("TooGenericExceptionCaught")
-  private suspend fun enrich() {
+  private suspend fun enrich(maxUnits: Int? = null) {
     val saved = repository.getState(STAGE_ENRICH)
     var cursor = saved?.cursorValue?.toLongOrNull() ?: 0L
     var done = saved?.doneCount ?: 0
     val total = done + repository.countNeedingMirror()
     beginStage(STAGE_ENRICH, done, total)
     var failedThisPass = 0
-    while (true) {
+    var processed = 0
+    var capped = false
+    batches@ while (true) {
       val batch = repository.waiversNeedingMirror(cursor, ENRICH_BATCH)
       if (batch.isEmpty()) break
       for (ref in batch) {
+        if (maxUnits != null && processed >= maxUnits) {
+          capped = true
+          break@batches
+        }
+        processed++
         gateBeforeUnit()
         val before = client.stats().requests
         try {
@@ -338,6 +359,10 @@ internal constructor(
         unitDone(done, total, client.stats().requests - before, remainingUnits = total - done)
         if (done % LOG_EVERY_UNITS == 0) logProgress()
       }
+    }
+    if (capped) {
+      log.info("SmartWaiver enrich trial stopped after $processed waivers (${progress.mirrored} mirrored, $failedThisPass failed)")
+      return // stage stays RUNNING with its cursor, so a full run continues from here
     }
     val note = if (failedThisPass > 0) "$failedThisPass waivers could not be mirrored; see the errors list" else null
     saveStage(STAGE_ENRICH, RunState.DONE.name, cursor.toString(), done, total, note)

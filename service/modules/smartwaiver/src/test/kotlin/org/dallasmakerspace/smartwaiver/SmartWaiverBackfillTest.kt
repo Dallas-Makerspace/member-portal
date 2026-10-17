@@ -227,6 +227,36 @@ class SmartWaiverBackfillTest {
   }
 
   @Test
+  fun `a trial mirrors only the limit, skips discovery, and a full run carries on from there`() {
+    runBlocking {
+      repo.insertMissingSummaries(listOf(summary("fakewaiver01"), summary("fakewaiver02"), summary("fakewaiver03")))
+    }
+    val client = twoMonths()
+    val b = backfill(client)
+
+    b.start(limit = 2)
+    val trial = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, trial.state, trial.lastError)
+    assertEquals(2, trial.mirrored)
+    assertEquals(1, runBlocking { repo.countNeedingMirror() })
+    assertTrue(trial.message.orEmpty().contains("Trial"), trial.message)
+    assertEquals(0, runBlocking { repo.countCheckins() })
+    assertEquals(0, client.requests.get() - 2, "only the two waiver fetches, no search or check-in calls")
+    assertEquals("RUNNING", runBlocking { repo.getState("enrich") }?.status)
+    assertEquals(null, runBlocking { repo.getState("discover") })
+
+    b.start()
+    val full = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, full.state, full.lastError)
+    assertEquals(1, full.mirrored)
+    assertEquals(0, runBlocking { repo.countNeedingMirror() })
+    assertEquals("DONE", runBlocking { repo.getState("enrich") }?.status)
+    assertEquals(1, runBlocking { repo.countCheckins() })
+  }
+
+  @Test
   fun `a second start while running is refused`() {
     val hold = CompletableDeferred<Unit>()
     val b = backfill(twoMonthsHeld(hold))
