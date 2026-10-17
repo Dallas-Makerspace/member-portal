@@ -6,9 +6,11 @@ import io.ktor.client.plugins.logging.DEFAULT
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.request
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -31,15 +33,56 @@ private const val SMARTWAIVER_BASE_URL = "https://api.smartwaiver.com/v4"
 private const val END_OF_DAY_HOUR = 23
 private const val END_OF_DAY_MINUTE = 59
 private const val END_OF_DAY_SECOND = 59
-private const val PAGE_LIMIT = 300
 private const val REQUEST_TIMEOUT_MS = 120000L // 120 seconds
 private const val MAX_PAGES = 20 // Upper bound: fetch max 2000 waivers (20 pages * 100)
+private const val MAX_RATE_LIMIT_ATTEMPTS = 5
+private const val MS_PER_SECOND = 1000L
+
+private val WAIVER_ID_PATTERN = Regex("[A-Za-z0-9_-]{1,64}")
+
+/** Waiver ids come from webhook bodies and end up in request paths, so reject anything odd. */
+private fun requireValidWaiverId(waiverId: String) {
+  if (!WAIVER_ID_PATTERN.matches(waiverId)) throw SmartwaiverApiException("Invalid waiver id")
+}
+
+private fun createHttpClient() =
+    HttpClient(DmsHttpEngine) {
+      engine {
+        config {
+          // All calls hit the same host - maxRequestsPerHost must rise too, or OkHttp's default
+          // of 5 throttles the parallel page-fetch below regardless of maxRequests.
+          dispatcher(
+              Dispatcher().apply {
+                maxRequests = 100
+                maxRequestsPerHost = 100
+              })
+        }
+      }
+      install(HttpTimeout) {
+        requestTimeoutMillis = REQUEST_TIMEOUT_MS
+        connectTimeoutMillis = REQUEST_TIMEOUT_MS
+        socketTimeoutMillis = REQUEST_TIMEOUT_MS
+      }
+      install(Logging) {
+        logger = Logger.DEFAULT
+        level = LogLevel.INFO
+      }
+    }
 
 @Singleton
 class SmartwaiverApiClient
-@Inject
-constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
-    ISmartwaiverApiClient {
+internal constructor(
+    private val appConfig: AppConfig,
+    loggerFactory: LoggerFactory,
+    private val client: HttpClient,
+    private val throttle: RequestThrottle,
+) : ISmartwaiverApiClient {
+  @Inject
+  constructor(
+      appConfig: AppConfig,
+      loggerFactory: LoggerFactory,
+  ) : this(appConfig, loggerFactory, createHttpClient(), RequestThrottle.fromConfig(appConfig))
+
   private val log = loggerFactory.create(javaClass)
 
   private val json = Json {
@@ -50,38 +93,42 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   // Smartwaiver API returns dates in format: "2025-09-19 00:04:02"
   private val smartwaiverDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
-  private fun getClient() =
-      HttpClient(DmsHttpEngine) {
-        engine {
-          config {
-            // All calls hit the same host - maxRequestsPerHost must rise too, or OkHttp's default
-            // of 5 throttles the parallel page-fetch below regardless of maxRequests.
-            dispatcher(
-                Dispatcher().apply {
-                  maxRequests = 100
-                  maxRequestsPerHost = 100
-                })
+  /**
+   * GETs [url] through the shared throttle. On 429 every caller pauses for `retryAfter`, then the
+   * request is retried; other statuses are returned for the caller to interpret.
+   */
+  private suspend fun send(
+      category: RequestCategory,
+      url: String,
+      configure: HttpRequestBuilder.() -> Unit = {},
+  ): HttpResponse {
+    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
+    repeat(MAX_RATE_LIMIT_ATTEMPTS) { attempt ->
+      throttle.acquire(category)
+      val response =
+          client.request(url) {
+            method = HttpMethod.Get
+            header("sw-api-key", apiKey)
+            configure()
           }
-        }
-        install(HttpTimeout) {
-          requestTimeoutMillis = REQUEST_TIMEOUT_MS
-          connectTimeoutMillis = REQUEST_TIMEOUT_MS
-          socketTimeoutMillis = REQUEST_TIMEOUT_MS
-        }
-        install(Logging) {
-          logger = Logger.DEFAULT
-          level = LogLevel.INFO
-        }
-      }
+      if (response.status != HttpStatusCode.TooManyRequests) return response
+      val seconds =
+          parseRetryAfterSeconds(response.headers["Retry-After"], response.bodyAsText())
+      log.warn(
+          "Smartwaiver rate limit hit (attempt ${attempt + 1}/$MAX_RATE_LIMIT_ATTEMPTS), " +
+              "pausing ${seconds}s")
+      throttle.pauseFor(seconds * MS_PER_SECOND)
+    }
+    throw SmartwaiverApiException("Rate limit exceeded")
+  }
 
   override suspend fun getWaivers(fromDate: LocalDate, toDate: LocalDate): List<WaiverSigningData> {
-    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
     val allWaivers = mutableListOf<WaiverSigningData>()
     val overallStartTime = System.currentTimeMillis()
 
     try {
       // Step 1: Initiate search to get GUID and metadata
-      val searchMetadata = initiateSearch(apiKey, fromDate, toDate)
+      val searchMetadata = initiateSearch(fromDate, toDate)
       val totalPages = searchMetadata.pages ?: 0
       val totalCount = searchMetadata.count ?: 0
 
@@ -95,14 +142,14 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
             "Limiting fetch to $MAX_PAGES pages (${MAX_PAGES * 100} waivers) out of $totalPages total pages")
       }
 
-      // Fetch all pages in parallel for maximum speed
+      // Fetch all pages in parallel; the throttle spaces the requests out
       log.info("Fetching $pagesToFetch pages in parallel...")
       val pageResults = coroutineScope {
         (0 until pagesToFetch)
             .map { pageNum ->
               async {
                 log.info("Starting fetch for page ${pageNum + 1} of $pagesToFetch")
-                fetchSearchResults(apiKey, searchMetadata.guid, pageNum)
+                fetchSearchResults(searchMetadata.guid, pageNum)
               }
             }
             .awaitAll()
@@ -125,95 +172,69 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   }
 
   private suspend fun initiateSearch(
-      apiKey: String,
       fromDate: LocalDate,
       toDate: LocalDate,
   ): SmartwaiverSearchMetadata {
-    val url = "$SMARTWAIVER_BASE_URL/search"
     val startTime = System.currentTimeMillis()
 
     val response =
-        getClient().use {
-          it.request(url) {
-            method = HttpMethod.Get
-            header("sw-api-key", apiKey)
-            parameter("fromDts", fromDate.atStartOfDay().format(DateTimeFormatter.ISO_DATE_TIME))
-            parameter(
-                "toDts",
-                toDate
-                    .atTime(END_OF_DAY_HOUR, END_OF_DAY_MINUTE, END_OF_DAY_SECOND)
-                    .format(DateTimeFormatter.ISO_DATE_TIME),
-            )
-            parameter("sort", "desc") // Get newest waivers first
-          }
+        send(RequestCategory.SEARCH, "$SMARTWAIVER_BASE_URL/search") {
+          parameter("fromDts", fromDate.atStartOfDay().format(DateTimeFormatter.ISO_DATE_TIME))
+          parameter(
+              "toDts",
+              toDate
+                  .atTime(END_OF_DAY_HOUR, END_OF_DAY_MINUTE, END_OF_DAY_SECOND)
+                  .format(DateTimeFormatter.ISO_DATE_TIME),
+          )
+          parameter("sort", "desc") // Get newest waivers first
         }
 
     val timeTaken = System.currentTimeMillis() - startTime
 
-    when (response.status) {
+    return when (response.status) {
       HttpStatusCode.OK -> {
-        val responseBody = response.bodyAsText()
-        log.info("Smartwaiver Search Response: $responseBody")
-        val searchResponse = json.decodeFromString<SmartwaiverSearchResponse>(responseBody)
+        // The body lists signers' names and emails, so only the metadata is logged.
+        val searchResponse = json.decodeFromString<SmartwaiverSearchResponse>(response.bodyAsText())
         val searchMetadata =
             searchResponse.search
-                ?: throw SmartwaiverApiException(
-                    "Search response missing search metadata: $responseBody")
+                ?: throw SmartwaiverApiException("Search response missing search metadata")
 
         log.info(
             "Search initiated - GUID: ${searchMetadata.guid}, Count: ${searchMetadata.count}, Pages: ${searchMetadata.pages}, Time: ${timeTaken}ms")
 
-        return searchMetadata
+        searchMetadata
       }
-      HttpStatusCode.Unauthorized -> {
-        throw SmartwaiverApiException("Unauthorized: Invalid API key")
-      }
-      HttpStatusCode.TooManyRequests -> {
-        throw SmartwaiverApiException("Rate limit exceeded")
-      }
-      else -> {
-        throw SmartwaiverApiException(
-            "Failed to initiate search: ${response.status} - ${response.bodyAsText()}")
-      }
+      HttpStatusCode.Unauthorized -> throw SmartwaiverApiException("Unauthorized: Invalid API key")
+      else ->
+          throw SmartwaiverApiException(
+              "Failed to initiate search: ${response.status} - ${response.bodyAsText()}")
     }
   }
 
   private suspend fun fetchSearchResults(
-      apiKey: String,
       guid: String,
       page: Int,
   ): SmartwaiverSearchResultsResponse {
-    val url = "$SMARTWAIVER_BASE_URL/search/$guid/results"
     val startTime = System.currentTimeMillis()
 
     val response =
-        getClient().use {
-          it.request(url) {
-            method = HttpMethod.Get
-            header("sw-api-key", apiKey)
-            parameter("page", page)
-          }
+        send(RequestCategory.SEARCH, "$SMARTWAIVER_BASE_URL/search/$guid/results") {
+          parameter("page", page)
         }
 
     val timeTaken = System.currentTimeMillis() - startTime
 
-    when (response.status) {
+    return when (response.status) {
       HttpStatusCode.OK -> {
         val responseBody = response.bodyAsText()
         log.info("Fetched page $page - Time: ${timeTaken}ms, Size: ${responseBody.length} bytes")
 
-        return json.decodeFromString<SmartwaiverSearchResultsResponse>(responseBody)
+        json.decodeFromString<SmartwaiverSearchResultsResponse>(responseBody)
       }
-      HttpStatusCode.Unauthorized -> {
-        throw SmartwaiverApiException("Unauthorized: Invalid API key")
-      }
-      HttpStatusCode.TooManyRequests -> {
-        throw SmartwaiverApiException("Rate limit exceeded")
-      }
-      else -> {
-        throw SmartwaiverApiException(
-            "Failed to fetch search results: ${response.status} - ${response.bodyAsText()}")
-      }
+      HttpStatusCode.Unauthorized -> throw SmartwaiverApiException("Unauthorized: Invalid API key")
+      else ->
+          throw SmartwaiverApiException(
+              "Failed to fetch search results: ${response.status} - ${response.bodyAsText()}")
     }
   }
 
@@ -221,14 +242,13 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
       fromDate: LocalDate,
       toDate: LocalDate
   ): List<SmartwaiverSummary> {
-    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
     try {
-      val searchMetadata = initiateSearch(apiKey, fromDate, toDate)
+      val searchMetadata = initiateSearch(fromDate, toDate)
       val totalPages = searchMetadata.pages ?: 0
       val pagesToFetch = minOf(totalPages, MAX_PAGES)
       val pageResults = coroutineScope {
         (0 until pagesToFetch)
-            .map { async { fetchSearchResults(apiKey, searchMetadata.guid, it) } }
+            .map { async { fetchSearchResults(searchMetadata.guid, it) } }
             .awaitAll()
       }
       return pageResults.flatMap { it.searchResults ?: emptyList() }
@@ -240,21 +260,13 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   }
 
   override suspend fun getWaiver(waiverId: String): SmartwaiverFullWaiver {
-    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
-    val url = "$SMARTWAIVER_BASE_URL/waivers/$waiverId"
-
-    val response =
-        getClient().use {
-          it.request(url) {
-            method = HttpMethod.Get
-            header("sw-api-key", apiKey)
-          }
-        }
+    requireValidWaiverId(waiverId)
+    val response = send(RequestCategory.OTHER, "$SMARTWAIVER_BASE_URL/waivers/$waiverId")
 
     return when (response.status) {
       HttpStatusCode.OK -> {
-        val responseBody = response.bodyAsText()
-        val waiverResponse = json.decodeFromString<SmartwaiverFullWaiverResponse>(responseBody)
+        val waiverResponse =
+            json.decodeFromString<SmartwaiverFullWaiverResponse>(response.bodyAsText())
         waiverResponse.waiver
             ?: throw SmartwaiverApiException("Waiver missing in response for id: $waiverId")
       }
@@ -267,11 +279,10 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   }
 
   override suspend fun getWaiversByName(firstName: String, lastName: String): List<SmartwaiverSummary> {
-    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
     try {
-      val searchMetadata = initiateSearchByName(apiKey, firstName, lastName)
+      val searchMetadata = initiateSearchByName(firstName, lastName)
       if ((searchMetadata.count ?: 0) == 0) return emptyList()
-      val firstPage = fetchSearchResults(apiKey, searchMetadata.guid, 0)
+      val firstPage = fetchSearchResults(searchMetadata.guid, 0)
       return firstPage.searchResults ?: emptyList()
     } catch (e: IOException) {
       throw SmartwaiverApiException("Failed to fetch waivers by name", e)
@@ -281,56 +292,33 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
   }
 
   private suspend fun initiateSearchByName(
-      apiKey: String,
       firstName: String,
       lastName: String,
   ): SmartwaiverSearchMetadata {
-    val url = "$SMARTWAIVER_BASE_URL/search"
-
     val response =
-        getClient().use {
-          it.request(url) {
-            method = HttpMethod.Get
-            header("sw-api-key", apiKey)
-            parameter("firstName", firstName)
-            parameter("lastName", lastName)
-            parameter("sort", "desc") // Get newest waivers first
-          }
+        send(RequestCategory.SEARCH, "$SMARTWAIVER_BASE_URL/search") {
+          parameter("firstName", firstName)
+          parameter("lastName", lastName)
+          parameter("sort", "desc") // Get newest waivers first
         }
 
     return when (response.status) {
       HttpStatusCode.OK -> {
-        // Not logging the response body here (unlike initiateSearch) — it's a search scoped to one
-        // identifiable person rather than a date-range batch.
-        val responseBody = response.bodyAsText()
-        val searchResponse = json.decodeFromString<SmartwaiverSearchResponse>(responseBody)
+        // Not logging the response body here — it's a search scoped to one identifiable person.
+        val searchResponse = json.decodeFromString<SmartwaiverSearchResponse>(response.bodyAsText())
         searchResponse.search
             ?: throw SmartwaiverApiException("Name search response missing search metadata")
       }
-      HttpStatusCode.Unauthorized -> {
-        throw SmartwaiverApiException("Unauthorized: Invalid API key")
-      }
-      HttpStatusCode.TooManyRequests -> {
-        throw SmartwaiverApiException("Rate limit exceeded")
-      }
-      else -> {
-        throw SmartwaiverApiException(
-            "Failed to initiate name search: ${response.status} - ${response.bodyAsText()}")
-      }
+      HttpStatusCode.Unauthorized -> throw SmartwaiverApiException("Unauthorized: Invalid API key")
+      else ->
+          throw SmartwaiverApiException(
+              "Failed to initiate name search: ${response.status} - ${response.bodyAsText()}")
     }
   }
 
   override suspend fun getWaiverPhotos(waiverId: String): List<SmartwaiverPhotoEntry> {
-    val apiKey = appConfig.requireStringProperty("app.smartwaiver.apiKey")
-    val url = "$SMARTWAIVER_BASE_URL/waivers/$waiverId/photos"
-
-    val response =
-        getClient().use {
-          it.request(url) {
-            method = HttpMethod.Get
-            header("sw-api-key", apiKey)
-          }
-        }
+    requireValidWaiverId(waiverId)
+    val response = send(RequestCategory.OTHER, "$SMARTWAIVER_BASE_URL/waivers/$waiverId/photos")
 
     return when (response.status) {
       HttpStatusCode.OK -> {

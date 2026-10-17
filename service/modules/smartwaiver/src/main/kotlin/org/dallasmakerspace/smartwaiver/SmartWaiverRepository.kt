@@ -7,6 +7,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import org.dallasmakerspace.core.DBMasterConnection
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
@@ -85,25 +86,23 @@ class SmartWaiverRepository @Inject constructor() {
         SmartWaiverTable.select { SmartWaiverTable.waiverId eq waiverId }.firstOrNull() != null
       }
 
-  suspend fun insertWebhookQueueEntry(uniqueId: String, event: String): Boolean {
-    var alreadyQueued = false
-    newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-      exec(
-          "SELECT COUNT(*) FROM `dms-makermanager`.smartwaiver_hooks " +
-              "WHERE unique_id = '$uniqueId' AND processed_at IS NULL") { rs ->
-            if (rs.next()) alreadyQueued = rs.getInt(1) > 0
-          }
-    }
-    if (alreadyQueued) return false
-    newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-      SmartWaiverHooksTable.insert {
-        it[SmartWaiverHooksTable.uniqueId] = uniqueId
-        it[hook] = event
-        it[createdAt] = LocalDateTime.now().format(DATETIME_FORMAT)
+  suspend fun insertWebhookQueueEntry(uniqueId: String, event: String): Boolean =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+        val alreadyQueued =
+            SmartWaiverHooksTable.select {
+                  (SmartWaiverHooksTable.uniqueId eq uniqueId) and
+                      SmartWaiverHooksTable.processedAt.isNull()
+                }
+                .limit(1)
+                .any()
+        if (alreadyQueued) return@newSuspendedTransaction false
+        SmartWaiverHooksTable.insert {
+          it[SmartWaiverHooksTable.uniqueId] = uniqueId
+          it[hook] = event
+          it[createdAt] = LocalDateTime.now().format(DATETIME_FORMAT)
+        }
+        true
       }
-    }
-    return true
-  }
 
   suspend fun getUnprocessedQueueEntries(): List<Triple<Int, String, String>> {
     val cutoff = LocalDateTime.now().minusDays(QUEUE_LOOKBACK_DAYS).format(DATETIME_FORMAT)
