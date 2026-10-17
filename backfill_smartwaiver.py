@@ -15,9 +15,14 @@ Connecting
     Local service:   --url http://localhost:8081 (the default)
     Production:      --tunnel dms-docker-h0-root   (opens an ssh -L tunnel to the service container
                      and re-opens it if a blue/green deploy moves the container)
-    Credentials:     the API key of a client with the CRON_EXECUTOR role, read from --key-file or the
-                     SW_API_KEY environment variable (never printed), and its name via --client or
-                     SW_API_CLIENT.
+    Credentials:     the API key of a client with the CRON_EXECUTOR role (e.g. jenkins-member-refresh),
+                     read from --key-file or SW_API_KEY (never printed), with that client's name via
+                     --client or SW_API_CLIENT. The name and key must belong to the same client.
+    Log file:        --log-file PATH appends the dated lines this prints, so the history survives a
+                     closed terminal. The job also logs to the service log (Kibana).
+
+Retrying failed waivers: a finished Enrich stage is not repeated; `start --restart` re-scans (about 150
+calls) and mirrors only the waivers that still lack a full mirror.
 """
 
 import argparse
@@ -54,6 +59,16 @@ def fmt_duration(seconds):
 
 def stamp():
     return time.strftime("%H:%M:%S")
+
+
+LOG_FILE = None
+
+
+def log_line(text):
+    """Append one dated line to the --log-file, if one was given."""
+    if LOG_FILE:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {text}\n")
 
 
 class Tunnel:
@@ -120,6 +135,11 @@ class Client:
         except urllib.error.HTTPError as e:
             return f"HTTP {e.code}: {e.read().decode(errors='replace')}"
 
+    def reset_tunnel(self):
+        """Drop the tunnel so the next request re-resolves the container (a deploy may have moved it)."""
+        if self.tunnel:
+            self.tunnel.close()
+
     def close(self):
         if self.tunnel:
             self.tunnel.close()
@@ -166,9 +186,10 @@ def attach(client):
                     more_429 = p.get("rateLimitHits", 0) > last.get("rateLimitHits", 0)
                     text = summary_line(p)
                     if changed or more_failures or more_429 or now - last_log >= STATUS_LOG_SECONDS:
-                        print(f"\r{' ' * (width - 1)}\r[{stamp()}] {text}"
-                              + ("  <- rate limited (429)" if more_429 else "")
-                              + ("  <- new failure (run 'errors')" if more_failures else ""), flush=True)
+                        note = (("  <- rate limited (429)" if more_429 else "")
+                                + ("  <- new failure (run 'errors')" if more_failures else ""))
+                        print(f"\r{' ' * (width - 1)}\r[{stamp()}] {text}{note}", flush=True)
+                        log_line(text + note)
                         last_log = now
                     else:
                         print(f"\r[{stamp()}] {text}"[: width - 1].ljust(width - 1), end="", flush=True)
@@ -181,8 +202,18 @@ def attach(client):
         except KeyboardInterrupt:
             print("\ndetached; the backfill keeps running")
             return True
+        except urllib.error.HTTPError as e:
+            if 400 <= e.code < 500:
+                # Wrong key or client name, no permission, ...: retrying won't help.
+                print(f"\nERROR: the service answered HTTP {e.code}; check --client and the API key")
+                return False
+            print(f"\n[{stamp()}] service returned HTTP {e.code}; retrying in {RETRY_SECONDS}s")
+            log_line(f"service returned HTTP {e.code}; retrying")
+            time.sleep(RETRY_SECONDS)
         except (urllib.error.URLError, ConnectionError, OSError, subprocess.TimeoutExpired) as e:
             print(f"\n[{stamp()}] connection lost ({e}); retrying in {RETRY_SECONDS}s")
+            log_line(f"connection lost ({e}); retrying")
+            client.reset_tunnel()
             time.sleep(RETRY_SECONDS)
 
 
@@ -195,12 +226,19 @@ def main():
     ap.add_argument("--tunnel", metavar="SSH_HOST", help="reach the service through ssh -L to its container")
     ap.add_argument("--key-file", help="file holding the API key (or set SW_API_KEY)")
     ap.add_argument("--client", help="X-Api-Client name (or set SW_API_CLIENT)")
+    ap.add_argument("--log-file", help="append the printed status lines, with dates, to this file")
     args = ap.parse_args()
+    global LOG_FILE
+    LOG_FILE = args.log_file
 
     client = Client(args)
     try:
         if args.command in ("start",):
-            print(client.text(BASE_PATH + ("?restart=true" if args.restart else "")))
+            reply = client.text(BASE_PATH + ("?restart=true" if args.restart else ""))
+            print(reply)
+            log_line(f"start: {reply.splitlines()[0] if reply else ''}")
+            if reply.startswith(("HTTP ", "Refusing")):
+                return 1  # refused (flag off, mock mode, bad key): don't sit on an idle stream
             return 0 if attach(client) else 1
         if args.command == "attach":
             return 0 if attach(client) else 1

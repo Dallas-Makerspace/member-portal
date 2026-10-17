@@ -36,6 +36,7 @@ private const val STAGE_ENRICH = "enrich"
 private const val STAGE_CHECKINS = "checkins"
 private const val RUN = "run"
 private const val ENRICH_BATCH = 50
+private const val LOG_EVERY_UNITS = 50
 private const val MAX_CONSECUTIVE_FAILURES = 10
 private const val MAX_RECENT_ERRORS = 200
 private const val CALLS_PER_WAIVER_GUESS = 2.0
@@ -205,6 +206,9 @@ internal constructor(
   fun start(restart: Boolean = false): StartResult {
     synchronized(lock) {
       if (job?.isActive == true) return StartResult.ALREADY_RUNNING
+      log.info(
+          "SmartWaiver backfill starting (restart=$restart, budget $dailyBudget calls/day, " +
+              "one call per ${intervalMs}ms)")
       paused.value = false
       job = scope.launch { runAll(restart) }
     }
@@ -293,6 +297,7 @@ internal constructor(
       val before = client.stats().requests
       val summaries = client.getWaiverDetails(start, end)
       val added = repository.insertMissingSummaries(summaries)
+      log.info("Discover $start to $end: ${summaries.size} on SmartWaiver, $added new (window ${done + 1}/$months)")
       start = end.plusDays(1)
       done++
       progress = progress.copy(discovered = progress.discovered + added)
@@ -331,6 +336,7 @@ internal constructor(
         done++
         saveStage(STAGE_ENRICH, "RUNNING", cursor.toString(), done, total)
         unitDone(done, total, client.stats().requests - before, remainingUnits = total - done)
+        if (done % LOG_EVERY_UNITS == 0) logProgress()
       }
     }
     val note = if (failedThisPass > 0) "$failedThisPass waivers could not be mirrored; see the errors list" else null
@@ -352,6 +358,7 @@ internal constructor(
       gateBeforeUnit()
     }
     saveStage(STAGE_CHECKINS, RunState.DONE.name, now.toString(), total, null)
+    log.info("SmartWaiver check-ins finished: ${progress.checkinsAdded} new")
   }
 
   // ---- pacing, budget, pause ----
@@ -375,6 +382,7 @@ internal constructor(
     rollBudgetDay()
     if (requestsToday >= dailyBudget) {
       val wake = nextChicagoMidnight()
+      log.info("SmartWaiver backfill used today's budget of $dailyBudget calls; sleeping until $wake")
       setState(RunState.WAITING, wake.toLocalDateTime().toString() + " America/Chicago", null)
       progress = progress.copy(waitingUntilEpoch = wake.toEpochSecond())
       publish()
@@ -392,6 +400,7 @@ internal constructor(
     lastRequestTotal = stats.requests
     requestsToday += used.toInt()
     if (stats.rateLimitHits > lastRateLimitHits) {
+      if (!slowMode) log.warn("SmartWaiver rate limit hit; backfill pace halves until the next Chicago day")
       slowMode = true
       lastRateLimitHits = stats.rateLimitHits
     }
@@ -457,7 +466,16 @@ internal constructor(
 
   private fun recentErrorCount() = synchronized(lock) { recentErrors.size }
 
+  private fun logProgress() {
+    val p = progress
+    log.info(
+        "SmartWaiver backfill ${p.stage}: ${p.stageDone}/${p.stageTotal ?: "?"}, ${p.mirrored} mirrored, " +
+            "${p.photosStored} photos, ${p.failed} failed, calls today ${p.requestsToday}/${p.dailyBudget}, " +
+            "%.1f/min, ETA ${p.etaStageSeconds?.let { "${it / 3600}h" } ?: "?"}".format(p.requestsPerMinute1))
+  }
+
   private fun setState(state: RunState, waitingUntil: String?, error: String?) {
+    if (state != progress.state) log.info("SmartWaiver backfill ${progress.state} -> $state${error?.let { ": $it" }.orEmpty()}")
     progress =
         progress.copy(
             state = state,
