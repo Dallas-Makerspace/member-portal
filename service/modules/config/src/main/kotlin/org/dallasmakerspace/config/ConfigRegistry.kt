@@ -201,10 +201,7 @@ object ConfigRegistry {
   val SMARTWAIVER_MIRROR_ENABLED =
       ConfigKey(
           key = "smartwaiver.mirror.enabled",
-          description =
-              "Mirror every SmartWaiver waiver in full (participants, contact details, kiosk " +
-                  "photos in S3, check-ins) when its webhook arrives, instead of the minimal " +
-                  "legacy row. Requires smartwaiver-mirror-migration.sql to be applied first.",
+          description = "Mirror SmartWaiver data when a new waiver or check-in arrives",
           category = "SmartWaiver",
           defaultValue = false,
           type = ConfigValueType.BooleanType,
@@ -213,10 +210,7 @@ object ConfigRegistry {
   val SMARTWAIVER_LOCAL_READS_ENABLED =
       ConfigKey(
           key = "smartwaiver.local-reads.enabled",
-          description =
-              "Serve the signed-waiver reports and the profile kiosk photos from the local " +
-                  "SmartWaiver mirror instead of calling SmartWaiver live. Only turn on after the " +
-                  "mirror backfill has finished and /cron/smartwaiver-reconcile reports no gaps.",
+          description = "Read SmartWaiver reports and kiosk photos from the local copy",
           category = "SmartWaiver",
           defaultValue = false,
           type = ConfigValueType.BooleanType,
