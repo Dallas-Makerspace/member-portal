@@ -2,9 +2,11 @@ package org.dallasmakerspace.di
 
 import dagger.Module
 import dagger.Provides
+import javax.inject.Named
 import javax.inject.Singleton
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.smartwaiver.SMARTWAIVER_STORE
 import org.dallasmakerspace.storage.IObjectStore
 import org.dallasmakerspace.storage.InMemoryObjectStore
 import org.dallasmakerspace.storage.S3ObjectStore
@@ -21,6 +23,17 @@ class StorageModule {
         InMemoryObjectStore()
       } else {
         S3ObjectStore(appConfig, loggerFactory)
+      }
+
+  /** Dedicated bucket for the SmartWaiver mirror; reaches [SMARTWAIVER_STORE] consumers only. */
+  @Provides
+  @Singleton
+  @Named(SMARTWAIVER_STORE)
+  fun provideSmartwaiverObjectStore(appConfig: AppConfig, loggerFactory: LoggerFactory): IObjectStore =
+      if (useMockServices(appConfig)) {
+        InMemoryObjectStore()
+      } else {
+        S3ObjectStore(appConfig, loggerFactory, "app.smartwaiver.object-store.bucket")
       }
 
   private fun useMockServices(appConfig: AppConfig) =

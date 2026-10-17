@@ -76,6 +76,11 @@ data class SmartwaiverCustomField(
     val displayText: String = "",
 )
 
+/**
+ * The parts of a v4 waiver we mirror. This is an allowlist: the API also returns driver's license,
+ * insurance, client IP, gender, marketing opt-ins and typed signatures, which are deliberately not
+ * declared here so they are never deserialized, mapped or stored.
+ */
 @Serializable
 data class SmartwaiverFullWaiver(
     val waiverId: String,
@@ -85,7 +90,73 @@ data class SmartwaiverFullWaiver(
     val lastName: String? = null,
     val email: String? = null,
     val dob: String? = null,
+    val templateId: String? = null,
+    val expirationDate: String? = null,
+    val verified: Boolean? = null,
+    val kiosk: Boolean? = null,
+    val isMinor: Boolean? = null,
+    val tags: List<String> = emptyList(),
+    val participants: List<SmartwaiverParticipant> = emptyList(),
+    val guardian: SmartwaiverGuardian? = null,
+    val addressLineOne: String? = null,
+    val addressLineTwo: String? = null,
+    val addressCity: String? = null,
+    val addressState: String? = null,
+    val addressZip: String? = null,
+    val addressCountry: String? = null,
+    val emergencyContactName: String? = null,
+    val emergencyContactRelation: String? = null,
+    val emergencyContactPhone: String? = null,
+    /** Number of kiosk photos SmartWaiver holds; null if the API didn't say. */
+    val photos: Int? = null,
     val customWaiverFields: Map<String, SmartwaiverCustomField> = emptyMap(),
+)
+
+@Serializable
+data class SmartwaiverParticipant(
+    val firstName: String? = null,
+    val middleName: String? = null,
+    val lastName: String? = null,
+    val dob: String? = null,
+    val isMinor: Boolean? = null,
+    val minorExpired: Boolean? = null,
+    val phone: String? = null,
+)
+
+/** Guardian name, relationship and phone only; the guardian's dob and address are not kept. */
+@Serializable
+data class SmartwaiverGuardian(
+    val firstName: String? = null,
+    val middleName: String? = null,
+    val lastName: String? = null,
+    val relationship: String? = null,
+    val phone: String? = null,
+)
+
+@Serializable
+data class SmartwaiverCheckin(
+    val checkinId: Long,
+    val waiverId: String,
+    val date: String,
+    val dateSigned: String? = null,
+    val position: Int? = null,
+    val templateId: String? = null,
+    val isMinor: Int? = null,
+)
+
+@Serializable
+data class SmartwaiverCheckinPage(
+    val checkins: List<SmartwaiverCheckin> = emptyList(),
+    val moreCheckins: Boolean = false,
+)
+
+@Serializable
+data class SmartwaiverCheckinsResponse(
+    val version: Int? = null,
+    val id: String? = null,
+    val ts: String? = null,
+    val type: String? = null,
+    val checkins: SmartwaiverCheckinPage? = null,
 )
 
 @Serializable

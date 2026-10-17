@@ -26,6 +26,7 @@ private const val MOCK_DAYS_3 = 3L
 private const val MOCK_DAYS_4 = 4L
 private const val MOCK_DAYS_5 = 5L
 private const val MOCK_DAYS_6 = 6L
+private const val MOCK_CHECKIN_ID_BASE = 1000L
 private const val MOCK_TEMPLATE_ID = "tmpl-1"
 private const val MOCK_WAIVER_TITLE = "DMS Waiver"
 // Minimal valid 1x1 pixel JPEG, used as placeholder mock photo data.
@@ -108,14 +109,58 @@ class SmartwaiverApiClientMock @Inject constructor(loggerFactory: LoggerFactory)
         lastName = "User",
         email = "test.user@example.com",
         dob = "1990-01-01",
+        templateId = MOCK_TEMPLATE_ID,
+        verified = true,
+        kiosk = true,
+        isMinor = false,
+        tags = listOf("mock-tag"),
+        participants =
+            listOf(
+                SmartwaiverParticipant(
+                    firstName = "Test",
+                    lastName = "User",
+                    dob = "1990-01-01",
+                    isMinor = false,
+                    minorExpired = false,
+                    phone = "555-0100",
+                )),
+        addressLineOne = "1 Example Street",
+        addressCity = "Exampleville",
+        addressState = "TX",
+        addressZip = "00000",
+        addressCountry = "US",
+        emergencyContactName = "Pat Example",
+        emergencyContactRelation = "Friend",
+        emergencyContactPhone = "555-0101",
+        photos = 3,
         customWaiverFields =
             mapOf(
                 "field-1" to
-                    SmartwaiverCustomField(
-                        value = "Online", displayText = "How did you hear about us?"),
+                    SmartwaiverCustomField(value = "Online", displayText = "Where did you hear about us?"),
                 "field-2" to
-                    SmartwaiverCustomField(value = "Friend", displayText = "Referral source"),
+                    SmartwaiverCustomField(
+                        value = "Friend", displayText = "Did anyone refer you?  If so, who?"),
             ),
+    )
+  }
+
+  override suspend fun getCheckins(from: LocalDateTime, to: LocalDateTime): SmartwaiverCheckinPage {
+    log.info("Mock: Fetching check-ins")
+    val today = LocalDate.now()
+    return SmartwaiverCheckinPage(
+        checkins =
+            (0L until 3L).map { i ->
+              SmartwaiverCheckin(
+                  checkinId = MOCK_CHECKIN_ID_BASE + i,
+                  waiverId = "mock-Alice-Smith-0",
+                  date = "${today.minusDays(i)} 12:00:00",
+                  dateSigned = "${today.minusDays(MOCK_DAYS_6)} 12:00:00",
+                  position = 0,
+                  templateId = MOCK_TEMPLATE_ID,
+                  isMinor = 0,
+              )
+            },
+        moreCheckins = false,
     )
   }
 

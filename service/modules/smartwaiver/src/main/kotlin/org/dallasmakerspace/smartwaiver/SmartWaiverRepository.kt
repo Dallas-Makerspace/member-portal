@@ -91,6 +91,7 @@ class SmartWaiverRepository @Inject constructor() {
         val alreadyQueued =
             SmartWaiverHooksTable.select {
                   (SmartWaiverHooksTable.uniqueId eq uniqueId) and
+                      (SmartWaiverHooksTable.hook eq event) and
                       SmartWaiverHooksTable.processedAt.isNull()
                 }
                 .limit(1)

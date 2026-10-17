@@ -28,21 +28,29 @@ private const val HTTP_SERVER_ERROR = 500
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HTTP_NOT_FOUND = 404
 
+private const val DEFAULT_BUCKET_PROPERTY = "app.object-store.bucket"
+
 /**
- * S3-backed [IObjectStore]. Uses [DefaultCredentialsProvider], same as `BedrockClient`. Bucket and
- * region come from `app.object-store.*` config.
+ * S3-backed [IObjectStore]. Uses [DefaultCredentialsProvider], same as `BedrockClient`. The bucket
+ * comes from [bucketProperty] (default `app.object-store.bucket`), the region from
+ * `app.object-store.region`.
  */
 @Singleton
-class S3ObjectStore
-@Inject
-constructor(
+class S3ObjectStore(
     private val appConfig: AppConfig,
     loggerFactory: LoggerFactory,
+    private val bucketProperty: String,
 ) : IObjectStore {
+
+  @Inject
+  constructor(
+      appConfig: AppConfig,
+      loggerFactory: LoggerFactory,
+  ) : this(appConfig, loggerFactory, DEFAULT_BUCKET_PROPERTY)
 
   private val log = loggerFactory.create(S3ObjectStore::class.java)
 
-  private val bucket: String by lazy { appConfig.requireStringProperty("app.object-store.bucket") }
+  private val bucket: String by lazy { appConfig.requireStringProperty(bucketProperty) }
 
   private val region: Region by lazy {
     Region.of(appConfig.requireStringProperty("app.object-store.region"))

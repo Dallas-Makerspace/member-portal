@@ -3,11 +3,20 @@ package org.dallasmakerspace.cron
 import dagger.Reusable
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
+import org.dallasmakerspace.config.ConfigOverrideService
+import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.smartwaiver.ISmartwaiverApiClient
+import org.dallasmakerspace.smartwaiver.SmartWaiverCheckinSync
+import org.dallasmakerspace.smartwaiver.SmartWaiverMirrorRepository
+import org.dallasmakerspace.smartwaiver.SmartWaiverMirrorService
 import org.dallasmakerspace.smartwaiver.SmartWaiverRepository
 
-private const val EVENT_NEW_WAIVER = "new-waiver"
+const val EVENT_NEW_WAIVER = "new-waiver"
+const val EVENT_CHECKIN = "new-checkin"
+
+private const val MAX_ATTEMPTS = 5
+private const val QUEUE_LOOKBACK_DAYS = 30L
 
 // File-level because @Reusable doesn't guarantee a single job instance.
 private val running = AtomicBoolean(false)
@@ -19,6 +28,10 @@ class SmartWaiverProcessQueueJob
 constructor(
     private val smartwaiverApiClient: ISmartwaiverApiClient,
     private val smartWaiverRepository: SmartWaiverRepository,
+    private val mirrorRepository: SmartWaiverMirrorRepository,
+    private val mirrorService: SmartWaiverMirrorService,
+    private val checkinSync: SmartWaiverCheckinSync,
+    private val configOverrideService: ConfigOverrideService,
     loggerFactory: LoggerFactory,
 ) {
   private val log = loggerFactory.create(javaClass)
@@ -37,7 +50,7 @@ constructor(
       var summary: String
       do {
         rerunRequested.set(false)
-        summary = runOnce()
+        summary = if (mirrorEnabled()) runMirrorPass() else runLegacyPass()
       } while (rerunRequested.get())
       result = summary
     } finally {
@@ -48,7 +61,59 @@ constructor(
   }
 
   @Suppress("TooGenericExceptionCaught")
-  private suspend fun runOnce(): String {
+  private suspend fun mirrorEnabled(): Boolean =
+      try {
+        configOverrideService.get(ConfigRegistry.SMARTWAIVER_MIRROR_ENABLED)
+      } catch (e: Exception) {
+        log.warn("Could not read smartwaiver.mirror.enabled, using the legacy path: ${e.message}")
+        false
+      }
+
+  /** Full mirror: waiver, participants, kiosk photos, plus a check-in catch-up for check-in events. */
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun runMirrorPass(): String {
+    val entries = mirrorRepository.retryableQueueEntries(MAX_ATTEMPTS, QUEUE_LOOKBACK_DAYS)
+    log.info("Found ${entries.size} unprocessed queue entries (mirror)")
+
+    var processed = 0
+    var failed = 0
+    val checkinEntryIds = mutableListOf<Int>()
+
+    for (entry in entries) {
+      when (entry.event) {
+        EVENT_NEW_WAIVER ->
+            try {
+              val outcome = mirrorService.mirrorWaiver(entry.uniqueId)
+              mirrorRepository.markQueueProcessed(listOf(entry.id))
+              log.info("Mirrored waiver ${entry.uniqueId} (${outcome.photos} photos, ${outcome.photosStatus})")
+              processed++
+            } catch (e: Exception) {
+              log.error("Failed to mirror waiver ${entry.uniqueId}: ${e.message}")
+              mirrorRepository.recordQueueFailure(entry.id, e.message)
+              failed++
+            }
+        EVENT_CHECKIN -> checkinEntryIds += entry.id
+        else -> log.warn("Skipping unexpected event type '${entry.event}' for ${entry.uniqueId}")
+      }
+    }
+
+    if (checkinEntryIds.isNotEmpty()) {
+      try {
+        val added = checkinSync.syncRecent()
+        mirrorRepository.markQueueProcessed(checkinEntryIds)
+        log.info("Check-in sync added $added check-ins")
+        processed += checkinEntryIds.size
+      } catch (e: Exception) {
+        log.error("Check-in sync failed: ${e.message}")
+        checkinEntryIds.forEach { mirrorRepository.recordQueueFailure(it, e.message) }
+        failed += checkinEntryIds.size
+      }
+    }
+    return "total=${entries.size}\nprocessed=$processed\nfailed=$failed"
+  }
+
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun runLegacyPass(): String {
     val entries = smartWaiverRepository.getUnprocessedQueueEntries()
     log.info("Found ${entries.size} unprocessed queue entries")
 

@@ -17,6 +17,7 @@ import io.ktor.http.HttpStatusCode
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.async
@@ -35,6 +36,7 @@ private const val END_OF_DAY_MINUTE = 59
 private const val END_OF_DAY_SECOND = 59
 private const val REQUEST_TIMEOUT_MS = 120000L // 120 seconds
 private const val MAX_PAGES = 20 // Upper bound: fetch max 2000 waivers (20 pages * 100)
+private const val CHECKINS_PAGE_SIZE = 100 // the API's maximum
 private const val MAX_RATE_LIMIT_ATTEMPTS = 5
 private const val MS_PER_SECOND = 1000L
 
@@ -243,19 +245,53 @@ internal constructor(
       toDate: LocalDate
   ): List<SmartwaiverSummary> {
     try {
-      val searchMetadata = initiateSearch(fromDate, toDate)
-      val totalPages = searchMetadata.pages ?: 0
-      val pagesToFetch = minOf(totalPages, MAX_PAGES)
-      val pageResults = coroutineScope {
-        (0 until pagesToFetch)
-            .map { async { fetchSearchResults(searchMetadata.guid, it) } }
-            .awaitAll()
-      }
-      return pageResults.flatMap { it.searchResults ?: emptyList() }
+      return searchSummaries(fromDate, toDate)
     } catch (e: IOException) {
       throw SmartwaiverApiException("Failed to fetch waiver details", e)
     } catch (e: kotlinx.serialization.SerializationException) {
       throw SmartwaiverApiException("Failed to parse waiver details response", e)
+    }
+  }
+
+  /** Halves a window that has more pages than [MAX_PAGES] instead of silently dropping the rest. */
+  private suspend fun searchSummaries(from: LocalDate, to: LocalDate): List<SmartwaiverSummary> {
+    val searchMetadata = initiateSearch(from, to)
+    val totalPages = searchMetadata.pages ?: 0
+    if (totalPages > MAX_PAGES && from.isBefore(to)) {
+      val mid = from.plusDays(ChronoUnit.DAYS.between(from, to) / 2)
+      return searchSummaries(from, mid) + searchSummaries(mid.plusDays(1), to)
+    }
+    if (totalPages > MAX_PAGES) {
+      log.warn("Single day $from has $totalPages pages; only the first $MAX_PAGES are fetched")
+    }
+    val pageResults = coroutineScope {
+      (0 until minOf(totalPages, MAX_PAGES))
+          .map { async { fetchSearchResults(searchMetadata.guid, it) } }
+          .awaitAll()
+    }
+    return pageResults.flatMap { it.searchResults ?: emptyList() }
+  }
+
+  override suspend fun getCheckins(from: LocalDateTime, to: LocalDateTime): SmartwaiverCheckinPage {
+    val response =
+        send(RequestCategory.OTHER, "$SMARTWAIVER_BASE_URL/checkins") {
+          parameter("fromDts", from.format(DateTimeFormatter.ISO_DATE_TIME))
+          parameter("toDts", to.format(DateTimeFormatter.ISO_DATE_TIME))
+          parameter("limit", CHECKINS_PAGE_SIZE)
+        }
+    return try {
+      when (response.status) {
+        HttpStatusCode.OK ->
+            json.decodeFromString<SmartwaiverCheckinsResponse>(response.bodyAsText()).checkins
+                ?: SmartwaiverCheckinPage()
+        HttpStatusCode.Unauthorized ->
+            throw SmartwaiverApiException("Unauthorized: Invalid API key")
+        else ->
+            throw SmartwaiverApiException(
+                "Failed to fetch check-ins: ${response.status} - ${response.bodyAsText()}")
+      }
+    } catch (e: kotlinx.serialization.SerializationException) {
+      throw SmartwaiverApiException("Failed to parse check-ins response", e)
     }
   }
 

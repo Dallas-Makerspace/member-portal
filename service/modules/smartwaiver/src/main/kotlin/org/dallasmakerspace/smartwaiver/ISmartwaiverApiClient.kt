@@ -1,6 +1,10 @@
 package org.dallasmakerspace.smartwaiver
 
 import java.time.LocalDate
+import java.time.LocalDateTime
+
+/** Name of the dedicated, `@Named` object store the SmartWaiver mirror writes kiosk photos to. */
+const val SMARTWAIVER_STORE = "smartwaiver"
 
 interface ISmartwaiverApiClient {
   /**
@@ -12,6 +16,10 @@ interface ISmartwaiverApiClient {
    */
   suspend fun getWaivers(fromDate: LocalDate, toDate: LocalDate): List<WaiverSigningData>
 
+  /**
+   * Every waiver summary signed from [fromDate] through [toDate] (both inclusive). A window that
+   * holds more results than one search can page through is split in half, so nothing is dropped.
+   */
   suspend fun getWaiverDetails(fromDate: LocalDate, toDate: LocalDate): List<SmartwaiverSummary>
 
   /**
@@ -30,4 +38,10 @@ interface ISmartwaiverApiClient {
 
   /** Kiosk-captured photos for a waiver signing session. Empty list if none exist. */
   suspend fun getWaiverPhotos(waiverId: String): List<SmartwaiverPhotoEntry>
+
+  /**
+   * Up to 100 check-ins from [from] (inclusive) to [to], oldest first. When
+   * [SmartwaiverCheckinPage.moreCheckins] is true, ask again starting at the last check-in's date.
+   */
+  suspend fun getCheckins(from: LocalDateTime, to: LocalDateTime): SmartwaiverCheckinPage
 }

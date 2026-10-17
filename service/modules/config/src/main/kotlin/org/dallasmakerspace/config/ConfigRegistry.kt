@@ -198,6 +198,18 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val SMARTWAIVER_MIRROR_ENABLED =
+      ConfigKey(
+          key = "smartwaiver.mirror.enabled",
+          description =
+              "Mirror every SmartWaiver waiver in full (participants, contact details, kiosk " +
+                  "photos in S3, check-ins) when its webhook arrives, instead of the minimal " +
+                  "legacy row. Requires smartwaiver-mirror-migration.sql to be applied first.",
+          category = "SmartWaiver",
+          defaultValue = false,
+          type = ConfigValueType.BooleanType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -218,5 +230,6 @@ object ConfigRegistry {
           ACCOUNT_MENU_ENABLED,
           WORKFLOWS_ENABLED,
           GROUPS_ARCHIVE_ENABLED,
+          SMARTWAIVER_MIRROR_ENABLED,
       )
 }
