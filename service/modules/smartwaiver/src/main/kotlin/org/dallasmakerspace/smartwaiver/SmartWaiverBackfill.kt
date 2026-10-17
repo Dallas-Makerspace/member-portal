@@ -910,7 +910,6 @@ internal constructor(
 
   @Suppress("TooGenericExceptionCaught")
   private suspend fun finish(state: RunState, error: String?) {
-    setState(state, null, error)
     try {
       val finished = if (state == RunState.DONE) now() else null
       repository.renewRun(owner, runState(state.name, error, finished))
@@ -919,6 +918,13 @@ internal constructor(
     } catch (e: Exception) {
       log.warn("Could not save the final state of the SmartWaiver backfill: ${e.safeMessage()}")
     }
+    // Published last, so anyone who sees DONE or FAILED can rely on it being saved.
+    setState(state, null, error)
+  }
+
+  /** Waits for the current job to end; for tests, which start a new run right after one finishes. */
+  internal suspend fun awaitJob() {
+    synchronized(lock) { job }?.join()
   }
 
   // ---- time ----

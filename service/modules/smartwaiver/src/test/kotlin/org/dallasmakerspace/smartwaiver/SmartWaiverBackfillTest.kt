@@ -161,7 +161,18 @@ class SmartWaiverBackfillTest {
       runBlocking {
         withTimeout(20_000) {
           while (b.status().state !in states) delay(10)
+          // Once a run has ended its job is about to return; wait for that so a following start() is
+          // not answered ALREADY_RUNNING.
+          if (b.status().state in setOf(RunState.DONE, RunState.FAILED, RunState.IDLE)) b.awaitJob()
           b.status()
+        }
+      }
+
+  /** The saved run status is written just after the in-memory state changes. */
+  private fun awaitSavedStatus(status: String) =
+      runBlocking {
+        withTimeout(20_000) {
+          while (runRow()?.status != status) delay(10)
         }
       }
 
@@ -255,7 +266,7 @@ class SmartWaiverBackfillTest {
     first.pause()
     hold.complete(Unit)
     awaitState(first, RunState.PAUSED)
-    assertEquals("PAUSED", runRow()?.status)
+    awaitSavedStatus("PAUSED")
 
     // A new container: it finds the saved pause, resumes the run paused, and `resume` lets it go.
     val second = backfill(twoMonths())
