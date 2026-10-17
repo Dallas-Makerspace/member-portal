@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""Watch and steer the SmartWaiver mirror backfill, which runs inside the member-portal service.
+"""Copy all SmartWaiver data into our own database, and watch it happen.
 
-The job keeps going if this script exits or the connection drops; this is only a live view and a set
-of controls. Standard library only.
+The copy runs inside the member-portal service and keeps its place, so it can be stopped and started
+again at any time. This script starts it, shows what it is doing, and stops it. Standard library only.
 
-    backfill_smartwaiver.py start [--restart]   start (or continue) the backfill, then watch it
-    backfill_smartwaiver.py start --limit N     trial: fully mirror only N stored waivers, then stop
-    backfill_smartwaiver.py attach              watch a running backfill (the default)
-    backfill_smartwaiver.py status              print one snapshot and exit
-    backfill_smartwaiver.py pause | resume      hold / release it at the next waiver
-    backfill_smartwaiver.py stop                end the run, keeping its cursors
-    backfill_smartwaiver.py errors              waivers that failed to mirror recently
+    backfill_smartwaiver.py start               start (or continue) the full copy and watch it
+    backfill_smartwaiver.py start --limit 20    trial: copy only 20 waivers, then stop
+    backfill_smartwaiver.py start --restart     begin again (finds waivers that failed before)
+    backfill_smartwaiver.py attach              watch a copy that is already running
+    backfill_smartwaiver.py status              show where it is and exit
+    backfill_smartwaiver.py pause | resume      hold / release it
+    backfill_smartwaiver.py stop                stop it now (it keeps its place)
+    backfill_smartwaiver.py errors              waivers that could not be copied
+
+Ctrl+C stops the copy on the server too, and the next `start` carries on where it left off. Use
+--keep-running to make Ctrl+C only close this window and leave the copy running.
 
 Connecting
     Local service:   --url http://localhost:8081 (the default)
-    Production:      --tunnel dms-docker-h0-root   (opens an ssh -L tunnel to the service container
-                     and re-opens it if a blue/green deploy moves the container)
-    Credentials:     the API key of a client with the CRON_EXECUTOR role (e.g. jenkins-member-refresh),
-                     read from --key-file or SW_API_KEY (never printed), with that client's name via
-                     --client or SW_API_CLIENT. The name and key must belong to the same client.
-    Log file:        --log-file PATH appends the dated lines this prints, so the history survives a
-                     closed terminal. The job also logs to the service log (Kibana).
-
-Retrying failed waivers: a finished Enrich stage is not repeated; `start --restart` re-scans (about 150
-calls) and mirrors only the waivers that still lack a full mirror.
+    Production:      --tunnel dms-docker-h0-root   (opens an ssh tunnel to the service and re-opens it if
+                     a deploy moves the service)
+    Credentials:     the API key and name of a client allowed to run cron jobs, e.g. the Jenkins one:
+                     SW_API_KEY (or --key-file) and --client jenkins-member-refresh. The key is never
+                     printed. Putting it in an environment variable keeps it out of the process list.
+    Log file:        --log-file PATH keeps a dated copy of what this prints.
 """
 
 import argparse
@@ -40,29 +40,11 @@ BASE_PATH = "/cron/backfill-smartwaiver"
 TUNNEL_PORT = 18081
 RETRY_SECONDS = 5
 STATUS_LOG_SECONDS = 60
-
-
-def fmt_duration(seconds):
-    if seconds is None:
-        return "?"
-    seconds = int(max(0, seconds))
-    days, rest = divmod(seconds, 86400)
-    hours, rest = divmod(rest, 3600)
-    minutes, secs = divmod(rest, 60)
-    if days:
-        return f"{days}d {hours}h"
-    if hours:
-        return f"{hours}h {minutes}m"
-    if minutes:
-        return f"{minutes}m {secs}s"
-    return f"{secs}s"
+LOG_FILE = None
 
 
 def stamp():
     return time.strftime("%H:%M:%S")
-
-
-LOG_FILE = None
 
 
 def log_line(text):
@@ -72,8 +54,61 @@ def log_line(text):
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {text}\n")
 
 
+def say(text=""):
+    """Print a line right away and keep it in the log file."""
+    print(text, flush=True)
+    if text:
+        log_line(text)
+
+
+LIVE_DRAWN = False
+USE_ANSI = sys.stdout.isatty()
+
+
+def clear_live():
+    """Remove the two live lines so a permanent line can be printed in their place."""
+    global LIVE_DRAWN
+    if LIVE_DRAWN and USE_ANSI:
+        sys.stdout.write("\r\033[2K\033[F\r\033[2K")
+        sys.stdout.flush()
+    LIVE_DRAWN = False
+
+
+def redraw_live(line1, line2):
+    """Two live lines that update in place: the summary, and what is happening right now."""
+    global LIVE_DRAWN
+    if not USE_ANSI:
+        return
+    width = shutil.get_terminal_size((120, 20)).columns - 1
+    if LIVE_DRAWN:
+        sys.stdout.write("\r\033[2K\033[F")
+    sys.stdout.write("\r\033[2K" + line1[:width] + "\n\033[2K" + (line2 or "")[:width])
+    sys.stdout.flush()
+    LIVE_DRAWN = True
+
+
+def duration(seconds):
+    if seconds is None:
+        return "unknown"
+    seconds = int(max(0, seconds))
+    days, rest = divmod(seconds, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes, secs = divmod(rest, 60)
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m"
+    return f"{secs}s" if secs else "under a minute"
+
+
+def short(seconds):
+    return "about " + duration(seconds) if seconds is not None else "unknown"
+
+
 class Tunnel:
-    """ssh -L to the service container; re-resolves the container's address when it has to reconnect."""
+    """ssh -L to the service container; looks the container up again whenever it has to reconnect."""
 
     def __init__(self, host):
         self.host = host
@@ -90,6 +125,7 @@ class Tunnel:
 
     def open(self):
         self.close()
+        say(f"Opening a secure connection to {self.host}...")
         address = self._container_address()
         if not address:
             raise ConnectionError("no running member-profile-service container found")
@@ -98,7 +134,8 @@ class Tunnel:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(2)
         if self.proc.poll() is not None:
-            raise ConnectionError("ssh tunnel exited right away")
+            raise ConnectionError("the ssh tunnel closed right away")
+        say("Connected.")
 
     def alive(self):
         return self.proc is not None and self.proc.poll() is None
@@ -106,6 +143,10 @@ class Tunnel:
     def close(self):
         if self.proc is not None and self.proc.poll() is None:
             self.proc.terminate()
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
         self.proc = None
 
 
@@ -120,12 +161,9 @@ class Client:
         self.headers = {"X-Api-Key": key or "dummy-key-for-dev",
                         "X-Api-Client": args.client or os.environ.get("SW_API_CLIENT", "member-profile-ui")}
 
-    def ensure_connection(self):
+    def request(self, path, timeout=60):
         if self.tunnel and not self.tunnel.alive():
             self.tunnel.open()
-
-    def request(self, path, timeout=60):
-        self.ensure_connection()
         req = urllib.request.Request(self.base + path, headers=self.headers)
         return urllib.request.urlopen(req, timeout=timeout)
 
@@ -137,7 +175,7 @@ class Client:
             return f"HTTP {e.code}: {e.read().decode(errors='replace')}"
 
     def reset_tunnel(self):
-        """Drop the tunnel so the next request re-resolves the container (a deploy may have moved it)."""
+        """Drop the tunnel so the next request looks the service up again (a deploy may have moved it)."""
         if self.tunnel:
             self.tunnel.close()
 
@@ -146,34 +184,77 @@ class Client:
             self.tunnel.close()
 
 
-def summary_line(p):
-    state, stage = p.get("state"), p.get("stage") or "-"
-    done, total = p.get("stageDone", 0), p.get("stageTotal")
-    pct = f" ({100 * done / total:.1f}%)" if total else ""
-    count = f"{done:,}/{total:,}" if total else f"{done:,}"
+def print_overview(p):
+    """What the copy is going to do and how long it should take, shown once at the start."""
+    plan = p.get("plan") or []
+    if not plan:
+        return
+    trial = p.get("limit")
+    say()
+    say("Copying SmartWaiver data into our database" + (f" (trial: {trial} waivers only)" if trial else ""))
+    say("What will happen:")
+    for i, step in enumerate(plan, 1):
+        units = step.get("units")
+        size = f"{units:,} {step.get('unit')}" if units is not None else "size unknown"
+        approx = "~" if step.get("approximate") and units is not None else ""
+        say(f"  Step {i} of {len(plan)}: {step.get('title')} ({approx}{size}), {short(step.get('etaSeconds'))}")
+    pace = p.get("paceCallsPerMinute", 0)
+    say(f"It makes about {pace:.0f} calls a minute to SmartWaiver and at most {p.get('dailyBudget', 0):,} a day,")
+    say("and waits for the next day when it reaches that limit.")
+    say(f"Estimated total time: {short(p.get('etaOverallSeconds'))}.")
+    say("Ctrl+C stops it; the next start carries on where it left off.")
+    say()
+
+
+def progress_line(p):
+    """(summary, activity): the summary carries the overall estimate first so it is never cut off."""
+    state = p.get("state")
+    count = p.get("stageCount") or 0
+    index = p.get("stageIndex") or 0
+    where = f"Step {index} of {count}" if count and index else "Getting ready"
+    overall = f"all done in {short(p.get('etaOverallSeconds'))}" if p.get("etaOverallSeconds") is not None else None
     if state == "WAITING":
         wake = p.get("waitingUntilEpoch")
-        left = fmt_duration(wake - time.time()) if wake else "?"
-        head = f"paused for daily budget, resuming {p.get('waitingUntil')} (in {left})"
-    elif state == "PAUSED":
-        head = "PAUSED (resume with: backfill_smartwaiver.py resume)"
-    else:
-        head = f"{state}"
-    rate = p.get("requestsPerMinute1", 0.0)
-    eta = fmt_duration(p.get("etaStageSeconds")) if p.get("etaStageSeconds") is not None else "?"
-    slow = " SLOW-MODE" if p.get("slowMode") else ""
-    note = f" | {p['message']}" if p.get("message") else ""
-    return (f"{head} | {stage} {count}{pct} | {rate:.1f} req/min | today "
-            f"{p.get('requestsToday', 0):,}/{p.get('dailyBudget', 0):,} | ETA stage {eta} | "
-            f"mirrored {p.get('mirrored', 0):,} photos {p.get('photosStored', 0):,} "
-            f"checkins {p.get('checkinsAdded', 0):,} failed {p.get('failed', 0)}{slow}{note}")
+        left = duration(wake - time.time()) if wake else "?"
+        return " · ".join(x for x in (where, f"daily call limit reached, continuing in {left}", overall) if x), ""
+    if state == "PAUSED":
+        return f"{where} · paused (run 'resume' to continue)", ""
+    total, done = p.get("stageTotal"), p.get("stageDone", 0)
+    approx = "~" if p.get("stageApprox") else ""
+    progress = None
+    if total:
+        pct = f" ({100 * done / total:.0f}%)"
+        progress = f"{done:,} of {approx}{total:,} {p.get('stageUnit') or ''}{pct}"
+    parts = [where, progress, overall,
+             f"this step {short(p.get('etaStageSeconds'))}" if p.get("etaStageSeconds") is not None and total else None]
+    if p.get("failed"):
+        parts.append(f"{p['failed']} problems (run 'errors')")
+    if p.get("slowMode"):
+        parts.append("slowed down by SmartWaiver")
+    return " · ".join(x for x in parts if x), p.get("activity") or ""
 
 
-def attach(client):
-    """Follow the progress stream until the run ends. Ctrl-C detaches; the backfill keeps running."""
-    last = {}
-    last_log = 0.0
-    width = shutil.get_terminal_size((120, 20)).columns
+def summary_line(p):
+    """The same idea for `status`, with the running totals."""
+    summary, activity = progress_line(p)
+    tail = (f" · calls today {p.get('requestsToday', 0):,} of {p.get('dailyBudget', 0):,}"
+            f" · waivers copied {p.get('mirrored', 0):,} · photos {p.get('photosStored', 0):,}"
+            f" · check-ins {p.get('checkinsAdded', 0):,}")
+    note = f" · {p['message']}" if p.get("message") else ""
+    return f"{p.get('state')}: {summary}{tail}{note}" + (f"\n  now: {activity}" if activity else "")
+
+
+def stop_job(client):
+    say("Stopping the copy on the server...")
+    try:
+        say(client.text(BASE_PATH + "/stop"))
+    except (urllib.error.URLError, OSError, ConnectionError) as e:
+        say(f"Could not reach the server to stop it ({e}). Run 'stop' again to be sure.")
+
+
+def attach(client, expected_limit=None, keep_running=False):
+    """Follow progress until the copy ends. Ctrl+C stops it too unless keep_running is set."""
+    last, last_log, first, overview_shown = {}, 0.0, True, False
     while True:
         try:
             with client.request(BASE_PATH + "/stream", timeout=60) as resp:
@@ -182,39 +263,64 @@ def attach(client):
                     if not line.startswith("data: "):
                         continue
                     p = json.loads(line[6:])
+                    if first and expected_limit and p.get("limit") != expected_limit:
+                        say(f"ERROR: the service did not accept the trial limit of {expected_limit} "
+                            "(it is probably still running an older version).")
+                        say("Stopping it so it doesn't copy everything.")
+                        stop_job(client)
+                        return False
+                    first = False
+                    if p.get("plan") and not overview_shown:
+                        clear_live()
+                        print_overview(p)
+                        overview_shown = True
                     now = time.time()
-                    changed = (p.get("state"), p.get("stage")) != (last.get("state"), last.get("stage"))
+                    text, activity = progress_line(p)
+                    changed = (p.get("state"), p.get("stageIndex")) != (last.get("state"), last.get("stageIndex"))
                     more_failures = p.get("failed", 0) > last.get("failed", 0)
                     more_429 = p.get("rateLimitHits", 0) > last.get("rateLimitHits", 0)
-                    text = summary_line(p)
                     if changed or more_failures or more_429 or now - last_log >= STATUS_LOG_SECONDS:
-                        note = (("  <- rate limited (429)" if more_429 else "")
-                                + ("  <- new failure (run 'errors')" if more_failures else ""))
-                        print(f"\r{' ' * (width - 1)}\r[{stamp()}] {text}{note}", flush=True)
+                        note = ("  <- SmartWaiver asked us to slow down" if more_429 else "") + \
+                               ("  <- a waiver could not be copied" if more_failures else "")
+                        clear_live()
+                        print(f"[{stamp()}] {text}{note}", flush=True)
                         log_line(text + note)
                         last_log = now
-                    else:
-                        print(f"\r[{stamp()}] {text}"[: width - 1].ljust(width - 1), end="", flush=True)
+                    redraw_live(f"[{stamp()}] {text}", activity)
                     last = p
                     if p.get("state") in ("DONE", "FAILED"):
-                        print()
+                        clear_live()
                         if p.get("state") == "FAILED":
-                            print(f"FAILED: {p.get('lastError')}")
+                            say(f"The copy stopped because of an error: {p.get('lastError')}")
+                            say("Fix the problem and run 'start' again to continue where it stopped.")
+                        else:
+                            say(p.get("message") or "Finished.")
                         return p.get("state") == "DONE"
         except KeyboardInterrupt:
-            print("\ndetached; the backfill keeps running")
+            clear_live()
+            print()
+            if keep_running:
+                say("Closed this window. The copy keeps running on the server (use 'stop' to stop it).")
+            else:
+                try:
+                    stop_job(client)
+                    say("Stopped. Run 'start' again to carry on where it left off.")
+                except KeyboardInterrupt:
+                    say("Interrupted again; run 'stop' to be sure the copy is stopped.")
             return True
         except urllib.error.HTTPError as e:
             if 400 <= e.code < 500:
                 # Wrong key or client name, no permission, ...: retrying won't help.
-                print(f"\nERROR: the service answered HTTP {e.code}; check --client and the API key")
+                say(f"ERROR: the service answered HTTP {e.code}; check --client and the API key.")
                 return False
-            print(f"\n[{stamp()}] service returned HTTP {e.code}; retrying in {RETRY_SECONDS}s")
+            clear_live()
+            print(f"[{stamp()}] the service returned HTTP {e.code}; retrying in {RETRY_SECONDS}s")
             log_line(f"service returned HTTP {e.code}; retrying")
             time.sleep(RETRY_SECONDS)
         except (urllib.error.URLError, ConnectionError, OSError, subprocess.TimeoutExpired) as e:
-            print(f"\n[{stamp()}] connection lost ({e}); retrying in {RETRY_SECONDS}s")
-            log_line(f"connection lost ({e}); retrying")
+            clear_live()
+            print(f"[{stamp()}] lost the connection ({e}); retrying in {RETRY_SECONDS}s")
+            log_line(f"lost the connection ({e}); retrying")
             client.reset_tunnel()
             time.sleep(RETRY_SECONDS)
 
@@ -223,35 +329,50 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", nargs="?", default="attach",
                     choices=["start", "attach", "status", "pause", "resume", "stop", "errors"])
-    ap.add_argument("--restart", action="store_true", help="with start: clear the cursors and begin again")
-    ap.add_argument("--limit", type=int, help="with start: mirror only this many waivers as a trial, then stop")
+    ap.add_argument("--restart", action="store_true", help="with start: begin again from the top")
+    ap.add_argument("--limit", type=int, help="with start: trial of this many waivers, then stop")
+    ap.add_argument("--keep-running", action="store_true", help="Ctrl+C only closes this window")
     ap.add_argument("--url", default="http://localhost:8081")
-    ap.add_argument("--tunnel", metavar="SSH_HOST", help="reach the service through ssh -L to its container")
+    ap.add_argument("--tunnel", metavar="SSH_HOST", help="reach the service through an ssh tunnel")
     ap.add_argument("--key-file", help="file holding the API key (or set SW_API_KEY)")
-    ap.add_argument("--client", help="X-Api-Client name (or set SW_API_CLIENT)")
-    ap.add_argument("--log-file", help="append the printed status lines, with dates, to this file")
+    ap.add_argument("--client", help="API client name (or set SW_API_CLIENT)")
+    ap.add_argument("--log-file", help="keep a dated copy of what is printed in this file")
     args = ap.parse_args()
     global LOG_FILE
     LOG_FILE = args.log_file
 
     client = Client(args)
+    started = False
     try:
-        if args.command in ("start",):
+        if args.command == "start":
+            say("Starting the SmartWaiver copy"
+                + (f" (trial: {args.limit} waivers)" if args.limit else "") + "...")
             query = [q for q in ("restart=true" if args.restart else "",
                                  f"limit={args.limit}" if args.limit else "") if q]
             reply = client.text(BASE_PATH + ("?" + "&".join(query) if query else ""))
-            print(reply)
-            log_line(f"start: {reply.splitlines()[0] if reply else ''}")
             if reply.startswith(("HTTP ", "Refusing")):
+                say(f"Could not start: {reply}")
                 return 1  # refused (flag off, mock mode, bad key): don't sit on an idle stream
-            return 0 if attach(client) else 1
+            started = True
+            already = reply.startswith("ALREADY_RUNNING")
+            say("A copy is already running; showing its progress." if already
+                else "Started on the server. Planning the work (about 15 seconds)...")
+            return 0 if attach(client, None if already else args.limit, args.keep_running) else 1
         if args.command == "attach":
-            return 0 if attach(client) else 1
+            say("Connecting to the running copy...")
+            return 0 if attach(client, None, args.keep_running) else 1
         if args.command == "status":
             print(summary_line(json.loads(client.text(BASE_PATH + "/status"))))
             return 0
         print(client.text(f"{BASE_PATH}/{args.command}"))
         return 0
+    except KeyboardInterrupt:
+        print()
+        if args.command == "start" and not args.keep_running:
+            stop_job(client)
+        else:
+            say("Interrupted.")
+        return 130 if not started else 0
     except (urllib.error.URLError, ConnectionError, OSError, ValueError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2

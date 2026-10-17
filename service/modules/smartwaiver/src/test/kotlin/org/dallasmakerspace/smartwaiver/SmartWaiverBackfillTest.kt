@@ -77,7 +77,8 @@ class SmartWaiverBackfillTest {
       return SmartwaiverCheckinPage(listOf(SmartwaiverCheckin(1, "fakewaiver01", "2014-01-06 09:00:00", null, 0, "t", 0)), false)
     }
 
-    override suspend fun countWaivers(fromDate: LocalDate, toDate: LocalDate) = 0
+    override suspend fun countWaivers(fromDate: LocalDate, toDate: LocalDate) =
+        if (fromDate.monthValue == 1 && fromDate.dayOfMonth == 1) 300 else 0
 
     override fun stats() = ApiClientStats(requests.get(), 0)
   }
@@ -241,8 +242,12 @@ class SmartWaiverBackfillTest {
     assertEquals(2, trial.mirrored)
     assertEquals(1, runBlocking { repo.countNeedingMirror() })
     assertTrue(trial.message.orEmpty().contains("Trial"), trial.message)
+    assertEquals(2, trial.limit)
+    assertEquals(1, trial.stageCount)
+    assertEquals(1, trial.plan.size)
+    assertEquals(2, trial.stageTotal)
     assertEquals(0, runBlocking { repo.countCheckins() })
-    assertEquals(0, client.requests.get() - 2, "only the two waiver fetches, no search or check-in calls")
+    assertEquals(0, client.requests.get() - 2, "only the two waiver fetches, no counting, search or check-in calls")
     assertEquals("RUNNING", runBlocking { repo.getState("enrich") }?.status)
     assertEquals(null, runBlocking { repo.getState("discover") })
 
@@ -254,6 +259,45 @@ class SmartWaiverBackfillTest {
     assertEquals(0, runBlocking { repo.countNeedingMirror() })
     assertEquals("DONE", runBlocking { repo.getState("enrich") }?.status)
     assertEquals(1, runBlocking { repo.countCheckins() })
+  }
+
+  @Test
+  fun `the plan and the first step are visible before any step finishes`() {
+    val hold = CompletableDeferred<Unit>()
+    val b = backfill(twoMonthsHeld(hold))
+
+    b.start()
+    runBlocking { withTimeout(10_000) { heldClient.entered.await() } }
+    val p = b.status()
+
+    assertEquals(3, p.plan.size)
+    assertEquals(3, p.stageCount)
+    assertEquals(1, p.stageIndex)
+    assertTrue(p.stageTitle.orEmpty().isNotBlank())
+    assertEquals("monthly searches", p.stageUnit)
+    assertTrue(p.activity.orEmpty().startsWith("Searching"), p.activity)
+    assertEquals(null, p.limit)
+    assertEquals(2, p.stageTotal)
+    assertTrue(p.plan.all { it.title.isNotBlank() })
+    assertTrue(p.etaOverallSeconds != null && p.etaOverallSeconds!! > 0, "overall eta ${p.etaOverallSeconds}")
+    assertTrue(p.paceCallsPerMinute > 0)
+
+    hold.complete(Unit)
+    awaitState(b, RunState.DONE)
+  }
+
+  @Test
+  fun `starting reports a running snapshot at once, with the trial limit if one was given`() {
+    val hold = CompletableDeferred<Unit>()
+    val b = backfill(twoMonthsHeld(hold))
+
+    b.start(limit = 5)
+    val right = b.status()
+
+    assertEquals(RunState.RUNNING, right.state)
+    assertEquals(5, right.limit)
+    assertEquals("Starting", right.activity)
+    runBlocking { b.stop() }
   }
 
   @Test

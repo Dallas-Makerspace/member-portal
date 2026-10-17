@@ -40,7 +40,12 @@ private const val LOG_EVERY_UNITS = 50
 private const val MAX_CONSECUTIVE_FAILURES = 10
 private const val MAX_RECENT_ERRORS = 200
 private const val CALLS_PER_WAIVER_GUESS = 2.0
+private const val ENRICH_CALLS_PER_WAIVER = 1.8 // one waiver call, plus photos for most
+private const val CHECKINS_PER_PAGE = 100
+private const val PRIOR_WEIGHT = 10.0
+private const val SEARCH_RESULTS_PER_PAGE = 100.0
 private const val SECONDS_PER_DAY = 86_400L
+private const val SECONDS_PER_HOUR = 3_600L
 private const val MS_PER_SECOND = 1000L
 private const val ONE_MINUTE_MS = 60_000L
 private const val FIFTEEN_MINUTES_MS = 15 * ONE_MINUTE_MS
@@ -58,10 +63,31 @@ enum class RunState {
   FAILED,
 }
 
+/** One line of the run's plan, shown before the work starts. */
+@Serializable
+data class PlanStep(
+    val title: String,
+    val units: Int?,
+    val unit: String,
+    val etaSeconds: Long?,
+    val approximate: Boolean = false,
+)
+
 /** One snapshot of the backfill, sent over the status and stream routes. */
 @Serializable
 data class BackfillProgress(
     val state: RunState = RunState.IDLE,
+    /** The trial size this run was started with, or null for a full run. */
+    val limit: Int? = null,
+    val plan: List<PlanStep> = emptyList(),
+    val stageIndex: Int = 0,
+    val stageCount: Int = 0,
+    val stageTitle: String? = null,
+    val stageUnit: String? = null,
+    /** True when [stageTotal] is an estimate (the check-in history has no exact count). */
+    val stageApprox: Boolean = false,
+    /** What the job is doing right now, in plain words. */
+    val activity: String? = null,
     val stage: String? = null,
     val stageDone: Int = 0,
     val stageTotal: Int? = null,
@@ -72,6 +98,8 @@ data class BackfillProgress(
     val checkinsAdded: Int = 0,
     val requestsToday: Int = 0,
     val dailyBudget: Int = DEFAULT_DAILY_BUDGET,
+    /** How fast the job calls SmartWaiver, in calls per minute. */
+    val paceCallsPerMinute: Double = 0.0,
     val requestsPerMinute1: Double = 0.0,
     val requestsPerMinute15: Double = 0.0,
     val rateLimitHits: Long = 0,
@@ -85,6 +113,15 @@ data class BackfillProgress(
     val startedAt: String? = null,
     val updatedAt: String? = null,
     val message: String? = null,
+)
+
+/** What the work is expected to take, from SmartWaiver's own counts; used for the plan and the ETA. */
+internal data class Estimate(
+    val discoverUnits: Int = 0,
+    val discoverCalls: Double = 0.0,
+    val enrichUnits: Int = 0,
+    val checkinPages: Int = 0,
+    val expectedWaivers: Int? = null,
 )
 
 enum class StartResult {
@@ -174,6 +211,8 @@ internal constructor(
   private var unitsThisStage = 0
   private var callsThisStage = 0L
   private var stageStartedMs = 0L
+  private var estimate = Estimate()
+  private var currentStage: String? = null
 
   fun status(): BackfillProgress = progress
 
@@ -216,7 +255,9 @@ internal constructor(
       paused.value = false
       // Replace the previous run's snapshot now, so a client that attaches right after start()
       // doesn't see that run's DONE and leave.
-      progress = BackfillProgress(dailyBudget = dailyBudget, state = RunState.RUNNING)
+      progress =
+          BackfillProgress(
+              dailyBudget = dailyBudget, state = RunState.RUNNING, limit = limit, activity = "Starting")
       publish()
       job = scope.launch { runAll(restart, limit) }
     }
@@ -258,7 +299,8 @@ internal constructor(
   @Suppress("TooGenericExceptionCaught")
   private suspend fun runAll(restart: Boolean, limit: Int?) {
     try {
-      begin(restart)
+      begin(restart, limit)
+      makePlan(limit)
       if (limit != null) {
         enrich(limit)
         progress = progress.copy(message = "Trial of up to $limit waivers finished; start again without a limit for the rest")
@@ -277,7 +319,7 @@ internal constructor(
     }
   }
 
-  private suspend fun begin(restart: Boolean) {
+  private suspend fun begin(restart: Boolean, limit: Int?) {
     val now = now()
     val saved = repository.getState(RUN)
     if (restart) {
@@ -292,8 +334,105 @@ internal constructor(
     lastRateLimitHits = stats.rateLimitHits
     slowMode = false
     consecutiveFailures = 0
-    progress = BackfillProgress(dailyBudget = dailyBudget, startedAt = startedAt.toString())
+    progress =
+        BackfillProgress(
+            dailyBudget = dailyBudget,
+            paceCallsPerMinute = ONE_MINUTE_MS.toDouble() / intervalMs,
+            startedAt = startedAt.toString(),
+            limit = limit,
+            activity = "Planning the run")
     setState(RunState.RUNNING, null, null)
+  }
+
+  /**
+   * Works out what is left to do and how long it should take, so the run starts with an overview
+   * and one overall estimate. SmartWaiver's yearly counts (about 13 searches) give the number of
+   * waivers; check-ins are assumed to be about one per waiver. If the counts can't be read the plan
+   * simply has no numbers for the steps that need them.
+   */
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun makePlan(limit: Int?) {
+    val interval = effectiveIntervalMs() / MS_PER_SECOND.toDouble()
+    val eta = { calls: Double ->
+      etaSeconds(calls.toLong(), requestsToday, dailyBudget, interval, secondsUntilMidnight())
+    }
+    if (limit != null) {
+      val units = minOf(limit, repository.countNeedingMirror())
+      estimate = Estimate(enrichUnits = units)
+      progress =
+          progress.copy(
+              stageCount = 1,
+              plan =
+                  listOf(
+                      PlanStep(
+                          "Copy up to $limit waivers with their photos (trial)",
+                          units,
+                          "waivers",
+                          eta(units * ENRICH_CALLS_PER_WAIVER))),
+              etaOverallSeconds = eta(units * ENRICH_CALLS_PER_WAIVER))
+      publish()
+      return
+    }
+    progress = progress.copy(activity = "Counting waivers on SmartWaiver to plan the run")
+    publish()
+    val expected =
+        try {
+          (FIRST_WAIVER_DAY.year..today().year).sumOf { year ->
+            client.countWaivers(LocalDate.of(year, 1, 1), minOf(LocalDate.of(year, 12, 31), today()))
+          }
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          log.warn("Could not count waivers on SmartWaiver for the plan: ${e.message}")
+          null
+        }
+    val stored = repository.countWaivers()
+    val discoverState = repository.getState(STAGE_DISCOVER)
+    val months = monthsBetween(FIRST_WAIVER_DAY, today())
+    val discoverLeft =
+        if (discoverState?.status == RunState.DONE.name) 0
+        else months - (discoverState?.doneCount ?: 0).coerceAtMost(months)
+    val discoverCalls =
+        discoverLeft +
+            Math.ceil((expected ?: 0) * discoverLeft.toDouble() / months / SEARCH_RESULTS_PER_PAGE)
+    val toEnrich =
+        repository.countNeedingMirror() +
+            if (discoverLeft > 0 && expected != null) maxOf(0, expected - stored) else 0
+    val enrichDone = repository.getState(STAGE_ENRICH)?.status == RunState.DONE.name
+    val checkinsDone = repository.getState(STAGE_CHECKINS)?.status == RunState.DONE.name
+    val pages =
+        if (checkinsDone) 0 else Math.ceil((expected ?: stored) / CHECKINS_PER_PAGE.toDouble()).toInt()
+    estimate =
+        Estimate(
+            discoverUnits = discoverLeft,
+            discoverCalls = discoverCalls,
+            enrichUnits = if (enrichDone) 0 else toEnrich,
+            checkinPages = pages,
+            expectedWaivers = expected)
+    val c1 = estimate.discoverCalls
+    val c2 = c1 + estimate.enrichUnits * ENRICH_CALLS_PER_WAIVER
+    val c3 = c2 + estimate.checkinPages
+    val steps =
+        listOf(
+            PlanStep("Find every waiver on SmartWaiver", estimate.discoverUnits, "monthly searches", eta(c1)),
+            PlanStep(
+                "Copy each waiver's details and photos",
+                estimate.enrichUnits,
+                "waivers",
+                eta(c2) - eta(c1),
+                approximate = true),
+            PlanStep(
+                "Copy the check-in history",
+                estimate.checkinPages,
+                "pages of $CHECKINS_PER_PAGE",
+                eta(c3) - eta(c2),
+                approximate = true),
+        )
+    progress = progress.copy(stageCount = steps.size, plan = steps, etaOverallSeconds = eta(c3), activity = null)
+    publish()
+    log.info(
+        "SmartWaiver backfill plan: ${estimate.discoverUnits} searches, ${estimate.enrichUnits} waivers, " +
+            "about ${estimate.checkinPages} check-in pages; roughly ${eta(c3) / SECONDS_PER_HOUR} hours")
   }
 
   private suspend fun stageDone(name: String) = repository.getState(name)?.status == RunState.DONE.name
@@ -308,6 +447,8 @@ internal constructor(
     while (!start.isAfter(today)) {
       gateBeforeUnit()
       val end = minOf(start.plusMonths(1).minusDays(1), today)
+      progress = progress.copy(activity = "Searching SmartWaiver for waivers signed $start to $end")
+      publish()
       val before = client.stats().requests
       val summaries = client.getWaiverDetails(start, end)
       val added = repository.insertMissingSummaries(summaries)
@@ -328,7 +469,9 @@ internal constructor(
     var cursor = saved?.cursorValue?.toLongOrNull() ?: 0L
     var done = saved?.doneCount ?: 0
     val total = done + repository.countNeedingMirror()
-    beginStage(STAGE_ENRICH, done, total)
+    // A trial counts only its own waivers; the saved counters keep the run-wide totals.
+    val shownTotal = if (maxUnits != null) minOf(maxUnits, total - done) else total
+    beginStage(STAGE_ENRICH, if (maxUnits != null) 0 else done, shownTotal)
     var failedThisPass = 0
     var processed = 0
     var capped = false
@@ -342,6 +485,9 @@ internal constructor(
         }
         processed++
         gateBeforeUnit()
+        val shownDone = if (maxUnits != null) processed - 1 else done
+        progress = progress.copy(activity = "Copying waiver ${shownDone + 1} of $shownTotal")
+        publish()
         val before = client.stats().requests
         try {
           val outcome = mirrorService.mirrorWaiver(ref.waiverId)
@@ -356,7 +502,8 @@ internal constructor(
         cursor = ref.rowId
         done++
         saveStage(STAGE_ENRICH, "RUNNING", cursor.toString(), done, total)
-        unitDone(done, total, client.stats().requests - before, remainingUnits = total - done)
+        val after = if (maxUnits != null) processed else done
+        unitDone(after, shownTotal, client.stats().requests - before, remainingUnits = shownTotal - after)
         if (done % LOG_EVERY_UNITS == 0) logProgress()
       }
     }
@@ -372,17 +519,25 @@ internal constructor(
   private suspend fun checkins() {
     val saved = repository.getState(STAGE_CHECKINS)
     val from = saved?.cursorValue?.let { LocalDateTime.parse(it) } ?: FIRST_WAIVER_DAY.atStartOfDay()
-    beginStage(STAGE_CHECKINS, saved?.doneCount ?: 0, null)
-    var total = saved?.doneCount ?: 0
+    var pages = saved?.doneCount ?: 0
+    // The history has no exact count, so the page total is an estimate that grows if it is too low.
+    var shownTotal = maxOf(estimate.checkinPages, pages + 1)
+    beginStage(STAGE_CHECKINS, pages, shownTotal)
+    progress = progress.copy(stageApprox = true, activity = "Reading check-ins from ${from.toLocalDate()}")
+    publish()
     val now = LocalDateTime.now(clock.withZone(ZoneOffset.UTC)).withNano(0)
     checkinSync.syncRange(from, now) { added, cursor ->
-      total += added
-      progress = progress.copy(checkinsAdded = progress.checkinsAdded + added)
-      saveStage(STAGE_CHECKINS, "RUNNING", cursor.toString(), total, null)
-      unitDone(total, null, 1, remainingUnits = 0)
+      pages++
+      if (pages >= shownTotal) shownTotal = pages + 1
+      progress =
+          progress.copy(
+              checkinsAdded = progress.checkinsAdded + added,
+              activity = "Reading check-ins from ${cursor.toLocalDate()}")
+      saveStage(STAGE_CHECKINS, "RUNNING", cursor.toString(), pages, null)
+      unitDone(pages, shownTotal, 1, remainingUnits = shownTotal - pages)
       gateBeforeUnit()
     }
-    saveStage(STAGE_CHECKINS, RunState.DONE.name, now.toString(), total, null)
+    saveStage(STAGE_CHECKINS, RunState.DONE.name, now.toString(), pages, null)
     log.info("SmartWaiver check-ins finished: ${progress.checkinsAdded} new")
   }
 
@@ -392,7 +547,24 @@ internal constructor(
     unitsThisStage = 0
     callsThisStage = 0
     stageStartedMs = clock.millis()
-    progress = progress.copy(stage = name, stageDone = done, stageTotal = total)
+    currentStage = name
+    val trial = progress.limit != null
+    val (index, title, unit) =
+        when (name) {
+          STAGE_DISCOVER -> Triple(1, "Finding every waiver on SmartWaiver", "monthly searches")
+          STAGE_ENRICH ->
+              Triple(if (trial) 1 else 2, "Copying each waiver's details and photos", "waivers")
+          else -> Triple(3, "Copying the check-in history", "pages of $CHECKINS_PER_PAGE")
+        }
+    progress =
+        progress.copy(
+            stage = name,
+            stageIndex = index,
+            stageTitle = title,
+            stageUnit = unit,
+            stageApprox = false,
+            stageDone = done,
+            stageTotal = total)
     publish()
   }
 
@@ -433,17 +605,34 @@ internal constructor(
     callsThisStage += calls
     rollBudgetDay()
     recordSample(stats.requests)
-    val callsPerUnit = if (unitsThisStage > 0) callsThisStage.toDouble() / unitsThisStage else CALLS_PER_WAIVER_GUESS
+    // Blend the planned calls per unit with what has been measured, so the first few units
+    // (a 2014 month needs fewer searches than a 2025 one) don't swing the estimate.
+    val prior =
+        when (currentStage) {
+          STAGE_DISCOVER -> estimate.discoverCalls / maxOf(1, estimate.discoverUnits)
+          STAGE_ENRICH -> ENRICH_CALLS_PER_WAIVER
+          else -> 1.0
+        }
+    val callsPerUnit = (prior * PRIOR_WEIGHT + callsThisStage) / (PRIOR_WEIGHT + unitsThisStage)
     val interval = effectiveIntervalMs() / MS_PER_SECOND.toDouble()
-    val stageEta =
-        if (total != null) etaSeconds((remainingUnits * callsPerUnit).toLong(), requestsToday, dailyBudget, interval, secondsUntilMidnight())
-        else null
+    val stageCalls = remainingUnits.coerceAtLeast(0) * callsPerUnit
+    val laterCalls =
+        if (progress.limit != null) 0.0
+        else
+            when (currentStage) {
+              STAGE_DISCOVER -> estimate.enrichUnits * ENRICH_CALLS_PER_WAIVER + estimate.checkinPages
+              STAGE_ENRICH -> estimate.checkinPages.toDouble()
+              else -> 0.0
+            }
+    val until = secondsUntilMidnight()
+    val stageEta = etaSeconds(stageCalls.toLong(), requestsToday, dailyBudget, interval, until)
+    val overallEta = etaSeconds((stageCalls + laterCalls).toLong(), requestsToday, dailyBudget, interval, until)
     progress =
         progress.copy(
             stageDone = done,
             stageTotal = total,
             etaStageSeconds = stageEta,
-            etaOverallSeconds = stageEta,
+            etaOverallSeconds = overallEta,
             failed = recentErrorCount())
     setState(RunState.RUNNING, null, null)
     persistRun()
