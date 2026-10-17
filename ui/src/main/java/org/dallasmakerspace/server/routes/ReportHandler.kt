@@ -119,18 +119,11 @@ constructor(
     if (parentSlug == "it" && childSlug == "recent-signed-waivers") {
       val currentUsername = (userInfo["preferred_username"] as? String) ?: ""
       val isWaiverReportAuthorized =
-          if (authz.can(Permission.MANAGE_BADGES.name)) {
-            true
-          } else {
-            val allowedRaw =
-                memberServiceClient.getConfigValue(
-                    "waiver-report.allowed-usernames", session.sessionId) ?: ""
-            allowedRaw
-                .split(",")
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .contains(currentUsername)
-          }
+          authz.can(Permission.MANAGE_BADGES.name) ||
+              isWaiverReportAllowlisted(
+                  currentUsername,
+                  memberServiceClient.getConfigValue(
+                      WAIVER_REPORT_ALLOWED_USERNAMES_KEY, session.sessionId))
       templateData["isWaiverReportAuthorized"] = isWaiverReportAuthorized
     }
 

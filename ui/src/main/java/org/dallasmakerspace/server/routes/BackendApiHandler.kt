@@ -8,9 +8,13 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
+import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
+import org.dallasmakerspace.server.memberservice.MemberServiceClient
+
+internal const val WAIVER_REPORT_ALLOWED_USERNAMES_KEY = "waiver-report.allowed-usernames"
 
 // Scoped to this handler only: the app-wide ContentNegotiation Gson decodes every JSON number as
 // Double, so whole numbers (e.g. namespaceId: 1) come back as 1.0 and break strict Int
@@ -29,24 +33,42 @@ private val bodyMapType = object : TypeToken<Map<String, Any?>>() {}.type
  */
 private val BLOCKED_PREFIXES = setOf("notifications", "webhook", "moodle")
 
-/** First path segment after normalizing encoding and dot/empty segments, lowercased. */
-internal fun proxiedRootSegment(path: String): String? {
+/** Path segments after normalizing encoding and dot/empty segments, lowercased; null if traversal. */
+private fun proxiedSegments(path: String): List<String>? {
   val decoded = runCatching { java.net.URLDecoder.decode(path.substringBefore('?'), "UTF-8") }
       .getOrDefault(path)
   val segments = decoded.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
   if (segments.any { it == ".." }) return null
-  return segments.firstOrNull()?.lowercase()
+  return segments.map { it.lowercase() }
 }
+
+internal fun proxiedRootSegment(path: String): String? = proxiedSegments(path)?.firstOrNull()
+
+/** `members/{username}/kiosk-waiver-photos`: served only by the dedicated, permission-checked handler. */
+internal fun isKioskPhotoPath(path: String): Boolean {
+  val segments = proxiedSegments(path) ?: return false
+  return segments.size >= 3 && segments[0] == "members" && segments[2] == "kiosk-waiver-photos"
+}
+
+/** The data-viz report that lists individual signers; its page is gated by [isWaiverReportAuthorized]. */
+internal fun isWaiverReportPath(path: String): Boolean =
+    proxiedSegments(path)?.take(2) == listOf("data-viz", "recent-signed-waivers")
 
 internal fun isProxyAllowed(path: String): Boolean {
   val root = proxiedRootSegment(path) ?: return false
-  return root !in BLOCKED_PREFIXES
+  return root !in BLOCKED_PREFIXES && !isKioskPhotoPath(path)
 }
+
+/** Whether [username] is listed in the comma-separated `waiver-report.allowed-usernames` value. */
+internal fun isWaiverReportAllowlisted(username: String, allowedUsernames: String?): Boolean =
+    allowedUsernames.orEmpty().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        .contains(username)
 
 class BackendApiHandler(
     loggerFactory: LoggerFactory,
     userInfoProvider: UserInfoProvider,
     val memberService: MemberService,
+    private val memberServiceClient: MemberServiceClient,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
   override suspend fun handleAuthenticated(call: ApplicationCall) {
     val path = call.request.path().removePrefix("/backend-api/")
@@ -54,6 +76,10 @@ class BackendApiHandler(
     val fullPath = if (queryString.isNotEmpty()) "$path?$queryString" else path
     val username = userInfo["preferred_username"] as? String
     if (!isProxyAllowed(path)) {
+      call.respond(HttpStatusCode.Forbidden)
+      return
+    }
+    if (isWaiverReportPath(path) && !canViewWaiverReport(username.orEmpty())) {
       call.respond(HttpStatusCode.Forbidden)
       return
     }
@@ -76,6 +102,12 @@ class BackendApiHandler(
         }
     call.respond(result)
   }
+
+  private suspend fun canViewWaiverReport(username: String): Boolean =
+      authz.can(Permission.MANAGE_BADGES.name) ||
+          isWaiverReportAllowlisted(
+              username,
+              memberServiceClient.getConfigValue(WAIVER_REPORT_ALLOWED_USERNAMES_KEY, session.sessionId))
 
   private suspend fun receiveJsonBody(call: ApplicationCall): Map<String, Any?> {
     val text = call.receiveText()

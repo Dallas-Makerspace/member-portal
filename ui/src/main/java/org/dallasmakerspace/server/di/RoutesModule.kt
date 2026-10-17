@@ -261,8 +261,10 @@ class RoutesModule {
   fun providesBackendApiHandler(
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
-      memberService: MemberService
-  ): IRouteHandler = BackendApiHandler(loggerFactory, userInfoProvider, memberService)
+      memberService: MemberService,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler =
+      BackendApiHandler(loggerFactory, userInfoProvider, memberService, memberServiceClient)
 
   @IntoMap
   @Provides
