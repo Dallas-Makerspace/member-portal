@@ -210,6 +210,18 @@ object ConfigRegistry {
           type = ConfigValueType.BooleanType,
       )
 
+  val SMARTWAIVER_LOCAL_READS_ENABLED =
+      ConfigKey(
+          key = "smartwaiver.local-reads.enabled",
+          description =
+              "Serve the signed-waiver reports and the profile kiosk photos from the local " +
+                  "SmartWaiver mirror instead of calling SmartWaiver live. Only turn on after the " +
+                  "mirror backfill has finished and /cron/smartwaiver-reconcile reports no gaps.",
+          category = "SmartWaiver",
+          defaultValue = false,
+          type = ConfigValueType.BooleanType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -231,5 +243,6 @@ object ConfigRegistry {
           WORKFLOWS_ENABLED,
           GROUPS_ARCHIVE_ENABLED,
           SMARTWAIVER_MIRROR_ENABLED,
+          SMARTWAIVER_LOCAL_READS_ENABLED,
       )
 }

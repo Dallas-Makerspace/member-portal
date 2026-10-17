@@ -9,12 +9,14 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import org.dallasmakerspace.core.DBMasterConnection
 import org.jetbrains.exposed.sql.Op
+import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.batchInsert
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.max
 import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
@@ -45,6 +47,17 @@ data class MirroredPhoto(
     val takenAt: String?,
     val s3Key: String,
     val sizeBytes: Int,
+)
+
+/** The few fields the reports and the profile photo view read back from the mirror. */
+data class LocalWaiver(
+    val waiverId: String,
+    val firstName: String,
+    val lastName: String,
+    val email: String?,
+    val createdOn: String,
+    val templateId: String?,
+    val title: String?,
 )
 
 /** A stored waiver: its row id (the Enrich cursor) and its SmartWaiver id. */
@@ -198,6 +211,54 @@ class SmartWaiverMirrorRepository @Inject constructor() {
       it[mirroredAt] = now
     }
   }
+
+  /**
+   * Waivers signed from the start of [from] through the end of [to] (UTC, like the API's search),
+   * newest first. Filters on the `dateCompleted` text, which every row has, rather than on
+   * `createdOnUtc`, which rows written by the original minimal path lack.
+   */
+  suspend fun waiversBetween(from: LocalDate, to: LocalDate): List<LocalWaiver> =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+        SmartWaiverMirrorTable.select {
+              (SmartWaiverMirrorTable.dateCompleted greaterEq "$from 00:00:00") and
+                  (SmartWaiverMirrorTable.dateCompleted lessEq "$to 23:59:59")
+            }
+            .orderBy(SmartWaiverMirrorTable.dateCompleted to SortOrder.DESC)
+            .map { it.toLocalWaiver() }
+      }
+
+  /** Newest waivers where the signer or any participant has this name (case-insensitive). */
+  suspend fun waiversByName(firstName: String, lastName: String, limit: Int): List<LocalWaiver> =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+        val first = firstName.lowercase()
+        val last = lastName.lowercase()
+        val viaParticipants =
+            SmartWaiverParticipantsTable.slice(SmartWaiverParticipantsTable.waiverId)
+                .select {
+                  (SmartWaiverParticipantsTable.firstName.lowerCase() eq first) and
+                      (SmartWaiverParticipantsTable.lastName.lowerCase() eq last)
+                }
+                .map { it[SmartWaiverParticipantsTable.waiverId] }
+        SmartWaiverMirrorTable.select {
+              ((SmartWaiverMirrorTable.firstName.lowerCase() eq first) and
+                  (SmartWaiverMirrorTable.lastName.lowerCase() eq last)) or
+                  (SmartWaiverMirrorTable.waiverId inList viaParticipants)
+            }
+            .orderBy(SmartWaiverMirrorTable.dateCompleted to SortOrder.DESC)
+            .limit(limit)
+            .map { it.toLocalWaiver() }
+      }
+
+  private fun ResultRow.toLocalWaiver() =
+      LocalWaiver(
+          waiverId = this[SmartWaiverMirrorTable.waiverId],
+          firstName = this[SmartWaiverMirrorTable.firstName],
+          lastName = this[SmartWaiverMirrorTable.lastName],
+          email = this[SmartWaiverMirrorTable.email],
+          createdOn = this[SmartWaiverMirrorTable.dateCompleted],
+          templateId = this[SmartWaiverMirrorTable.templateId],
+          title = this[SmartWaiverMirrorTable.documentTitle],
+      )
 
   /** Photos already recorded for a waiver (what is in S3 and the DB). */
   suspend fun photosFor(waiverId: String): List<PhotoRow> =

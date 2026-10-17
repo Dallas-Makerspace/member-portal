@@ -22,8 +22,12 @@ private const val MILLIS_IN_SECOND = 1000.0
 private const val CACHE_DURATION_HOURS = 24L
 
 @Singleton
-class SignedWaivers @Inject constructor(private val smartwaiverClient: ISmartwaiverApiClient) :
-    DataVizReport() {
+class SignedWaivers
+@Inject
+constructor(
+    private val smartwaiverClient: ISmartwaiverApiClient,
+    private val localReads: LocalWaiverReads,
+) : DataVizReport() {
 
   @Volatile private var cachedResponse: DataVizResponse? = null
   @Volatile private var cacheTimestamp: Long = 0
@@ -36,8 +40,12 @@ class SignedWaivers @Inject constructor(private val smartwaiverClient: ISmartwai
     val cacheAgeMillis = now - cacheTimestamp
     val cacheMaxAgeMillis = CACHE_DURATION_HOURS * 60 * 60 * 1000
 
+    // The local mirror is a quick query, so it is never cached (and a cached API answer is not
+    // served once reads move to the mirror).
+    val local = localReads.useLocal(params["source"]?.firstOrNull())
+
     // Check for cache bypass parameter
-    val bypassCache = params["cache"]?.firstOrNull() == "0"
+    val bypassCache = params["cache"]?.firstOrNull() == "0" || local
 
     // Check if we have a valid cached response (and not bypassing cache)
     if (!bypassCache && cachedResponse != null && cacheAgeMillis < cacheMaxAgeMillis) {
@@ -55,8 +63,9 @@ class SignedWaivers @Inject constructor(private val smartwaiverClient: ISmartwai
     val toDate = LocalDate.now()
     val fromDate = toDate.minusDays(REPORT_DAYS)
 
-    // Fetch waivers from Smartwaiver API
-    val waivers = smartwaiverClient.getWaivers(fromDate, toDate)
+    val waivers =
+        if (local) localReads.signingData(fromDate, toDate)
+        else smartwaiverClient.getWaivers(fromDate, toDate)
 
     // Find the start of the first week (Sunday)
     val firstWeekStart = fromDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
@@ -127,7 +136,9 @@ class SignedWaivers @Inject constructor(private val smartwaiverClient: ISmartwai
                 name = "Saturday Waivers", type = DataType.NUMBER, label = "Saturday Waivers"))
 
     val cacheStatus =
-        if (bypassCache) {
+        if (local) {
+          "Not cached (read from the local mirror)"
+        } else if (bypassCache) {
           "Freshly generated (cache bypassed)"
         } else {
           "Freshly generated (cached for 24 hours)"
@@ -141,6 +152,7 @@ class SignedWaivers @Inject constructor(private val smartwaiverClient: ISmartwai
             "Time taken" to "${"%.3f".format(timeTaken)} sec",
             "Date range" to "$fromDate to $toDate",
             "Total waivers" to "${waivers.size}",
+            "Source" to (if (local) "Local mirror" else "SmartWaiver API"),
             "Cache status" to cacheStatus)
 
     val response = DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)

@@ -21,6 +21,7 @@ class MemberWaiverPhotosService
 constructor(
     private val genericRepository: GenericRepository,
     private val smartwaiverApiClient: ISmartwaiverApiClient,
+    private val localReads: LocalWaiverReads,
     loggerFactory: LoggerFactory,
 ) {
   private val log = loggerFactory.create(javaClass)
@@ -32,6 +33,10 @@ constructor(
     log.info(
         "resolveIdentity took ${System.currentTimeMillis() - t0}ms, found=${identity != null}")
     if (identity == null) return emptyList()
+
+    if (localReads.useLocal()) {
+      return localReads.kioskPhotos(identity.firstName, identity.lastName, identity.email)
+    }
 
     // Search by name rather than email: Smartwaiver's `email` search parameter was empirically
     // found to miss real, existing waivers that `firstName`/`lastName` search finds correctly (see

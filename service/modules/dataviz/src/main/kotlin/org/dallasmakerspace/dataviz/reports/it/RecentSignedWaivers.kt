@@ -20,6 +20,7 @@ import org.dallasmakerspace.models.DataVizResponse
 import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.smartwaiver.ISmartwaiverApiClient
+import org.dallasmakerspace.smartwaiver.LocalWaiverReads
 
 private const val DEFAULT_DAYS = 0L
 private const val DAYS_7 = 7L
@@ -31,6 +32,7 @@ class RecentSignedWaivers
 @Inject
 constructor(
     private val smartwaiverClient: ISmartwaiverApiClient,
+    private val localReads: LocalWaiverReads,
     private val genericRepository: GenericRepository,
     private val memberService: MemberService,
 ) : DataVizReport() {
@@ -44,7 +46,10 @@ constructor(
     val toDate = LocalDate.now()
     val fromDate = toDate.minusDays(reportDays)
 
-    val waivers = smartwaiverClient.getWaiverDetails(fromDate, toDate)
+    val local = localReads.useLocal(params["source"]?.firstOrNull())
+    val waivers =
+        if (local) localReads.summaries(fromDate, toDate)
+        else smartwaiverClient.getWaiverDetails(fromDate, toDate)
 
     val emails = waivers.mapNotNull { it.email?.lowercase() }.filter { it.isNotEmpty() }.toSet()
     val emailToUsername = lookupMakerManagerUsers(emails)
@@ -88,6 +93,7 @@ constructor(
                 if (reportDays == DEFAULT_DAYS) "$toDate (today)"
                 else "$fromDate to $toDate (past $reportDays days)",
             "Total waivers" to "${waivers.size}",
+            "Source" to (if (local) "Local mirror" else "SmartWaiver API"),
             "Time taken" to "${timeTaken}ms",
         )
 

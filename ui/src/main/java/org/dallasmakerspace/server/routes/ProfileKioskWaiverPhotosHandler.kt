@@ -28,6 +28,11 @@ constructor(
 
     try {
       val waivers = memberService.getKioskWaiverPhotos(requestedUsername, session.sessionId)
+      // Audit trail: face photos are sensitive, so every view records who looked at whose.
+      log.info(
+          "Kiosk waiver photos viewed: viewer=${userInfo["preferred_username"]} " +
+              "subject=$requestedUsername waivers=${waivers.size} " +
+              "photos=${waivers.sumOf { it.photos.size }}")
       call.respond(mapOf("waivers" to waivers))
     } catch (e: Exception) {
       log.warn("Failed to fetch kiosk waiver photos for $requestedUsername", e)
