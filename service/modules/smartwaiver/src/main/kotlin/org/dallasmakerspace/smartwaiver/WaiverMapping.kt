@@ -40,8 +40,19 @@ internal fun tagsJson(tags: List<String>): String? =
     tags.takeIf { it.isNotEmpty() }?.let { Json.encodeToString(ListSerializer(String.serializer()), it) }
 
 /**
+ * Values the old system stored in the referral column that are not answers: the dropdown's
+ * placeholder and an empty string (nothing chosen), and gender values it picked up when it chose the
+ * answer by position and the waiver's first custom field was Gender. SmartWaiver returns an empty
+ * answer for "nothing chosen".
+ */
+internal val REFERRAL_NOT_AN_ANSWER = listOf("", "Please Select...", "Male", "Female")
+
+internal fun isReferralAnswer(value: String?) =
+    value != null && REFERRAL_NOT_AN_ANSWER.none { it.equals(value.trim(), ignoreCase = true) }
+
+/**
  * The two referral answers, found by the question text rather than by position so a reordered or
- * dropped question can't put an answer in the wrong column.
+ * dropped question can't put an answer in the wrong column. A placeholder is not an answer.
  */
 internal data class Referral(val type: String?, val source: String?)
 
@@ -50,7 +61,7 @@ internal fun referralFrom(waiver: SmartwaiverFullWaiver): Referral {
       waiver.customWaiverFields.values
           .firstOrNull { it.displayText.trim().startsWith(label, ignoreCase = true) }
           ?.value
-          ?.takeIf { it.isNotBlank() }
+          ?.takeIf { isReferralAnswer(it) }
   return Referral(answer(REFERRAL_TYPE_LABEL).fit(REFERRAL_WIDTH), answer(REFERRAL_SOURCE_LABEL).fit(REFERRAL_WIDTH))
 }
 

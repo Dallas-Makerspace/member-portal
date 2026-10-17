@@ -164,6 +164,16 @@ class SmartWaiverMirrorRepository @Inject constructor() {
       it[mirrorVersion] = MIRROR_VERSION
       it[SmartWaiverMirrorTable.photosStatus] = photosStatus
     }
+    if (referral.type == null) {
+      // SmartWaiver has no real answer: keep a stored real answer, but clear a stored placeholder or
+      // misplaced value (see REFERRAL_NOT_AN_ANSWER) so it isn't mistaken for one.
+      SmartWaiverMirrorTable.update({
+        (SmartWaiverMirrorTable.waiverId eq waiver.waiverId) and
+            (SmartWaiverMirrorTable.referralType inList REFERRAL_NOT_AN_ANSWER)
+      }) {
+        it[referralType] = null
+      }
+    }
   }
 
   private fun upsertParticipant(waiverId: String, position: Int, p: SmartwaiverParticipant) {

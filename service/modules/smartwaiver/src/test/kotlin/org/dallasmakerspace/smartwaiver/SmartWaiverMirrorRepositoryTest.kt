@@ -120,6 +120,65 @@ class SmartWaiverMirrorRepositoryTest {
     assertEquals(1, count(SmartWaiverParticipantsTable))
   }
 
+  private fun legacyRow(id: String, referral: String?) {
+    transaction(db) {
+      SmartWaiverMirrorTable.insert {
+        it[firstName] = "Old"
+        it[lastName] = "Name"
+        it[birthDate] = "x"
+        it[dateCompleted] = "2024-03-05 18:30:00"
+        it[waiverId] = id
+        it[waiverStatus] = "Completed At Kiosk"
+        it[checkinCount] = 1
+        it[requestedWaiverEmail] = 1
+        it[referralType] = referral
+      }
+    }
+  }
+
+  private fun waiverWithReferral(id: String, answer: String?) =
+      SmartwaiverFullWaiver(
+          waiverId = id,
+          firstName = "Fakefirst",
+          lastName = "Fakelast",
+          customWaiverFields =
+              if (answer == null) emptyMap()
+              else mapOf("k1" to SmartwaiverCustomField(value = answer, displayText = "Where did you hear about us?")))
+
+  private fun storedReferral(id: String) =
+      rows().first { it[SmartWaiverMirrorTable.waiverId] == id }[SmartWaiverMirrorTable.referralType]
+
+  @Test
+  fun `a stored placeholder or misplaced value is cleared when SmartWaiver has no real answer`() {
+    listOf("Please Select...", "", "Male", "Female").forEachIndexed { i, junk ->
+      legacyRow("fakewaiver0000$i", junk)
+      runBlocking { repo.saveMirror(waiverWithReferral("fakewaiver0000$i", null), emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE) }
+      assertEquals(null, storedReferral("fakewaiver0000$i"), "'$junk' should have been cleared")
+    }
+  }
+
+  @Test
+  fun `a stored real answer is kept when SmartWaiver has none, and replaced when it has one`() {
+    legacyRow("fakewaiver000010", "Word of Mouth")
+    runBlocking { repo.saveMirror(waiverWithReferral("fakewaiver000010", null), emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE) }
+    assertEquals("Word of Mouth", storedReferral("fakewaiver000010"))
+
+    legacyRow("fakewaiver000011", "Male")
+    runBlocking { repo.saveMirror(waiverWithReferral("fakewaiver000011", "Meetup"), emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE) }
+    assertEquals("Meetup", storedReferral("fakewaiver000011"))
+  }
+
+  @Test
+  fun `a placeholder from the API is not stored as an answer`() {
+    runBlocking {
+      repo.saveMirror(waiverWithReferral("fakewaiver000020", "Please Select..."), emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE)
+    }
+
+    assertEquals(null, storedReferral("fakewaiver000020"))
+    assertEquals(false, isReferralAnswer("please select..."))
+    assertEquals(true, isReferralAnswer("Declined to answer"))
+  }
+
   @Test
   fun `a guardian is stored by name, relationship and phone only`() {
     val minor =
