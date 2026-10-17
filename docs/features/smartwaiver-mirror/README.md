@@ -81,8 +81,21 @@ Writes are select-then-update-or-insert because the service user has no DELETE a
 8. **Compare, then cut over**: call the two reports with `source=local` and `source=api` and compare; then turn on
    `smartwaiver.local-reads.enabled`. Once it has run cleanly for a while, the live-read client methods can go.
 
-The backfill resumes by itself after a deploy or restart (it saves its cursors and state). A stopped run is saved as
-IDLE and is not resumed. It refuses to start in mock mode, because local `.env` files point at the real database.
+How it keeps going on its own over several days:
+
+- **Resume.** Progress is saved after every unit (one transaction). After a deploy or restart a run that was
+  running, waiting or paused is picked up again (a paused one stays paused until `resume`). A stopped run is saved
+  as IDLE and a trial as TRIAL; neither is resumed.
+- **One copy only.** The saved run records which copy owns it. A deploy briefly runs two containers; whichever
+  started last owns the run and the other ends at its next checkpoint without writing. `stop` releases the run, so
+  it also stops a copy running in another container.
+- **Errors.** A failed step is retried after 30 s, 1, 2, 5 and then 10 minutes (up to 8 tries without any progress).
+  Only a rejected API key, a configuration error, or running out of tries ends the run as FAILED; fix the cause and
+  `start` again to continue.
+- **Failed waivers.** One that fails is tried again in a second pass; any still failing are listed by `errors`
+  (in memory) and the log, and `start --retry` runs just the waiver-copying step again. A waiver SmartWaiver answers
+  404 for is marked gone (`mirrorVersion` 0, photo status GONE) and no longer counts as work to do.
+- **Refuses** to start in mock mode, because local `.env` files point at the real database.
 
 Pacing knobs (env, all optional): `SMARTWAIVER_BACKFILL_DAILY_BUDGET`, `SMARTWAIVER_BACKFILL_INTERVAL_MS`,
 `SMARTWAIVER_SEARCH_INTERVAL_MS`, `SMARTWAIVER_REQUEST_INTERVAL_MS`. A 429 pauses every API caller for the

@@ -11,6 +11,7 @@ import org.dallasmakerspace.smartwaiver.SmartWaiverCheckinSync
 import org.dallasmakerspace.smartwaiver.SmartWaiverMirrorRepository
 import org.dallasmakerspace.smartwaiver.SmartWaiverMirrorService
 import org.dallasmakerspace.smartwaiver.SmartWaiverRepository
+import org.dallasmakerspace.smartwaiver.safeMessage
 
 const val EVENT_NEW_WAIVER = "new-waiver"
 const val EVENT_CHECKIN = "new-checkin"
@@ -88,8 +89,8 @@ constructor(
               log.info("Mirrored waiver ${entry.uniqueId} (${outcome.photos} photos, ${outcome.photosStatus})")
               processed++
             } catch (e: Exception) {
-              log.error("Failed to mirror waiver ${entry.uniqueId}: ${e.message}")
-              mirrorRepository.recordQueueFailure(entry.id, e.message)
+              log.error("Failed to mirror waiver ${entry.uniqueId}: ${e.safeMessage()}")
+              mirrorRepository.recordQueueFailure(entry.id, e.safeMessage())
               failed++
             }
         EVENT_CHECKIN -> checkinEntryIds += entry.id
@@ -104,8 +105,8 @@ constructor(
         log.info("Check-in sync added $added check-ins")
         processed += checkinEntryIds.size
       } catch (e: Exception) {
-        log.error("Check-in sync failed: ${e.message}")
-        checkinEntryIds.forEach { mirrorRepository.recordQueueFailure(it, e.message) }
+        log.error("Check-in sync failed: ${e.safeMessage()}")
+        checkinEntryIds.forEach { mirrorRepository.recordQueueFailure(it, e.safeMessage()) }
         failed += checkinEntryIds.size
       }
     }
@@ -134,7 +135,7 @@ constructor(
         log.info("Processed waiver $uniqueId")
         processed++
       } catch (e: Exception) {
-        log.error("Failed to process waiver $uniqueId: ${e.message}")
+        log.error("Failed to process waiver $uniqueId: ${e.safeMessage()}")
         failed++
       }
     }

@@ -8,11 +8,10 @@ import org.dallasmakerspace.storage.ObjectKey
 private val SAFE_ID = Regex("[A-Za-z0-9_-]{1,100}")
 private val SAFE_FILE_TYPE = Regex("[a-z0-9]{1,10}")
 
-/** What copying one waiver's kiosk photos produced. [created] is what to undo if the DB write fails. */
+/** What copying one waiver's kiosk photos produced. */
 data class PhotoMirrorResult(
     val photos: List<MirroredPhoto>,
     val status: String,
-    val created: List<ObjectKey>,
 )
 
 /**
@@ -28,12 +27,11 @@ class KioskPhotoMirror(
   @Suppress("TooGenericExceptionCaught")
   suspend fun mirror(waiver: SmartwaiverFullWaiver): PhotoMirrorResult {
     // The waiver says how many photos it has; skip the call when it says none.
-    if (waiver.photos == 0) return PhotoMirrorResult(emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE, emptyList())
+    if (waiver.photos == 0) return PhotoMirrorResult(emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE)
     val entries = client.getWaiverPhotos(waiver.waiverId)
-    if (entries.isEmpty()) return PhotoMirrorResult(emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE, emptyList())
+    if (entries.isEmpty()) return PhotoMirrorResult(emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE)
 
     val photos = mutableListOf<MirroredPhoto>()
-    val created = mutableListOf<ObjectKey>()
     var skipped = 0
     for (entry in entries) {
       val photoId = entry.photoId
@@ -55,7 +53,6 @@ class KioskPhotoMirror(
       val key = ObjectKey("${waiver.waiverId}/photos/$photoId.$fileType")
       if (store.head(key) == null) {
         store.put(key, bytes, contentTypeFor(fileType), mapOf("photo-id" to photoId))
-        created += key
       }
       photos +=
           MirroredPhoto(
@@ -71,7 +68,7 @@ class KioskPhotoMirror(
     val status =
         if (skipped == 0) SmartWaiverMirrorRepository.PHOTOS_COMPLETE
         else SmartWaiverMirrorRepository.PHOTOS_PARTIAL
-    return PhotoMirrorResult(photos, status, created)
+    return PhotoMirrorResult(photos, status)
   }
 
   private fun contentTypeFor(fileType: String) =

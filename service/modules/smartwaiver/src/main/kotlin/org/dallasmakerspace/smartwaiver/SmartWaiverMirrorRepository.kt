@@ -22,6 +22,7 @@ import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.statements.UpdateBuilder
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.update
 
@@ -115,43 +116,50 @@ class SmartWaiverMirrorRepository @Inject constructor() {
     SmartWaiverMirrorTable.upsertWhere(
         { SmartWaiverMirrorTable.waiverId eq waiver.waiverId },
         insertOnly = {
-          it[waiverStatus] = waiverStatusFor(waiver.kiosk) ?: STATUS_KIOSK
+          it[waiverId] = waiver.waiverId
+          it[firstName] = ""
+          it[lastName] = ""
+          it[birthDate] = ""
+          it[dateCompleted] = ""
+          it[waiverStatus] = STATUS_KIOSK
           it[checkinCount] = DEFAULT_LEGACY_COUNT
           it[requestedWaiverEmail] = DEFAULT_LEGACY_COUNT
-          it[waiverId] = waiver.waiverId
         },
     ) {
-      it[firstName] = waiver.firstName.orEmpty().take(NAME_WIDTH)
-      it[lastName] = waiver.lastName.orEmpty().take(NAME_WIDTH)
-      it[email] = waiver.email.fit(EMAIL_WIDTH)
-      it[birthDate] = waiver.dob.orEmpty().take(DOB_WIDTH)
-      it[dateCompleted] = waiver.createdOn.orEmpty().take(DOB_WIDTH)
-      it[documentTitle] = waiver.title.fit(TITLE_WIDTH)
+      // Only write what the API gave us, so a missing field never blanks a value already stored.
+      waiver.firstName?.let { v -> it[firstName] = v.take(NAME_WIDTH) }
+      waiver.lastName?.let { v -> it[lastName] = v.take(NAME_WIDTH) }
+      waiver.email?.let { v -> it[email] = v.take(EMAIL_WIDTH) }
+      waiver.dob?.let { v -> it[birthDate] = v.take(DOB_WIDTH) }
+      waiver.createdOn?.let { v ->
+        it[dateCompleted] = v.take(DOB_WIDTH)
+        parseApiDateTime(v)?.let { d -> it[createdOnUtc] = d }
+      }
+      waiver.title?.let { v -> it[documentTitle] = v.take(TITLE_WIDTH) }
       // Don't overwrite a legacy answer with null when the API no longer has one.
       referral.type?.let { v -> it[referralType] = v }
       referral.source?.let { v -> it[referralSource] = v }
       waiver.guardian?.let { g ->
-        it[guardianFirstName] = g.firstName.fit(NAME_WIDTH)
-        it[guardianLastName] = g.lastName.fit(NAME_WIDTH)
+        g.firstName?.let { v -> it[guardianFirstName] = v.take(NAME_WIDTH) }
+        g.lastName?.let { v -> it[guardianLastName] = v.take(NAME_WIDTH) }
       }
       waiverStatusFor(waiver.kiosk)?.let { v -> it[waiverStatus] = v }
-      it[templateId] = waiver.templateId.fit(TEMPLATE_WIDTH)
-      it[createdOnUtc] = parseApiDateTime(waiver.createdOn)
-      it[expirationDate] = waiver.expirationDate.fit(EXPIRATION_WIDTH)
-      it[verified] = waiver.verified
-      it[kiosk] = waiver.kiosk
-      it[isMinor] = waiver.isMinor
+      waiver.templateId?.let { v -> it[templateId] = v.take(TEMPLATE_WIDTH) }
+      waiver.expirationDate?.let { v -> it[expirationDate] = v.take(EXPIRATION_WIDTH) }
+      waiver.verified?.let { v -> it[verified] = v }
+      waiver.kiosk?.let { v -> it[kiosk] = v }
+      waiver.isMinor?.let { v -> it[isMinor] = v }
       it[tags] = tagsJson(waiver.tags)
-      it[phone] = primary?.phone.fit(PHONE_WIDTH)
-      it[addressLineOne] = waiver.addressLineOne.fit(ADDRESS_WIDTH)
-      it[addressLineTwo] = waiver.addressLineTwo.fit(ADDRESS_WIDTH)
-      it[addressCity] = waiver.addressCity.fit(NAME_WIDTH)
-      it[addressState] = waiver.addressState.fit(SHORT_WIDTH)
-      it[addressZip] = waiver.addressZip.fit(ZIP_WIDTH)
-      it[addressCountry] = waiver.addressCountry.fit(SHORT_WIDTH)
-      it[emergencyContactName] = waiver.emergencyContactName.fit(CONTACT_NAME_WIDTH)
-      it[emergencyContactRelation] = waiver.emergencyContactRelation.fit(NAME_WIDTH)
-      it[emergencyContactPhone] = waiver.emergencyContactPhone.fit(PHONE_WIDTH)
+      primary?.phone?.let { v -> it[phone] = v.take(PHONE_WIDTH) }
+      waiver.addressLineOne?.let { v -> it[addressLineOne] = v.take(ADDRESS_WIDTH) }
+      waiver.addressLineTwo?.let { v -> it[addressLineTwo] = v.take(ADDRESS_WIDTH) }
+      waiver.addressCity?.let { v -> it[addressCity] = v.take(NAME_WIDTH) }
+      waiver.addressState?.let { v -> it[addressState] = v.take(SHORT_WIDTH) }
+      waiver.addressZip?.let { v -> it[addressZip] = v.take(ZIP_WIDTH) }
+      waiver.addressCountry?.let { v -> it[addressCountry] = v.take(SHORT_WIDTH) }
+      waiver.emergencyContactName?.let { v -> it[emergencyContactName] = v.take(CONTACT_NAME_WIDTH) }
+      waiver.emergencyContactRelation?.let { v -> it[emergencyContactRelation] = v.take(NAME_WIDTH) }
+      waiver.emergencyContactPhone?.let { v -> it[emergencyContactPhone] = v.take(PHONE_WIDTH) }
       it[mirroredAt] = now
       it[mirrorVersion] = MIRROR_VERSION
       it[SmartWaiverMirrorTable.photosStatus] = photosStatus
@@ -202,7 +210,7 @@ class SmartWaiverMirrorRepository @Inject constructor() {
           it[photoId] = photo.photoId.take(NAME_WIDTH)
         },
     ) {
-      it[photoType] = photo.type.fit(SHORT_WIDTH)
+      it[photoType] = photo.type.fit(PHOTO_TYPE_WIDTH)
       it[tag] = photo.tag.fit(NAME_WIDTH)
       it[fileType] = photo.fileType.take(PHOTO_FILE_TYPE_WIDTH)
       it[takenAt] = photo.takenAt.fit(DOB_WIDTH)
@@ -288,23 +296,29 @@ class SmartWaiverMirrorRepository @Inject constructor() {
                 .map { it[SmartWaiverMirrorTable.waiverId] }
           }.toSet()
       val missing = summaries.filter { it.waiverId !in existing }.distinctBy { it.waiverId }
+      var added = 0
       missing.forEach { s ->
-        SmartWaiverMirrorTable.insert {
-          it[firstName] = s.firstName.orEmpty().take(NAME_WIDTH)
-          it[lastName] = s.lastName.orEmpty().take(NAME_WIDTH)
-          it[email] = s.email.fit(EMAIL_WIDTH)
-          it[birthDate] = s.dob.orEmpty().take(DOB_WIDTH)
-          it[dateCompleted] = s.createdOn.take(DOB_WIDTH)
-          it[waiverId] = s.waiverId
-          it[waiverStatus] = waiverStatusFor(s.kiosk) ?: STATUS_KIOSK
-          it[documentTitle] = s.title.fit(TITLE_WIDTH)
-          it[checkinCount] = DEFAULT_LEGACY_COUNT
-          it[requestedWaiverEmail] = DEFAULT_LEGACY_COUNT
-          it[templateId] = s.templateId.fit(TEMPLATE_WIDTH)
-          it[createdOnUtc] = parseApiDateTime(s.createdOn)
+        try {
+          SmartWaiverMirrorTable.insert {
+            it[firstName] = s.firstName.orEmpty().take(NAME_WIDTH)
+            it[lastName] = s.lastName.orEmpty().take(NAME_WIDTH)
+            it[email] = s.email.fit(EMAIL_WIDTH)
+            it[birthDate] = s.dob.orEmpty().take(DOB_WIDTH)
+            it[dateCompleted] = s.createdOn.take(DOB_WIDTH)
+            it[waiverId] = s.waiverId
+            it[waiverStatus] = waiverStatusFor(s.kiosk) ?: STATUS_KIOSK
+            it[documentTitle] = s.title.fit(TITLE_WIDTH)
+            it[checkinCount] = DEFAULT_LEGACY_COUNT
+            it[requestedWaiverEmail] = DEFAULT_LEGACY_COUNT
+            it[templateId] = s.templateId.fit(TEMPLATE_WIDTH)
+            it[createdOnUtc] = parseApiDateTime(s.createdOn)
+          }
+          added++
+        } catch (e: ExposedSQLException) {
+          if (!e.isDuplicateKey()) throw e // stored meanwhile by another copy
         }
       }
-      missing.size
+      added
     }
   }
 
@@ -329,8 +343,25 @@ class SmartWaiverMirrorRepository @Inject constructor() {
 
   private fun needsMirror(): SqlExpressionBuilder.() -> Op<Boolean> = {
     SmartWaiverMirrorTable.mirrorVersion.isNull() or
-        (SmartWaiverMirrorTable.mirrorVersion less MIRROR_VERSION)
+        ((SmartWaiverMirrorTable.mirrorVersion greater GONE_VERSION) and
+            (SmartWaiverMirrorTable.mirrorVersion less MIRROR_VERSION))
   }
+
+  /** Records that SmartWaiver no longer has this waiver, so it stops counting as work still to do. */
+  suspend fun markGone(waiverId: String, now: LocalDateTime = nowUtc()) {
+    newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+      SmartWaiverMirrorTable.update({ SmartWaiverMirrorTable.waiverId eq waiverId }) {
+        it[mirrorVersion] = GONE_VERSION
+        it[photosStatus] = PHOTOS_GONE
+        it[mirroredAt] = now
+      }
+    }
+  }
+
+  suspend fun countGone(): Int =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+        SmartWaiverMirrorTable.select { SmartWaiverMirrorTable.mirrorVersion eq GONE_VERSION }.count().toInt()
+      }
 
   /** Waivers that were fully mirrored but have no participant row, which should not happen. */
   suspend fun countMirroredWithoutParticipants(): Int =
@@ -338,7 +369,7 @@ class SmartWaiverMirrorRepository @Inject constructor() {
         var count = 0
         exec(
             "SELECT COUNT(*) FROM `dms-makermanager`.smartwaiver_data d " +
-                "WHERE d.mirrorVersion IS NOT NULL AND NOT EXISTS " +
+                "WHERE d.mirrorVersion > 0 AND NOT EXISTS " +
                 "(SELECT 1 FROM `dms-makermanager`.smartwaiver_participants p WHERE p.waiverId = d.waiverId)") { rs ->
               if (rs.next()) count = rs.getInt(1)
             }
@@ -356,7 +387,15 @@ class SmartWaiverMirrorRepository @Inject constructor() {
       }
 
   /** Stores check-ins not seen before (they never change). Returns how many were new. */
-  suspend fun insertNewCheckins(checkins: List<SmartwaiverCheckin>, now: LocalDateTime = nowUtc()): Int {
+  suspend fun insertNewCheckins(checkins: List<SmartwaiverCheckin>, now: LocalDateTime = nowUtc()): Int =
+      try {
+        insertNewCheckinsOnce(checkins, now)
+      } catch (e: ExposedSQLException) {
+        // Another writer (a catch-up sync, or a second container) stored some of them meanwhile.
+        if (e.isDuplicateKey()) insertNewCheckinsOnce(checkins, now) else throw e
+      }
+
+  private suspend fun insertNewCheckinsOnce(checkins: List<SmartwaiverCheckin>, now: LocalDateTime): Int {
     if (checkins.isEmpty()) return 0
     return newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
       val ids = checkins.map { it.checkinId }
@@ -450,24 +489,83 @@ class SmartWaiverMirrorRepository @Inject constructor() {
             }
       }
 
-  suspend fun saveState(state: BackfillState) =
+  /**
+   * Makes [owner] the one copy that runs the backfill (the run row's cursorValue holds the owner).
+   * A copy that was running before notices at its next checkpoint and stops.
+   */
+  suspend fun claimRun(owner: String, state: BackfillState) = saveState(state.copy(cursorValue = owner))
+
+  /**
+   * One transaction per unit of work: renew the run row if [owner] still holds it, then save the
+   * stage's progress. Returns false, writing nothing, when another copy has taken over or the run
+   * was stopped.
+   */
+  suspend fun saveUnit(stage: BackfillState, owner: String, run: BackfillState): Boolean =
       newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
-        SmartWaiverBackfillStateTable.upsertWhere(
-            { SmartWaiverBackfillStateTable.name eq state.name },
-            insertOnly = { it[name] = state.name },
-        ) {
-          it[status] = state.status
-          it[cursorValue] = state.cursorValue
-          it[doneCount] = state.doneCount
-          it[totalCount] = state.totalCount
-          it[requestsToday] = state.requestsToday
-          it[budgetDay] = state.budgetDay
-          it[lastError] = state.lastError.fit(LAST_ERROR_WIDTH)
-          it[startedAt] = state.startedAt
-          it[updatedAt] = state.updatedAt
-          it[finishedAt] = state.finishedAt
-        }
+        val held = renewRunRow(owner, run)
+        if (held) saveStageRow(stage)
+        held
       }
+
+  /** Renews the run row without saving a stage (while paused or waiting). False if not the owner. */
+  suspend fun renewRun(owner: String, run: BackfillState): Boolean =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) { renewRunRow(owner, run) }
+
+  /** Marks the run IDLE and releases it, keeping its counters, so any copy still running stops. */
+  suspend fun markRunIdle(now: LocalDateTime = nowUtc()) {
+    newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
+      SmartWaiverBackfillStateTable.update({ SmartWaiverBackfillStateTable.name eq RUN_STATE_NAME }) {
+        it[status] = "IDLE"
+        it[cursorValue] = null
+        it[updatedAt] = now
+      }
+    }
+  }
+
+  private fun renewRunRow(owner: String, run: BackfillState): Boolean {
+    val updated =
+        SmartWaiverBackfillStateTable.update({
+          (SmartWaiverBackfillStateTable.name eq RUN_STATE_NAME) and
+              (SmartWaiverBackfillStateTable.cursorValue eq owner)
+        }) {
+          it[status] = run.status
+          it[doneCount] = run.doneCount
+          it[requestsToday] = run.requestsToday
+          it[budgetDay] = run.budgetDay
+          it[lastError] = run.lastError.fit(LAST_ERROR_WIDTH)
+          it[startedAt] = run.startedAt
+          it[updatedAt] = run.updatedAt
+          it[finishedAt] = run.finishedAt
+        }
+    if (updated > 0) return true
+    // A driver that counts changed rows reports 0 for an identical update, so confirm by reading.
+    return SmartWaiverBackfillStateTable.select {
+          (SmartWaiverBackfillStateTable.name eq RUN_STATE_NAME) and
+              (SmartWaiverBackfillStateTable.cursorValue eq owner)
+        }
+        .any()
+  }
+
+  private fun saveStageRow(state: BackfillState) {
+    SmartWaiverBackfillStateTable.upsertWhere(
+        { SmartWaiverBackfillStateTable.name eq state.name },
+        insertOnly = { it[name] = state.name },
+    ) {
+      it[status] = state.status
+      it[cursorValue] = state.cursorValue
+      it[doneCount] = state.doneCount
+      it[totalCount] = state.totalCount
+      it[requestsToday] = state.requestsToday
+      it[budgetDay] = state.budgetDay
+      it[lastError] = state.lastError.fit(LAST_ERROR_WIDTH)
+      it[startedAt] = state.startedAt
+      it[updatedAt] = state.updatedAt
+      it[finishedAt] = state.finishedAt
+    }
+  }
+
+  suspend fun saveState(state: BackfillState) =
+      newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) { saveStageRow(state) }
 
   /** Mirrored waivers per `yyyy-MM` of their creation date, for reconciliation. */
   suspend fun countsByMonth(): Map<String, Int> =
@@ -497,6 +595,13 @@ class SmartWaiverMirrorRepository @Inject constructor() {
     const val PHOTOS_NONE = "NONE"
     const val PHOTOS_COMPLETE = "COMPLETE"
     const val PHOTOS_PARTIAL = "PARTIAL"
+    const val PHOTOS_GONE = "GONE"
+
+    /** `mirrorVersion` of a waiver SmartWaiver no longer has (real versions start at 1). */
+    const val GONE_VERSION = 0
+
+    /** Name of the backfill state row that describes the run as a whole. */
+    const val RUN_STATE_NAME = "run"
   }
 }
 
@@ -504,19 +609,27 @@ private const val IN_CLAUSE_CHUNK = 500
 private const val LAST_ERROR_WIDTH = 500
 private const val MONTH_LENGTH = 7
 private const val PHOTO_FILE_TYPE_WIDTH = 10
+private const val PHOTO_TYPE_WIDTH = 30
 
-/** Update the row matching [where], or insert one if none does; [insertOnly] adds insert-only values. */
+/**
+ * Updates the row matching [where], or inserts one if none does ([insertOnly] values go in first, so
+ * [common] can override them). Updating first is one statement for rows that exist, the usual case.
+ * If the insert hits a duplicate key, another writer inserted it first (a second container during a
+ * deploy) or the driver counted only changed rows and the update matched an identical row: the row
+ * exists either way.
+ */
 private fun <T : Table> T.upsertWhere(
     where: SqlExpressionBuilder.() -> Op<Boolean>,
     insertOnly: T.(UpdateBuilder<*>) -> Unit = {},
     common: T.(UpdateBuilder<*>) -> Unit,
 ) {
-  if (select(where).limit(1).any()) {
-    update(where) { common(this@upsertWhere, it) }
-  } else {
+  if (update(where) { common(this@upsertWhere, it) } > 0) return
+  try {
     insert {
-      common(this@upsertWhere, it)
       insertOnly(this@upsertWhere, it)
+      common(this@upsertWhere, it)
     }
+  } catch (e: ExposedSQLException) {
+    if (!e.isDuplicateKey()) throw e
   }
 }

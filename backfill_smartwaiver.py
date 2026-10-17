@@ -6,7 +6,8 @@ again at any time. This script starts it, shows what it is doing, and stops it. 
 
     backfill_smartwaiver.py start               start (or continue) the full copy and watch it
     backfill_smartwaiver.py start --limit 20    trial: copy only 20 waivers, then stop
-    backfill_smartwaiver.py start --restart     begin again (finds waivers that failed before)
+    backfill_smartwaiver.py start --retry       try again only the waivers that failed (skips the rest)
+    backfill_smartwaiver.py start --restart     begin the whole copy again from the top
     backfill_smartwaiver.py attach              watch a copy that is already running
     backfill_smartwaiver.py status              show where it is and exit
     backfill_smartwaiver.py pause | resume      hold / release it
@@ -254,7 +255,7 @@ def stop_job(client):
 
 def attach(client, expected_limit=None, keep_running=False):
     """Follow progress until the copy ends. Ctrl+C stops it too unless keep_running is set."""
-    last, last_log, first, overview_shown = {}, 0.0, True, False
+    last, last_log, overview_shown, saw_activity = {}, 0.0, False, False
     while True:
         try:
             with client.request(BASE_PATH + "/stream", timeout=60) as resp:
@@ -263,13 +264,22 @@ def attach(client, expected_limit=None, keep_running=False):
                     if not line.startswith("data: "):
                         continue
                     p = json.loads(line[6:])
-                    if first and expected_limit and p.get("limit") != expected_limit:
-                        say(f"ERROR: the service did not accept the trial limit of {expected_limit} "
-                            "(it is probably still running an older version).")
+                    # Checked on every frame: a copy that lost its limit (a restart) would run in full.
+                    if expected_limit and p.get("limit") != expected_limit:
+                        clear_live()
+                        say(f"ERROR: the running copy does not have the trial limit of {expected_limit} "
+                            "(the service may be an older version, or it was restarted).")
                         say("Stopping it so it doesn't copy everything.")
                         stop_job(client)
                         return False
-                    first = False
+                    if p.get("state") == "IDLE":
+                        clear_live()
+                        if saw_activity:
+                            say(p.get("message") or "The copy was stopped (by 'stop', or another copy took over).")
+                            return True
+                        say("No copy is running. Start one with: start")
+                        return False
+                    saw_activity = True
                     if p.get("plan") and not overview_shown:
                         clear_live()
                         print_overview(p)
@@ -309,9 +319,12 @@ def attach(client, expected_limit=None, keep_running=False):
                     say("Interrupted again; run 'stop' to be sure the copy is stopped.")
             return True
         except urllib.error.HTTPError as e:
-            if 400 <= e.code < 500:
-                # Wrong key or client name, no permission, ...: retrying won't help.
+            if e.code in (401, 403):
                 say(f"ERROR: the service answered HTTP {e.code}; check --client and the API key.")
+                return False
+            if 400 <= e.code < 500:
+                # Not a key problem and retrying won't help (e.g. 404: the service has no such page).
+                say(f"ERROR: the service answered HTTP {e.code}; it may be an older version.")
                 return False
             clear_live()
             print(f"[{stamp()}] the service returned HTTP {e.code}; retrying in {RETRY_SECONDS}s")
@@ -330,6 +343,7 @@ def main():
     ap.add_argument("command", nargs="?", default="attach",
                     choices=["start", "attach", "status", "pause", "resume", "stop", "errors"])
     ap.add_argument("--restart", action="store_true", help="with start: begin again from the top")
+    ap.add_argument("--retry", action="store_true", help="with start: retry only waivers that failed before")
     ap.add_argument("--limit", type=int, help="with start: trial of this many waivers, then stop")
     ap.add_argument("--keep-running", action="store_true", help="Ctrl+C only closes this window")
     ap.add_argument("--url", default="http://localhost:8081")
@@ -340,15 +354,18 @@ def main():
     args = ap.parse_args()
     global LOG_FILE
     LOG_FILE = args.log_file
+    if args.limit is not None and args.limit < 1:
+        ap.error("--limit must be a whole number of 1 or more")
 
     client = Client(args)
     started = False
     try:
         if args.command == "start":
             say("Starting the SmartWaiver copy"
-                + (f" (trial: {args.limit} waivers)" if args.limit else "") + "...")
+                + (f" (trial: {args.limit} waivers)" if args.limit is not None else "") + "...")
             query = [q for q in ("restart=true" if args.restart else "",
-                                 f"limit={args.limit}" if args.limit else "") if q]
+                                 "retry=true" if args.retry else "",
+                                 f"limit={args.limit}" if args.limit is not None else "") if q]
             reply = client.text(BASE_PATH + ("?" + "&".join(query) if query else ""))
             if reply.startswith(("HTTP ", "Refusing")):
                 say(f"Could not start: {reply}")
@@ -362,7 +379,11 @@ def main():
             say("Connecting to the running copy...")
             return 0 if attach(client, None, args.keep_running) else 1
         if args.command == "status":
-            print(summary_line(json.loads(client.text(BASE_PATH + "/status"))))
+            reply = client.text(BASE_PATH + "/status")
+            if reply.startswith("HTTP "):
+                print(f"Could not get the status: {reply}")
+                return 1
+            print(summary_line(json.loads(reply)))
             return 0
         print(client.text(f"{BASE_PATH}/{args.command}"))
         return 0

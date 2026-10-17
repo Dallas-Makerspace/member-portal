@@ -67,8 +67,11 @@ data class WaiverSigningData(
     val waiverId: String
 )
 
-class SmartwaiverApiException(message: String, cause: Throwable? = null) :
+open class SmartwaiverApiException(message: String, cause: Throwable? = null) :
     Exception(message, cause)
+
+/** SmartWaiver answered 404: the waiver no longer exists there. */
+class SmartwaiverNotFoundException(message: String) : SmartwaiverApiException(message)
 
 @Serializable
 data class SmartwaiverCustomField(

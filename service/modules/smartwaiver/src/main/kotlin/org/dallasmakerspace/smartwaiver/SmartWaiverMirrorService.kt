@@ -27,24 +27,16 @@ constructor(
   private val store = NamespacedObjectStore(objectStore, StorageNamespace.SMARTWAIVER)
   private val photoMirror = KioskPhotoMirror(client, store, log)
 
-  /** Fetches the waiver and its photos, stores the photos, then records everything in one transaction. */
-  @Suppress("TooGenericExceptionCaught")
+  /**
+   * Fetches the waiver and its photos, stores the photos, then records everything in one
+   * transaction. If recording fails the uploaded photos are left in place rather than deleted: their
+   * keys are fixed, so the next attempt finds and reuses them, whereas deleting could remove a photo
+   * that another writer (the webhook, or a second container) has just recorded.
+   */
   suspend fun mirrorWaiver(waiverId: String): MirrorOutcome {
     val waiver = client.getWaiver(waiverId)
     val photos = photoMirror.mirror(waiver)
-    try {
-      repository.saveMirror(waiver, photos.photos, photos.status)
-    } catch (e: Exception) {
-      // Only undo what this call uploaded; objects from an earlier run belong to a recorded mirror.
-      photos.created.forEach { key ->
-        try {
-          store.delete(key)
-        } catch (cleanup: Exception) {
-          log.warn("Could not remove orphaned object $key: ${cleanup.message}")
-        }
-      }
-      throw e
-    }
+    repository.saveMirror(waiver, photos.photos, photos.status)
     return MirrorOutcome(waiver.waiverId, photos.photos.size, photos.status)
   }
 }

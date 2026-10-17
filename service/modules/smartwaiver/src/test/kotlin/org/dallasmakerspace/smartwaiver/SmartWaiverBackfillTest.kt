@@ -6,6 +6,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -21,7 +23,6 @@ import org.dallasmakerspace.core.DBMasterConnection
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.storage.InMemoryObjectStore
 import org.jetbrains.exposed.sql.deleteAll
-import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class SmartWaiverBackfillTest {
@@ -47,18 +48,35 @@ class SmartWaiverBackfillTest {
   /** Counts every call as one API request, like the real client does. */
   private class FakeClient(
       val summariesByStart: Map<LocalDate, List<SmartwaiverSummary>>,
-      var failWaivers: Boolean = false,
+      /** Waivers whose fetch always fails. */
+      var failAlways: Set<String> = emptySet(),
+      /** Waivers whose first fetch fails and later ones work. */
+      val failOnce: MutableSet<String> = mutableSetOf(),
+      /** Waivers SmartWaiver answers 404 for. */
+      val gone: Set<String> = emptySet(),
+      /** The first search calls fail this many times, with [searchError]. */
+      var failSearches: Int = 0,
+      val searchError: String = "temporary problem",
       /** When set, the first search call announces itself and then waits to be released. */
       val hold: CompletableDeferred<Unit>? = null,
+      /** When set, the first waiver fetch announces itself and then waits to be released. */
+      val holdWaiver: CompletableDeferred<Unit>? = null,
   ) : ISmartwaiverApiClient {
     val requests = AtomicLong()
+    val searches = AtomicInteger()
     val entered = CompletableDeferred<Unit>()
+    val enteredWaiver = CompletableDeferred<Unit>()
 
     override suspend fun getWaivers(fromDate: LocalDate, toDate: LocalDate): List<WaiverSigningData> = emptyList()
 
     override suspend fun getWaiverDetails(fromDate: LocalDate, toDate: LocalDate): List<SmartwaiverSummary> {
       requests.incrementAndGet()
+      searches.incrementAndGet()
       if (hold != null && entered.complete(Unit)) hold.await()
+      if (failSearches > 0) {
+        failSearches--
+        throw SmartwaiverApiException(searchError)
+      }
       return summariesByStart[fromDate].orEmpty()
     }
 
@@ -66,7 +84,10 @@ class SmartWaiverBackfillTest {
 
     override suspend fun getWaiver(waiverId: String): SmartwaiverFullWaiver {
       requests.incrementAndGet()
-      if (failWaivers) throw SmartwaiverApiException("api down")
+      if (holdWaiver != null && enteredWaiver.complete(Unit)) holdWaiver.await()
+      if (waiverId in gone) throw SmartwaiverNotFoundException("Waiver not found: $waiverId")
+      if (waiverId in failAlways) throw SmartwaiverApiException("api down")
+      if (failOnce.remove(waiverId)) throw SmartwaiverApiException("blip")
       return SmartwaiverFullWaiver(waiverId = waiverId, firstName = "Fake", lastName = "User", createdOn = "2014-01-05 10:00:00", photos = 0)
     }
 
@@ -87,7 +108,6 @@ class SmartWaiverBackfillTest {
   // 2014-02-20 12:00 UTC (6 am Chicago): two monthly windows, Jan and Feb.
   private val clock = TestClock(Instant.parse("2014-02-20T12:00:00Z"))
   private val sleeps = mutableListOf<Long>()
-
   private val created = mutableListOf<SmartWaiverBackfill>()
 
   @AfterTest
@@ -110,18 +130,18 @@ class SmartWaiverBackfillTest {
   private fun summary(id: String) =
       SmartwaiverSummary(waiverId = id, templateId = "t", title = "T", createdOn = "2014-01-05 10:00:00", firstName = "F", lastName = "L")
 
-  private fun backfill(client: FakeClient, budget: Int = 1000): SmartWaiverBackfill {
+  private fun backfill(client: FakeClient, budget: Int = 1000, owner: String = UUID.randomUUID().toString()): SmartWaiverBackfill {
     val service = SmartWaiverMirrorService(client, repo, InMemoryObjectStore(), LoggerFactory())
-    return created.add(newBackfill(client, service, budget)).let { created.last() }
-  }
-
-  private fun newBackfill(client: FakeClient, service: SmartWaiverMirrorService, budget: Int): SmartWaiverBackfill {
-    return SmartWaiverBackfill(
-        client, repo, service, SmartWaiverCheckinSync(client, repo, LoggerFactory()), LoggerFactory(), budget, 3_000L, clock,
-        sleep = {
-          sleeps += it
-          clock.now = clock.now.plusMillis(it)
-        })
+    val b =
+        SmartWaiverBackfill(
+            client, repo, service, SmartWaiverCheckinSync(client, repo, LoggerFactory()), LoggerFactory(), budget, 3_000L, clock,
+            sleep = {
+              sleeps += it
+              clock.now = clock.now.plusMillis(it)
+            },
+            owner = owner)
+    created += b
+    return b
   }
 
   private fun awaitState(b: SmartWaiverBackfill, vararg states: RunState): BackfillProgress =
@@ -132,21 +152,22 @@ class SmartWaiverBackfillTest {
         }
       }
 
-  private fun twoMonths() =
-      FakeClient(
-          mapOf(
-              LocalDate.of(2014, 1, 1) to listOf(summary("fakewaiver01"), summary("fakewaiver02")),
-              LocalDate.of(2014, 2, 1) to listOf(summary("fakewaiver03"))))
+  private fun threeWaivers() =
+      mapOf(
+          LocalDate.of(2014, 1, 1) to listOf(summary("fakewaiver01"), summary("fakewaiver02")),
+          LocalDate.of(2014, 2, 1) to listOf(summary("fakewaiver03")))
+
+  private fun twoMonths() = FakeClient(threeWaivers())
 
   private lateinit var heldClient: FakeClient
 
   private fun twoMonthsHeld(hold: CompletableDeferred<Unit>): FakeClient =
-      FakeClient(
-              mapOf(
-                  LocalDate.of(2014, 1, 1) to listOf(summary("fakewaiver01"), summary("fakewaiver02")),
-                  LocalDate.of(2014, 2, 1) to listOf(summary("fakewaiver03"))),
-              hold = hold)
-          .also { heldClient = it }
+      FakeClient(threeWaivers(), hold = hold).also { heldClient = it }
+
+  private fun runRow() = runBlocking { repo.getState("run") }
+
+  private fun thinRows() =
+      runBlocking { repo.insertMissingSummaries(listOf(summary("fakewaiver01"), summary("fakewaiver02"), summary("fakewaiver03"))) }
 
   @Test
   fun `a full run discovers, mirrors every waiver, syncs check-ins and finishes`() {
@@ -160,7 +181,7 @@ class SmartWaiverBackfillTest {
     assertEquals(3, done.mirrored)
     assertEquals(0, runBlocking { repo.countNeedingMirror() })
     assertEquals(1, runBlocking { repo.countCheckins() })
-    assertEquals("DONE", runBlocking { repo.getState("run") }?.status)
+    assertEquals("DONE", runRow()?.status)
     assertTrue(sleeps.all { it >= 3_000L })
   }
 
@@ -213,9 +234,42 @@ class SmartWaiverBackfillTest {
   }
 
   @Test
-  fun `ten failures in a row stop the run instead of burning the budget`() {
-    val client =
-        FakeClient(mapOf(LocalDate.of(2014, 1, 1) to (1..12).map { summary("fakewaiver%02d".format(it)) }), failWaivers = true)
+  fun `a pause is saved, and after a restart resume starts the paused run again`() {
+    val hold = CompletableDeferred<Unit>()
+    val first = backfill(twoMonthsHeld(hold))
+    first.start()
+    runBlocking { withTimeout(10_000) { heldClient.entered.await() } }
+    first.pause()
+    hold.complete(Unit)
+    awaitState(first, RunState.PAUSED)
+    assertEquals("PAUSED", runRow()?.status)
+
+    // A new container: it finds the saved pause, resumes the run paused, and `resume` lets it go.
+    val second = backfill(twoMonths())
+    runBlocking { second.resumeIfInterrupted() }
+    awaitState(second, RunState.PAUSED)
+    assertEquals("resuming", runBlocking { second.resumeOrStart() })
+    val done = awaitState(second, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, done.state, done.lastError)
+    assertEquals("nothing is paused", runBlocking { second.resumeOrStart() })
+  }
+
+  @Test
+  fun `resume with no job running restarts a saved pause`() {
+    runBlocking { repo.saveState(BackfillState("run", "PAUSED", "gone-owner", 0, null, 0, null, null, null, null, null)) }
+    val fresh = backfill(twoMonths())
+
+    assertEquals("started again from the saved pause", runBlocking { fresh.resumeOrStart() })
+    val done = awaitState(fresh, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, done.state, done.lastError)
+  }
+
+  @Test
+  fun `ten failures in a row are retried with growing waits, then the run fails`() {
+    val ids = (1..12).map { "fakewaiver%02d".format(it) }
+    val client = FakeClient(mapOf(LocalDate.of(2014, 1, 1) to ids.map { summary(it) }), failAlways = ids.toSet())
     val b = backfill(client)
 
     b.start()
@@ -223,15 +277,86 @@ class SmartWaiverBackfillTest {
 
     assertEquals(RunState.FAILED, done.state)
     assertTrue(done.lastError.orEmpty().contains("in a row"), done.lastError)
-    assertEquals(10, b.recentErrors().size)
-    assertEquals("FAILED", runBlocking { repo.getState("run") }?.status)
+    assertTrue(b.recentErrors().size >= 10)
+    assertTrue(30_000L in sleeps && 60_000L in sleeps && 600_000L in sleeps, "waits: ${sleeps.filter { it >= 30_000 }}")
+    assertEquals("FAILED", runRow()?.status)
+  }
+
+  @Test
+  fun `a temporary error is waited out and the run carries on`() {
+    val client = FakeClient(threeWaivers(), failSearches = 2)
+    val b = backfill(client)
+
+    b.start()
+    val done = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, done.state, done.lastError)
+    assertEquals(3, done.mirrored)
+    assertTrue(30_000L in sleeps && 60_000L in sleeps, "waits: ${sleeps.filter { it >= 30_000 }}")
+  }
+
+  @Test
+  fun `a rejected API key fails the run at once instead of retrying`() {
+    val client = FakeClient(threeWaivers(), failSearches = 99, searchError = "Unauthorized: Invalid API key")
+    val b = backfill(client)
+
+    b.start()
+    val done = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.FAILED, done.state)
+    assertTrue(sleeps.none { it >= 30_000L }, "no retry wait expected: $sleeps")
+  }
+
+  @Test
+  fun `waivers SmartWaiver no longer has are marked gone and do not count as failures`() {
+    val client = FakeClient(threeWaivers(), gone = setOf("fakewaiver01", "fakewaiver02", "fakewaiver03"))
+    val b = backfill(client)
+
+    b.start()
+    val done = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, done.state, done.lastError)
+    assertEquals(3, done.gone)
+    assertEquals(0, done.failed)
+    assertEquals(0, runBlocking { repo.countNeedingMirror() })
+    assertEquals(3, runBlocking { repo.countGone() })
+    assertEquals("DONE", runBlocking { repo.getState("enrich") }?.status)
+  }
+
+  @Test
+  fun `a waiver that failed once is tried again before the step is called done`() {
+    val client = FakeClient(threeWaivers(), failOnce = mutableSetOf("fakewaiver02"))
+    val b = backfill(client)
+
+    b.start()
+    val done = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, done.state, done.lastError)
+    assertEquals(3, done.mirrored)
+    assertEquals(0, runBlocking { repo.countNeedingMirror() })
+  }
+
+  @Test
+  fun `retryFailed re-runs only the waiver copying and leaves discovery alone`() {
+    val client = FakeClient(threeWaivers(), failAlways = setOf("fakewaiver02"))
+    val b = backfill(client)
+    b.start()
+    awaitState(b, RunState.DONE)
+    assertEquals(1, runBlocking { repo.countNeedingMirror() })
+    val searchesBefore = client.searches.get()
+    client.failAlways = emptySet()
+
+    b.start(retryFailed = true)
+    val done = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(RunState.DONE, done.state, done.lastError)
+    assertEquals(0, runBlocking { repo.countNeedingMirror() })
+    assertEquals(searchesBefore, client.searches.get(), "discovery must not run again")
   }
 
   @Test
   fun `a trial mirrors only the limit, skips discovery, and a full run carries on from there`() {
-    runBlocking {
-      repo.insertMissingSummaries(listOf(summary("fakewaiver01"), summary("fakewaiver02"), summary("fakewaiver03")))
-    }
+    thinRows()
     val client = twoMonths()
     val b = backfill(client)
 
@@ -259,6 +384,89 @@ class SmartWaiverBackfillTest {
     assertEquals(0, runBlocking { repo.countNeedingMirror() })
     assertEquals("DONE", runBlocking { repo.getState("enrich") }?.status)
     assertEquals(1, runBlocking { repo.countCheckins() })
+  }
+
+  @Test
+  fun `a trial that runs out of waivers still does not mark the step done`() {
+    thinRows()
+    val b = backfill(twoMonths())
+
+    b.start(limit = 50)
+    val trial = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertEquals(3, trial.mirrored)
+    assertEquals("RUNNING", runBlocking { repo.getState("enrich") }?.status)
+  }
+
+  @Test
+  fun `a trial is saved as TRIAL so a restart never turns it into a full run`() {
+    thinRows()
+    val hold = CompletableDeferred<Unit>()
+    val client = FakeClient(threeWaivers(), holdWaiver = hold)
+    val b = backfill(client)
+    b.start(limit = 3)
+    runBlocking { withTimeout(10_000) { client.enteredWaiver.await() } }
+
+    assertEquals("TRIAL", runRow()?.status)
+    val afterDeploy = backfill(twoMonths())
+    runBlocking { afterDeploy.resumeIfInterrupted() }
+
+    assertEquals(RunState.IDLE, afterDeploy.status().state, "a trial must not be resumed")
+    hold.complete(Unit)
+    awaitState(b, RunState.DONE)
+  }
+
+  @Test
+  fun `only one copy runs, and a copy that is replaced ends at its next checkpoint without writing`() {
+    val hold = CompletableDeferred<Unit>()
+    val old = backfill(twoMonthsHeld(hold), owner = "old-copy")
+    old.start()
+    runBlocking { withTimeout(10_000) { heldClient.entered.await() } }
+
+    val replacement = backfill(twoMonths(), owner = "new-copy")
+    replacement.start()
+    awaitState(replacement, RunState.DONE, RunState.FAILED)
+    assertEquals("new-copy", runRow()?.cursorValue)
+
+    hold.complete(Unit)
+    val ended = awaitState(old, RunState.IDLE)
+
+    assertTrue(ended.message.orEmpty().contains("Another copy"), ended.message)
+    assertEquals("DONE", runRow()?.status, "the old copy must not overwrite the new copy's state")
+    assertEquals("new-copy", runRow()?.cursorValue)
+  }
+
+  @Test
+  fun `stop from a copy that is not running releases the run and keeps its counters`() {
+    val hold = CompletableDeferred<Unit>()
+    val running = backfill(twoMonthsHeld(hold), owner = "running-copy")
+    running.start()
+    runBlocking { withTimeout(10_000) { heldClient.entered.await() } }
+    runBlocking {
+      repo.saveState(BackfillState("run", "RUNNING", "running-copy", 7, null, 130, LocalDate.of(2014, 2, 20), null, null, null, null))
+    }
+
+    runBlocking { backfill(twoMonths(), owner = "other-copy").stop() }
+
+    val row = runRow()!!
+    assertEquals("IDLE", row.status)
+    assertEquals(null, row.cursorValue)
+    assertEquals(130, row.requestsToday, "today's call count must survive a stop")
+    hold.complete(Unit)
+    awaitState(running, RunState.IDLE)
+  }
+
+  @Test
+  fun `restarting keeps the day's call count`() {
+    runBlocking {
+      repo.saveState(BackfillState("run", "DONE", "x", 0, null, 500, LocalDate.of(2014, 2, 20), null, null, null, null))
+    }
+    val b = backfill(twoMonths())
+
+    b.start(restart = true)
+    val done = awaitState(b, RunState.DONE, RunState.FAILED)
+
+    assertTrue(done.requestsToday >= 500, "requests today: ${done.requestsToday}")
   }
 
   @Test
@@ -323,7 +531,7 @@ class SmartWaiverBackfillTest {
     runBlocking { b.stop() }
 
     assertEquals(RunState.IDLE, b.status().state)
-    assertEquals("IDLE", runBlocking { repo.getState("run") }?.status)
+    assertEquals("IDLE", runRow()?.status)
   }
 
   @Test
@@ -335,6 +543,16 @@ class SmartWaiverBackfillTest {
     assertEquals(0, etaSeconds(0, 0, 100, 3.0, 5_000))
     // Budget already spent: wait for midnight, then the calls.
     assertEquals(7_200 + 30, etaSeconds(10, 100, 100, 3.0, 7_200))
+  }
+
+  @Test
+  fun `eta never assumes more calls in a day than the pace allows`() {
+    // At 6 s per call a day holds only 14,400 calls even though the budget says 25,000, so 28,800
+    // calls take two days of work (172,800 s), not the 3.6 days the budget alone would suggest.
+    val eta = etaSeconds(28_800, 0, 25_000, 6.0, 1_000)
+    assertTrue(eta in 172_800L..172_810L, "eta $eta")
+    // And with the budget the limit, the day ends early and the rest of it is waited out.
+    assertEquals(100 * 3 + (86_400 - 300) + 100 * 3, etaSeconds(200, 0, 100, 3.0, 86_400))
   }
 
   @Test

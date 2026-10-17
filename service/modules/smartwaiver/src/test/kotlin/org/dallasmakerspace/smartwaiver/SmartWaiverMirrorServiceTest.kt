@@ -129,7 +129,7 @@ class SmartWaiverMirrorServiceTest {
   }
 
   @Test
-  fun `if recording fails, only the objects this call uploaded are removed`() {
+  fun `if recording fails the uploaded photos stay and the next attempt reuses them`() {
     stubApi(listOf(entry("old"), entry("new")))
     runBlocking { inner.put(ObjectKey("smartwaiver/fakewaiver000001/photos/old.jpg"), photoBytes, "image/jpeg") }
     val failing = mock<SmartWaiverMirrorRepository>()
@@ -137,7 +137,14 @@ class SmartWaiverMirrorServiceTest {
 
     assertFailsWith<IllegalStateException> { runBlocking { service(failing).mirrorWaiver("fakewaiver000001") } }
 
-    assertNull(runBlocking { inner.head(ObjectKey("smartwaiver/fakewaiver000001/photos/new.jpg")) })
+    // Nothing is deleted: another writer may have recorded the same photos.
+    assertNotNull(runBlocking { inner.head(ObjectKey("smartwaiver/fakewaiver000001/photos/new.jpg")) })
     assertNotNull(runBlocking { inner.head(ObjectKey("smartwaiver/fakewaiver000001/photos/old.jpg")) })
+    puts.clear()
+
+    runBlocking { service().mirrorWaiver("fakewaiver000001") }
+
+    assertEquals(emptyList(), puts, "the retry must not upload again")
+    assertEquals(2, runBlocking { SmartWaiverMirrorRepository().photosFor("fakewaiver000001") }.size)
   }
 }

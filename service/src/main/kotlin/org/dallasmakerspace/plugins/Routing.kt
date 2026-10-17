@@ -782,12 +782,17 @@ fun Application.configureRouting() {
         // steer and watch it. It needs smartwaiver.mirror.enabled (the migration must be applied).
         get("/cron/backfill-smartwaiver") {
           val restart = "true".equals(call.request.queryParameters["restart"], ignoreCase = true)
-          val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.takeIf { it > 0 }
+          val retryFailed = "true".equals(call.request.queryParameters["retry"], ignoreCase = true)
+          val rawLimit = call.request.queryParameters["limit"]
+          val limit = rawLimit?.toIntOrNull()?.takeIf { it > 0 }
           val refusal = smartWaiverBackfillRefusal(appConfig, configOverrideService)
           if (refusal != null) {
             call.respondText(refusal, ContentType.Text.Plain, HttpStatusCode.Conflict)
+          } else if (rawLimit != null && limit == null) {
+            // An unreadable or zero limit must not turn into a full run.
+            call.respondText("Refusing: limit must be a whole number above 0", ContentType.Text.Plain, HttpStatusCode.BadRequest)
           } else {
-            val started = smartWaiverBackfill.start(restart, limit)
+            val started = smartWaiverBackfill.start(restart, limit, retryFailed)
             call.respondText(
                 "$started\n" + Json.encodeToString(smartWaiverBackfill.status()),
                 ContentType.Text.Plain)
@@ -804,8 +809,7 @@ fun Application.configureRouting() {
         }
 
         get("/cron/backfill-smartwaiver/resume") {
-          smartWaiverBackfill.resume()
-          call.respondText("resuming", ContentType.Text.Plain)
+          call.respondText(smartWaiverBackfill.resumeOrStart(), ContentType.Text.Plain)
         }
 
         get("/cron/backfill-smartwaiver/stop") {
@@ -820,11 +824,15 @@ fun Application.configureRouting() {
         // Server-sent events: every progress change, plus a keep-alive comment every 15 s.
         get("/cron/backfill-smartwaiver/stream") {
           call.response.headers.append(HttpHeaders.CacheControl, "no-cache")
-          call.respondTextWriter(ContentType.Text.EventStream) {
-            smartWaiverBackfill.frames().collect { frame ->
-              write(frame)
-              flush()
+          try {
+            call.respondTextWriter(ContentType.Text.EventStream) {
+              smartWaiverBackfill.frames().collect { frame ->
+                write(frame)
+                flush()
+              }
             }
+          } catch (e: io.ktor.utils.io.ClosedByteChannelException) {
+            // The viewer closed its window; that is not an error.
           }
         }
 

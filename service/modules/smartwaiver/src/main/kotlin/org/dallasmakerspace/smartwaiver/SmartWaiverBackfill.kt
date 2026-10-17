@@ -6,6 +6,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
@@ -28,18 +29,17 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.smartwaiver.SmartWaiverMirrorRepository.Companion.RUN_STATE_NAME
 
 private val CHICAGO: ZoneId = ZoneId.of("America/Chicago")
 private val FIRST_WAIVER_DAY: LocalDate = LocalDate.of(2014, 1, 1)
 private const val STAGE_DISCOVER = "discover"
 private const val STAGE_ENRICH = "enrich"
 private const val STAGE_CHECKINS = "checkins"
-private const val RUN = "run"
 private const val ENRICH_BATCH = 50
 private const val LOG_EVERY_UNITS = 50
 private const val MAX_CONSECUTIVE_FAILURES = 10
 private const val MAX_RECENT_ERRORS = 200
-private const val CALLS_PER_WAIVER_GUESS = 2.0
 private const val ENRICH_CALLS_PER_WAIVER = 1.8 // one waiver call, plus photos for most
 private const val CHECKINS_PER_PAGE = 100
 private const val PRIOR_WEIGHT = 10.0
@@ -53,6 +53,15 @@ private const val KEEP_ALIVE_MS = 15_000L
 private const val SLOW_MODE_FACTOR = 2L
 private const val DEFAULT_DAILY_BUDGET = 25_000
 private const val DEFAULT_INTERVAL_MS = 3_000L
+private const val ENRICH_PASSES = 2 // one retry pass for waivers that failed
+private const val MAX_ETA_DAYS = 400
+private const val MAX_RETRIES = 8
+private val RETRY_BACKOFF_MS = listOf(30_000L, 60_000L, 120_000L, 300_000L, 600_000L)
+
+// Time a unit takes besides the API calls and their pacing: database round trips over the VPN, S3.
+private const val DB_OVERHEAD_DISCOVER_S = 2.0
+private const val DB_OVERHEAD_ENRICH_S = 3.0
+private const val DB_OVERHEAD_CHECKIN_S = 1.5
 
 enum class RunState {
   IDLE,
@@ -93,6 +102,8 @@ data class BackfillProgress(
     val stageTotal: Int? = null,
     val discovered: Int = 0,
     val mirrored: Int = 0,
+    /** Waivers SmartWaiver no longer has (it answered 404). */
+    val gone: Int = 0,
     val failed: Int = 0,
     val photosStored: Int = 0,
     val checkinsAdded: Int = 0,
@@ -129,9 +140,13 @@ enum class StartResult {
   ALREADY_RUNNING,
 }
 
+/** Another copy of the job (a second container during a deploy) took over, or the run was stopped. */
+private class SupersededException : CancellationException("another copy of the backfill took over")
+
 /**
  * Seconds until [remainingCalls] API calls are done at one call per [intervalSeconds], with at most
- * [budget] calls per day: today's leftover first, then a wait until midnight, then whole days.
+ * [budget] calls per day: today's leftover first, then a wait until midnight, then whole days. A day
+ * holds at most 24 h of calls, which matters when the pace is slow.
  */
 internal fun etaSeconds(
     remainingCalls: Long,
@@ -141,20 +156,38 @@ internal fun etaSeconds(
     secondsUntilMidnight: Long,
 ): Long {
   if (remainingCalls <= 0) return 0
-  val capacityToday = maxOf(0, budget - requestsToday).toLong()
-  if (remainingCalls <= capacityToday) return (remainingCalls * intervalSeconds).toLong()
-  val left = remainingCalls - capacityToday
-  val fullDays = (left - 1) / budget
-  val lastDayCalls = left - fullDays * budget
-  return secondsUntilMidnight + fullDays * SECONDS_PER_DAY + (lastDayCalls * intervalSeconds).toLong()
+  val interval = maxOf(intervalSeconds, 0.001)
+  var left = remainingCalls
+  var usedToday = requestsToday.toLong()
+  var untilMidnight = secondsUntilMidnight.toDouble()
+  var elapsed = 0.0
+  // One pass per day: a day ends when the budget is spent or midnight comes, whichever is first.
+  repeat(MAX_ETA_DAYS) {
+    val today = minOf(left, maxOf(0L, budget - usedToday), (untilMidnight / interval).toLong())
+    elapsed += today * interval
+    left -= today
+    if (left <= 0) return elapsed.toLong()
+    elapsed += maxOf(0.0, untilMidnight - today * interval) // wait out the rest of the day
+    usedToday = 0
+    untilMidnight = SECONDS_PER_DAY.toDouble()
+  }
+  return elapsed.toLong()
 }
 
 /**
- * Mirrors the whole SmartWaiver history in the background: Discover (find every waiver), Enrich
- * (fetch each one in full plus its photos) and Check-ins. It runs inside the service, resumes from
- * its saved cursors after a restart, and is deliberately slow: a daily request budget and a fixed
- * pace keep it a polite API client. When the day's budget is spent it sleeps on one timer until
- * midnight Chicago time; nothing polls.
+ * Mirrors the whole SmartWaiver history in the background: find every waiver, copy each one in
+ * full with its photos, then the check-ins. It runs inside the service and is deliberately slow: a
+ * daily request budget and a fixed pace keep it a polite API client. When the day's budget is spent
+ * it sleeps on one timer until midnight Chicago time; nothing polls.
+ *
+ * Staying safe over several days:
+ * - Progress is saved after every unit (one transaction), so a restart or deploy resumes where it
+ *   was; a run that was RUNNING, WAITING or PAUSED is picked up again at startup. A trial is saved
+ *   as TRIAL, which is never resumed.
+ * - Only one copy runs. Starting a copy makes it the owner in the run's saved state; a copy that is
+ *   no longer the owner (a deploy overlap, or `stop`) notices at its next checkpoint and ends.
+ * - A failed step is retried with growing waits; only a bad key, bad configuration, or running out
+ *   of retries ends the run as FAILED.
  */
 @Singleton
 class SmartWaiverBackfill
@@ -168,6 +201,7 @@ internal constructor(
     private val intervalMs: Long,
     private val clock: Clock = Clock.systemUTC(),
     private val sleep: suspend (Long) -> Unit = { delay(it) },
+    private val owner: String = UUID.randomUUID().toString(),
 ) {
   @Inject
   constructor(
@@ -200,7 +234,7 @@ internal constructor(
   private val recentErrors = ArrayDeque<String>()
   private val samples = ArrayDeque<Pair<Long, Long>>() // epoch ms to total API requests
 
-  // Run-wide counters, updated only from the single run coroutine.
+  // Run-wide state, touched only from the single run coroutine.
   private var requestsToday = 0
   private var budgetDay: LocalDate? = null
   private var lastRequestTotal = 0L
@@ -208,11 +242,14 @@ internal constructor(
   private var slowMode = false
   private var startedAt: LocalDateTime? = null
   private var consecutiveFailures = 0
+  private var consecutiveRetries = 0
   private var unitsThisStage = 0
-  private var callsThisStage = 0L
-  private var stageStartedMs = 0L
+  private var stageSeconds = 0.0
+  private var lastUnitMs = 0L
+  private var excludedMs = 0L // time spent paused, waiting or retrying since the last unit
   private var estimate = Estimate()
   private var currentStage: String? = null
+  private var enrichSecondsPerUnit: Double? = null
 
   fun status(): BackfillProgress = progress
 
@@ -242,98 +279,173 @@ internal constructor(
   }
 
   /**
-   * Starts the run, or continues from the saved cursors; [restart] clears them and begins again.
-   * With [limit], only that many already-stored waivers are mirrored in full (no discovery, no
-   * check-ins) and the stages are left unfinished, so a later full run carries on from there.
+   * Releases a pause. If no job is running here (a deploy replaced the container while it was
+   * paused), the saved PAUSED run is started again instead.
    */
-  fun start(restart: Boolean = false, limit: Int? = null): StartResult {
+  suspend fun resumeOrStart(): String {
+    paused.value = false
+    if (synchronized(lock) { job?.isActive == true }) return "resuming"
+    return if (repository.getState(RUN_STATE_NAME)?.status == RunState.PAUSED.name) {
+      start()
+      "started again from the saved pause"
+    } else {
+      "nothing is paused"
+    }
+  }
+
+  /**
+   * Starts the run, or continues from the saved positions.
+   * - [restart] clears every stage's position and begins again (the day's call count is kept).
+   * - [retryFailed] re-runs only the waiver-copying step from the start; waivers already copied are
+   *   skipped, so only the ones that failed before are tried again.
+   * - [limit] copies only that many already-stored waivers in full (no discovery, no check-ins) and
+   *   leaves the stages unfinished, so a later full run carries on from there.
+   */
+  fun start(restart: Boolean = false, limit: Int? = null, retryFailed: Boolean = false, startPaused: Boolean = false): StartResult {
     synchronized(lock) {
       if (job?.isActive == true) return StartResult.ALREADY_RUNNING
       log.info(
-          "SmartWaiver backfill starting (restart=$restart, limit=$limit, budget $dailyBudget " +
-              "calls/day, one call per ${intervalMs}ms)")
-      paused.value = false
+          "SmartWaiver backfill starting (restart=$restart, retryFailed=$retryFailed, limit=$limit, " +
+              "paused=$startPaused, budget $dailyBudget calls/day, one call per ${intervalMs}ms)")
+      paused.value = startPaused
       // Replace the previous run's snapshot now, so a client that attaches right after start()
       // doesn't see that run's DONE and leave.
       progress =
           BackfillProgress(
-              dailyBudget = dailyBudget, state = RunState.RUNNING, limit = limit, activity = "Starting")
+              dailyBudget = dailyBudget,
+              state = if (startPaused) RunState.PAUSED else RunState.RUNNING,
+              limit = limit,
+              activity = "Starting")
       publish()
-      job = scope.launch { runAll(restart, limit) }
+      job = scope.launch { runAll(restart, limit, retryFailed) }
     }
     return StartResult.STARTED
   }
 
   /**
-   * Ends the run now, keeping the cursors. It is saved as IDLE so a restart of the service does not
-   * pick it up again; call [start] to continue from where it stopped.
+   * Ends the run now, keeping the positions. The run is saved as IDLE with no owner, so a restart
+   * of the service doesn't resume it and a copy still running elsewhere stops at its next
+   * checkpoint. Call [start] to continue from where it stopped.
    */
   suspend fun stop() {
     val running = synchronized(lock) { job.also { job = null } }
     running?.cancelAndJoin()
     paused.value = false
-    progress = progress.copy(state = RunState.IDLE, waitingUntil = null)
+    repository.markRunIdle(now())
+    progress = progress.copy(state = RunState.IDLE, waitingUntil = null, waitingUntilEpoch = null, activity = null)
     publish()
-    repository.saveState(
-        BackfillState(
-            RUN, RunState.IDLE.name, null, progress.mirrored, null, requestsToday, budgetDay, progress.lastError,
-            startedAt, now(), null))
   }
 
-  /** After a restart of the service: carry on if the previous run was cut off. */
+  /** After a restart of the service: carry on if the previous run was cut off (a trial is not resumed). */
   @Suppress("TooGenericExceptionCaught")
   suspend fun resumeIfInterrupted() {
     try {
-      val state = repository.getState(RUN) ?: return
-      if (state.status == RunState.RUNNING.name || state.status == RunState.WAITING.name) {
-        log.info("SmartWaiver backfill was running when the service stopped; resuming")
-        start()
+      when (repository.getState(RUN_STATE_NAME)?.status) {
+        RunState.RUNNING.name,
+        RunState.WAITING.name -> {
+          log.info("SmartWaiver backfill was running when the service stopped; resuming")
+          start()
+        }
+        RunState.PAUSED.name -> {
+          log.info("SmartWaiver backfill was paused when the service stopped; resuming it paused")
+          start(startPaused = true)
+        }
       }
     } catch (e: Exception) {
-      log.warn("Could not check for an interrupted SmartWaiver backfill: ${e.message}")
+      log.warn("Could not check for an interrupted SmartWaiver backfill: ${e.safeMessage()}")
     }
   }
 
   // ---- the run ----
 
   @Suppress("TooGenericExceptionCaught")
-  private suspend fun runAll(restart: Boolean, limit: Int?) {
+  private suspend fun runAll(restart: Boolean, limit: Int?, retryFailed: Boolean) {
     try {
-      begin(restart, limit)
-      makePlan(limit)
+      retrying("starting") { begin(restart, limit, retryFailed) }
+      retrying("planning") { makePlan(limit) }
       if (limit != null) {
-        enrich(limit)
+        retrying("copying waivers") { enrich(limit) }
         progress = progress.copy(message = "Trial of up to $limit waivers finished; start again without a limit for the rest")
         finish(RunState.DONE, null)
         return
       }
-      if (!stageDone(STAGE_DISCOVER)) discover()
-      if (!stageDone(STAGE_ENRICH)) enrich()
-      if (!stageDone(STAGE_CHECKINS)) checkins()
+      if (!retrying("checking progress") { stageDone(STAGE_DISCOVER) }) retrying("finding waivers") { discover() }
+      if (!retrying("checking progress") { stageDone(STAGE_ENRICH) }) retrying("copying waivers") { enrich() }
+      if (!retrying("checking progress") { stageDone(STAGE_CHECKINS) }) retrying("copying check-ins") { checkins() }
       finish(RunState.DONE, null)
+    } catch (e: SupersededException) {
+      log.info("SmartWaiver backfill: another copy took over or the run was stopped; this copy ends")
+      progress = progress.copy(state = RunState.IDLE, activity = null, message = "Another copy of the backfill took over")
+      publish()
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
-      log.error("SmartWaiver backfill stopped: ${e.message}", e)
-      finish(RunState.FAILED, e.message ?: e.javaClass.simpleName)
+      log.error("SmartWaiver backfill stopped: ${e.safeMessage()}")
+      finish(RunState.FAILED, e.safeMessage())
     }
   }
 
-  private suspend fun begin(restart: Boolean, limit: Int?) {
-    val now = now()
-    val saved = repository.getState(RUN)
-    if (restart) {
-      listOf(STAGE_DISCOVER, STAGE_ENRICH, STAGE_CHECKINS).forEach { saveStage(it, "IDLE", null, 0, null) }
+  /**
+   * Runs [block], and when it fails tries again after a growing wait, picking up from the saved
+   * positions. Only a bad API key or configuration, or too many attempts in a row without progress,
+   * lets the error through. [consecutiveRetries] starts over only when a unit of work really
+   * succeeds (a waiver copied, a search window or check-in page read), not when one merely fails.
+   */
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun <T> retrying(what: String, block: suspend () -> T): T {
+    while (true) {
+      try {
+        return block()
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        if (isFatal(e) || ++consecutiveRetries > MAX_RETRIES) throw e
+        val wait = RETRY_BACKOFF_MS[minOf(consecutiveRetries - 1, RETRY_BACKOFF_MS.size - 1)]
+        val why = e.safeMessage()
+        log.warn(
+            "SmartWaiver backfill: $what failed ($why); trying again in ${wait / MS_PER_SECOND}s " +
+                "(attempt $consecutiveRetries of $MAX_RETRIES)")
+        consecutiveFailures = 0
+        waitToRetry(wait, why)
+      }
     }
-    startedAt = if (restart || saved?.startedAt == null) now else saved.startedAt
+  }
+
+  private fun isFatal(e: Exception) =
+      e is IllegalArgumentException || (e is SmartwaiverApiException && e.message.orEmpty().startsWith("Unauthorized"))
+
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun waitToRetry(ms: Long, why: String) {
+    setState(RunState.WAITING, "retrying after an error", why)
+    progress =
+        progress.copy(
+            waitingUntilEpoch = (clock.millis() + ms) / MS_PER_SECOND,
+            activity = "Hit an error ($why); trying again in ${ms / MS_PER_SECOND}s")
+    publish()
+    try {
+      renewLease()
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      // The database is the likely cause; the state is saved by the next write that works.
+    }
+    sleep(ms)
+    excludedMs += ms
+    setState(RunState.RUNNING, null, null)
+  }
+
+  private suspend fun begin(restart: Boolean, limit: Int?, retryFailed: Boolean) {
+    val saved = repository.getState(RUN_STATE_NAME)
+    startedAt = if (restart || saved?.startedAt == null) now() else saved.startedAt
     budgetDay = saved?.budgetDay
-    requestsToday = if (restart) 0 else saved?.requestsToday ?: 0
+    requestsToday = saved?.requestsToday ?: 0 // the day's count survives a restart: it is a courtesy limit
     rollBudgetDay()
     val stats = client.stats()
     lastRequestTotal = stats.requests
     lastRateLimitHits = stats.rateLimitHits
     slowMode = false
     consecutiveFailures = 0
+    consecutiveRetries = 0
     progress =
         BackfillProgress(
             dailyBudget = dailyBudget,
@@ -341,6 +453,12 @@ internal constructor(
             startedAt = startedAt.toString(),
             limit = limit,
             activity = "Planning the run")
+    repository.claimRun(owner, runState(runStatus(RunState.RUNNING)))
+    if (restart) {
+      listOf(STAGE_DISCOVER, STAGE_ENRICH, STAGE_CHECKINS).forEach { repository.saveState(stageState(it, "IDLE", null, 0, null)) }
+    } else if (retryFailed) {
+      repository.saveState(stageState(STAGE_ENRICH, "IDLE", null, 0, null))
+    }
     setState(RunState.RUNNING, null, null)
   }
 
@@ -353,26 +471,23 @@ internal constructor(
   @Suppress("TooGenericExceptionCaught")
   private suspend fun makePlan(limit: Int?) {
     val interval = effectiveIntervalMs() / MS_PER_SECOND.toDouble()
-    val eta = { calls: Double ->
-      etaSeconds(calls.toLong(), requestsToday, dailyBudget, interval, secondsUntilMidnight())
+    val overall = { seconds: Double, calls: Double ->
+      maxOf(seconds.toLong(), etaSeconds(calls.toLong(), requestsToday, dailyBudget, interval, secondsUntilMidnight()))
     }
     if (limit != null) {
       val units = minOf(limit, repository.countNeedingMirror())
       estimate = Estimate(enrichUnits = units)
+      val seconds = units * priorSeconds(STAGE_ENRICH)
       progress =
           progress.copy(
               stageCount = 1,
-              plan =
-                  listOf(
-                      PlanStep(
-                          "Copy up to $limit waivers with their photos (trial)",
-                          units,
-                          "waivers",
-                          eta(units * ENRICH_CALLS_PER_WAIVER))),
-              etaOverallSeconds = eta(units * ENRICH_CALLS_PER_WAIVER))
+              plan = listOf(PlanStep("Copy up to $limit waivers with their photos (trial)", units, "waivers", seconds.toLong())),
+              etaOverallSeconds = overall(seconds, units * ENRICH_CALLS_PER_WAIVER))
       publish()
       return
     }
+    // The counting searches are API calls too, so wait out a pause or an exhausted day first.
+    gateBeforeUnit()
     progress = progress.copy(activity = "Counting waivers on SmartWaiver to plan the run")
     publish()
     val expected =
@@ -383,7 +498,7 @@ internal constructor(
         } catch (e: CancellationException) {
           throw e
         } catch (e: Exception) {
-          log.warn("Could not count waivers on SmartWaiver for the plan: ${e.message}")
+          log.warn("Could not count waivers on SmartWaiver for the plan: ${e.safeMessage()}")
           null
         }
     val stored = repository.countWaivers()
@@ -393,15 +508,12 @@ internal constructor(
         if (discoverState?.status == RunState.DONE.name) 0
         else months - (discoverState?.doneCount ?: 0).coerceAtMost(months)
     val discoverCalls =
-        discoverLeft +
-            Math.ceil((expected ?: 0) * discoverLeft.toDouble() / months / SEARCH_RESULTS_PER_PAGE)
+        discoverLeft + Math.ceil((expected ?: 0) * discoverLeft.toDouble() / months / SEARCH_RESULTS_PER_PAGE)
     val toEnrich =
-        repository.countNeedingMirror() +
-            if (discoverLeft > 0 && expected != null) maxOf(0, expected - stored) else 0
+        repository.countNeedingMirror() + if (discoverLeft > 0 && expected != null) maxOf(0, expected - stored) else 0
     val enrichDone = repository.getState(STAGE_ENRICH)?.status == RunState.DONE.name
     val checkinsDone = repository.getState(STAGE_CHECKINS)?.status == RunState.DONE.name
-    val pages =
-        if (checkinsDone) 0 else Math.ceil((expected ?: stored) / CHECKINS_PER_PAGE.toDouble()).toInt()
+    val pages = if (checkinsDone) 0 else Math.ceil((expected ?: stored) / CHECKINS_PER_PAGE.toDouble()).toInt()
     estimate =
         Estimate(
             discoverUnits = discoverLeft,
@@ -409,30 +521,22 @@ internal constructor(
             enrichUnits = if (enrichDone) 0 else toEnrich,
             checkinPages = pages,
             expectedWaivers = expected)
-    val c1 = estimate.discoverCalls
-    val c2 = c1 + estimate.enrichUnits * ENRICH_CALLS_PER_WAIVER
-    val c3 = c2 + estimate.checkinPages
+    val s1 = estimate.discoverUnits * priorSeconds(STAGE_DISCOVER)
+    val s2 = estimate.enrichUnits * priorSeconds(STAGE_ENRICH)
+    val s3 = estimate.checkinPages * priorSeconds(STAGE_CHECKINS)
+    val calls = estimate.discoverCalls + estimate.enrichUnits * ENRICH_CALLS_PER_WAIVER + estimate.checkinPages
+    val total = overall(s1 + s2 + s3, calls)
     val steps =
         listOf(
-            PlanStep("Find every waiver on SmartWaiver", estimate.discoverUnits, "monthly searches", eta(c1)),
-            PlanStep(
-                "Copy each waiver's details and photos",
-                estimate.enrichUnits,
-                "waivers",
-                eta(c2) - eta(c1),
-                approximate = true),
-            PlanStep(
-                "Copy the check-in history",
-                estimate.checkinPages,
-                "pages of $CHECKINS_PER_PAGE",
-                eta(c3) - eta(c2),
-                approximate = true),
+            PlanStep("Find every waiver on SmartWaiver", estimate.discoverUnits, "monthly searches", s1.toLong()),
+            PlanStep("Copy each waiver's details and photos", estimate.enrichUnits, "waivers", s2.toLong(), approximate = true),
+            PlanStep("Copy the check-in history", estimate.checkinPages, "pages of $CHECKINS_PER_PAGE", s3.toLong(), approximate = true),
         )
-    progress = progress.copy(stageCount = steps.size, plan = steps, etaOverallSeconds = eta(c3), activity = null)
+    progress = progress.copy(stageCount = steps.size, plan = steps, etaOverallSeconds = total, activity = null)
     publish()
     log.info(
         "SmartWaiver backfill plan: ${estimate.discoverUnits} searches, ${estimate.enrichUnits} waivers, " +
-            "about ${estimate.checkinPages} check-in pages; roughly ${eta(c3) / SECONDS_PER_HOUR} hours")
+            "about ${estimate.checkinPages} check-in pages; roughly ${total / SECONDS_PER_HOUR} hours")
   }
 
   private suspend fun stageDone(name: String) = repository.getState(name)?.status == RunState.DONE.name
@@ -452,18 +556,21 @@ internal constructor(
       val before = client.stats().requests
       val summaries = client.getWaiverDetails(start, end)
       val added = repository.insertMissingSummaries(summaries)
+      consecutiveRetries = 0
       log.info("Discover $start to $end: ${summaries.size} on SmartWaiver, $added new (window ${done + 1}/$months)")
       start = end.plusDays(1)
       done++
       progress = progress.copy(discovered = progress.discovered + added)
-      saveStage(STAGE_DISCOVER, "RUNNING", start.toString(), done, months)
-      unitDone(done, months, client.stats().requests - before, remainingUnits = months - done)
+      val next = start.toString()
+      unitDone(done, months, client.stats().requests - before, remainingUnits = months - done) {
+        checkpoint(STAGE_DISCOVER, "RUNNING", next, done, months)
+      }
     }
-    saveStage(STAGE_DISCOVER, RunState.DONE.name, start.toString(), months, months)
+    checkpoint(STAGE_DISCOVER, RunState.DONE.name, start.toString(), months, months)
     log.info("SmartWaiver discover finished: ${progress.discovered} new waivers")
   }
 
-  @Suppress("TooGenericExceptionCaught")
+  @Suppress("TooGenericExceptionCaught", "LoopWithTooManyJumpStatements")
   private suspend fun enrich(maxUnits: Int? = null) {
     val saved = repository.getState(STAGE_ENRICH)
     var cursor = saved?.cursorValue?.toLongOrNull() ?: 0L
@@ -472,48 +579,72 @@ internal constructor(
     // A trial counts only its own waivers; the saved counters keep the run-wide totals.
     val shownTotal = if (maxUnits != null) minOf(maxUnits, total - done) else total
     beginStage(STAGE_ENRICH, if (maxUnits != null) 0 else done, shownTotal)
-    var failedThisPass = 0
     var processed = 0
     var capped = false
-    batches@ while (true) {
-      val batch = repository.waiversNeedingMirror(cursor, ENRICH_BATCH)
-      if (batch.isEmpty()) break
-      for (ref in batch) {
-        if (maxUnits != null && processed >= maxUnits) {
-          capped = true
-          break@batches
+    var pass = 0
+    var failedThisPass: Int
+    while (true) {
+      pass++
+      failedThisPass = 0
+      batches@ while (true) {
+        val batch = repository.waiversNeedingMirror(cursor, ENRICH_BATCH)
+        if (batch.isEmpty()) break
+        for (ref in batch) {
+          if (maxUnits != null && processed >= maxUnits) {
+            capped = true
+            break@batches
+          }
+          processed++
+          gateBeforeUnit()
+          val shownDone = if (maxUnits != null) processed - 1 else done
+          progress = progress.copy(activity = "Copying waiver ${shownDone + 1} of $shownTotal")
+          publish()
+          val before = client.stats().requests
+          try {
+            val outcome = mirrorService.mirrorWaiver(ref.waiverId)
+            consecutiveFailures = 0
+            consecutiveRetries = 0
+            progress = progress.copy(mirrored = progress.mirrored + 1, photosStored = progress.photosStored + outcome.photos)
+          } catch (e: CancellationException) {
+            throw e
+          } catch (e: SmartwaiverNotFoundException) {
+            // SmartWaiver no longer has it: remember that so it stops counting as work to do.
+            repository.markGone(ref.waiverId)
+            consecutiveRetries = 0
+            progress = progress.copy(gone = progress.gone + 1)
+            log.info("Waiver ${ref.waiverId} no longer exists on SmartWaiver; marked as gone")
+          } catch (e: Exception) {
+            failedThisPass++
+            recordFailure(ref.waiverId, e)
+          }
+          cursor = ref.rowId
+          done++
+          val after = if (maxUnits != null) processed else done
+          val savedCursor = cursor.toString()
+          val savedDone = done
+          unitDone(after, shownTotal, client.stats().requests - before, remainingUnits = shownTotal - after) {
+            checkpoint(STAGE_ENRICH, "RUNNING", savedCursor, savedDone, total)
+          }
+          if (done % LOG_EVERY_UNITS == 0) logProgress()
         }
-        processed++
-        gateBeforeUnit()
-        val shownDone = if (maxUnits != null) processed - 1 else done
-        progress = progress.copy(activity = "Copying waiver ${shownDone + 1} of $shownTotal")
-        publish()
-        val before = client.stats().requests
-        try {
-          val outcome = mirrorService.mirrorWaiver(ref.waiverId)
-          consecutiveFailures = 0
-          progress = progress.copy(mirrored = progress.mirrored + 1, photosStored = progress.photosStored + outcome.photos)
-        } catch (e: CancellationException) {
-          throw e
-        } catch (e: Exception) {
-          failedThisPass++
-          recordFailure(ref.waiverId, e)
-        }
-        cursor = ref.rowId
-        done++
-        saveStage(STAGE_ENRICH, "RUNNING", cursor.toString(), done, total)
-        val after = if (maxUnits != null) processed else done
-        unitDone(after, shownTotal, client.stats().requests - before, remainingUnits = shownTotal - after)
-        if (done % LOG_EVERY_UNITS == 0) logProgress()
       }
+      // Waivers that failed (a hiccup at the time) get one more pass before the step is called done.
+      if (capped || maxUnits != null || failedThisPass == 0 || pass >= ENRICH_PASSES) break
+      log.info("SmartWaiver enrich: $failedThisPass waivers failed; trying them once more")
+      cursor = 0
+      // Save the restart now: otherwise a restart during this pass resumes at the end of the last
+      // one, finds nothing left, and calls the step done with the failures still outstanding.
+      checkpoint(STAGE_ENRICH, "RUNNING", "0", done, total)
     }
     if (capped) {
-      log.info("SmartWaiver enrich trial stopped after $processed waivers (${progress.mirrored} mirrored, $failedThisPass failed)")
+      log.info("SmartWaiver enrich trial stopped after $processed waivers (${progress.mirrored} mirrored)")
       return // stage stays RUNNING with its cursor, so a full run continues from here
     }
+    // A trial never marks the step done, even if it ran out of waivers: discovery may find more.
+    if (maxUnits != null) return
     val note = if (failedThisPass > 0) "$failedThisPass waivers could not be mirrored; see the errors list" else null
-    saveStage(STAGE_ENRICH, RunState.DONE.name, cursor.toString(), done, total, note)
-    log.info("SmartWaiver enrich finished: ${progress.mirrored} mirrored, $failedThisPass failed")
+    checkpoint(STAGE_ENRICH, RunState.DONE.name, cursor.toString(), done, total, note)
+    log.info("SmartWaiver enrich finished: ${progress.mirrored} mirrored, ${progress.gone} gone, $failedThisPass failed")
   }
 
   private suspend fun checkins() {
@@ -528,16 +659,20 @@ internal constructor(
     val now = LocalDateTime.now(clock.withZone(ZoneOffset.UTC)).withNano(0)
     checkinSync.syncRange(from, now) { added, cursor ->
       pages++
+      consecutiveRetries = 0
       if (pages >= shownTotal) shownTotal = pages + 1
       progress =
           progress.copy(
               checkinsAdded = progress.checkinsAdded + added,
               activity = "Reading check-ins from ${cursor.toLocalDate()}")
-      saveStage(STAGE_CHECKINS, "RUNNING", cursor.toString(), pages, null)
-      unitDone(pages, shownTotal, 1, remainingUnits = shownTotal - pages)
+      val savedPages = pages
+      val savedTotal = shownTotal
+      unitDone(savedPages, savedTotal, 1, remainingUnits = savedTotal - savedPages) {
+        checkpoint(STAGE_CHECKINS, "RUNNING", cursor.toString(), savedPages, null)
+      }
       gateBeforeUnit()
     }
-    saveStage(STAGE_CHECKINS, RunState.DONE.name, now.toString(), pages, null)
+    checkpoint(STAGE_CHECKINS, RunState.DONE.name, now.toString(), pages, null)
     log.info("SmartWaiver check-ins finished: ${progress.checkinsAdded} new")
   }
 
@@ -545,15 +680,15 @@ internal constructor(
 
   private fun beginStage(name: String, done: Int, total: Int?) {
     unitsThisStage = 0
-    callsThisStage = 0
-    stageStartedMs = clock.millis()
+    stageSeconds = 0.0
+    excludedMs = 0
+    lastUnitMs = clock.millis()
     currentStage = name
     val trial = progress.limit != null
     val (index, title, unit) =
         when (name) {
           STAGE_DISCOVER -> Triple(1, "Finding every waiver on SmartWaiver", "monthly searches")
-          STAGE_ENRICH ->
-              Triple(if (trial) 1 else 2, "Copying each waiver's details and photos", "waivers")
+          STAGE_ENRICH -> Triple(if (trial) 1 else 2, "Copying each waiver's details and photos", "waivers")
           else -> Triple(3, "Copying the check-in history", "pages of $CHECKINS_PER_PAGE")
         }
     progress =
@@ -571,9 +706,11 @@ internal constructor(
   /** Waits out a pause, and sleeps to the next Chicago midnight when today's budget is used up. */
   private suspend fun gateBeforeUnit() {
     if (paused.value) {
+      val since = clock.millis()
       setState(RunState.PAUSED, null, null)
-      persistRun()
+      renewLease()
       paused.first { !it }
+      excludedMs += clock.millis() - since
       setState(RunState.RUNNING, null, null)
     }
     rollBudgetDay()
@@ -583,15 +720,20 @@ internal constructor(
       setState(RunState.WAITING, wake.toLocalDateTime().toString() + " America/Chicago", null)
       progress = progress.copy(waitingUntilEpoch = wake.toEpochSecond())
       publish()
-      persistRun()
-      sleep(maxOf(0L, wake.toInstant().toEpochMilli() - clock.millis()))
+      renewLease()
+      val ms = maxOf(0L, wake.toInstant().toEpochMilli() - clock.millis())
+      sleep(ms)
+      excludedMs += ms
       rollBudgetDay()
       setState(RunState.RUNNING, null, null)
     }
   }
 
-  /** Books a finished unit's calls against the budget, then paces: one call per interval, doubled after a 429. */
-  private suspend fun unitDone(done: Int, total: Int?, calls: Long, remainingUnits: Int) {
+  /**
+   * Books a finished unit's calls against the budget, saves the checkpoint via [save], then paces:
+   * one call per interval, doubled after a 429. Also refreshes the estimates.
+   */
+  private suspend fun unitDone(done: Int, total: Int?, calls: Long, remainingUnits: Int, save: suspend () -> Unit) {
     val stats = client.stats()
     val used = (stats.requests - lastRequestTotal).coerceAtLeast(0)
     lastRequestTotal = stats.requests
@@ -601,32 +743,41 @@ internal constructor(
       slowMode = true
       lastRateLimitHits = stats.rateLimitHits
     }
+    val nowMs = clock.millis()
+    stageSeconds += maxOf(0L, nowMs - lastUnitMs - excludedMs) / MS_PER_SECOND.toDouble()
+    lastUnitMs = nowMs
+    excludedMs = 0
     unitsThisStage++
-    callsThisStage += calls
     rollBudgetDay()
     recordSample(stats.requests)
-    // Blend the planned calls per unit with what has been measured, so the first few units
+
+    // Blend the planned time per unit with what has been measured, so the first few units
     // (a 2014 month needs fewer searches than a 2025 one) don't swing the estimate.
-    val prior =
-        when (currentStage) {
-          STAGE_DISCOVER -> estimate.discoverCalls / maxOf(1, estimate.discoverUnits)
-          STAGE_ENRICH -> ENRICH_CALLS_PER_WAIVER
-          else -> 1.0
-        }
-    val callsPerUnit = (prior * PRIOR_WEIGHT + callsThisStage) / (PRIOR_WEIGHT + unitsThisStage)
+    val secondsPerUnit = (priorSeconds(currentStage) * PRIOR_WEIGHT + stageSeconds) / (PRIOR_WEIGHT + unitsThisStage)
+    if (currentStage == STAGE_ENRICH && unitsThisStage >= PRIOR_WEIGHT) enrichSecondsPerUnit = secondsPerUnit
     val interval = effectiveIntervalMs() / MS_PER_SECOND.toDouble()
-    val stageCalls = remainingUnits.coerceAtLeast(0) * callsPerUnit
-    val laterCalls =
-        if (progress.limit != null) 0.0
-        else
-            when (currentStage) {
-              STAGE_DISCOVER -> estimate.enrichUnits * ENRICH_CALLS_PER_WAIVER + estimate.checkinPages
-              STAGE_ENRICH -> estimate.checkinPages.toDouble()
-              else -> 0.0
-            }
+    val callsPerUnit = if (currentStage == STAGE_ENRICH) ENRICH_CALLS_PER_WAIVER else (calls.coerceAtLeast(1)).toDouble()
+    val stageRemaining = remainingUnits.coerceAtLeast(0)
+    val laterSeconds: Double
+    val laterCalls: Double
+    if (progress.limit != null) {
+      laterSeconds = 0.0
+      laterCalls = 0.0
+    } else {
+      val enrich = if (currentStage == STAGE_DISCOVER) estimate.enrichUnits else 0
+      val checkins = if (currentStage == STAGE_CHECKINS) 0 else estimate.checkinPages
+      laterSeconds = enrich * (enrichSecondsPerUnit ?: priorSeconds(STAGE_ENRICH)) + checkins * priorSeconds(STAGE_CHECKINS)
+      laterCalls = enrich * ENRICH_CALLS_PER_WAIVER + checkins
+    }
     val until = secondsUntilMidnight()
-    val stageEta = etaSeconds(stageCalls.toLong(), requestsToday, dailyBudget, interval, until)
-    val overallEta = etaSeconds((stageCalls + laterCalls).toLong(), requestsToday, dailyBudget, interval, until)
+    val stageCalls = stageRemaining * callsPerUnit
+    // Time-bound (each unit's real duration) or budget-bound (calls per day), whichever is longer.
+    val stageEta =
+        maxOf((stageRemaining * secondsPerUnit).toLong(), etaSeconds(stageCalls.toLong(), requestsToday, dailyBudget, interval, until))
+    val overallEta =
+        maxOf(
+            (stageRemaining * secondsPerUnit + laterSeconds).toLong(),
+            etaSeconds((stageCalls + laterCalls).toLong(), requestsToday, dailyBudget, interval, until))
     progress =
         progress.copy(
             stageDone = done,
@@ -635,8 +786,18 @@ internal constructor(
             etaOverallSeconds = overallEta,
             failed = recentErrorCount())
     setState(RunState.RUNNING, null, null)
-    persistRun()
+    save()
     sleep(effectiveIntervalMs() * maxOf(1L, used))
+  }
+
+  /** What a unit of [stage] is expected to take before any has been measured. */
+  private fun priorSeconds(stage: String?): Double {
+    val interval = effectiveIntervalMs() / MS_PER_SECOND.toDouble()
+    return when (stage) {
+      STAGE_DISCOVER -> estimate.discoverCalls / maxOf(1, estimate.discoverUnits) * interval + DB_OVERHEAD_DISCOVER_S
+      STAGE_ENRICH -> ENRICH_CALLS_PER_WAIVER * interval + DB_OVERHEAD_ENRICH_S
+      else -> interval + DB_OVERHEAD_CHECKIN_S
+    }
   }
 
   private fun effectiveIntervalMs() = if (slowMode) intervalMs * SLOW_MODE_FACTOR else intervalMs
@@ -667,15 +828,15 @@ internal constructor(
 
   private fun recordFailure(waiverId: String, e: Exception) {
     consecutiveFailures++
-    val line = "${now()} $waiverId: ${e.message ?: e.javaClass.simpleName}"
+    val why = e.safeMessage()
     synchronized(lock) {
-      recentErrors.addLast(line)
+      recentErrors.addLast("${now()} $waiverId: $why")
       while (recentErrors.size > MAX_RECENT_ERRORS) recentErrors.removeFirst()
     }
-    log.warn("SmartWaiver backfill could not mirror $waiverId: ${e.message}")
-    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-      throw IllegalStateException("$MAX_CONSECUTIVE_FAILURES waivers in a row failed; last: ${e.message}")
-    }
+    log.warn("SmartWaiver backfill could not mirror $waiverId: $why")
+    // A long unbroken run of failures means the problem is not the waivers (SmartWaiver, S3 or the
+    // database is down); step out so the retry wait gives it time to recover.
+    check(consecutiveFailures < MAX_CONSECUTIVE_FAILURES) { "$MAX_CONSECUTIVE_FAILURES waivers in a row failed; last: $why" }
   }
 
   private fun recentErrorCount() = synchronized(lock) { recentErrors.size }
@@ -685,7 +846,7 @@ internal constructor(
     log.info(
         "SmartWaiver backfill ${p.stage}: ${p.stageDone}/${p.stageTotal ?: "?"}, ${p.mirrored} mirrored, " +
             "${p.photosStored} photos, ${p.failed} failed, calls today ${p.requestsToday}/${p.dailyBudget}, " +
-            "%.1f/min, ETA ${p.etaStageSeconds?.let { "${it / 3600}h" } ?: "?"}".format(p.requestsPerMinute1))
+            "%.1f/min, ETA ${p.etaStageSeconds?.let { "${it / SECONDS_PER_HOUR}h" } ?: "?"}".format(p.requestsPerMinute1))
   }
 
   private fun setState(state: RunState, waitingUntil: String?, error: String?) {
@@ -709,24 +870,41 @@ internal constructor(
     updates.tryEmit(progress)
   }
 
-  private suspend fun persistRun() {
-    repository.saveState(
-        BackfillState(
-            RUN, progress.state.name, null, progress.mirrored, null, requestsToday, budgetDay, progress.lastError,
-            startedAt, now(), null))
+  /** How the run is saved: a trial is stored as TRIAL while active so a restart never resumes it. */
+  private fun runStatus(state: RunState) =
+      if (progress.limit != null && (state == RunState.RUNNING || state == RunState.WAITING || state == RunState.PAUSED)) "TRIAL"
+      else state.name
+
+  private fun runState(status: String, error: String? = null, finished: LocalDateTime? = null) =
+      BackfillState(
+          RUN_STATE_NAME, status, owner, progress.mirrored, null, requestsToday, budgetDay, error ?: progress.lastError,
+          startedAt, now(), finished)
+
+  private fun stageState(name: String, status: String, cursor: String?, done: Int, total: Int?, note: String? = null) =
+      BackfillState(name, status, cursor, done, total, 0, null, note, null, now(), if (status == "DONE") now() else null)
+
+  /** Saves a unit's progress with the run row in one transaction; ends this copy if it lost the run. */
+  private suspend fun checkpoint(name: String, status: String, cursor: String?, done: Int, total: Int?, note: String? = null) {
+    if (!repository.saveUnit(stageState(name, status, cursor, done, total, note), owner, runState(runStatus(progress.state)))) {
+      throw SupersededException()
+    }
   }
 
+  private suspend fun renewLease() {
+    if (!repository.renewRun(owner, runState(runStatus(progress.state)))) throw SupersededException()
+  }
+
+  @Suppress("TooGenericExceptionCaught")
   private suspend fun finish(state: RunState, error: String?) {
     setState(state, null, error)
-    repository.saveState(
-        BackfillState(
-            RUN, state.name, null, progress.mirrored, null, requestsToday, budgetDay, error, startedAt, now(),
-            if (state == RunState.DONE) now() else null))
-  }
-
-  private suspend fun saveStage(name: String, status: String, cursor: String?, done: Int, total: Int?, error: String? = null) {
-    repository.saveState(
-        BackfillState(name, status, cursor, done, total, 0, null, error, null, now(), if (status == "DONE") now() else null))
+    try {
+      val finished = if (state == RunState.DONE) now() else null
+      repository.renewRun(owner, runState(state.name, error, finished))
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      log.warn("Could not save the final state of the SmartWaiver backfill: ${e.safeMessage()}")
+    }
   }
 
   // ---- time ----

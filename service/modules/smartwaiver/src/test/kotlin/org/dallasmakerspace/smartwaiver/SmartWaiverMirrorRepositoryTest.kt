@@ -199,6 +199,75 @@ class SmartWaiverMirrorRepositoryTest {
     assertNull(runBlocking { repo.getState("missing") })
   }
 
+  @Test
+  fun `a save that lacks a field keeps the value already stored`() {
+    runBlocking { repo.saveMirror(waiver(), emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE) }
+    val sparse = SmartwaiverFullWaiver(waiverId = "fakewaiver000001", firstName = "Fakefirst", lastName = "Fakelast")
+
+    runBlocking { repo.saveMirror(sparse, emptyList(), SmartWaiverMirrorRepository.PHOTOS_NONE) }
+
+    val row = rows().single()
+    assertEquals("fake@example.invalid", row[SmartWaiverMirrorTable.email])
+    assertEquals("1990-01-01", row[SmartWaiverMirrorTable.birthDate])
+    assertEquals("2024-03-05 18:30:00", row[SmartWaiverMirrorTable.dateCompleted])
+    assertEquals("Test Waiver", row[SmartWaiverMirrorTable.documentTitle])
+    assertEquals("1 Fake St", row[SmartWaiverMirrorTable.addressLineOne])
+    assertEquals(2024, row[SmartWaiverMirrorTable.createdOnUtc]?.year)
+  }
+
+  @Test
+  fun `a photo type longer than its column is cut instead of failing the waiver`() {
+    val photo = MirroredPhoto("p1", "x".repeat(80), "tag", "jpg", null, "fakewaiver000001/photos/p1.jpg", 4)
+
+    runBlocking { repo.saveMirror(waiver(), listOf(photo), SmartWaiverMirrorRepository.PHOTOS_COMPLETE) }
+
+    val stored = transaction(db) { SmartWaiverPhotosTable.selectAll().single() }
+    assertEquals(30, stored[SmartWaiverPhotosTable.photoType]?.length)
+  }
+
+  @Test
+  fun `a waiver SmartWaiver no longer has is marked gone and stops counting as work to do`() {
+    runBlocking {
+      repo.insertMissingSummaries(
+          listOf(SmartwaiverSummary(waiverId = "fakewaiver000009", templateId = "t", title = "T", createdOn = "2024-03-06 10:00:00")))
+    }
+    assertEquals(1, runBlocking { repo.countNeedingMirror() })
+
+    runBlocking { repo.markGone("fakewaiver000009") }
+
+    assertEquals(0, runBlocking { repo.countNeedingMirror() })
+    assertEquals(1, runBlocking { repo.countGone() })
+    assertEquals("GONE", rows().single()[SmartWaiverMirrorTable.photosStatus])
+  }
+
+  @Test
+  fun `the run row can be claimed, renewed only by its owner, and released`() {
+    val run = BackfillState("run", "RUNNING", null, 0, null, 5, null, null, null, null, null)
+    runBlocking { repo.claimRun("copy-a", run) }
+
+    assertEquals(true, runBlocking { repo.renewRun("copy-a", run.copy(requestsToday = 9)) })
+    assertEquals(false, runBlocking { repo.renewRun("copy-b", run.copy(requestsToday = 99)) })
+    assertEquals(9, runBlocking { repo.getState("run") }?.requestsToday)
+
+    runBlocking { repo.markRunIdle() }
+
+    assertEquals("IDLE", runBlocking { repo.getState("run") }?.status)
+    assertEquals(false, runBlocking { repo.renewRun("copy-a", run) })
+  }
+
+  @Test
+  fun `a unit checkpoint writes the stage only while the copy still owns the run`() {
+    val run = BackfillState("run", "RUNNING", null, 0, null, 0, null, null, null, null, null)
+    val stage = BackfillState("enrich", "RUNNING", "42", 3, 10, 0, null, null, null, null, null)
+    runBlocking { repo.claimRun("copy-a", run) }
+
+    assertEquals(true, runBlocking { repo.saveUnit(stage, "copy-a", run) })
+    assertEquals("42", runBlocking { repo.getState("enrich") }?.cursorValue)
+
+    assertEquals(false, runBlocking { repo.saveUnit(stage.copy(cursorValue = "99"), "copy-b", run) })
+    assertEquals("42", runBlocking { repo.getState("enrich") }?.cursorValue, "a replaced copy must write nothing")
+  }
+
   companion object {
     private val tables: List<Table> =
         listOf(

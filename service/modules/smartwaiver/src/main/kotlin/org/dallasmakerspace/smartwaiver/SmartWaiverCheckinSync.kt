@@ -36,9 +36,15 @@ constructor(
       val page = client.getCheckins(cursor, to)
       val added = repository.insertNewCheckins(page.checkins)
       total += added
-      val last = page.checkins.lastOrNull()?.let { parseApiDateTime(it.date) }
+      val lastCheckin = page.checkins.lastOrNull()
+      val last = lastCheckin?.let { parseApiDateTime(it.date) }
       onPage(added, last ?: cursor)
-      if (!page.moreCheckins || last == null) break
+      if (!page.moreCheckins) break
+      // Ending here would silently drop the rest of the history, so a page we can't follow is an error.
+      check(lastCheckin != null) { "SmartWaiver reports more check-ins but returned an empty page" }
+      check(last != null) { "SmartWaiver sent a check-in date that can't be read" }
+      check(!last.isBefore(cursor)) { "SmartWaiver check-in dates went backwards ($last before $cursor)" }
+      if (last == cursor) log.warn("A full page of check-ins shares the second $cursor; moving one second on")
       // 100 check-ins in one second would never advance; step past that second instead of looping.
       cursor = if (last.isAfter(cursor)) last else last.plusSeconds(1)
       log.info("Check-ins synced up to $cursor ($total new so far)")

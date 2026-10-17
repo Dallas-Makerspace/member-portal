@@ -323,7 +323,7 @@ internal constructor(
         waiverResponse.waiver
             ?: throw SmartwaiverApiException("Waiver missing in response for id: $waiverId")
       }
-      HttpStatusCode.NotFound -> throw SmartwaiverApiException("Waiver not found: $waiverId")
+      HttpStatusCode.NotFound -> throw SmartwaiverNotFoundException("Waiver not found: $waiverId")
       HttpStatusCode.Unauthorized -> throw SmartwaiverApiException("Unauthorized: Invalid API key")
       else ->
           throw SmartwaiverApiException(
