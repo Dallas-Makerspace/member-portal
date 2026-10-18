@@ -7,6 +7,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.util.*
 import io.ktor.utils.io.*
+import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
@@ -17,6 +18,7 @@ import org.dallasmakerspace.models.ArchivedGroup
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.models.FeaturedProject
+import org.dallasmakerspace.models.SubscriptionStatus
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.DMSHttpClient
 import org.dallasmakerspace.server.common.DmsHttpEngine
@@ -27,6 +29,7 @@ import org.dallasmakerspace.server.models.SearchPreloadResponse
 import org.dallasmakerspace.server.models.dmsGroupFromMap
 import org.dallasmakerspace.server.models.dmsMemberFromMap
 import org.dallasmakerspace.server.models.dmsMemberToMap
+import org.dallasmakerspace.server.models.subscriptionStatusFromMap
 
 sealed class ShortLinkResult {
   data class Redirect(val location: String, val description: String?) : ShortLinkResult()
@@ -550,6 +553,30 @@ constructor(
       result["data"] as? Map<*, *>
     } catch (ex: Exception) {
       log.warn("Failed to get follow suggestion debug for: $username", ex)
+      null
+    }
+  }
+
+  /**
+   * Whether [username] is subscribed to [topicKey] with [args], plus the button copy; null when the
+   * topic is off for them or the call fails, so the button isn't shown.
+   */
+  suspend fun getSubscriptionStatus(
+      topicKey: String,
+      args: Map<String, String>,
+      username: String,
+      sessionId: String?,
+  ): SubscriptionStatus? {
+    return try {
+      val query =
+          args.entries.joinToString("&") {
+            "${URLEncoder.encode(it.key, "UTF-8")}=${URLEncoder.encode(it.value, "UTF-8")}"
+          }
+      val url = "$baseUrl/subscriptions/${URLEncoder.encode(topicKey, "UTF-8")}?$query"
+      val result = dmsHttpClient.get(url, getApiHeaders(sessionId, username))
+      (result["data"] as? Map<*, *>)?.let { subscriptionStatusFromMap(it) }
+    } catch (ex: Exception) {
+      log.debug("No subscription status for $topicKey / $username: ${ex.message}")
       null
     }
   }

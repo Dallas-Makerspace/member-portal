@@ -240,16 +240,8 @@
                         <h4 class="mt-3 mb-0 dms-card-title" th:text="${name}"></h4>
                         <p class="text-muted" th:text="'@' + ${preferred_username}"></p>
                         <th:block th:if="${follow_feature_enabled}">
-                            <div th:if="${!is_self}">
-                                <button type="button" id="followBtn"
-                                        class="btn btn-sm"
-                                        th:classappend="${is_following == 'true'} ? 'btn-outline-secondary' : 'btn-primary'"
-                                        th:text="${is_following == 'true'} ? 'Unfollow' : 'Follow'"
-                                        th:attr="data-username=${preferred_username},data-following=${is_following},data-viewer=${viewer_username}">
-                                </button>
-                                <p class="text-muted small mt-2 mb-0 mx-auto" style="max-width: 220px;">
-                                    Get notified when they post an event or a project
-                                </p>
+                            <div th:if="${!is_self and follow_subscription != null}">
+                                <th:block th:replace="~{fragments/subscribe-button :: button(${follow_subscription})}"></th:block>
                             </div>
                         </th:block>
                     </div>
@@ -731,7 +723,8 @@
                     </div>
 
                     <!-- Always rendered (hidden when empty) so following/unfollowing can update it in place. -->
-                    <div id="followersSection" th:hidden="${followers_count == 0}">
+                    <div id="followersSection" th:hidden="${followers_count == 0}"
+                         th:attr="data-viewer=${viewer_username}">
                         <h6 class="mb-2">
                             <a class="text-muted text-decoration-none"
                                th:href="'/profile/@' + ${preferred_username} + '/follows#followers'">
@@ -801,6 +794,7 @@
         crossorigin="anonymous"></script>
 <!-- App JS -->
 <script src="../static/js/app.js"></script>
+<script src="../static/js/dms-subscribe-button.js" th:if="${follow_subscription != null}"></script>
 <script src="../static/js/dms-page-loader.js" defer></script>
 <script type="module" src="../static/js/dms-group-pill.js"></script>
 <script type="module" src="../static/js/dms-relative-date.js"></script>
@@ -1310,14 +1304,13 @@
     })();
 </script>
 
-<!-- Follow/Unfollow Script -->
+<!-- Follows card: reacts to the subscribe button (fragments/subscribe-button.html) -->
 <script th:if="${follow_feature_enabled and !is_self}">
     (function() {
         'use strict';
 
         const FACEPILE_LIMIT = 5;
-        const followBtn = document.getElementById('followBtn');
-        if (!followBtn) return;
+        const FOLLOWING_TOPIC = 'EVENT_ANNOUNCEMENT';
 
         // Keeps the Follows card in sync with the viewer's follow state without a reload: the
         // viewer's own avatar is added to (or removed from) the front of the followers facepile,
@@ -1355,7 +1348,7 @@
                     setOverflow(overflow + 1);
                 }
             } else if (!nowFollowing) {
-                const mine = pile.querySelector('[data-username="' + followBtn.dataset.viewer + '"]');
+                const mine = pile.querySelector('[data-username="' + section.dataset.viewer + '"]');
                 if (mine) mine.remove(); else setOverflow(overflow - 1);
             }
             if (more) more.title = 'View all ' + count + ' followers';
@@ -1364,36 +1357,8 @@
             if (empty) empty.hidden = count > 0 || Number(empty.dataset.followingCount) > 0;
         }
 
-        followBtn.addEventListener('click', async function() {
-            const username = followBtn.getAttribute('data-username');
-            const wasFollowing = followBtn.getAttribute('data-following') === 'true';
-            const method = wasFollowing ? 'DELETE' : 'POST';
-
-            setButtonLoading(followBtn, true, wasFollowing ? 'Unfollowing…' : 'Following…');
-
-            try {
-                const response = await fetch(`/backend-api/members/${username}/follow`, { method });
-                const result = await response.json().catch(() => ({}));
-
-                if (response.ok && result.status === 'SUCCESS') {
-                    const nowFollowing = !wasFollowing;
-                    followBtn.setAttribute('data-following', String(nowFollowing));
-                    followBtn.textContent = nowFollowing ? 'Unfollow' : 'Follow';
-                    followBtn.classList.toggle('btn-primary', !nowFollowing);
-                    followBtn.classList.toggle('btn-outline-secondary', nowFollowing);
-                    updateFollowersCard(nowFollowing);
-                    showToast(nowFollowing
-                        ? `You're following @${username}. You'll be notified when they post an event or a project.`
-                        : `You unfollowed @${username}.`);
-                } else {
-                    showToast(result.message || 'Could not update follow status.', 'danger');
-                }
-            } catch (error) {
-                console.error('Error updating follow status:', error);
-                showToast('Could not update follow status. Please try again.', 'danger');
-            } finally {
-                setButtonLoading(followBtn, false);
-            }
+        document.addEventListener('dms:subscription-changed', function(e) {
+            if (e.detail.topic === FOLLOWING_TOPIC) updateFollowersCard(e.detail.subscribed);
         });
     })();
 </script>

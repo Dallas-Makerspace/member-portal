@@ -18,6 +18,7 @@ import kotlinx.datetime.format.byUnicodePattern
 import kotlinx.datetime.toJavaInstant
 import org.dallasmakerspace.models.CommunicationPreference
 import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.TopicKeys
 import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.Permission
@@ -28,6 +29,7 @@ import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.models.slug
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.plugins.UserSession
+import org.dallasmakerspace.server.subscriptions.subscriptionButtonModel
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
 
 class ProfileHandler
@@ -95,6 +97,15 @@ constructor(
       currentUsername?.let {
         memberServiceClient.isFeatureEnabled(FOLLOW_FEATURE_FLAG_KEY, it, session.sessionId)
       } ?: false
+    }
+    val followSubscriptionDeferred = async {
+      if (currentUsername == null || isSelf) null
+      else
+          memberServiceClient.getSubscriptionStatus(
+              TopicKeys.FOLLOWING,
+              mapOf("username" to requestedUsername),
+              currentUsername,
+              session.sessionId)
     }
     val profilePhotoEnabledDeferred = async {
       currentUsername?.let {
@@ -218,8 +229,10 @@ constructor(
       val members = memberServiceClient.getMembersByUsernames(shown, session.sessionId)
       jsonMap["following_facepile"] = buildFacepile(following, members)
       jsonMap["followers_facepile"] = buildFacepile(followers, members)
+      followSubscriptionDeferred.await()?.let {
+        jsonMap["follow_subscription"] = subscriptionButtonModel(it)
+      }
       if (viewer != null) {
-        jsonMap["is_following"] = (viewer in followers).toString()
         jsonMap["viewer_username"] = viewer
         jsonMap["viewer_facepile_item"] = buildFacepile(listOf(viewer), members).single()
       }

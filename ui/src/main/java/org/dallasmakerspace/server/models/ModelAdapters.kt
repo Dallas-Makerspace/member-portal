@@ -4,8 +4,11 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import org.dallasmakerspace.models.Account
 import org.dallasmakerspace.models.AccountInfo
+import org.dallasmakerspace.models.ConfirmCopy
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.SubscriptionCopy
+import org.dallasmakerspace.models.SubscriptionStatus
 
 /** Adapter functions to convert API response maps to common-models domain objects */
 fun dmsMemberFromMap(data: Map<String, Any?>): DMSMember {
@@ -40,6 +43,38 @@ fun dmsMemberFromMap(data: Map<String, Any?>): DMSMember {
       groups = groups,
       accountInfo = accountInfo)
 }
+
+/** Null when a required field is missing, so callers can hide the button instead of rendering junk. */
+fun subscriptionStatusFromMap(data: Map<*, *>): SubscriptionStatus? =
+    runCatching {
+          val copy = data["copy"] as Map<*, *>
+          SubscriptionStatus(
+              topic = data["topic"] as String,
+              args = (data["args"] as Map<*, *>).entries.associate { "${it.key}" to "${it.value}" },
+              subscribed = data["subscribed"] as Boolean,
+              copy =
+                  SubscriptionCopy(
+                      subscribeLabel = copy["subscribeLabel"] as String,
+                      unsubscribeLabel = copy["unsubscribeLabel"] as String,
+                      subscribeIcon = copy["subscribeIcon"] as String,
+                      unsubscribeIcon = copy["unsubscribeIcon"] as String,
+                      subscribeBusy = copy["subscribeBusy"] as String,
+                      unsubscribeBusy = copy["unsubscribeBusy"] as String,
+                      subscribedToast = copy["subscribedToast"] as String,
+                      unsubscribedToast = copy["unsubscribedToast"] as String,
+                      hint = copy["hint"] as String?,
+                      subscribeConfirm = confirmCopyFromMap(copy["subscribeConfirm"]),
+                      unsubscribeConfirm = confirmCopyFromMap(copy["unsubscribeConfirm"])))
+        }
+        .getOrNull()
+
+private fun confirmCopyFromMap(value: Any?): ConfirmCopy? =
+    (value as Map<*, *>?)?.let {
+      ConfirmCopy(
+          title = it["title"] as String,
+          message = it["message"] as String,
+          confirmLabel = it["confirmLabel"] as String)
+    }
 
 fun dmsGroupFromMap(data: Map<String, Any?>): DMSGroup {
   val members =

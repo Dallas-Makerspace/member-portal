@@ -441,3 +441,60 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+/**
+ * Bootstrap confirm modal. Resolves true when the confirm button is clicked, false on cancel/close.
+ * All text is set via textContent.
+ * @param {{title?: string, message?: string, details?: string[], confirmLabel?: string, danger?: boolean}} opts
+ * @returns {Promise<boolean>}
+ */
+function dmsConfirm(opts) {
+    return new Promise((resolve) => {
+        const el = (tag, className, text) => {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text) node.textContent = text;
+            return node;
+        };
+        const button = (className, text, dismiss) => {
+            const btn = el('button', className, text);
+            btn.type = 'button';
+            if (dismiss) btn.setAttribute('data-bs-dismiss', 'modal');
+            return btn;
+        };
+
+        let confirmed = false;
+        const confirmBtn = button('btn btn-' + (opts.danger ? 'danger' : 'primary'), opts.confirmLabel || 'Confirm');
+        const closeBtn = button('btn-close', '', true);
+        closeBtn.setAttribute('aria-label', 'Close');
+
+        const header = el('div', 'modal-header');
+        header.append(el('h5', 'modal-title', opts.title || 'Are you sure?'), closeBtn);
+        const body = el('div', 'modal-body');
+        body.append(el('p', 'mb-0', opts.message || ''));
+        (opts.details || []).forEach((d) => body.append(el('p', 'small text-muted mb-0 mt-2', d)));
+        const footer = el('div', 'modal-footer');
+        footer.append(button('btn btn-outline-secondary', 'Cancel', true), confirmBtn);
+
+        const content = el('div', 'modal-content');
+        content.append(header, body, footer);
+        const dialog = el('div', 'modal-dialog');
+        dialog.append(content);
+        const root = el('div', 'modal fade');
+        root.tabIndex = -1;
+        root.setAttribute('aria-hidden', 'true');
+        root.append(dialog);
+        document.body.appendChild(root);
+
+        const modal = new bootstrap.Modal(root);
+        confirmBtn.addEventListener('click', () => {
+            confirmed = true;
+            modal.hide();
+        });
+        root.addEventListener('hidden.bs.modal', () => {
+            modal.dispose();
+            root.remove();
+            resolve(confirmed);
+        });
+        modal.show();
+    });
+}

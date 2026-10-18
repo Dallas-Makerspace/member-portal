@@ -606,3 +606,19 @@ a.dms-facepile-item:focus-visible {
     padding: 2px 14px;
     font-size: 13px;
 }
+
+/* Subscribe/unsubscribe button (fragments/subscribe-button.html) */
+.dms-subscribe-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.dms-subscribe-btn .material-symbols-outlined {
+    font-size: 1.15em;
+}
+.dms-subscribe-icon-only {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    justify-content: center;
+}

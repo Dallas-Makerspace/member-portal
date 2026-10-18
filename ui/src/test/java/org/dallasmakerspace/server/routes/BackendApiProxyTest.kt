@@ -13,6 +13,11 @@ class BackendApiProxyTest {
   }
 
   @Test
+  fun allowsSubscriptionPaths() {
+    assertTrue(isProxyAllowed("subscriptions/EVENT_ANNOUNCEMENT?username=asmith"))
+  }
+
+  @Test
   fun blocksNotificationAndWebhookPaths() {
     listOf(
             "notifications",

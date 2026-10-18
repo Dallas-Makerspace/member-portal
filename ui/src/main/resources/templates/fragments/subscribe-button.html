@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Subscribe/unsubscribe button for a notification topic. `sub` is built by subscriptionButtonModel(...).
+  Needs /static/js/dms-subscribe-button.js on the page (after app.js).
+-->
+<th:block th:fragment="button(sub)">
+    <button type="button" class="btn btn-sm dms-subscribe-btn" data-dms-subscribe
+            th:classappend="${sub['btnClass']} + (${sub['iconOnly']} ? ' dms-subscribe-icon-only' : '')"
+            th:attr="data-topic=${sub['topic']},data-args=${sub['argsJson']},data-copy=${sub['copyJson']},data-subscribed=${sub['subscribed']},data-icon-only=${sub['iconOnly']},aria-pressed=${sub['subscribed']},aria-label=${sub['iconOnly'] ? sub['label'] : null}">
+        <span class="material-symbols-outlined" aria-hidden="true" th:text="${sub['icon']}"></span>
+        <span class="dms-subscribe-label" th:unless="${sub['iconOnly']}" th:text="${sub['label']}"></span>
+    </button>
+    <p th:if="${sub['hint'] != null}" class="text-muted small mt-2 mb-0 mx-auto" style="max-width: 220px;"
+       th:text="${sub['hint']}"></p>
+</th:block>
+</body>
+</html>

@@ -286,47 +286,9 @@
         };
     }
 
-    /** Bootstrap confirm modal; resolves true when confirmed. */
+    /** Bootstrap confirm modal; resolves true when confirmed. Shared implementation lives in app.js. */
     function confirmDialog(opts) {
-        return new Promise(function (resolve) {
-            var confirmed = false;
-            var confirmBtn = el('button', {
-                type: 'button',
-                class: 'btn btn-' + (opts.danger ? 'danger' : 'primary'),
-                text: opts.confirmLabel || 'Confirm'
-            });
-            var body = el('div', {class: 'modal-body'}, [el('p', {class: 'mb-0', text: opts.message || ''})]);
-            (opts.details || []).forEach(function (d) {
-                body.appendChild(el('p', {class: 'small text-muted mb-0 mt-2', text: d}));
-            });
-            var root = el('div', {class: 'modal fade', tabindex: '-1', 'aria-hidden': 'true'}, [
-                el('div', {class: 'modal-dialog'}, [
-                    el('div', {class: 'modal-content'}, [
-                        el('div', {class: 'modal-header'}, [
-                            el('h5', {class: 'modal-title', text: opts.title || 'Are you sure?'}),
-                            el('button', {type: 'button', class: 'btn-close', 'data-bs-dismiss': 'modal', 'aria-label': 'Close'})
-                        ]),
-                        body,
-                        el('div', {class: 'modal-footer'}, [
-                            el('button', {type: 'button', class: 'btn btn-outline-secondary', 'data-bs-dismiss': 'modal', text: 'Cancel'}),
-                            confirmBtn
-                        ])
-                    ])
-                ])
-            ]);
-            document.body.appendChild(root);
-            var modal = new bootstrap.Modal(root);
-            confirmBtn.addEventListener('click', function () {
-                confirmed = true;
-                modal.hide();
-            });
-            root.addEventListener('hidden.bs.modal', function () {
-                modal.dispose();
-                root.remove();
-                resolve(confirmed);
-            });
-            modal.show();
-        });
+        return window.dmsConfirm(opts);
     }
 
     function notice(container, kind, message) {
