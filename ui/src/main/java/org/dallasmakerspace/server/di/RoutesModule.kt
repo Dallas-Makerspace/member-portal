@@ -61,6 +61,7 @@ import org.dallasmakerspace.server.routes.ShortLinksHandler
 import org.dallasmakerspace.server.routes.SignOutHandler
 import org.dallasmakerspace.server.routes.SmartWaiverWebhookHandler
 import org.dallasmakerspace.server.routes.DiscourseWebhookHandler
+import org.dallasmakerspace.server.routes.MoodleWebhookHandler
 import org.dallasmakerspace.server.routes.SparkPostWebhookHandler
 import org.dallasmakerspace.server.routes.MembersToFollowHandler
 import org.dallasmakerspace.server.routes.SuggestedEventsHandler
@@ -526,6 +527,14 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       appConfig: AppConfig,
   ): IRouteHandler = DiscourseWebhookHandler(loggerFactory, appConfig)
+
+  @IntoMap
+  @Provides
+  @StringKey("/webhook/moodle")
+  fun providesMoodleWebhookHandler(
+      loggerFactory: LoggerFactory,
+      appConfig: AppConfig,
+  ): IRouteHandler = MoodleWebhookHandler(loggerFactory, appConfig)
 
   @IntoMap
   @Provides

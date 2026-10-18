@@ -130,6 +130,7 @@ object RouteFactory {
     SMARTWAIVER_WEBHOOK("/webhook/smartwaiver"),
     SPARKPOST_WEBHOOK("/webhook/sparkpost"),
     DISCOURSE_WEBHOOK("/webhook/discourse"),
+    MOODLE_WEBHOOK("/webhook/moodle"),
     CAMERAS("/cameras"),
     CAMERAS_API("/cameras-api/{path...}"),
     PERSONAL_BIN_SCANNER("/personal-bin-scanner"),

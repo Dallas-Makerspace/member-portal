@@ -10,9 +10,6 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.header
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
-import java.security.MessageDigest
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import javax.inject.Inject
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.DmsHttpEngine
@@ -66,30 +63,13 @@ constructor(
   companion object {
     const val SIGNATURE_HEADER = "X-Discourse-Event-Signature"
     const val EVENT_HEADER = "X-Discourse-Event"
-    private const val SIGNATURE_PREFIX = "sha256="
 
-    /** Hex HMAC-SHA256 of [body] keyed with [secret]. */
-    internal fun sign(secret: String, body: String): String {
-      val mac = Mac.getInstance("HmacSHA256")
-      mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-      return mac.doFinal(body.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
-    }
+    internal fun sign(secret: String, body: String): String = WebhookHmac.sign(secret, body)
 
-    /** Constant-time check of a `sha256=<hex>` [header] against the body's HMAC. */
-    internal fun isValidSignature(secret: String, body: String, header: String?): Boolean {
-      if (header == null || !header.startsWith(SIGNATURE_PREFIX)) return false
-      val expected = sign(secret, body).toByteArray(Charsets.UTF_8)
-      val actual = header.removePrefix(SIGNATURE_PREFIX).lowercase().toByteArray(Charsets.UTF_8)
-      return MessageDigest.isEqual(expected, actual)
-    }
+    internal fun isValidSignature(secret: String, body: String, header: String?): Boolean =
+        WebhookHmac.isValidSignature(secret, body, header)
 
-    /** `{"event": ..., "payload": <raw body as a JSON string>}`. */
     internal fun wrapEnvelope(event: String, rawBody: String): String =
-        com.google.gson.JsonObject()
-            .apply {
-              addProperty("event", event)
-              addProperty("payload", rawBody)
-            }
-            .toString()
+        WebhookHmac.wrapEnvelope(event, rawBody)
   }
 }
