@@ -18,6 +18,19 @@ fun memberProfileUrl(username: String): String = "$MEMBER_PORTAL_BASE_URL/profil
 fun notificationPreferencesUrl(username: String): String =
     "$MEMBER_PORTAL_BASE_URL/profile/@$username/notifications"
 
+/**
+ * Plain-text preview of already-plain text (e.g. a calendar event description): whitespace
+ * collapsed, cut at a word boundary to at most [maxLength] characters plus an ellipsis. Escape the
+ * result before embedding in HTML.
+ */
+fun plainExcerpt(text: String, maxLength: Int = 200): String {
+  val collapsed = text.replace(WHITESPACE_REGEX, " ").trim()
+  if (collapsed.length <= maxLength) return collapsed
+  val cut = collapsed.take(maxLength)
+  val atWord = cut.substringBeforeLast(' ', "")
+  return (if (atWord.length >= maxLength / 2) atWord else cut).trimEnd() + "…"
+}
+
 private val HTML_TAG_REGEX = Regex("<[^>]*>")
 private val WHITESPACE_REGEX = Regex("\\s+")
 

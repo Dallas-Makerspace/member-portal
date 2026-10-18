@@ -26,13 +26,14 @@ loops in the service deliver them.
    transient failure keeps the rows `IN_DIGEST` with backoff, so the retry is still a single
    digest and never individual emails.
 
-### Event images
+### Event image and description
 
 `event-announcement` and `committee-class` emails show the event's first public image attachment
 (png, jpg or gif) as a thumbnail beside the text, laid out like `project-post`
 (`templates/ThumbnailLayout.kt`). The calendar webhook doesn't send it: the portal looks it up in
 the calendar DB (`CalendarRepository.getEventImagePath`) and builds the URL from the event page URL.
-No image, or a failed lookup, gives the plain text layout.
+They also carry the first ~200 characters of the event's description (long, else short;
+`getEventDescription`). Either part is simply left out when the event has none or its lookup fails.
 
 ### No duplicates
 

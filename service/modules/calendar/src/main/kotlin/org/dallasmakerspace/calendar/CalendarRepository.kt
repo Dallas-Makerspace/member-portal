@@ -250,6 +250,33 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   }
 
   /**
+   * The text describing event [eventId]: its long description, or the short one when that is
+   * empty. Null when the event isn't found, has neither, or the lookup fails or times out.
+   */
+  suspend fun getEventDescription(eventId: Long): String? {
+    val query =
+        """
+      SET STATEMENT max_statement_time=1.5 FOR
+      SELECT e.long_description AS long_description, e.short_description AS short_description
+      FROM `dms-calendar`.events e
+      WHERE e.id = $eventId
+      LIMIT 1
+    """
+
+    val result =
+        try {
+          genericRepository.getReportData(query)
+        } catch (ex: Exception) {
+          log.warn("Failed fetching the description for event $eventId - ${ex.message}")
+          return null
+        }
+
+    val row = result?.data?.firstOrNull() ?: return null
+    return listOf("long_description", "short_description")
+        .firstNotNullOfOrNull { row[it]?.toString()?.trim()?.takeIf { text -> text.isNotEmpty() } }
+  }
+
+  /**
    * Fetches distinct event names that a member has attended, ordered by most recent first.
    *
    * @param username The AD username of the member.

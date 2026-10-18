@@ -16,6 +16,7 @@ import org.dallasmakerspace.notifications.db.CommitteeSubscriptionsRepository
 import org.dallasmakerspace.notifications.topics.CommitteeUpdatesTopic
 import org.dallasmakerspace.webhook.handlers.CommitteeClassAnnouncer
 import org.dallasmakerspace.webhook.handlers.CommitteeFollowerFilter
+import org.dallasmakerspace.webhook.handlers.EventPreview
 import org.dallasmakerspace.webhook.models.CalendarEventWebhookData
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -100,7 +101,7 @@ class CommitteeClassAnnouncerTest {
                     "bob" to adUser("bob", "Other")))
         givenFanOut()
 
-        val summary = announcer.announce(event, "Mon Aug 10 7:00 PM", emptySet(), "")
+        val summary = announcer.announce(event, "Mon Aug 10 7:00 PM", emptySet(), EventPreview())
 
         verify(subscriptions).getSubscribers(listOf(laser.id))
         verify(notifications)
@@ -120,19 +121,20 @@ class CommitteeClassAnnouncerTest {
       }
 
   @Test
-  fun `the event image goes into the class notification`() = runBlocking {
+  fun `the event image and teaser go into the class notification`() = runBlocking {
     givenEvent(EventPrerequisite("Laser Basics", null))
     givenSubscribers("bob")
     whenever(ad.getMembersByUsernameList(listOf("bob"))).thenReturn(mapOf("bob" to adUser("bob")))
     givenFanOut()
 
-    announcer.announce(event, "", emptySet(), "https://calendar.example.org/files/1/a.png")
+    announcer.announce(event, "", emptySet(), EventPreview("https://calendar.example.org/files/1/a.png", "A short teaser"))
 
     verify(notifications)
         .createForMembers(any(), any(), any(), payload.capture(), any(), any())
     assertTrue(
         payload.lastValue.contains("\"imageUrl\":\"https://calendar.example.org/files/1/a.png\""),
         payload.lastValue)
+    assertTrue(payload.lastValue.contains("\"excerpt\":\"A short teaser\""), payload.lastValue)
     Unit
   }
 
@@ -143,7 +145,7 @@ class CommitteeClassAnnouncerTest {
     whenever(ad.getMembersByUsernameList(listOf("alice")))
         .thenReturn(mapOf("alice" to adUser("alice", "LASER BASICS")))
 
-    val summary = announcer.announce(event, "", emptySet(), "")
+    val summary = announcer.announce(event, "", emptySet(), EventPreview())
 
     verifyNothingSent()
     assertTrue(summary.contains("already have it"), summary)
@@ -156,7 +158,7 @@ class CommitteeClassAnnouncerTest {
     whenever(ad.getMembersByUsernameList(listOf("bob"))).thenReturn(mapOf("bob" to adUser("bob")))
     givenFanOut()
 
-    announcer.announce(event, "", emptySet(), "")
+    announcer.announce(event, "", emptySet(), EventPreview())
 
     verify(notifications)
         .createForMembers(any(), any(), any(), anyOrNull(), any(), dedupe.capture())
@@ -170,7 +172,7 @@ class CommitteeClassAnnouncerTest {
     whenever(ad.getMembersByUsernameList(listOf("bob"))).thenReturn(mapOf("bob" to adUser("bob")))
     givenFanOut()
 
-    announcer.announce(event, "", alreadyNotified = setOf("alice"), imageUrl = "")
+    announcer.announce(event, "", alreadyNotified = setOf("alice"), preview = EventPreview())
 
     verify(notifications)
         .createForMembers(eq(listOf("bob")), any(), any(), anyOrNull(), any(), any())
@@ -180,10 +182,10 @@ class CommitteeClassAnnouncerTest {
   @Test
   fun `a lookup failure or an event without a group sends nothing`() = runBlocking {
     givenEvent(null)
-    assertTrue(announcer.announce(event, "", emptySet(), "").contains("lookup failed"))
+    assertTrue(announcer.announce(event, "", emptySet(), EventPreview()).contains("lookup failed"))
 
     givenEvent(EventPrerequisite(null, null))
-    assertTrue(announcer.announce(event, "", emptySet(), "").contains("grants no group"))
+    assertTrue(announcer.announce(event, "", emptySet(), EventPreview()).contains("grants no group"))
 
     verify(subscriptions, never()).getSubscribers(any())
     verifyNothingSent()
@@ -193,7 +195,7 @@ class CommitteeClassAnnouncerTest {
   fun `a group no committee owns sends nothing`() = runBlocking {
     givenEvent(EventPrerequisite("Board of Directors", null))
 
-    val summary = announcer.announce(event, "", emptySet(), "")
+    val summary = announcer.announce(event, "", emptySet(), EventPreview())
 
     assertTrue(summary.contains("no committee owns"), summary)
     verify(subscriptions, never()).getSubscribers(any())
@@ -205,7 +207,7 @@ class CommitteeClassAnnouncerTest {
     givenEvent(EventPrerequisite("Laser Basics", null))
     givenSubscribers()
 
-    announcer.announce(event, "", emptySet(), "")
+    announcer.announce(event, "", emptySet(), EventPreview())
 
     verify(ad, never()).getMembersByUsernameList(any())
     verifyNothingSent()
@@ -218,7 +220,7 @@ class CommitteeClassAnnouncerTest {
     whenever(ad.getMembersByUsernameList(any())).thenThrow(RuntimeException("ldap down"))
     givenFanOut()
 
-    announcer.announce(event, "", emptySet(), "")
+    announcer.announce(event, "", emptySet(), EventPreview())
 
     verify(notifications)
         .createForMembers(eq(listOf("alice", "bob")), any(), any(), anyOrNull(), any(), any())
@@ -233,7 +235,7 @@ class CommitteeClassAnnouncerTest {
         .thenReturn(mapOf("alice" to adUser("alice"), "ghost" to null))
     givenFanOut()
 
-    announcer.announce(event, "", emptySet(), "")
+    announcer.announce(event, "", emptySet(), EventPreview())
 
     verify(notifications)
         .createForMembers(eq(listOf("alice", "ghost")), any(), any(), anyOrNull(), any(), any())
@@ -251,7 +253,7 @@ class CommitteeClassAnnouncerTest {
     }
     givenFanOut()
 
-    announcer.announce(event, "", emptySet(), "")
+    announcer.announce(event, "", emptySet(), EventPreview())
 
     verify(ad, times(3)).getMembersByUsernameList(any())
     verify(notifications)

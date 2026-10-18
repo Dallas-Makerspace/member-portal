@@ -15,6 +15,7 @@ import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.notifications.templates.EventAnnouncementData
+import org.dallasmakerspace.notifications.templates.plainExcerpt
 import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.WebhookResult
@@ -75,10 +76,10 @@ constructor(
     val event = envelope.data
     val eventStart = formatEventStart(event.eventStart, event.eventStartTimezone)
     val followers = profileSubscriptionService.getFollowers(event.organizerUsername)
-    val imageUrl = lookUpImageUrl(event)
-    val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart, imageUrl)
+    val preview = lookUpPreview(event)
+    val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart, preview)
     val committeeSummary =
-        announceToCommitteeFollowers(event, eventStart, followers.toSet(), imageUrl)
+        announceToCommitteeFollowers(event, eventStart, followers.toSet(), preview)
     return WebhookResult(true, "$organizerSummary; $committeeSummary")
   }
 
@@ -86,7 +87,7 @@ constructor(
       event: CalendarEventWebhookData,
       followers: List<String>,
       eventStart: String,
-      imageUrl: String,
+      preview: EventPreview,
   ): String {
     if (followers.isEmpty()) return "No followers for ${event.organizerUsername}, nothing to send"
 
@@ -99,7 +100,8 @@ constructor(
                 organizerUsername = event.organizerUsername,
                 eventStart = eventStart,
                 eventUrl = event.url,
-                imageUrl = imageUrl))
+                imageUrl = preview.imageUrl,
+                excerpt = preview.excerpt))
 
     val result =
         notificationService.createForMembers(
@@ -123,22 +125,37 @@ constructor(
       event: CalendarEventWebhookData,
       eventStart: String,
       alreadyNotified: Set<String>,
-      imageUrl: String,
+      preview: EventPreview,
   ): String =
       try {
-        committeeClassAnnouncer.announce(event, eventStart, alreadyNotified, imageUrl)
+        committeeClassAnnouncer.announce(event, eventStart, alreadyNotified, preview)
       } catch (e: Exception) {
         logger.warn("Committee follower announcement failed for event ${event.id}", e)
         "Committee followers: failed (${e.javaClass.simpleName})"
       }
 
-  /** The event's first public image as an absolute URL; blank when there is none or the lookup fails. */
+  /** Each part is blank when the event has none or its lookup fails; the emails just omit it. */
+  private suspend fun lookUpPreview(event: CalendarEventWebhookData): EventPreview =
+      EventPreview(
+          imageUrl =
+              lookUp(event, "image") {
+                calendarService.getEventImagePath(event.id)?.let { absoluteImageUrl(event.url, it) }
+              },
+          excerpt =
+              lookUp(event, "description") {
+                calendarService.getEventDescription(event.id)?.let { plainExcerpt(it) }
+              })
+
   @Suppress("TooGenericExceptionCaught")
-  private suspend fun lookUpImageUrl(event: CalendarEventWebhookData): String =
+  private suspend fun lookUp(
+      event: CalendarEventWebhookData,
+      what: String,
+      block: suspend () -> String?,
+  ): String =
       try {
-        calendarService.getEventImagePath(event.id)?.let { absoluteImageUrl(event.url, it) }.orEmpty()
+        block().orEmpty()
       } catch (e: Exception) {
-        logger.warn("Image lookup failed for event ${event.id}, sending without one", e)
+        logger.warn("The $what lookup failed for event ${event.id}, sending without it", e)
         ""
       }
 
@@ -193,3 +210,5 @@ internal fun absoluteImageUrl(eventUrl: String, path: String): String =
       ""
     }
 
+/** The optional extras shown next to an event in emails: an absolute image URL and a short teaser. */
+data class EventPreview(val imageUrl: String = "", val excerpt: String = "")

@@ -94,4 +94,16 @@ class EventAnnouncementTemplateTest {
 
     assertTrue(!html.contains("src=\"https://x.example.org/a\"onerror"), html)
   }
+
+  @Test
+  fun `html shows the description teaser, escaped, with or without an image`() {
+    val withText = data().copy(excerpt = "Bring <b>glasses</b> & gloves")
+
+    for (html in listOf(template.renderHtml(withText), template.renderHtml(withText.copy(imageUrl = "https://calendar.example.org/files/1/a.png")))) {
+      assertTrue(html.contains("Bring &lt;b&gt;glasses&lt;/b&gt; &amp; gloves"), html)
+      assertTrue(html.indexOf("Bring &lt;") < html.indexOf("View the full details"))
+    }
+    assertTrue(template.renderText(withText).contains("Bring <b>glasses</b> & gloves"))
+    assertTrue(!template.renderHtml(data()).contains("color:#555"))
+  }
 }

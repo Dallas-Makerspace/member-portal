@@ -13,6 +13,7 @@ import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.dallasmakerspace.webhook.handlers.CommitteeClassAnnouncer
+import org.dallasmakerspace.webhook.handlers.EventPreview
 import org.dallasmakerspace.webhook.handlers.absoluteImageUrl
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -202,7 +203,7 @@ class CalendarEventWebhookTest {
         assertTrue(result.success)
         assertTrue(result.message.contains("No followers for jdoe"))
         assertTrue(result.message.contains("Committee followers: none to notify"))
-        verify(mockAnnouncer).announce(any(), eq("Mon Aug 10 7:00 PM"), eq(emptySet()), eq(""))
+        verify(mockAnnouncer).announce(any(), eq("Mon Aug 10 7:00 PM"), eq(emptySet()), eq(EventPreview()))
         Unit
       }
 
@@ -263,7 +264,7 @@ class CalendarEventWebhookTest {
     val expected = "https://calendar.dallasmakerspace.org/files/12345/my%20flyer.jpg"
     verifyFanOut(listOf("alice"))
     assertTrue(payload.lastValue.contains("\"imageUrl\":\"$expected\""), payload.lastValue)
-    verify(mockAnnouncer).announce(any(), any(), any(), eq(expected))
+    verify(mockAnnouncer).announce(any(), any(), any(), eq(EventPreview(expected, "")))
     Unit
   }
 
@@ -281,9 +282,40 @@ class CalendarEventWebhookTest {
         val result = handler.handleWebhook(requestBody())
 
         assertTrue(result.success)
-        verify(mockAnnouncer, times(2)).announce(any(), any(), any(), eq(""))
+        verify(mockAnnouncer, times(2)).announce(any(), any(), any(), eq(EventPreview()))
         Unit
       }
+
+  @Test
+  fun `handleWebhook should add a short description teaser to both announcements`() = runBlocking {
+    val long = "Learn to cut and engrave.   " + "Bring safety glasses. ".repeat(30)
+    whenever(mockCalendar.getEventDescription(12345)).thenReturn(long)
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
+    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
+    givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
+
+    handler.handleWebhook(requestBody())
+
+    verifyFanOut(listOf("alice"))
+    assertTrue(payload.lastValue.contains("\"excerpt\":\"Learn to cut and engrave. Bring safety"), payload.lastValue)
+    assertTrue(payload.lastValue.contains("…\""), payload.lastValue)
+    verify(mockAnnouncer)
+        .announce(any(), any(), any(), argThat { excerpt.startsWith("Learn to cut and engrave. Bring") && excerpt.length <= 201 })
+    Unit
+  }
+
+  @Test
+  fun `handleWebhook should send without a teaser when the description lookup fails`() = runBlocking {
+    whenever(mockCalendar.getEventDescription(12345)).thenThrow(IllegalStateException("db down"))
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(emptyList())
+
+    val result = handler.handleWebhook(requestBody())
+
+    assertTrue(result.success)
+    verify(mockAnnouncer).announce(any(), any(), any(), eq(EventPreview()))
+    Unit
+  }
 
   @Test
   fun `absoluteImageUrl takes the origin from the event page and encodes the path`() {

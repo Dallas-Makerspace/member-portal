@@ -17,6 +17,8 @@ data class EventAnnouncementData(
     val eventUrl: String = "",
     /** Absolute URL of the event's first public image attachment; blank when it has none. */
     val imageUrl: String = "",
+    /** Short plain-text preview of the event description; may be blank. */
+    val excerpt: String = "",
 )
 
 /** "An organizer you follow posted a new event" - flagship use case for the calendar webhook. */
@@ -37,6 +39,10 @@ class EventAnnouncementTemplate :
     appendLine()
     appendLine(data.eventName)
     if (data.eventStart.isNotBlank()) appendLine(data.eventStart)
+    if (data.excerpt.isNotBlank()) {
+      appendLine()
+      appendLine(data.excerpt)
+    }
     appendLine()
     appendLine("View the full details at ${data.eventUrl}")
     appendLine()
@@ -49,6 +55,9 @@ class EventAnnouncementTemplate :
       append("<h3 style=\"margin:0 0 8px;\">${escapeHtml(data.eventName)}</h3>")
       if (data.eventStart.isNotBlank()) {
         append("<p style=\"margin:0 0 8px;\">${escapeHtml(data.eventStart)}</p>")
+      }
+      if (data.excerpt.isNotBlank()) {
+        append("<p style=\"margin:0 0 10px;color:#555;\">${escapeHtml(data.excerpt)}</p>")
       }
       append("<p style=\"margin:0;\"><a href=\"${escapeHtml(data.eventUrl)}\">View the full details</a></p>")
     }

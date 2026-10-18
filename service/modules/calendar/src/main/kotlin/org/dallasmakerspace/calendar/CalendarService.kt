@@ -57,6 +57,10 @@ constructor(private val calendarRepository: CalendarRepository, loggerFactory: L
   suspend fun getEventImagePath(eventId: Long): String? =
       calendarRepository.getEventImagePath(eventId)
 
+  /** Long (else short) description of event [eventId] (see [CalendarRepository.getEventDescription]). */
+  suspend fun getEventDescription(eventId: Long): String? =
+      calendarRepository.getEventDescription(eventId)
+
   /**
    * Gets distinct event names that a member has attended, ordered by most recent first.
    *
