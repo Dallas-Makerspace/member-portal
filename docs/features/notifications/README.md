@@ -167,20 +167,67 @@ the committee adds a class they haven't taken yet. It is a second use of the sub
   skipped (as in the Upcoming Classes widget). Prefixes are plain `startsWith`, so short ones (`CA`,
   `WS`, `3D`) can match unrelated groups. Membership is direct only, which is how calendar and
   Moodle assign it.
-- **Not built yet:**
-  - **Online courses.** The course-to-committee mapping already exists (Moodle top-level category via
-    `Committee.learnCategories`). Moodle core has no outgoing webhook. The trigger isn't decided: the
-    `local/addad` plugin (source: the `moodle-addad` repo next to this one) already has an observer
-    registration, a scheduled task and a settings page, so it could post a signed request to a relay
-    (new UI route, like the Discourse one) when a course becomes visible, with a scheduled task as a
-    safety net; or the portal could compare Moodle's visible courses against an announced-courses
-    table on a timer, which this project avoids for idle DB traffic. Either way it needs a
-    "published = became visible" rule and an announced-courses record. Still to check on the Moodle
-    host: what `local/eventstreamer` does and whether Moodle can reach docker-h0.
-  - **Committee meetings.** Calendar has a generic "Committee Meetings" category but nothing that says
-    which committee, and the webhook doesn't send categories. It needs calendar-side committee info
-    (`events.committee_id`, see `calendar/docs/rfcs/committee-field.md`).
-  Both would add templates on the same topic, so members keep one toggle.
+- **Not built yet: committee meetings.** Calendar has a generic "Committee Meetings" category but
+  nothing that says which committee, and the webhook doesn't send categories. It needs calendar-side
+  committee info (`events.committee_id`, see `calendar/docs/rfcs/committee-field.md`). It would add a
+  template on the same topic, so members keep one toggle.
+
+### New online courses
+
+Followers are also notified when a committee's Moodle category gets a new online course. Moodle has no
+outgoing webhooks, so the `local_addad` plugin (repo `moodle-addad`, v0.4.0+) sends a signal and the
+portal works out what is new.
+
+- **Signal:** the plugin queues one ad hoc task when a course is created, shown, hidden or moved,
+  when a category is edited, or when an enrolment method is added or changed. It POSTs
+  `{"event":"course_change","time":...}` with `X-Addad-Signature: sha256=<HMAC-SHA256 of the body>`
+  to the portal. The body carries no course data and is only a hint. A non-2xx answer makes Moodle
+  retry with a growing delay.
+- **Relay:** `POST /webhook/moodle` (UI, public, `MoodleWebhookHandler`) verifies the signature with
+  `ENV_MOODLE_WEBHOOK_SECRET` and forwards to the service's `moodle-course` handler
+  (`MoodleCourseWebhook` -> `MoodleCourseAnnouncer`). While the secret is still the placeholder the
+  relay refuses everything outside development.
+- **Decision:** `MoodleCourseAnnouncer` reads the Moodle catalog fresh
+  (`MoodleCatalogService.refreshNow`, which throws rather than serving a stale cache, so a failure is
+  reported and Moodle retries). A course is announced when it is visible, in a committee's category
+  (`Committee.learnCategories`) and members can self-enrol, and it has not been announced.
+- **"Already announced" state:** the generic key/value store (below), namespace
+  `moodle-course-announced`, one marker per course id. An edit to a long-published course (Moodle fires
+  an update event for any edit), or hiding and re-showing a course, therefore never announces it
+  again. The first pass ever **records every course that is visible at that moment and notifies
+  nobody** (`_baseline`), so nothing that already existed is treated as new.
+- **Recipients:** followers of the owning committee, except those already in the course's `ad_group`
+  (they completed it). With no `ad_group` we can't tell who finished it, so every follower is told.
+  `CommitteeFollowerFilter` is shared with the class announcer.
+- **Dedupe and retries:** a course is marked only after its notifications were created, and the
+  per-member key `committee-course-<courseId>-<username>` makes a retry harmless. A course nobody
+  follows is still marked, so people who follow later aren't told about an old course.
+- **Limits:** a course that is visible but not yet joinable is announced when it becomes joinable
+  (the plugin signals on enrolment changes); courses that already existed and weren't joinable at
+  the baseline are never announced. Moodle must be reachable when the signal arrives, otherwise the
+  attempt fails and Moodle retries.
+
+**Switching it on** (nothing is sent until all of this is done):
+1. Apply `service/docs/sql/key-value-migration.sql` to the Member Portal DB (re-runnable).
+2. Choose a random secret and set `ENV_MOODLE_WEBHOOK_SECRET` in the UI's environment.
+3. Deploy the service, then the UI.
+4. In Moodle (Site administration > Plugins > Local plugins > AddAD) enter the same secret and set the
+   URL to `https://<portal host>/webhook/moodle`. Clearing the URL switches it off again.
+5. Send the first ping, which records the baseline, before any new course is published:
+   `sudo -u www-data php local/addad/cli/announce_courses.php --send` on the Moodle host. The portal log
+   shows `Moodle courses: seeded N visible course(s), nobody notified`; a second ping says
+   `nothing new`.
+
+## Key/value store
+
+`:service:keyvalue` is a small generic store for durable state that doesn't deserve its own table: the
+`key_value(namespace, item_key, item_value, updated_at)` table (case-sensitive keys, migration
+`service/docs/sql/key-value-migration.sql`) behind `KeyValueStore` (`get`, `put`, `putIfAbsent`,
+`putAllIfAbsent`, `contains`, `delete`, `keys(prefix)`) and a per-feature handle,
+`store.namespace("name")`, with `getJson`/`putJson`. Pick one namespace per feature. It is for markers
+and baselines, not for high-volume data or anything you query by field (there are no foreign keys or
+per-value indexes, and `keys` reads the whole namespace). It is its own module so a change to it
+doesn't invalidate `:service:core`'s build cache.
 
 ## Adding a channel
 
