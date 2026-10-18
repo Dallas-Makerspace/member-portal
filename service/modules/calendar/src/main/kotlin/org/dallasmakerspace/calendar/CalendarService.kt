@@ -49,6 +49,10 @@ constructor(private val calendarRepository: CalendarRepository, loggerFactory: L
     return calendarRepository.getUpcomingPrerequisiteEvents(groupNames)
   }
 
+  /** The prerequisite AD group event [eventId] grants (see [EventPrerequisite]); null on failure. */
+  suspend fun getEventPrerequisite(eventId: Long): EventPrerequisite? =
+      calendarRepository.getEventPrerequisite(eventId)
+
   /**
    * Gets distinct event names that a member has attended, ordered by most recent first.
    *

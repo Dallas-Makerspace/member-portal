@@ -182,6 +182,40 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   }
 
   /**
+   * The prerequisite AD group attending event [eventId] grants, and the parent event if it is a
+   * session of a multi-part event. Null when the event isn't found or the lookup fails or times
+   * out; an [EventPrerequisite] with a null [EventPrerequisite.adGroup] means the event exists but
+   * grants nothing.
+   */
+  suspend fun getEventPrerequisite(eventId: Long): EventPrerequisite? {
+    // Column aliases equal the column names, so this reads the same whichever name the driver
+    // reports in the result set.
+    val query =
+        """
+      SET STATEMENT max_statement_time=1.5 FOR
+      SELECT p.ad_group AS ad_group, e.part_of_id AS part_of_id
+      FROM `dms-calendar`.events e
+      LEFT JOIN `dms-calendar`.prerequisites p ON e.fulfills_prerequisite_id = p.id
+      WHERE e.id = $eventId
+      LIMIT 1
+    """
+
+    val result =
+        try {
+          genericRepository.getReportData(query)
+        } catch (ex: Exception) {
+          log.warn("Failed fetching the prerequisite for event $eventId - ${ex.message}")
+          return null
+        }
+
+    val row = result?.data?.firstOrNull() ?: return null
+    return EventPrerequisite(
+        adGroup = row["ad_group"]?.toString()?.trim()?.takeIf { it.isNotEmpty() },
+        partOfId = (row["part_of_id"] as? Number)?.toLong(),
+    )
+  }
+
+  /**
    * Fetches distinct event names that a member has attended, ordered by most recent first.
    *
    * @param username The AD username of the member.
@@ -642,6 +676,13 @@ data class EventSummary(
     val eventStartUtcMs: Long? = null,
     val fulfillsPrerequisiteGroup: String? = null,
 )
+
+/**
+ * What attending a calendar event grants: [adGroup] is the AD group of the prerequisite it
+ * fulfills (null if none), and [partOfId] the parent event when it is one session of a multi-part
+ * event.
+ */
+data class EventPrerequisite(val adGroup: String?, val partOfId: Long?)
 
 /** How many calendar prerequisites name an AD group, and how many events use them. */
 data class PrerequisiteReferences(

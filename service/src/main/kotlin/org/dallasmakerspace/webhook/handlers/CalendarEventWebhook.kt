@@ -16,6 +16,7 @@ import org.dallasmakerspace.notifications.templates.EventAnnouncementData
 import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.WebhookResult
+import org.dallasmakerspace.webhook.models.CalendarEventWebhookData
 import org.dallasmakerspace.webhook.models.CalendarEventWebhookEnvelope
 import org.slf4j.LoggerFactory
 
@@ -26,7 +27,8 @@ private val EVENT_START_FORMATTER = DateTimeFormatter.ofPattern("EEE MMM d h:mm 
 /**
  * Webhook handler for "an organizer posted a new calendar event." Fans out an EVENT_ANNOUNCEMENT
  * notification to every member following the organizer - the piece that connects the follow feature
- * to real notifications. The calendar system is internal-only, so it calls this endpoint directly
+ * to real notifications. It also tells followers of the committee that owns the class
+ * ([CommitteeClassAnnouncer]). The calendar system is internal-only, so it calls this endpoint directly
  * (no UI proxy needed, unlike genuinely external callers such as SparkPost) - same as the existing
  * groups-audit webhook.
  *
@@ -41,6 +43,7 @@ constructor(
     private val profileSubscriptionService: ProfileSubscriptionService,
     private val notificationService: NotificationService,
     private val activeDirectoryService: IActiveDirectoryService,
+    private val committeeClassAnnouncer: CommitteeClassAnnouncer,
 ) : WebhookHandler() {
 
   private val logger = LoggerFactory.getLogger(CalendarEventWebhook::class.java)
@@ -67,10 +70,19 @@ constructor(
     }
 
     val event = envelope.data
+    val eventStart = formatEventStart(event.eventStart, event.eventStartTimezone)
     val followers = profileSubscriptionService.getFollowers(event.organizerUsername)
-    if (followers.isEmpty()) {
-      return WebhookResult(true, "No followers for ${event.organizerUsername}, nothing to send")
-    }
+    val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart)
+    val committeeSummary = announceToCommitteeFollowers(event, eventStart, followers.toSet())
+    return WebhookResult(true, "$organizerSummary; $committeeSummary")
+  }
+
+  private suspend fun notifyOrganizerFollowers(
+      event: CalendarEventWebhookData,
+      followers: List<String>,
+      eventStart: String,
+  ): String {
+    if (followers.isEmpty()) return "No followers for ${event.organizerUsername}, nothing to send"
 
     val payload =
         json.encodeToString(
@@ -79,7 +91,7 @@ constructor(
                 eventName = event.name,
                 organizerName = resolveOrganizerName(event.organizerUsername),
                 organizerUsername = event.organizerUsername,
-                eventStart = formatEventStart(event.eventStart, event.eventStartTimezone),
+                eventStart = eventStart,
                 eventUrl = event.url))
 
     val result =
@@ -90,11 +102,27 @@ constructor(
             payload = payload,
             channel = Channel.EMAIL,
             dedupeKey = { follower -> "event-announcement-${event.id}-$follower" })
-    return WebhookResult(
-        true,
-        "Notified ${result.created} of ${followers.size} follower(s) of ${event.organizerUsername}" +
-            " (duplicates=${result.duplicates}, failed=${result.failed})")
+    return "Notified ${result.created} of ${followers.size} follower(s) of ${event.organizerUsername}" +
+        " (duplicates=${result.duplicates}, failed=${result.failed})"
   }
+
+  /**
+   * Committee followers are a bonus on top of the organizer fan-out: a failure here (for example
+   * the committee_subscriptions table not being migrated yet) is logged and never fails the
+   * webhook, which calendar would report as a delivery error.
+   */
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun announceToCommitteeFollowers(
+      event: CalendarEventWebhookData,
+      eventStart: String,
+      alreadyNotified: Set<String>,
+  ): String =
+      try {
+        committeeClassAnnouncer.announce(event, eventStart, alreadyNotified)
+      } catch (e: Exception) {
+        logger.warn("Committee follower announcement failed for event ${event.id}", e)
+        "Committee followers: failed (${e.javaClass.simpleName})"
+      }
 
   /**
    * Resolves the organizer's full display name from AD. LDAP is blocking, so this is scoped to

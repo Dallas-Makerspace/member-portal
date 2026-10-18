@@ -11,9 +11,11 @@ import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
+import org.dallasmakerspace.webhook.handlers.CommitteeClassAnnouncer
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.argThat
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
@@ -26,7 +28,16 @@ class CalendarEventWebhookTest {
   private val mockSubscriptions = mock<ProfileSubscriptionService>()
   private val mockNotifications = mock<NotificationService>()
   private val mockAd = mock<IActiveDirectoryService>()
-  private val handler = CalendarEventWebhook(mockSubscriptions, mockNotifications, mockAd)
+  private val mockAnnouncer = mock<CommitteeClassAnnouncer>()
+  private val handler =
+      CalendarEventWebhook(mockSubscriptions, mockNotifications, mockAd, mockAnnouncer)
+
+  init {
+    runBlocking {
+      whenever(mockAnnouncer.announce(any(), any(), any()))
+          .thenReturn("Committee followers: none to notify")
+    }
+  }
 
   private fun adUser(username: String, displayName: String?) =
       ADUser(
@@ -174,6 +185,63 @@ class CalendarEventWebhookTest {
     // 2026-08-11T00:00:00 UTC is 2026-08-10 19:00 Central (UTC-5 in August).
     verifyFanOut(listOf("alice"))
     assertTrue(payload.lastValue.contains("Mon Aug 10"))
+  }
+
+  @Test
+  fun `handleWebhook should still announce to committee followers when the organizer has none`() =
+      runBlocking {
+        whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(emptyList())
+
+        val result = handler.handleWebhook(requestBody())
+
+        assertTrue(result.success)
+        assertTrue(result.message.contains("No followers for jdoe"))
+        assertTrue(result.message.contains("Committee followers: none to notify"))
+        verify(mockAnnouncer).announce(any(), eq("Mon Aug 10 7:00 PM"), eq(emptySet()))
+        Unit
+      }
+
+  @Test
+  fun `handleWebhook should tell the announcer who the organizer fan-out already notified`() =
+      runBlocking {
+        whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice", "bob"))
+        whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+            .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
+        givenFanOut(FanOutResult(created = 2, duplicates = 0, failed = 0))
+
+        handler.handleWebhook(requestBody())
+
+        verify(mockAnnouncer)
+            .announce(
+                argThat { id == 12345L && organizerUsername == "jdoe" },
+                any(),
+                eq(setOf("alice", "bob")))
+        Unit
+      }
+
+  @Test
+  fun `handleWebhook should succeed when the committee announcement fails`() = runBlocking {
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
+    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
+    givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
+    whenever(mockAnnouncer.announce(any(), any(), any()))
+        .thenThrow(IllegalStateException("committee_subscriptions doesn't exist"))
+
+    val result = handler.handleWebhook(requestBody())
+
+    assertTrue(result.success)
+    assertTrue(result.message.contains("Notified 1 of 1"))
+    assertTrue(result.message.contains("Committee followers: failed"))
+    verifyFanOut(listOf("alice"))
+  }
+
+  @Test
+  fun `handleWebhook should not announce to committees for other event types`() = runBlocking {
+    handler.handleWebhook(requestBody(eventType = "event.updated"))
+
+    verify(mockAnnouncer, never()).announce(any(), any(), any())
+    Unit
   }
 
   @Test
