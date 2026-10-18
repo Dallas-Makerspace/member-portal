@@ -3,31 +3,48 @@
 (function () {
     'use strict';
 
-    function iconOnly(btn) {
-        return btn.dataset.iconOnly === 'true';
-    }
+    // Must match buttonClass() in SubscriptionButton.kt, which renders the initial state.
+    const STYLES = {
+        full: {off: 'btn-primary', on: 'btn-outline-primary', hover: 'btn-outline-danger'},
+        icon: {off: 'btn-outline-secondary', on: 'btn-outline-primary dms-subscribe-on'}
+    };
+
+    const isIconOnly = (btn) => btn.dataset.iconOnly === 'true';
+    const isSubscribed = (btn) => btn.dataset.subscribed === 'true';
+    const styleFor = (btn) => STYLES[isIconOnly(btn) ? 'icon' : 'full'];
+    const classes = (value) => (value || '').split(' ').filter(Boolean);
 
     function tooltipFor(btn) {
-        return iconOnly(btn) && typeof bootstrap !== 'undefined'
-            ? bootstrap.Tooltip.getOrCreateInstance(btn, {title: btn.getAttribute('aria-label') || ''})
+        return isIconOnly(btn) && typeof bootstrap !== 'undefined'
+            ? bootstrap.Tooltip.getOrCreateInstance(btn, {title: btn.getAttribute('aria-label') || '', placement: 'bottom'})
             : null;
     }
 
-    function render(btn, copy, subscribed) {
-        const label = subscribed ? copy.unsubscribeLabel : copy.subscribeLabel;
+    /** Sets the look for [subscribed]; [hovering] shows the subscribed full button as its "Unfollow" action. */
+    function render(btn, copy, subscribed, hovering) {
+        const style = styleFor(btn);
+        const unsubscribeAction = subscribed && hovering && !isIconOnly(btn);
         btn.dataset.subscribed = String(subscribed);
-        btn.setAttribute('aria-pressed', String(subscribed));
-        btn.classList.toggle('btn-primary', !subscribed);
-        btn.classList.toggle('btn-outline-secondary', subscribed);
+        Object.values(style).forEach((value) => btn.classList.remove(...classes(value)));
+        btn.classList.add(...classes(unsubscribeAction ? style.hover : subscribed ? style.on : style.off));
+
         const icon = btn.querySelector('.material-symbols-outlined');
-        if (icon) icon.textContent = subscribed ? copy.unsubscribeIcon : copy.subscribeIcon;
-        if (iconOnly(btn)) {
-            btn.setAttribute('aria-label', label);
+        if (icon) {
+            icon.textContent = unsubscribeAction ? copy.unsubscribeIcon : subscribed ? copy.subscribedIcon : copy.subscribeIcon;
+        }
+        if (isIconOnly(btn)) {
+            const action = subscribed ? copy.unsubscribeLabel : copy.subscribeLabel;
+            btn.setAttribute('aria-label', action);
             const tip = tooltipFor(btn);
-            if (tip) tip.setContent({'.tooltip-inner': label});
-        } else {
-            const text = btn.querySelector('.dms-subscribe-label');
-            if (text) text.textContent = label;
+            if (tip) tip.setContent({'.tooltip-inner': action});
+            return;
+        }
+        btn.setAttribute('aria-pressed', String(subscribed));
+        const text = btn.querySelector('.dms-subscribe-label');
+        if (text) text.textContent = unsubscribeAction ? copy.unsubscribeLabel : subscribed ? copy.subscribedLabel : copy.subscribeLabel;
+        const hint = btn.nextElementSibling;
+        if (hint && hint.classList.contains('dms-subscribe-hint')) {
+            hint.textContent = (subscribed ? copy.subscribedHint : copy.hint) || '';
         }
     }
 
@@ -35,7 +52,7 @@
         const topic = btn.dataset.topic;
         const args = JSON.parse(btn.dataset.args || '{}');
         const copy = JSON.parse(btn.dataset.copy || '{}');
-        const wasSubscribed = btn.dataset.subscribed === 'true';
+        const wasSubscribed = isSubscribed(btn);
         // Otherwise the tooltip stays visible over the dialog's backdrop.
         const tip = bootstrap.Tooltip.getInstance(btn);
         if (tip) tip.hide();
@@ -50,7 +67,9 @@
             const result = await response.json().catch(() => ({}));
             if (response.ok && result.status === 'SUCCESS' && result.data) {
                 const subscribed = result.data.subscribed === true;
-                render(btn, copy, subscribed);
+                // The pointer is still over the button; don't flash "Unfollow" until it leaves and returns.
+                btn.dataset.holdRest = 'true';
+                render(btn, copy, subscribed, false);
                 showToast(subscribed ? copy.subscribedToast : copy.unsubscribedToast);
                 btn.dispatchEvent(new CustomEvent('dms:subscription-changed', {
                     bubbles: true,
@@ -67,13 +86,27 @@
         }
     }
 
+    function bind(btn) {
+        tooltipFor(btn);
+        btn.addEventListener('click', () => onClick(btn));
+        if (isIconOnly(btn)) return;
+
+        const enter = () => {
+            if (!isSubscribed(btn) || btn.dataset.holdRest || btn.dataset.dmsLoading) return;
+            render(btn, JSON.parse(btn.dataset.copy || '{}'), true, true);
+        };
+        const leave = () => {
+            delete btn.dataset.holdRest;
+            if (isSubscribed(btn) && !btn.dataset.dmsLoading) render(btn, JSON.parse(btn.dataset.copy || '{}'), true, false);
+        };
+        btn.addEventListener('mouseenter', enter);
+        btn.addEventListener('focus', enter);
+        btn.addEventListener('mouseleave', leave);
+        btn.addEventListener('blur', leave);
+    }
+
     function init() {
-        document.querySelectorAll('[data-dms-subscribe]').forEach(function (btn) {
-            tooltipFor(btn);
-            btn.addEventListener('click', function () {
-                onClick(btn);
-            });
-        });
+        document.querySelectorAll('[data-dms-subscribe]').forEach(bind);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

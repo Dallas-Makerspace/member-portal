@@ -55,14 +55,17 @@ fun subscriptionStatusFromMap(data: Map<*, *>): SubscriptionStatus? =
               copy =
                   SubscriptionCopy(
                       subscribeLabel = copy["subscribeLabel"] as String,
+                      subscribedLabel = copy["subscribedLabel"] as String,
                       unsubscribeLabel = copy["unsubscribeLabel"] as String,
                       subscribeIcon = copy["subscribeIcon"] as String,
+                      subscribedIcon = copy["subscribedIcon"] as String,
                       unsubscribeIcon = copy["unsubscribeIcon"] as String,
                       subscribeBusy = copy["subscribeBusy"] as String,
                       unsubscribeBusy = copy["unsubscribeBusy"] as String,
                       subscribedToast = copy["subscribedToast"] as String,
                       unsubscribedToast = copy["unsubscribedToast"] as String,
                       hint = copy["hint"] as String?,
+                      subscribedHint = copy["subscribedHint"] as String?,
                       subscribeConfirm = confirmCopyFromMap(copy["subscribeConfirm"]),
                       unsubscribeConfirm = confirmCopyFromMap(copy["unsubscribeConfirm"])))
         }

@@ -625,3 +625,21 @@ a.dms-facepile-item:focus-visible {
     border-radius: 50%;
     justify-content: center;
 }
+.btn.dms-subscribe-icon-only .material-symbols-outlined {
+    font-size: 20px;
+}
+/* Icon-only "on": a tinted circle, so it reads as active next to the ghost "off" circle. */
+.btn.dms-subscribe-on {
+    --bs-btn-color: var(--bs-primary-text-emphasis);
+    --bs-btn-bg: var(--bs-primary-bg-subtle);
+    --bs-btn-border-color: var(--bs-primary-border-subtle);
+    --bs-btn-hover-color: var(--bs-primary-text-emphasis);
+    --bs-btn-hover-bg: var(--bs-primary-border-subtle);
+    --bs-btn-hover-border-color: var(--bs-primary-border-subtle);
+    --bs-btn-active-color: var(--bs-primary-text-emphasis);
+    --bs-btn-active-bg: var(--bs-primary-border-subtle);
+    --bs-btn-active-border-color: var(--bs-primary-border-subtle);
+}
+.dms-subscribe-hint {
+    text-wrap: balance;
+}

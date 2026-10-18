@@ -5,7 +5,6 @@ import org.dallasmakerspace.models.ConfirmCopy
 import org.dallasmakerspace.models.SubscriptionCopy
 import org.dallasmakerspace.models.SubscriptionStatus
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,21 +14,24 @@ class SubscriptionButtonTest {
   private val copy =
       SubscriptionCopy(
           subscribeLabel = "Follow",
+          subscribedLabel = "Following",
           unsubscribeLabel = "Unfollow",
           subscribeIcon = "person_add",
+          subscribedIcon = "check",
           unsubscribeIcon = "person_remove",
           subscribeBusy = "Following…",
           unsubscribeBusy = "Unfollowing…",
           subscribedToast = "Followed",
           unsubscribedToast = "Unfollowed",
           hint = "A hint",
+          subscribedHint = "A subscribed hint",
           subscribeConfirm = ConfirmCopy("Follow?", "Sure?", "Follow"))
 
   private fun status(subscribed: Boolean) =
       SubscriptionStatus("TOPIC", mapOf("username" to "asmith"), subscribed, copy)
 
   @Test
-  fun notSubscribedShowsSubscribeLabelIconAndPrimaryStyle() {
+  fun notSubscribedOffersTheActionInPrimaryStyle() {
     val model = subscriptionButtonModel(status(false))
 
     assertEquals("Follow", model["label"])
@@ -41,20 +43,31 @@ class SubscriptionButtonTest {
   }
 
   @Test
-  fun subscribedShowsUnsubscribeLabelIconAndOutlineStyle() {
+  fun subscribedShowsTheStateAtRest() {
     val model = subscriptionButtonModel(status(true))
 
-    assertEquals("Unfollow", model["label"])
-    assertEquals("person_remove", model["icon"])
-    assertEquals("btn-outline-secondary", model["btnClass"])
+    assertEquals("Following", model["label"])
+    assertEquals("check", model["icon"])
+    assertEquals("btn-outline-primary", model["btnClass"])
+    assertEquals("A subscribed hint", model["hint"])
   }
 
   @Test
-  fun iconVariantDropsTheHint() {
-    val model = subscriptionButtonModel(status(false), VARIANT_ICON)
+  fun iconVariantIsGhostWhenOffAndTintedWhenOnWithNoHint() {
+    val off = subscriptionButtonModel(status(false), VARIANT_ICON)
+    val on = subscriptionButtonModel(status(true), VARIANT_ICON)
 
-    assertEquals(true, model["iconOnly"])
-    assertNull(model["hint"])
+    assertEquals(true, off["iconOnly"])
+    assertEquals("btn-outline-secondary", off["btnClass"])
+    assertEquals("btn-outline-primary dms-subscribe-on", on["btnClass"])
+    assertNull(off["hint"])
+    assertNull(on["hint"])
+  }
+
+  @Test
+  fun iconVariantIsNamedByTheActionAClickPerforms() {
+    assertEquals("Follow", subscriptionButtonModel(status(false), VARIANT_ICON)["actionLabel"])
+    assertEquals("Unfollow", subscriptionButtonModel(status(true), VARIANT_ICON)["actionLabel"])
   }
 
   @Test
@@ -63,24 +76,28 @@ class SubscriptionButtonTest {
         subscriptionButtonModel(
             status(false),
             subscribeLabel = "Notify me",
+            subscribedLabel = "Notifying",
             unsubscribeLabel = "Stop",
             subscribeIcon = "notifications",
+            subscribedIcon = "notifications_active",
             unsubscribeIcon = "notifications_off")
 
     assertEquals("Notify me", model["label"])
     assertEquals("notifications", model["icon"])
     val scriptCopy = Json.decodeFromString(SubscriptionCopy.serializer(), model["copyJson"] as String)
     assertEquals("Notify me", scriptCopy.subscribeLabel)
+    assertEquals("Notifying", scriptCopy.subscribedLabel)
     assertEquals("Stop", scriptCopy.unsubscribeLabel)
+    assertEquals("notifications_active", scriptCopy.subscribedIcon)
     assertEquals("notifications_off", scriptCopy.unsubscribeIcon)
     assertEquals("Follow?", scriptCopy.subscribeConfirm?.title)
   }
 
   @Test
-  fun argsAreEncodedAsJson() {
+  fun argsAndCopyAreEncodedAsJson() {
     val model = subscriptionButtonModel(status(false))
 
     assertTrue((model["argsJson"] as String).contains("\"username\":\"asmith\""))
-    assertFalse((model["copyJson"] as String).isEmpty())
+    assertTrue((model["copyJson"] as String).contains("\"subscribedLabel\":\"Following\""))
   }
 }

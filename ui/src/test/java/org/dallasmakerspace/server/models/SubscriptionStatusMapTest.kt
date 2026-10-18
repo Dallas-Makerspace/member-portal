@@ -10,14 +10,17 @@ class SubscriptionStatusMapTest {
   private fun copyMap(): MutableMap<String, Any?> =
       mutableMapOf(
           "subscribeLabel" to "Follow",
+          "subscribedLabel" to "Following",
           "unsubscribeLabel" to "Unfollow",
           "subscribeIcon" to "person_add",
+          "subscribedIcon" to "check",
           "unsubscribeIcon" to "person_remove",
           "subscribeBusy" to "Following…",
           "unsubscribeBusy" to "Unfollowing…",
           "subscribedToast" to "Followed",
           "unsubscribedToast" to "Unfollowed",
           "hint" to "A hint",
+          "subscribedHint" to "A subscribed hint",
           "subscribeConfirm" to
               mapOf("title" to "Follow?", "message" to "Sure?", "confirmLabel" to "Follow"))
 
@@ -39,12 +42,15 @@ class SubscriptionStatusMapTest {
     assertEquals("Follow?", status.copy.subscribeConfirm?.title)
     assertNull(status.copy.unsubscribeConfirm)
     assertEquals("A hint", status.copy.hint)
+    assertEquals("A subscribed hint", status.copy.subscribedHint)
+    assertEquals("Following", status.copy.subscribedLabel)
   }
 
   @Test
   fun optionalFieldsMayBeAbsent() {
     val copy = copyMap().apply {
       remove("hint")
+      remove("subscribedHint")
       remove("subscribeConfirm")
     }
 

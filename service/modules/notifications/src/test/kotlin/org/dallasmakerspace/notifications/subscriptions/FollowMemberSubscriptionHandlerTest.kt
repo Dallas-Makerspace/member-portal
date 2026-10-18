@@ -46,6 +46,9 @@ class FollowMemberSubscriptionHandlerTest {
     assertEquals("Follow @asmith?", assertNotNull(copy.subscribeConfirm).title)
     assertNull(copy.unsubscribeConfirm)
     assertEquals("person_add", copy.subscribeIcon)
+    assertEquals("check", copy.subscribedIcon)
     assertEquals("person_remove", copy.unsubscribeIcon)
+    assertEquals("Following", copy.subscribedLabel)
+    assertNotNull(copy.subscribedHint)
   }
 }

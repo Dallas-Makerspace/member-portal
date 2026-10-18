@@ -31,8 +31,10 @@ constructor(private val service: ProfileSubscriptionService) : TopicSubscription
     val target = "@${args.getValue(ARG_USERNAME)}"
     return SubscriptionCopy(
         subscribeLabel = "Follow",
+        subscribedLabel = "Following",
         unsubscribeLabel = "Unfollow",
         subscribeIcon = "person_add",
+        subscribedIcon = "check",
         unsubscribeIcon = "person_remove",
         subscribeBusy = "Following…",
         unsubscribeBusy = "Unfollowing…",
@@ -40,6 +42,7 @@ constructor(private val service: ProfileSubscriptionService) : TopicSubscription
             "You're following $target. You'll be notified when they post an event or a project.",
         unsubscribedToast = "You unfollowed $target.",
         hint = "Get notified when they post an event or a project",
+        subscribedHint = "You'll get an email when they post an event or a project",
         subscribeConfirm =
             ConfirmCopy(
                 title = "Follow $target?",

@@ -65,8 +65,10 @@ class TopicSubscriptionRoutesTest {
     override fun copy(args: Map<String, String>) =
         SubscriptionCopy(
             subscribeLabel = "Sub ${args.getValue("target")}",
+            subscribedLabel = "Subbed",
             unsubscribeLabel = "Unsub",
             subscribeIcon = "add",
+            subscribedIcon = "check",
             unsubscribeIcon = "remove",
             subscribeBusy = "Subscribing…",
             unsubscribeBusy = "Unsubscribing…",

@@ -10,18 +10,27 @@ object TopicKeys {
 @Serializable
 data class ConfirmCopy(val title: String, val message: String, val confirmLabel: String)
 
-/** Everything the subscribe button shows for one topic and its args; a null confirm means no dialog. */
+/**
+ * Everything the subscribe button shows for one topic and its args; a null confirm means no dialog.
+ *
+ * The button has three looks: not subscribed ([subscribeLabel]/[subscribeIcon], the action it
+ * offers), subscribed at rest ([subscribedLabel]/[subscribedIcon], the state, e.g. "Following"),
+ * and subscribed while hovered ([unsubscribeLabel]/[unsubscribeIcon], the action it offers).
+ */
 @Serializable
 data class SubscriptionCopy(
     val subscribeLabel: String,
+    val subscribedLabel: String,
     val unsubscribeLabel: String,
     val subscribeIcon: String,
+    val subscribedIcon: String,
     val unsubscribeIcon: String,
     val subscribeBusy: String,
     val unsubscribeBusy: String,
     val subscribedToast: String,
     val unsubscribedToast: String,
     val hint: String? = null,
+    val subscribedHint: String? = null,
     val subscribeConfirm: ConfirmCopy? = null,
     val unsubscribeConfirm: ConfirmCopy? = null,
 )
