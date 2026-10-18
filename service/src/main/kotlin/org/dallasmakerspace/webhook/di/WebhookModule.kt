@@ -4,6 +4,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.multibindings.ElementsIntoSet
 import dagger.multibindings.IntoSet
+import org.dallasmakerspace.notifications.templates.CommitteeClassTemplate
 import org.dallasmakerspace.notifications.templates.EventAnnouncementTemplate
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
 import org.dallasmakerspace.notifications.templates.ProjectPostTemplate
@@ -32,6 +33,11 @@ class WebhookModule {
   @Provides
   @IntoSet
   fun provideProjectPostTemplate(): NotificationTemplate<*> = ProjectPostTemplate()
+
+  /** Produced by [CalendarEventWebhook] (via CommitteeClassAnnouncer) for committee followers. */
+  @Provides
+  @IntoSet
+  fun provideCommitteeClassTemplate(): NotificationTemplate<*> = CommitteeClassTemplate()
 
   @Provides
   @ElementsIntoSet

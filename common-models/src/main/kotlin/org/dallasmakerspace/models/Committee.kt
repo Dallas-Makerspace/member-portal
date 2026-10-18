@@ -26,10 +26,20 @@ data class Committee(
       learnCategories.any {
         it.equals(idNumber?.trim(), ignoreCase = true) || it.equals(name?.trim(), ignoreCase = true)
       }
+
+  /** Whether the AD group [groupName] belongs to this committee (the committee page's rule). */
+  fun ownsGroup(groupName: String): Boolean =
+      groupPrefixes.any { groupName.startsWith(it, ignoreCase = true) }
 }
 
 object Committees {
   @JvmStatic fun getActiveCommittees(): List<Committee> = ALL.filter { it.isActive }
+
+  /** Active committees that own the AD group [groupName]; empty for a blank name. */
+  @JvmStatic
+  fun forGroup(groupName: String): List<Committee> =
+      if (groupName.isBlank()) emptyList()
+      else getActiveCommittees().filter { it.ownsGroup(groupName) }
 
   val ALL =
       listOf(

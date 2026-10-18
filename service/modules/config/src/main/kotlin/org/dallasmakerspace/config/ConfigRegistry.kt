@@ -151,6 +151,17 @@ object ConfigRegistry {
           type = ConfigValueType.IntType,
       )
 
+  val COMMITTEE_FOLLOW_ENABLED =
+      ConfigKey(
+          key = "notifications.committee-follow-enabled",
+          description =
+              "Gates following a committee (committee page button and new-class notifications); " +
+                  "can be piloted for specific usernames or AD groups before a full rollout",
+          category = "Notifications",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val FOLLOW_FEATURE_ENABLED =
       ConfigKey(
           key = "notifications.follow-feature-enabled",

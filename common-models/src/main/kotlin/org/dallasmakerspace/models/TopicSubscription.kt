@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 /** Shared notification topic keys the UI needs; the service's topic objects reference these. */
 object TopicKeys {
   const val FOLLOWING = "EVENT_ANNOUNCEMENT"
+  const val COMMITTEE_UPDATES = "COMMITTEE_UPDATES"
 }
 
 @Serializable

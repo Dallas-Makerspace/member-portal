@@ -17,6 +17,7 @@ import org.dallasmakerspace.notifications.channels.ChannelKey
 import org.dallasmakerspace.notifications.channels.EmailNotifier
 import org.dallasmakerspace.notifications.channels.MockNotifier
 import org.dallasmakerspace.notifications.channels.Notifier
+import org.dallasmakerspace.notifications.subscriptions.FollowCommitteeSubscriptionHandler
 import org.dallasmakerspace.notifications.subscriptions.FollowMemberSubscriptionHandler
 import org.dallasmakerspace.notifications.subscriptions.TopicSubscriptionHandler
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
@@ -64,6 +65,15 @@ object NotificationsModule {
   @StringKey(TopicKeys.FOLLOWING)
   fun provideFollowMemberSubscriptionHandler(
       handler: FollowMemberSubscriptionHandler
+  ): TopicSubscriptionHandler = handler
+
+  /** "Follow a committee" button handler, keyed by its topic. */
+  @Provides
+  @Singleton
+  @IntoMap
+  @StringKey(TopicKeys.COMMITTEE_UPDATES)
+  fun provideFollowCommitteeSubscriptionHandler(
+      handler: FollowCommitteeSubscriptionHandler
   ): TopicSubscriptionHandler = handler
 
   @Provides
