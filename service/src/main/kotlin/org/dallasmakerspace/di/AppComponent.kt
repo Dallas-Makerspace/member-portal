@@ -37,6 +37,7 @@ import org.dallasmakerspace.notifications.FollowSuggestionService
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationWorker
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
+import org.dallasmakerspace.keyvalue.di.KeyValueModule
 import org.dallasmakerspace.notifications.di.NotificationsModule
 import org.dallasmakerspace.notifications.subscriptions.TopicSubscriptionService
 import org.dallasmakerspace.remoteaccess.RemoteAccessService
@@ -76,6 +77,7 @@ import org.dallasmakerspace.workflows.groups.references.GroupReferenceChecker
             ShortLinksModule::class,
             SmartwaiverModule::class,
             NotificationsModule::class,
+            KeyValueModule::class,
             StorageModule::class,
             WebhookModule::class,
             WorkflowsModule::class,

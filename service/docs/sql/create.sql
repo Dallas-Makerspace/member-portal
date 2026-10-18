@@ -436,6 +436,20 @@ CREATE TABLE `committee_subscriptions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Members following a committee, e.g. to be notified when it adds a class.';
 
 --
+-- Table structure for table `key_value`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `key_value` (
+  `namespace` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Feature the value belongs to, e.g. moodle-course-announced',
+  `item_key` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'Key within the namespace, case-sensitive',
+  `item_value` text NOT NULL COMMENT 'The value, at most 65535 bytes',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp() COMMENT 'When the value was last written',
+  PRIMARY KEY (`namespace`,`item_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Generic key/value store for small durable state.';
+
+--
 -- Table structure for table `workflow_run`
 --
 
