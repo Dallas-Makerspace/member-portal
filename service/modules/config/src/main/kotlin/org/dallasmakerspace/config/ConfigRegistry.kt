@@ -158,7 +158,10 @@ object ConfigRegistry {
               "Gates following a committee (committee page button and new-class notifications); " +
                   "can be piloted for specific usernames or AD groups before a full rollout",
           category = "Notifications",
-          defaultValue = FeatureFlagValue(enabled = false),
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
           type = ConfigValueType.FeatureFlagType,
       )
 
