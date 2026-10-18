@@ -216,6 +216,40 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   }
 
   /**
+   * Web path (for example `/files/123/flyer.jpg`, relative to the calendar site) of event
+   * [eventId]'s first public image attachment, or null when it has none or the lookup fails or
+   * times out. Only formats every mail client can show are considered.
+   */
+  suspend fun getEventImagePath(eventId: Long): String? {
+    val query =
+        """
+      SET STATEMENT max_statement_time=1.5 FOR
+      SELECT f.dir AS dir, f.file AS file
+      FROM `dms-calendar`.files f
+      WHERE f.event_id = $eventId
+        AND f.`private` = 0
+        AND LOWER(f.file) REGEXP '[.](png|jpe?g|gif)$'
+      ORDER BY f.id ASC
+      LIMIT 1
+    """
+
+    val result =
+        try {
+          genericRepository.getReportData(query)
+        } catch (ex: Exception) {
+          log.warn("Failed fetching the image for event $eventId - ${ex.message}")
+          return null
+        }
+
+    val row = result?.data?.firstOrNull() ?: return null
+    val dir = row["dir"]?.toString()?.trim().orEmpty()
+    val file = row["file"]?.toString()?.trim().orEmpty()
+    if (file.isEmpty()) return null
+    val folder = dir.removePrefix("webroot/").trim('/')
+    return "/" + (if (folder.isEmpty()) "" else "$folder/") + file
+  }
+
+  /**
    * Fetches distinct event names that a member has attended, ordered by most recent first.
    *
    * @param username The AD username of the member.

@@ -55,4 +55,40 @@ class CommitteeClassTemplateTest {
   fun `combined subject counts the updates`() {
     assertEquals("3 new updates from committees you follow", CommitteeUpdatesTopic.combinedSubject(3))
   }
+
+  @Test
+  fun `html shows the event image linked to the event`() {
+    val html = template.renderHtml(data().copy(imageUrl = "https://calendar.example.org/files/1/a b.png"))
+
+    assertTrue(
+        Regex("<a href=\"https://calendar.dallasmakerspace.org/events/view/12345\"[^>]*><img class=\"dms-thumb\" src=\"https://calendar.example.org/files/1/a b.png\"")
+            .containsMatchIn(html),
+        html)
+    assertTrue(html.contains("alt=\"Intro to Laser Cutting\""))
+    assertTrue(html.indexOf("dms-thumb") < html.indexOf("Intro to Laser Cutting</h3>"))
+    assertTrue(html.indexOf("You are receiving this") > html.indexOf("View the full details"))
+  }
+
+  @Test
+  fun `html has no image markup when the event has none`() {
+    val html = template.renderHtml(data())
+
+    assertTrue(!html.contains("<img") && !html.contains("dms-thumb"), html)
+    assertTrue(html.contains("View the full details"))
+  }
+
+  @Test
+  fun `the image does not change the subject or the text`() {
+    val withImage = data().copy(imageUrl = "https://calendar.example.org/files/1/a.png")
+
+    assertEquals(template.renderSubject(data()), template.renderSubject(withImage))
+    assertEquals(template.renderText(data()), template.renderText(withImage))
+  }
+
+  @Test
+  fun `html escapes the image url`() {
+    val html = template.renderHtml(data().copy(imageUrl = "https://x.example.org/a\"onerror=\"x.png"))
+
+    assertTrue(!html.contains("src=\"https://x.example.org/a\"onerror"), html)
+  }
 }

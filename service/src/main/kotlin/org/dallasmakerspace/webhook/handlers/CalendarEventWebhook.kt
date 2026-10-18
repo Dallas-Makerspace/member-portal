@@ -1,5 +1,6 @@
 package org.dallasmakerspace.webhook.handlers
 
+import java.net.URI
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -9,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
+import org.dallasmakerspace.calendar.CalendarService
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
@@ -44,6 +46,7 @@ constructor(
     private val notificationService: NotificationService,
     private val activeDirectoryService: IActiveDirectoryService,
     private val committeeClassAnnouncer: CommitteeClassAnnouncer,
+    private val calendarService: CalendarService,
 ) : WebhookHandler() {
 
   private val logger = LoggerFactory.getLogger(CalendarEventWebhook::class.java)
@@ -72,8 +75,10 @@ constructor(
     val event = envelope.data
     val eventStart = formatEventStart(event.eventStart, event.eventStartTimezone)
     val followers = profileSubscriptionService.getFollowers(event.organizerUsername)
-    val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart)
-    val committeeSummary = announceToCommitteeFollowers(event, eventStart, followers.toSet())
+    val imageUrl = lookUpImageUrl(event)
+    val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart, imageUrl)
+    val committeeSummary =
+        announceToCommitteeFollowers(event, eventStart, followers.toSet(), imageUrl)
     return WebhookResult(true, "$organizerSummary; $committeeSummary")
   }
 
@@ -81,6 +86,7 @@ constructor(
       event: CalendarEventWebhookData,
       followers: List<String>,
       eventStart: String,
+      imageUrl: String,
   ): String {
     if (followers.isEmpty()) return "No followers for ${event.organizerUsername}, nothing to send"
 
@@ -92,7 +98,8 @@ constructor(
                 organizerName = resolveOrganizerName(event.organizerUsername),
                 organizerUsername = event.organizerUsername,
                 eventStart = eventStart,
-                eventUrl = event.url))
+                eventUrl = event.url,
+                imageUrl = imageUrl))
 
     val result =
         notificationService.createForMembers(
@@ -116,12 +123,23 @@ constructor(
       event: CalendarEventWebhookData,
       eventStart: String,
       alreadyNotified: Set<String>,
+      imageUrl: String,
   ): String =
       try {
-        committeeClassAnnouncer.announce(event, eventStart, alreadyNotified)
+        committeeClassAnnouncer.announce(event, eventStart, alreadyNotified, imageUrl)
       } catch (e: Exception) {
         logger.warn("Committee follower announcement failed for event ${event.id}", e)
         "Committee followers: failed (${e.javaClass.simpleName})"
+      }
+
+  /** The event's first public image as an absolute URL; blank when there is none or the lookup fails. */
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun lookUpImageUrl(event: CalendarEventWebhookData): String =
+      try {
+        calendarService.getEventImagePath(event.id)?.let { absoluteImageUrl(event.url, it) }.orEmpty()
+      } catch (e: Exception) {
+        logger.warn("Image lookup failed for event ${event.id}, sending without one", e)
+        ""
       }
 
   /**
@@ -161,3 +179,17 @@ constructor(
         raw
       }
 }
+
+/**
+ * Joins the calendar site's origin (taken from the event page URL, so nothing is hard-coded) with
+ * a web path such as `/files/1/my flyer.jpg`, percent-encoding the path. Blank if either is unusable.
+ */
+internal fun absoluteImageUrl(eventUrl: String, path: String): String =
+    try {
+      val origin = URI(eventUrl)
+      if (origin.scheme.isNullOrBlank() || origin.rawAuthority.isNullOrBlank()) ""
+      else URI(origin.scheme, origin.rawAuthority, path, null, null).toASCIIString()
+    } catch (e: java.net.URISyntaxException) {
+      ""
+    }
+

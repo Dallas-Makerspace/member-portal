@@ -5,6 +5,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
+import org.dallasmakerspace.calendar.CalendarService
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.FanOutResult
 import org.dallasmakerspace.notifications.NotificationService
@@ -12,6 +13,7 @@ import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.dallasmakerspace.webhook.handlers.CommitteeClassAnnouncer
+import org.dallasmakerspace.webhook.handlers.absoluteImageUrl
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -20,6 +22,7 @@ import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -29,12 +32,14 @@ class CalendarEventWebhookTest {
   private val mockNotifications = mock<NotificationService>()
   private val mockAd = mock<IActiveDirectoryService>()
   private val mockAnnouncer = mock<CommitteeClassAnnouncer>()
+  private val mockCalendar = mock<CalendarService>()
   private val handler =
-      CalendarEventWebhook(mockSubscriptions, mockNotifications, mockAd, mockAnnouncer)
+      CalendarEventWebhook(
+          mockSubscriptions, mockNotifications, mockAd, mockAnnouncer, mockCalendar)
 
   init {
     runBlocking {
-      whenever(mockAnnouncer.announce(any(), any(), any()))
+      whenever(mockAnnouncer.announce(any(), any(), any(), any()))
           .thenReturn("Committee followers: none to notify")
     }
   }
@@ -197,7 +202,7 @@ class CalendarEventWebhookTest {
         assertTrue(result.success)
         assertTrue(result.message.contains("No followers for jdoe"))
         assertTrue(result.message.contains("Committee followers: none to notify"))
-        verify(mockAnnouncer).announce(any(), eq("Mon Aug 10 7:00 PM"), eq(emptySet()))
+        verify(mockAnnouncer).announce(any(), eq("Mon Aug 10 7:00 PM"), eq(emptySet()), eq(""))
         Unit
       }
 
@@ -215,7 +220,8 @@ class CalendarEventWebhookTest {
             .announce(
                 argThat { id == 12345L && organizerUsername == "jdoe" },
                 any(),
-                eq(setOf("alice", "bob")))
+                eq(setOf("alice", "bob")),
+                any())
         Unit
       }
 
@@ -225,7 +231,7 @@ class CalendarEventWebhookTest {
     whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
         .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
     givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
-    whenever(mockAnnouncer.announce(any(), any(), any()))
+    whenever(mockAnnouncer.announce(any(), any(), any(), any()))
         .thenThrow(IllegalStateException("committee_subscriptions doesn't exist"))
 
     val result = handler.handleWebhook(requestBody())
@@ -240,8 +246,52 @@ class CalendarEventWebhookTest {
   fun `handleWebhook should not announce to committees for other event types`() = runBlocking {
     handler.handleWebhook(requestBody(eventType = "event.updated"))
 
-    verify(mockAnnouncer, never()).announce(any(), any(), any())
+    verify(mockAnnouncer, never()).announce(any(), any(), any(), any())
     Unit
+  }
+
+  @Test
+  fun `handleWebhook should put the event image on both announcements`() = runBlocking {
+    whenever(mockCalendar.getEventImagePath(12345)).thenReturn("/files/12345/my flyer.jpg")
+    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
+    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+        .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
+    givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
+
+    handler.handleWebhook(requestBody())
+
+    val expected = "https://calendar.dallasmakerspace.org/files/12345/my%20flyer.jpg"
+    verifyFanOut(listOf("alice"))
+    assertTrue(payload.lastValue.contains("\"imageUrl\":\"$expected\""), payload.lastValue)
+    verify(mockAnnouncer).announce(any(), any(), any(), eq(expected))
+    Unit
+  }
+
+  @Test
+  fun `handleWebhook should send without an image when the lookup finds none or fails`() =
+      runBlocking {
+        whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
+        whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
+            .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
+        givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
+
+        whenever(mockCalendar.getEventImagePath(12345)).thenReturn(null)
+        handler.handleWebhook(requestBody())
+        whenever(mockCalendar.getEventImagePath(12345)).thenThrow(IllegalStateException("db down"))
+        val result = handler.handleWebhook(requestBody())
+
+        assertTrue(result.success)
+        verify(mockAnnouncer, times(2)).announce(any(), any(), any(), eq(""))
+        Unit
+      }
+
+  @Test
+  fun `absoluteImageUrl takes the origin from the event page and encodes the path`() {
+    assertEquals(
+        "https://calendar.example.org/files/7/a%20b%25.png",
+        absoluteImageUrl("https://calendar.example.org/events/view/7?x=1", "/files/7/a b%.png"))
+    assertEquals("", absoluteImageUrl("not a url", "/files/7/a.png"))
+    assertEquals("", absoluteImageUrl("/events/view/7", "/files/7/a.png"))
   }
 
   @Test

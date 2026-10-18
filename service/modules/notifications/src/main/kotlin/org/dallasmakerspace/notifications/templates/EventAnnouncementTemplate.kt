@@ -15,6 +15,8 @@ data class EventAnnouncementData(
     /** Start time formatted in Central Time, e.g. "Mon Aug 10 7:00 PM". */
     val eventStart: String = "",
     val eventUrl: String = "",
+    /** Absolute URL of the event's first public image attachment; blank when it has none. */
+    val imageUrl: String = "",
 )
 
 /** "An organizer you follow posted a new event" - flagship use case for the calendar webhook. */
@@ -42,13 +44,16 @@ class EventAnnouncementTemplate :
   }
 
   override fun renderHtml(data: EventAnnouncementData): String = buildString {
-    append("<p>${organizerHtmlLabel(data)} posted a new event:</p>")
-    append("<h3>${escapeHtml(data.eventName)}</h3>")
-    if (data.eventStart.isNotBlank()) {
-      append("<p>${escapeHtml(data.eventStart)}</p>")
+    val body = buildString {
+      append("<p style=\"margin:0 0 8px;\">${organizerHtmlLabel(data)} posted a new event:</p>")
+      append("<h3 style=\"margin:0 0 8px;\">${escapeHtml(data.eventName)}</h3>")
+      if (data.eventStart.isNotBlank()) {
+        append("<p style=\"margin:0 0 8px;\">${escapeHtml(data.eventStart)}</p>")
+      }
+      append("<p style=\"margin:0;\"><a href=\"${escapeHtml(data.eventUrl)}\">View the full details</a></p>")
     }
-    append("<p><a href=\"${escapeHtml(data.eventUrl)}\">View the full details</a></p>")
-    append("<p style=\"color:#888;font-size:13px;\">You are receiving this because you follow ")
+    append(thumbnailColumnsHtml(data.imageUrl, data.eventName, data.eventUrl, body))
+    append("<p style=\"color:#888;font-size:13px;line-height:18px;margin:14px 0 0;\">You are receiving this because you follow ")
     append(organizerHtmlLabel(data))
     append(".</p>")
   }

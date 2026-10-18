@@ -26,6 +26,14 @@ loops in the service deliver them.
    transient failure keeps the rows `IN_DIGEST` with backoff, so the retry is still a single
    digest and never individual emails.
 
+### Event images
+
+`event-announcement` and `committee-class` emails show the event's first public image attachment
+(png, jpg or gif) as a thumbnail beside the text, laid out like `project-post`
+(`templates/ThumbnailLayout.kt`). The calendar webhook doesn't send it: the portal looks it up in
+the calendar DB (`CalendarRepository.getEventImagePath`) and builds the URL from the event page URL.
+No image, or a failed lookup, gives the plain text layout.
+
 ### No duplicates
 
 - **Same event emitted twice:** `dedupe_key` is unique. The calendar webhook uses
