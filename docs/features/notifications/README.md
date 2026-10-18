@@ -37,10 +37,12 @@ loops in the service deliver them.
 
 ## Producers
 
-Both feed the single `FollowingTopic` ("Updates from people you follow", stored key
-`EVENT_ANNOUNCEMENT`), so members have one preference toggle for everything they follow.
+Events and projects both feed the single `FollowingTopic` ("Updates from people you follow", stored
+key `EVENT_ANNOUNCEMENT`), so members have one preference toggle for everything they follow.
 
 - **Events:** calendar calls `POST /webhook/calendar-event` (internal) when an event is published.
+  The same call also tells followers of the committee that owns the class, under their own topic
+  (see "Following a committee").
 - **Projects:** Discourse calls the UI's public `POST /webhook/discourse`, which verifies the
   `X-Discourse-Event-Signature` HMAC and forwards `{event, payload}` to the service's
   `discourse-post` handler (`DiscoursePostWebhook`). It notifies followers when a member posts an
@@ -133,12 +135,49 @@ channel-neutral (no "email"): more channels may be added.
   has no visible label on touch (no tooltip). The committee bell should show a short text label
   below 576px ("Notify me" / "Notifying").
 
-**Planned: committee classes.** A `CommitteeClassesTopic` of its own (its own preference toggle), a
-handler with `argNames = {"committee"}` and its own feature flag, and a new subscriptions table
-(needs a DB admin). The committee page builds an icon-only model (`notifications` /
-`notifications_active` icons) for the Upcoming Classes card header. `CalendarEventWebhook` would fan
-out `event.published` to subscribers of committees whose related groups match the event's
-prerequisite groups.
+## Following a committee
+
+A member follows a committee from the button in the committee page's info card, and is notified when
+the committee adds a class they haven't taken yet. It is a second use of the subscribe button above.
+
+- **Topic and flag:** `CommitteeUpdatesTopic` (`COMMITTEE_UPDATES`, "Updates from committees you
+  follow", one preference toggle) and the default-off `notifications.committee-follow-enabled`
+  feature flag, which can be piloted per username or AD group like the member follow.
+- **Storage:** `committee_subscriptions(profile_id, committee_id)` in the Member Portal DB
+  (`service/docs/sql/committee-subscriptions-migration.sql`, re-runnable, also in `create.sql`). It
+  stores `Committee.id`, which is stable; the slug is derived from the name.
+- **Button:** `FollowCommitteeSubscriptionHandler` (arg `committee` = the committee id), wired like the
+  member-follow handler. The page only offers it to committees with `groupPrefixes`: a class is tied
+  to a committee through its prerequisite group, so the 7 committees without prefixes (VECTOR, Public
+  Relations, Printmaking, MotorSports, Logistics, Infrastructure, Financial) have nothing to follow
+  yet.
+- **New-class notifications:** when calendar publishes an event, `CommitteeClassAnnouncer` (called by
+  `CalendarEventWebhook`) looks the event up in the calendar DB (`CalendarRepository.getEventPrerequisite`:
+  the AD group its prerequisite grants, and its parent event). `Committees.forGroup` matches that
+  group to the committee that owns it with the same prefix rule the committee page uses, then it
+  notifies that committee's followers except:
+  - members already in the prerequisite group, since they have taken the class (batched AD lookup,
+    100 at a time; if AD fails the batch is kept, because a repeat notice beats a missed one);
+  - the organizer, and members the organizer-follow fan-out just emailed about the same event.
+- **Dedupe:** `committee-class-<parent event id or event id>-<username>`, so a multi-part class that
+  fires one webhook per session notifies each member once.
+- **Isolation:** the committee path always runs (even when the organizer has no followers), and its
+  errors are logged and never fail the webhook calendar sees.
+- **Limits:** classes whose event grants no prerequisite group can't be tied to a committee and are
+  skipped (as in the Upcoming Classes widget). Prefixes are plain `startsWith`, so short ones (`CA`,
+  `WS`, `3D`) can match unrelated groups. Membership is direct only, which is how calendar and
+  Moodle assign it.
+- **Not built yet:**
+  - **Online courses.** The course-to-committee mapping already exists (Moodle top-level category via
+    `Committee.learnCategories`). Moodle has no outgoing webhook, so this needs an observer in the
+    `local/addad` plugin posting to a signed relay (new UI route, like the Discourse one), plus an
+    announced-courses table and a "published = became visible" rule. Before choosing, check on the
+    Moodle host what `local/eventstreamer` does and whether it can reach docker-h0. A timed poll was
+    ruled out (no idle traffic).
+  - **Committee meetings.** Calendar has a generic "Committee Meetings" category but nothing that says
+    which committee, and the webhook doesn't send categories. It needs calendar-side committee info
+    (`events.committee_id`, see `calendar/docs/rfcs/committee-field.md`).
+  Both would add templates on the same topic, so members keep one toggle.
 
 ## Adding a channel
 
