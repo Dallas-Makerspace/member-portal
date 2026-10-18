@@ -19,6 +19,10 @@ jobs:
       image: eclipse-temurin:21-jdk-jammy
 
     steps:
+      # Before checkout, so the workspace is a real git repository: the test reporter lists tracked files.
+      - name: Install git
+        run: apt-get update -qq && apt-get install -y -qq git
+
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -31,11 +35,6 @@ jobs:
         run: ./gradlew test -x :e2e:test
 
       # Reported from the workspace directly, so no test-results artifact is uploaded.
-      # The reporter shells out to git, which the job container image lacks.
-      - name: Install git
-        if: always()
-        run: apt-get update -qq && apt-get install -y -qq git
-
       - name: Publish unit test results
         if: always()
         uses: dorny/test-reporter@v3
@@ -82,6 +81,10 @@ jobs:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
     steps:
+      # Before checkout, so the workspace is a real git repository: the test reporter lists tracked files.
+      - name: Install git
+        run: apt-get update -qq && apt-get install -y -qq git
+
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -157,10 +160,6 @@ jobs:
               kill "$(cat /tmp/$app.pid)" 2>/dev/null || true
             fi
           done
-
-      - name: Install git
-        if: always()
-        run: apt-get install -y -qq git
 
       - name: Publish e2e test results
         if: always()
