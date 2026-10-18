@@ -192,6 +192,16 @@ class TopicSubscriptionRoutesTest {
   }
 
   @Test
+  fun `requests without API credentials are 401 and change nothing`() = testApplication {
+    configureApp()
+
+    val response = client.post("/subscriptions/FAKE?target=asmith") { header("X-Username", "jdoe") }
+
+    assertEquals(HttpStatusCode.Unauthorized, response.status)
+    assertTrue(handler.subscribed.isEmpty())
+  }
+
+  @Test
   fun `missing X-Username is 400`() = testApplication {
     configureApp()
 

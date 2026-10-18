@@ -1,10 +1,8 @@
 package org.dallasmakerspace.notifications.routing
 
 import io.ktor.client.call.body
-import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.request.post
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.gson.gson
 import io.ktor.server.application.install
@@ -28,7 +26,6 @@ import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class ProfileSubscriptionRoutesTest {
@@ -72,127 +69,6 @@ class ProfileSubscriptionRoutesTest {
         gson { setPrettyPrinting() }
       }
     }
-  }
-
-  @Test
-  fun `post follow should follow as the acting X-Username`() = testApplication {
-    configureApp()
-
-    val response =
-        client.post("/members/jane/follow") {
-          header("X-Api-Key", "test-key")
-          header("X-Api-Client", "test-client")
-          header("X-Username", "jdoe")
-        }
-
-    assertEquals(HttpStatusCode.OK, response.status)
-    verify(mockService).follow("jdoe", "jane")
-    Unit
-  }
-
-  @Test
-  fun `post follow should reject self-follow`() = testApplication {
-    configureApp()
-    runBlocking {
-      whenever(mockService.follow("jdoe", "jdoe"))
-          .thenThrow(IllegalArgumentException("Cannot follow yourself"))
-    }
-
-    val response =
-        client.post("/members/jdoe/follow") {
-          header("X-Api-Key", "test-key")
-          header("X-Api-Client", "test-client")
-          header("X-Username", "jdoe")
-        }
-
-    assertEquals(HttpStatusCode.BadRequest, response.status)
-    val apiResponse = response.body<ApiResponse<String?>>()
-    assertEquals("Cannot follow yourself", apiResponse.message)
-    Unit
-  }
-
-  @Test
-  fun `post follow should require X-Username header`() = testApplication {
-    configureApp()
-
-    val response =
-        client.post("/members/jane/follow") {
-          header("X-Api-Key", "test-key")
-          header("X-Api-Client", "test-client")
-        }
-
-    assertEquals(HttpStatusCode.BadRequest, response.status)
-    Unit
-  }
-
-  @Test
-  fun `post follow should reject when the follow feature is disabled for the actor`() =
-      testApplication {
-        configureApp()
-        runBlocking {
-          whenever(
-                  mockFeatureFlagService.isEnabledForUsername(
-                      ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
-              .thenReturn(false)
-        }
-
-        val response =
-            client.post("/members/jane/follow") {
-              header("X-Api-Key", "test-key")
-              header("X-Api-Client", "test-client")
-              header("X-Username", "jdoe")
-            }
-
-        assertEquals(HttpStatusCode.Forbidden, response.status)
-        Unit
-      }
-
-  @Test
-  fun `delete follow should reject when the follow feature is disabled for the actor`() =
-      testApplication {
-        configureApp()
-        runBlocking {
-          whenever(
-                  mockFeatureFlagService.isEnabledForUsername(
-                      ConfigRegistry.FOLLOW_FEATURE_ENABLED, "jdoe"))
-              .thenReturn(false)
-        }
-
-        val response =
-            client.delete("/members/jane/follow") {
-              header("X-Api-Key", "test-key")
-              header("X-Api-Client", "test-client")
-              header("X-Username", "jdoe")
-            }
-
-        assertEquals(HttpStatusCode.Forbidden, response.status)
-        Unit
-      }
-
-  @Test
-  fun `post follow should require authentication`() = testApplication {
-    configureApp()
-
-    val response = client.post("/members/jane/follow") { header("X-Username", "jdoe") }
-
-    assertEquals(HttpStatusCode.Unauthorized, response.status)
-    Unit
-  }
-
-  @Test
-  fun `delete follow should unfollow as the acting X-Username`() = testApplication {
-    configureApp()
-
-    val response =
-        client.delete("/members/jane/follow") {
-          header("X-Api-Key", "test-key")
-          header("X-Api-Client", "test-client")
-          header("X-Username", "jdoe")
-        }
-
-    assertEquals(HttpStatusCode.OK, response.status)
-    verify(mockService).unfollow("jdoe", "jane")
-    Unit
   }
 
   @Test
