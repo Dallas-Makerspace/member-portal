@@ -1,0 +1,42 @@
+name: Artifact cleanup
+
+# Keeps Actions artifact storage low. Jars are normally deleted by common-cd.yml right after deploy;
+# this removes anything older than a few hours that is left (skipped components, failed deploys,
+# app logs from failed runs).
+
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: 'Delete artifacts older than this many hours (0 = all)'
+        required: false
+        default: '6'
+
+permissions:
+  actions: write
+
+concurrency:
+  group: artifact-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete old artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Delete artifacts older than the cutoff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAX_AGE_HOURS: ${{ inputs.max_age_hours || '6' }}
+        run: |
+          cutoff=$(date -u -d "${MAX_AGE_HOURS} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Deleting artifacts created before $cutoff"
+          deleted=0
+          for id in $(gh api --paginate "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+              --jq ".artifacts[] | select(.created_at < \"$cutoff\") | .id"); do
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" >/dev/null && deleted=$((deleted + 1))
+          done
+          echo "Deleted $deleted artifact(s)"

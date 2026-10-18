@@ -113,6 +113,10 @@ jobs:
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v6
+        env:
+          # Skip the build-record artifact and job summary the action would otherwise upload.
+          DOCKER_BUILD_RECORD_UPLOAD: 'false'
+          DOCKER_BUILD_SUMMARY: 'false'
         with:
           context: ${{ inputs.component }}
           push: true
@@ -510,6 +514,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - uses: actions/checkout@v6
@@ -526,3 +531,17 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f "deployed-${{ inputs.component }}"
           git push origin "deployed-${{ inputs.component }}" --force
+
+      # The jar is only needed until it is deployed; delete it now rather than wait for expiry. A failed
+      # deploy skips this job, so the jar stays for a re-run (artifact-cleanup.yml removes it later).
+      - name: Delete the deployed jar artifact
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/runs/${{ inputs.ci_run_id }}/artifacts" \
+            --jq '.artifacts[] | select(.name == "${{ inputs.component }}-jar") | .id')
+          for id in $ids; do
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+            echo "Deleted ${{ inputs.component }}-jar artifact $id"
+          done
