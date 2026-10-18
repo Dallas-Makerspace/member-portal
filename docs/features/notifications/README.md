@@ -169,11 +169,14 @@ the committee adds a class they haven't taken yet. It is a second use of the sub
   Moodle assign it.
 - **Not built yet:**
   - **Online courses.** The course-to-committee mapping already exists (Moodle top-level category via
-    `Committee.learnCategories`). Moodle has no outgoing webhook, so this needs an observer in the
-    `local/addad` plugin posting to a signed relay (new UI route, like the Discourse one), plus an
-    announced-courses table and a "published = became visible" rule. Before choosing, check on the
-    Moodle host what `local/eventstreamer` does and whether it can reach docker-h0. A timed poll was
-    ruled out (no idle traffic).
+    `Committee.learnCategories`). Moodle core has no outgoing webhook. The trigger isn't decided: the
+    `local/addad` plugin (source: the `moodle-addad` repo next to this one) already has an observer
+    registration, a scheduled task and a settings page, so it could post a signed request to a relay
+    (new UI route, like the Discourse one) when a course becomes visible, with a scheduled task as a
+    safety net; or the portal could compare Moodle's visible courses against an announced-courses
+    table on a timer, which this project avoids for idle DB traffic. Either way it needs a
+    "published = became visible" rule and an announced-courses record. Still to check on the Moodle
+    host: what `local/eventstreamer` does and whether Moodle can reach docker-h0.
   - **Committee meetings.** Calendar has a generic "Committee Meetings" category but nothing that says
     which committee, and the webhook doesn't send categories. It needs calendar-side committee info
     (`events.committee_id`, see `calendar/docs/rfcs/committee-field.md`).
