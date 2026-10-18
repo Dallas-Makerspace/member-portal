@@ -1,5 +1,6 @@
 package org.dallasmakerspace.notifications.topics
 
+import org.dallasmakerspace.models.TopicKeys
 import org.dallasmakerspace.notifications.NotificationTopic
 
 /**
@@ -10,7 +11,7 @@ import org.dallasmakerspace.notifications.NotificationTopic
  */
 object FollowingTopic : NotificationTopic {
   // Legacy key from when this only covered events; stored rows and preferences use it.
-  override val key = "EVENT_ANNOUNCEMENT"
+  override val key = TopicKeys.FOLLOWING
   override val displayName = "Updates from people you follow"
   override val visibleInPreferences = true
 

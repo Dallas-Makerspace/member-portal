@@ -4,17 +4,21 @@ import dagger.Module
 import dagger.Provides
 import dagger.multibindings.IntoMap
 import dagger.multibindings.IntoSet
+import dagger.multibindings.StringKey
 import io.ktor.client.HttpClient
 import javax.inject.Named
 import javax.inject.Singleton
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.models.TopicKeys
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.channels.ChannelKey
 import org.dallasmakerspace.notifications.channels.EmailNotifier
 import org.dallasmakerspace.notifications.channels.MockNotifier
 import org.dallasmakerspace.notifications.channels.Notifier
+import org.dallasmakerspace.notifications.subscriptions.FollowMemberSubscriptionHandler
+import org.dallasmakerspace.notifications.subscriptions.TopicSubscriptionHandler
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
 import org.dallasmakerspace.notifications.templates.SystemTestTemplate
 
@@ -52,6 +56,15 @@ object NotificationsModule {
       } else {
         EmailNotifier(appConfig, loggerFactory, sparkPostClient, activeDirectoryService)
       }
+
+  /** "Follow a member" button handler, keyed by its topic. */
+  @Provides
+  @Singleton
+  @IntoMap
+  @StringKey(TopicKeys.FOLLOWING)
+  fun provideFollowMemberSubscriptionHandler(
+      handler: FollowMemberSubscriptionHandler
+  ): TopicSubscriptionHandler = handler
 
   @Provides
   @Singleton

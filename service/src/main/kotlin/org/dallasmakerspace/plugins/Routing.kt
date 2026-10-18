@@ -67,6 +67,7 @@ import org.dallasmakerspace.models.NamespaceOwnerType
 import org.dallasmakerspace.moodle.routing.moodleRoutes
 import org.dallasmakerspace.notifications.routing.notificationRoutes
 import org.dallasmakerspace.notifications.routing.profileSubscriptionRoutes
+import org.dallasmakerspace.notifications.routing.topicSubscriptionRoutes
 import org.dallasmakerspace.remoteaccess.routing.remoteAccessRoutes
 import org.dallasmakerspace.routing.*
 import org.dallasmakerspace.routing.BadgeLookup
@@ -1293,6 +1294,12 @@ fun Application.configureRouting() {
     }
     profileSubscriptionRoutes(
         profileSubscriptionService, featureFlagService, followSuggestionService)
+
+    /** Subscribe/unsubscribe to a notification topic (generic subscribe button) * */
+    val topicSubscriptionService by lazy {
+      AppComponentHolder.instance.getTopicSubscriptionService()
+    }
+    topicSubscriptionRoutes(topicSubscriptionService)
 
     /** Upload/remove/serve a member's profile photo * */
     val profilePhotoService by lazy { AppComponentHolder.instance.getProfilePhotoService() }

@@ -38,6 +38,7 @@ import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationWorker
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
 import org.dallasmakerspace.notifications.di.NotificationsModule
+import org.dallasmakerspace.notifications.subscriptions.TopicSubscriptionService
 import org.dallasmakerspace.remoteaccess.RemoteAccessService
 import org.dallasmakerspace.shortlinks.ShortLinksService
 import org.dallasmakerspace.smartwaiver.SmartWaiverBackfill
@@ -156,6 +157,8 @@ interface AppComponent {
   fun getProfileSubscriptionService(): ProfileSubscriptionService
 
   fun getFollowSuggestionService(): FollowSuggestionService
+
+  fun getTopicSubscriptionService(): TopicSubscriptionService
 
   fun getObjectStoreFactory(): ObjectStoreFactory
 
