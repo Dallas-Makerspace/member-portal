@@ -39,7 +39,8 @@ class SubscriptionButtonTest {
     assertEquals("btn-primary", model["btnClass"])
     assertEquals(false, model["subscribed"])
     assertEquals(false, model["iconOnly"])
-    assertEquals("A hint", model["hint"])
+    assertEquals("A hint", model["hintOff"])
+    assertEquals("A subscribed hint", model["hintOn"])
   }
 
   @Test
@@ -49,7 +50,6 @@ class SubscriptionButtonTest {
     assertEquals("Following", model["label"])
     assertEquals("check", model["icon"])
     assertEquals("btn-outline-primary", model["btnClass"])
-    assertEquals("A subscribed hint", model["hint"])
   }
 
   @Test
@@ -60,8 +60,21 @@ class SubscriptionButtonTest {
     assertEquals(true, off["iconOnly"])
     assertEquals("btn-outline-secondary", off["btnClass"])
     assertEquals("btn-outline-primary dms-subscribe-on", on["btnClass"])
-    assertNull(off["hint"])
-    assertNull(on["hint"])
+    assertNull(off["hintOff"])
+    assertNull(off["hintOn"])
+    assertNull(on["hintOff"])
+    assertNull(on["hintOn"])
+  }
+
+  @Test
+  fun hintIdIsUniquePerInstanceAndSafeAsAnId() {
+    val other = status(false).copy(args = mapOf("username" to "b smith/x"))
+
+    val first = subscriptionButtonModel(status(false))["hintId"] as String
+    val second = subscriptionButtonModel(other)["hintId"] as String
+
+    assertEquals("dms-sub-hint-TOPIC-asmith", first)
+    assertEquals("dms-sub-hint-TOPIC-b_smith_x", second)
   }
 
   @Test

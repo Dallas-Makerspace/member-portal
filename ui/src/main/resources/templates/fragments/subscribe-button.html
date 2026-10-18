@@ -4,18 +4,28 @@
 <!--
   Subscribe/unsubscribe button for a notification topic. `sub` is built by subscriptionButtonModel(...).
   Needs /static/js/dms-subscribe-button.js on the page (after app.js).
-  Full: icon + label, plus a hint line; aria-pressed carries the state. Icon-only: a circle named by
-  aria-label (the action a click performs) with a tooltip, for tight spaces.
+  Full: icon + label, plus a hint line tied to the button (shared wrapper, aria-describedby);
+  aria-pressed carries the state. Icon-only: a circle named by aria-label (the action a click
+  performs) with a tooltip, for tight spaces; it has no hint.
+  Both hint strings are rendered and stacked in one cell; the wrapper's data-subscribed picks the
+  visible one, so the height never changes when the state does.
 -->
 <th:block th:fragment="button(sub)">
-    <button type="button" class="btn btn-sm dms-subscribe-btn" data-dms-subscribe
-            th:classappend="${sub['btnClass']} + (${sub['iconOnly']} ? ' dms-subscribe-icon-only' : '')"
-            th:attr="data-topic=${sub['topic']},data-args=${sub['argsJson']},data-copy=${sub['copyJson']},data-subscribed=${sub['subscribed']},data-icon-only=${sub['iconOnly']},aria-pressed=${sub['iconOnly'] ? null : sub['subscribed']},aria-label=${sub['iconOnly'] ? sub['actionLabel'] : null}">
-        <span class="material-symbols-outlined" aria-hidden="true" th:text="${sub['icon']}"></span>
-        <span class="dms-subscribe-label" th:unless="${sub['iconOnly']}" th:text="${sub['label']}"></span>
-    </button>
-    <p th:if="${sub['hint'] != null}" class="dms-subscribe-hint text-muted small mt-2 mb-0"
-       th:text="${sub['hint']}"></p>
+    <div class="dms-subscribe" th:attr="data-subscribed=${sub['subscribed']}">
+        <button type="button" class="btn btn-sm dms-subscribe-btn" data-dms-subscribe
+                th:classappend="${sub['btnClass']} + (${sub['iconOnly']} ? ' dms-subscribe-icon-only' : '')"
+                th:attr="data-topic=${sub['topic']},data-args=${sub['argsJson']},data-copy=${sub['copyJson']},data-subscribed=${sub['subscribed']},data-icon-only=${sub['iconOnly']},aria-pressed=${sub['iconOnly'] ? null : sub['subscribed']},aria-label=${sub['iconOnly'] ? sub['actionLabel'] : null},aria-describedby=${(sub['hintOff'] != null or sub['hintOn'] != null) ? sub['hintId'] : null}">
+            <span class="material-symbols-outlined" aria-hidden="true" th:text="${sub['icon']}"></span>
+            <span class="dms-subscribe-label" th:unless="${sub['iconOnly']}" th:text="${sub['label']}"></span>
+        </button>
+        <p th:if="${sub['hintOff'] != null or sub['hintOn'] != null}" th:id="${sub['hintId']}"
+           class="dms-subscribe-hint text-body-secondary">
+            <span class="dms-subscribe-hint-texts">
+                <span class="dms-subscribe-hint-off"><span class="material-symbols-outlined" aria-hidden="true">notifications</span><th:block th:text="${sub['hintOff']}"></th:block></span>
+                <span class="dms-subscribe-hint-on"><span class="material-symbols-outlined" aria-hidden="true">notifications_active</span><th:block th:text="${sub['hintOn']}"></th:block></span>
+            </span>
+        </p>
+    </div>
 </th:block>
 </body>
 </html>

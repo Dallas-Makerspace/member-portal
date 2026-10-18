@@ -25,6 +25,9 @@
         const style = styleFor(btn);
         const unsubscribeAction = subscribed && hovering && !isIconOnly(btn);
         btn.dataset.subscribed = String(subscribed);
+        // The wrapper's state picks which of the two stacked hints is visible (see global.css).
+        const unit = btn.closest('.dms-subscribe');
+        if (unit) unit.dataset.subscribed = String(subscribed);
         Object.values(style).forEach((value) => btn.classList.remove(...classes(value)));
         btn.classList.add(...classes(unsubscribeAction ? style.hover : subscribed ? style.on : style.off));
 
@@ -42,10 +45,6 @@
         btn.setAttribute('aria-pressed', String(subscribed));
         const text = btn.querySelector('.dms-subscribe-label');
         if (text) text.textContent = unsubscribeAction ? copy.unsubscribeLabel : subscribed ? copy.subscribedLabel : copy.subscribeLabel;
-        const hint = btn.nextElementSibling;
-        if (hint && hint.classList.contains('dms-subscribe-hint')) {
-            hint.textContent = (subscribed ? copy.subscribedHint : copy.hint) || '';
-        }
     }
 
     async function onClick(btn) {
@@ -91,18 +90,16 @@
         btn.addEventListener('click', () => onClick(btn));
         if (isIconOnly(btn)) return;
 
-        const enter = () => {
-            if (!isSubscribed(btn) || btn.dataset.holdRest || btn.dataset.dmsLoading) return;
+        // Hover only: keyboard focus keeps "Following" (aria-pressed), and touch has no hover.
+        const canHover = window.matchMedia('(hover: hover)');
+        btn.addEventListener('mouseenter', () => {
+            if (!canHover.matches || !isSubscribed(btn) || btn.dataset.holdRest || btn.dataset.dmsLoading) return;
             render(btn, JSON.parse(btn.dataset.copy || '{}'), true, true);
-        };
-        const leave = () => {
+        });
+        btn.addEventListener('mouseleave', () => {
             delete btn.dataset.holdRest;
             if (isSubscribed(btn) && !btn.dataset.dmsLoading) render(btn, JSON.parse(btn.dataset.copy || '{}'), true, false);
-        };
-        btn.addEventListener('mouseenter', enter);
-        btn.addEventListener('focus', enter);
-        btn.addEventListener('mouseleave', leave);
-        btn.addEventListener('blur', leave);
+        });
     }
 
     function init() {

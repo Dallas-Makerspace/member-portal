@@ -41,14 +41,14 @@ constructor(private val service: ProfileSubscriptionService) : TopicSubscription
         subscribedToast =
             "You're following $target. You'll be notified when they post an event or a project.",
         unsubscribedToast = "You unfollowed $target.",
-        hint = "Get notified when they post an event or a project",
-        subscribedHint = "You'll get an email when they post an event or a project",
+        hint = "Get notified about their events and projects",
+        subscribedHint = "You'll be notified about their events and projects",
         subscribeConfirm =
             ConfirmCopy(
                 title = "Follow $target?",
                 message =
-                    "You'll get an email when $target posts an event or a project. " +
-                        "You can turn this off in Notification Preferences.",
+                    "You'll be notified when $target posts an event or a project. " +
+                        "You can change how in Notification Preferences.",
                 confirmLabel = "Follow"),
     )
   }

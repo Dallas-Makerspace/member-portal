@@ -640,6 +640,35 @@ a.dms-facepile-item:focus-visible {
     --bs-btn-active-bg: var(--bs-primary-border-subtle);
     --bs-btn-active-border-color: var(--bs-primary-border-subtle);
 }
+/* Button and hint form one unit: a centred column with a tight gap. */
+.dms-subscribe {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
 .dms-subscribe-hint {
+    max-width: 32ch;
+    margin: 0;
+    font-size: 0.8125rem;
+    text-align: center;
     text-wrap: balance;
+}
+/* The icon is inline at the start of each hint, so it stays beside its own text. */
+.dms-subscribe-hint .material-symbols-outlined {
+    margin-right: 0.25rem;
+    font-size: 14px;
+    vertical-align: -3px;
+}
+/* Both hints share one cell, so the unit's height is the same in either state. */
+.dms-subscribe-hint-texts {
+    display: grid;
+}
+.dms-subscribe-hint-off,
+.dms-subscribe-hint-on {
+    grid-area: 1 / 1;
+}
+.dms-subscribe[data-subscribed="false"] .dms-subscribe-hint-on,
+.dms-subscribe[data-subscribed="true"] .dms-subscribe-hint-off {
+    visibility: hidden;
 }

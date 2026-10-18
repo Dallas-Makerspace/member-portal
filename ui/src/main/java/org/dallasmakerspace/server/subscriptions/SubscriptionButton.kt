@@ -59,6 +59,14 @@ fun subscriptionButtonModel(
       // Icon-only buttons have no visible text, so name the action a click performs.
       "actionLabel" to if (subscribed) copy.unsubscribeLabel else copy.subscribeLabel,
       "btnClass" to buttonClass(iconOnly, subscribed),
-      "hint" to if (iconOnly) null else if (subscribed) copy.subscribedHint else copy.hint,
+      // Both hints are rendered (stacked, one visible) so the height doesn't change on toggle.
+      "hintOff" to if (iconOnly) null else copy.hint,
+      "hintOn" to if (iconOnly) null else copy.subscribedHint,
+      "hintId" to hintId(status),
   )
 }
+
+/** Unique per button instance: one page can hold several. */
+private fun hintId(status: SubscriptionStatus) =
+    "dms-sub-hint-" + (listOf(status.topic) + status.args.values).joinToString("-")
+        .replace(Regex("[^A-Za-z0-9_-]"), "_")
