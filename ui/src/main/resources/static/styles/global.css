@@ -608,17 +608,20 @@ a.dms-facepile-item:focus-visible {
 }
 
 /* Subscribe/unsubscribe button (fragments/subscribe-button.html) */
-.dms-subscribe-btn {
+/* .btn.* so this beats Bootstrap's .btn { display: inline-block }, which loads after this file. */
+.btn.dms-subscribe-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
 }
-.dms-subscribe-btn .material-symbols-outlined {
+.btn.dms-subscribe-btn .material-symbols-outlined {
     font-size: 1.15em;
+    line-height: 1;
 }
-.dms-subscribe-icon-only {
+.btn.dms-subscribe-icon-only {
     width: 2rem;
     height: 2rem;
     padding: 0;
+    border-radius: 50%;
     justify-content: center;
 }

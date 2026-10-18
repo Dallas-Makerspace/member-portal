@@ -36,6 +36,9 @@
         const args = JSON.parse(btn.dataset.args || '{}');
         const copy = JSON.parse(btn.dataset.copy || '{}');
         const wasSubscribed = btn.dataset.subscribed === 'true';
+        // Otherwise the tooltip stays visible over the dialog's backdrop.
+        const tip = bootstrap.Tooltip.getInstance(btn);
+        if (tip) tip.hide();
 
         const confirm = wasSubscribed ? copy.unsubscribeConfirm : copy.subscribeConfirm;
         if (confirm && !(await dmsConfirm(confirm))) return;
