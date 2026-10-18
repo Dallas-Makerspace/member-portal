@@ -130,7 +130,8 @@ fun Application.configureRouting() {
       AppComponentHolder.instance.getSmartWaiverBackfill()
   launch {
     runCatching {
-      if (smartWaiverBackfillRefusal(appConfig, configOverrideService) == null) {
+      if (shouldAutoResumeBackfill(appConfig) &&
+          smartWaiverBackfillRefusal(appConfig, configOverrideService) == null) {
         smartWaiverBackfillOnStartup.resumeIfInterrupted()
       }
     }

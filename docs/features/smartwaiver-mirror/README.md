@@ -83,8 +83,9 @@ Writes are select-then-update-or-insert because the service user has no DELETE a
 
 How it keeps going on its own over several days:
 
-- **Resume.** Progress is saved after every unit (one transaction). After a deploy or restart a run that was
-  running, waiting or paused is picked up again (a paused one stays paused until `resume`). A stopped run is saved
+- **Resume.** Progress is saved after every unit (one transaction). After a deploy or restart of the production
+  service (the only one with `SMARTWAIVER_BACKFILL_AUTO_RESUME=true`; a local dev service pointed at the same database
+  must never resume it, or it takes the run over from production) a run that was running, waiting or paused is picked up again (a paused one stays paused until `resume`). A stopped run is saved
   as IDLE and a trial as TRIAL; neither is resumed.
 - **One copy only.** The saved run records which copy owns it. A deploy briefly runs two containers; whichever
   started last owns the run and the other ends at its next checkpoint without writing. `stop` releases the run, so
