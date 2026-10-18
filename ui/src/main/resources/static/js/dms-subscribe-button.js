@@ -47,29 +47,33 @@
         if (text) text.textContent = unsubscribeAction ? copy.unsubscribeLabel : subscribed ? copy.subscribedLabel : copy.subscribeLabel;
     }
 
-    async function onClick(btn) {
+    /** Subscribes or unsubscribes; [skipConfirm] is for Undo, where consent was already given. */
+    async function change(btn, subscribe, skipConfirm) {
         const topic = btn.dataset.topic;
         const args = JSON.parse(btn.dataset.args || '{}');
         const copy = JSON.parse(btn.dataset.copy || '{}');
-        const wasSubscribed = isSubscribed(btn);
         // Otherwise the tooltip stays visible over the dialog's backdrop.
         const tip = bootstrap.Tooltip.getInstance(btn);
         if (tip) tip.hide();
 
-        const confirm = wasSubscribed ? copy.unsubscribeConfirm : copy.subscribeConfirm;
-        if (confirm && !(await dmsConfirm(confirm))) return;
+        const confirm = subscribe ? copy.subscribeConfirm : copy.unsubscribeConfirm;
+        if (confirm && !skipConfirm && !(await dmsConfirm(confirm))) return;
 
-        setButtonLoading(btn, true, wasSubscribed ? copy.unsubscribeBusy : copy.subscribeBusy);
+        setButtonLoading(btn, true, subscribe ? copy.subscribeBusy : copy.unsubscribeBusy);
         try {
             const url = '/backend-api/subscriptions/' + encodeURIComponent(topic) + '?' + new URLSearchParams(args);
-            const response = await fetch(url, {method: wasSubscribed ? 'DELETE' : 'POST'});
+            const response = await fetch(url, {method: subscribe ? 'POST' : 'DELETE'});
             const result = await response.json().catch(() => ({}));
             if (response.ok && result.status === 'SUCCESS' && result.data) {
                 const subscribed = result.data.subscribed === true;
                 // The pointer is still over the button; don't flash "Unfollow" until it leaves and returns.
                 btn.dataset.holdRest = 'true';
                 render(btn, copy, subscribed, false);
-                showToast(subscribed ? copy.subscribedToast : copy.unsubscribedToast);
+                // A one-tap unsubscribe (no dialog asked first) can be undone from the toast.
+                const undo = !subscribed && !copy.unsubscribeConfirm
+                    ? {action: {label: 'Undo', onClick: () => { if (!isSubscribed(btn)) change(btn, true, true); }}}
+                    : {};
+                showToast(subscribed ? copy.subscribedToast : copy.unsubscribedToast, 'success', undo);
                 btn.dispatchEvent(new CustomEvent('dms:subscription-changed', {
                     bubbles: true,
                     detail: {topic: topic, args: args, subscribed: subscribed}
@@ -87,7 +91,7 @@
 
     function bind(btn) {
         tooltipFor(btn);
-        btn.addEventListener('click', () => onClick(btn));
+        btn.addEventListener('click', () => change(btn, !isSubscribed(btn), false));
         if (isIconOnly(btn)) return;
 
         // Hover only: keyboard focus keeps "Following" (aria-pressed), and touch has no hover.

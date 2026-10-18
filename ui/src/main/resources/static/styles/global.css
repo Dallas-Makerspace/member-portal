@@ -647,8 +647,49 @@ a.dms-facepile-item:focus-visible {
     align-items: center;
     gap: 0.25rem;
 }
+.btn.dms-subscribe-btn {
+    touch-action: manipulation;
+}
+/* Touch: grow the tap area to ~44px without changing how the button looks. */
+@media (pointer: coarse) {
+    .btn.dms-subscribe-btn {
+        position: relative;
+    }
+    .btn.dms-subscribe-btn::before {
+        content: "";
+        position: absolute;
+        inset: -8px -4px;
+    }
+    .btn.dms-subscribe-icon-only::before {
+        inset: -8px;
+    }
+    #dmsToast [data-dms-toast-action] {
+        min-height: 44px;
+    }
+}
+/* Touch has no hover, and iOS keeps :hover on the tapped button; keep the resting colours. */
+@media (hover: none) {
+    .btn.dms-subscribe-btn,
+    .btn.dms-subscribe-on {
+        --bs-btn-hover-color: var(--bs-btn-color);
+        --bs-btn-hover-bg: var(--bs-btn-bg);
+        --bs-btn-hover-border-color: var(--bs-btn-border-color);
+    }
+}
+/* Phones: centre the confirm dialog (within thumb reach) with full-width, tappable buttons. */
+@media (max-width: 575.98px) {
+    .dms-confirm .modal-dialog {
+        display: flex;
+        align-items: center;
+        min-height: calc(100% - var(--bs-modal-margin) * 2);
+    }
+    .dms-confirm .modal-footer .btn {
+        flex: 1 1 0;
+        min-height: 44px;
+    }
+}
 .dms-subscribe-hint {
-    max-width: 32ch;
+    max-width: min(100%, 36ch);
     margin: 0;
     font-size: 0.8125rem;
     text-align: center;

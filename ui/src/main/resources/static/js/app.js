@@ -379,15 +379,37 @@ function hideToast() {
  * (i.e. doesn't include the fragment) or Bootstrap hasn't loaded yet.
  * @param {string} message - Plain text; set via textContent, never innerHTML.
  * @param {'success'|'danger'|'warning'|'info'} [type='success']
+ * @param {{action?: {label: string, onClick: function(): void}}} [options] - An action adds a button
+ *     (e.g. Undo) that dismisses the toast and runs onClick; the toast then stays up for 8s, not 5s.
  */
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', options = {}) {
     const el = document.getElementById('dmsToast');
     if (!el || typeof bootstrap === 'undefined') return;
     const body = document.getElementById('dmsToastMessage');
     if (body) body.textContent = message;
     el.className = 'toast align-items-center border-0 text-bg-' + type;
     delete el.dataset.serverRendered;
-    bootstrap.Toast.getOrCreateInstance(el, { delay: 5000, autohide: true }).show();
+
+    const row = el.querySelector('.d-flex');
+    row.querySelectorAll('[data-dms-toast-action]').forEach((node) => node.remove());
+    const action = options.action;
+    if (action) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-link link-light fw-semibold me-2 m-auto';
+        btn.dataset.dmsToastAction = 'true';
+        btn.textContent = action.label;
+        btn.addEventListener('click', () => {
+            bootstrap.Toast.getOrCreateInstance(el).hide();
+            action.onClick();
+        });
+        row.insertBefore(btn, row.querySelector('.btn-close'));
+    }
+
+    // A toast's delay is fixed when its instance is created, so rebuild it for this message.
+    const existing = bootstrap.Toast.getInstance(el);
+    if (existing) existing.dispose();
+    new bootstrap.Toast(el, { delay: action ? 8000 : 5000, autohide: true }).show();
 }
 
 const PENDING_TOAST_KEY = 'dms_pending_toast';
@@ -479,7 +501,7 @@ function dmsConfirm(opts) {
         content.append(header, body, footer);
         const dialog = el('div', 'modal-dialog');
         dialog.append(content);
-        const root = el('div', 'modal fade');
+        const root = el('div', 'modal fade dms-confirm');
         root.tabIndex = -1;
         root.setAttribute('aria-hidden', 'true');
         root.append(dialog);

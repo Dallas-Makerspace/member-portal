@@ -121,7 +121,17 @@ channel-neutral (no "email"): more channels may be added.
   `aria-label` (the action a click performs) with a tooltip below it. It has no hint.
 - After a successful toggle the button fires a bubbling `dms:subscription-changed` event with
   `{topic, args, subscribed}`. The profile page listens for it to update the Follows card.
-- Confirmation uses `dmsConfirm(...)` from `app.js`, shared with the workflow pages.
+- Confirmation uses `dmsConfirm(...)` from `app.js`, shared with the workflow pages. On phones the
+  dialog is centered with full-width 44px buttons.
+- An unsubscribe that wasn't confirmed first shows a toast with **Undo**, which re-subscribes
+  without asking again (`showToast(message, type, {action: {label, onClick}})`; a toast with an
+  action stays up 8s). Touch has no hover, so the button always reads "Following" there, and Undo
+  is the safety net for an accidental tap.
+- Touch devices (`pointer: coarse`) get a ~44px tap area around the button without changing its
+  look, and `hover: none` devices don't show hover colours after a tap.
+- Not done yet: on phones, toasts still appear at the top of the screen, and the icon-only variant
+  has no visible label on touch (no tooltip). The committee bell should show a short text label
+  below 576px ("Notify me" / "Notifying").
 
 **Planned: committee classes.** A `CommitteeClassesTopic` of its own (its own preference toggle), a
 handler with `argNames = {"committee"}` and its own feature flag, and a new subscriptions table
