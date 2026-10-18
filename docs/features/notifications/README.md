@@ -75,6 +75,61 @@ webhook that keeps failing, so the handler returns 200 for everything it deliber
 4. Emit notifications through `NotificationService`. Always pass a dedupe key for anything that
    can be retried.
 
+## Subscribe button
+
+One UI button, bound to a notification topic plus args, lets a member opt in or out of something
+(today: following a member). The topic decides what subscribing means and what the button says.
+
+**Service**
+
+- `TopicSubscriptionHandler` (`notifications/subscriptions`): per topic, the `topic`, an optional
+  `featureFlag`, the exact `argNames` a request must carry, `isSubscribed` / `subscribe` /
+  `unsubscribe` (both idempotent), and `copy(args)`, which is all the text the button shows.
+  Throw `IllegalArgumentException` for args that name nothing subscribable; it becomes a 400.
+- Register it in `NotificationsModule` as
+  `@Provides @Singleton @IntoMap @StringKey(<topic key>) fun ...: TopicSubscriptionHandler`.
+  Put the key in `common-models` `TopicKeys` if the UI needs it.
+- `GET/POST/DELETE /subscriptions/{topicKey}?<args>` (`TopicSubscriptionRoutes`) acts for the
+  `X-Username` member. It answers 404 for an unknown topic, 400 for missing, extra, blank or
+  repeated args, and 403 when the handler's flag is off for that member. The UI's `/backend-api`
+  proxy forwards `subscriptions/*`, with the session user as `X-Username`, so members can only act
+  for themselves. Through that proxy every error reaches the browser as a 500 with no message, so
+  the button falls back to its generic toast.
+- `FollowMemberSubscriptionHandler` is the first handler (args: `username`) over
+  `profile_subscriptions`.
+
+**Copy** (`SubscriptionCopy`) has three looks for the button: not subscribed (`subscribeLabel` /
+`subscribeIcon`, the action), subscribed at rest (`subscribedLabel` / `subscribedIcon`, the state,
+e.g. "Following") and subscribed while hovered (`unsubscribeLabel` / `unsubscribeIcon`, the action).
+Plus busy text, toasts, two hints (`hint`, `subscribedHint`) and an optional `ConfirmCopy` per
+direction; no confirm means no dialog. Member follow confirms Follow only. Keep the wording
+channel-neutral (no "email"): more channels may be added.
+
+**UI**
+
+- A page builds the model with `subscriptionButtonModel(status, ...)`
+  (`server/subscriptions/SubscriptionButton.kt`), where `status` comes from
+  `MemberServiceClient.getSubscriptionStatus` (null when the topic is off for the viewer or the call
+  fails, so render nothing). The optional arguments override labels and icons and pick the
+  `"icon"` variant.
+- Render it with `th:replace="~{fragments/subscribe-button :: button(${model})}"` and load
+  `/static/js/dms-subscribe-button.js` after `app.js`.
+- Full variant: icon + label, filled when off, outlined "Following" when on (red "Unfollow" on
+  hover only), with a hint tied to the button (`aria-describedby`; both hints are stacked so the
+  height never changes).
+- Icon-only variant, for tight spaces: a 32px circle, ghost when off and tinted when on, named by
+  `aria-label` (the action a click performs) with a tooltip below it. It has no hint.
+- After a successful toggle the button fires a bubbling `dms:subscription-changed` event with
+  `{topic, args, subscribed}`. The profile page listens for it to update the Follows card.
+- Confirmation uses `dmsConfirm(...)` from `app.js`, shared with the workflow pages.
+
+**Planned: committee classes.** A `CommitteeClassesTopic` of its own (its own preference toggle), a
+handler with `argNames = {"committee"}` and its own feature flag, and a new subscriptions table
+(needs a DB admin). The committee page builds an icon-only model (`notifications` /
+`notifications_active` icons) for the Upcoming Classes card header. `CalendarEventWebhook` would fan
+out `event.published` to subscribers of committees whose related groups match the event's
+prerequisite groups.
+
 ## Adding a channel
 
 Implement `Notifier`, which resolves its own recipient from the username and sets
@@ -96,7 +151,8 @@ to immediate delivery on channels that can't batch.
 
 - Follower and following lists use `fragments/member-grid.html`, the same grid as group member
   lists.
-- The profile Follows card updates in place when you follow or unfollow.
+- The profile Follow button is the shared subscribe button (see above), and the Follows card
+  updates in place when you follow or unfollow.
 - The notifications page shows member-friendly status labels and reasons. Raw provider errors are
   shown to admins only.
 - Members who got 10 or more immediate emails in the last 7 days see a one-click "Switch to daily
