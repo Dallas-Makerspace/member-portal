@@ -428,7 +428,7 @@ CREATE TABLE `profile_subscriptions` (
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `committee_subscriptions` (
   `profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the subscribing (follower) member profile',
-  `committee_id` int(11) NOT NULL COMMENT 'Committee.id from common-models (stable; never reused), not the slug',
+  `committee_id` int(11) NOT NULL COMMENT 'Committee.id from common-models (stable, never reused), not the slug',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'When the subscription was created',
   PRIMARY KEY (`profile_id`,`committee_id`),
   KEY `committee_subscriptions_committee_id_IDX` (`committee_id`) USING BTREE,
