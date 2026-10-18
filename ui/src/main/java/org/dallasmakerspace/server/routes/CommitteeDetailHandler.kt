@@ -10,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.models.Committee
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.DMSGroup
+import org.dallasmakerspace.models.TopicKeys
 import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 import org.dallasmakerspace.server.auth.UserInfoProvider
@@ -19,6 +20,7 @@ import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.models.getSlugFromName
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.reports.ArchivedGroupsReport
+import org.dallasmakerspace.server.subscriptions.subscriptionButtonModel
 
 class CommitteeDetailHandler
 @Inject
@@ -63,6 +65,20 @@ constructor(
               null
             }
           }
+    }
+
+    // Only committees with group prefixes can be followed (a class is tied to a committee through
+    // its prerequisite group); null when the follow feature is off for the viewer.
+    val subscriptionDeferred = async {
+      if (currentUsername == null || committee.groupPrefixes.isEmpty()) {
+        null
+      } else {
+        memberService.getSubscriptionStatus(
+            TopicKeys.COMMITTEE_UPDATES,
+            mapOf("committee" to committee.id.toString()),
+            currentUsername,
+            session.sessionId)
+      }
     }
 
     // Fetch chair groups, teacher groups, and all groups in parallel
@@ -242,6 +258,10 @@ constructor(
             "upcomingEvents" to upcomingEvents,
             "sections" to sectionsDeferred.await(),
         )
+
+    subscriptionDeferred.await()?.let {
+      jsonMap["committee_subscription"] = subscriptionButtonModel(it)
+    }
 
     val archivedCount = archivedCountDeferred.await()
     if (archivedCount > 0) {

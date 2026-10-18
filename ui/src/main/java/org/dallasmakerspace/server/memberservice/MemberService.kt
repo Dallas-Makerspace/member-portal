@@ -4,6 +4,7 @@ import javax.inject.Inject
 import org.dallasmakerspace.models.ArchivedGroup
 import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.DMSMember
+import org.dallasmakerspace.models.SubscriptionStatus
 import org.dallasmakerspace.server.common.HttpException
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.models.EventSummary
@@ -227,6 +228,16 @@ constructor(
       sessionId: String?,
   ): List<EventSummary> {
     return memberServiceClient.getUpcomingPrerequisiteEvents(groupNames, sessionId)
+  }
+
+  /** Subscription state and button copy for [username]; null when the topic is off for them. */
+  suspend fun getSubscriptionStatus(
+      topicKey: String,
+      args: Map<String, String>,
+      username: String,
+      sessionId: String?,
+  ): SubscriptionStatus? {
+    return memberServiceClient.getSubscriptionStatus(topicKey, args, username, sessionId)
   }
 
   suspend fun askAi(

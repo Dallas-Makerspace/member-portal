@@ -688,6 +688,13 @@ a.dms-facepile-item:focus-visible {
         min-height: 44px;
     }
 }
+/* Left-aligned cards (committee page): wrap the fragment in .dms-subscribe-start. */
+.dms-subscribe-start .dms-subscribe {
+    align-items: flex-start;
+}
+.dms-subscribe-start .dms-subscribe-hint {
+    text-align: left;
+}
 .dms-subscribe-hint {
     max-width: min(100%, 36ch);
     margin: 0;
