@@ -6,10 +6,9 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
@@ -79,15 +78,12 @@ constructor(
     val event = envelope.data
     val eventStart = formatEventStart(event.eventStart, event.eventStartTimezone)
     val followers = profileSubscriptionService.getFollowers(event.organizerUsername)
-    return coroutineScope {
-      // Looked up at most once, and only if someone is actually going to be emailed.
-      val lookup = async(start = CoroutineStart.LAZY) { lookUpPreview(event) }
-      val preview: EventPreviewProvider = { lookup.await() }
-      val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart, preview)
-      val committeeSummary =
-          announceToCommitteeFollowers(event, eventStart, followers.toSet(), preview)
-      WebhookResult(true, "$organizerSummary; $committeeSummary")
-    }
+    // Looked up at most once, and only if someone is actually going to be emailed.
+    val preview = memoized { lookUpPreview(event) }
+    val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart, preview)
+    val committeeSummary =
+        announceToCommitteeFollowers(event, eventStart, followers.toSet(), preview)
+    return WebhookResult(true, "$organizerSummary; $committeeSummary")
   }
 
   private suspend fun notifyOrganizerFollowers(
@@ -211,3 +207,9 @@ data class EventPreview(val imageUrl: String = "", val excerpt: String = "")
 
 /** Fetches the preview on first call; shared by both fan-outs so it is looked up at most once. */
 typealias EventPreviewProvider = suspend () -> EventPreview
+
+private fun memoized(load: suspend () -> EventPreview): EventPreviewProvider {
+  val lock = Mutex()
+  var loaded: EventPreview? = null
+  return { loaded ?: lock.withLock { loaded ?: load().also { loaded = it } } }
+}
