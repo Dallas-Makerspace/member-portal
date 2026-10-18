@@ -40,7 +40,7 @@ jobs:
             service/build/test-results/
             service/modules/*/build/test-results/
             ui/build/test-results/
-          retention-days: 30
+          retention-days: 7
 
   publish-unit-test-results:
     name: Publish unit test results
@@ -125,14 +125,14 @@ jobs:
         with:
           name: service-jar
           path: service/build/libs/service-all.jar
-          retention-days: 7
+          retention-days: 1
 
       - name: Upload UI jar
         uses: actions/upload-artifact@v7
         with:
           name: ui-jar
           path: ui/build/libs/ui-all.jar
-          retention-days: 7
+          retention-days: 1
 
       # Each app runs from its module dir, mirroring Gradle's run task.
       - name: Start service and UI
@@ -192,7 +192,7 @@ jobs:
         with:
           name: e2e-test-results
           path: e2e/build/test-results/
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload app logs on failure
         if: failure()
@@ -202,7 +202,7 @@ jobs:
           path: |
             /tmp/service.log
             /tmp/ui.log
-          retention-days: 7
+          retention-days: 1
 
   publish-e2e-test-results:
     name: Publish e2e test results
