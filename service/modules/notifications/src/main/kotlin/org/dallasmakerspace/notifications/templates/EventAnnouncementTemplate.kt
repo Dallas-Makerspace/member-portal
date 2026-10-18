@@ -61,7 +61,7 @@ class EventAnnouncementTemplate :
       }
       append("<p style=\"margin:0;\"><a href=\"${escapeHtml(data.eventUrl)}\">View the full details</a></p>")
     }
-    append(thumbnailColumnsHtml(data.imageUrl, data.eventName, data.eventUrl, body))
+    append(thumbnailColumnsHtml(data.imageUrl, data.eventName, data.eventUrl, body, keepAspectRatio = true))
     append("<p style=\"color:#888;font-size:13px;line-height:18px;margin:14px 0 0;\">You are receiving this because you follow ")
     append(organizerHtmlLabel(data))
     append(".</p>")

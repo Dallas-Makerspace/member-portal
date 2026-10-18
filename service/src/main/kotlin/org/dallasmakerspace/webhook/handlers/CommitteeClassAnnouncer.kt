@@ -31,13 +31,14 @@ constructor(
   /**
    * Returns a one-line summary for the webhook result. [eventStart] is already formatted for
    * display; [alreadyNotified] are members the organizer-follow fan-out just emailed about this
-   * same event, so they aren't told twice; [preview] is the event's image and description teaser.
+   * same event, so they aren't told twice; [preview] fetches the event's image and description teaser, and is only called once there is
+   * someone to notify.
    */
   suspend fun announce(
       event: CalendarEventWebhookData,
       eventStart: String,
       alreadyNotified: Set<String>,
-      preview: EventPreview,
+      preview: EventPreviewProvider,
   ): String {
     val prerequisite =
         calendarService.getEventPrerequisite(event.id)
@@ -55,6 +56,7 @@ constructor(
     val eligible = followerFilter.withoutGroup(subscribers, adGroup)
     if (eligible.isEmpty()) return "Committee followers: all ${subscribers.size} already have it"
 
+    val eventPreview = preview()
     val payload =
         json.encodeToString(
             CommitteeClassData.serializer(),
@@ -63,8 +65,8 @@ constructor(
                 committeeName = committees.joinToString(", ") { it.name },
                 eventStart = eventStart,
                 eventUrl = event.url,
-                imageUrl = preview.imageUrl,
-                excerpt = preview.excerpt))
+                imageUrl = eventPreview.imageUrl,
+                excerpt = eventPreview.excerpt))
     // One webhook per session of a multi-part event is possible, so key on the parent event.
     val seriesId = prerequisite.partOfId ?: event.id
     val result =

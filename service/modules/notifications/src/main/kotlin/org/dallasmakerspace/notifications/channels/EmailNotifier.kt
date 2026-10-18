@@ -49,6 +49,7 @@ internal fun wrapHtml(bodyHtml: String): String {
           @media only screen and (max-width: 540px) {
             .dms-col { display: block !important; width: 100% !important; max-width: 100% !important; }
             .dms-thumb { width: 100% !important; height: 200px !important; }
+            .dms-thumb-auto { width: 100% !important; height: auto !important; }
             .dms-text { padding-left: 0 !important; padding-top: 12px !important; }
           }
         </style>

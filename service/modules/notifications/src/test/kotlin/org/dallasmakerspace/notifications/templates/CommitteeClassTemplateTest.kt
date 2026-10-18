@@ -61,11 +61,12 @@ class CommitteeClassTemplateTest {
     val html = template.renderHtml(data().copy(imageUrl = "https://calendar.example.org/files/1/a b.png"))
 
     assertTrue(
-        Regex("<a href=\"https://calendar.dallasmakerspace.org/events/view/12345\"[^>]*><img class=\"dms-thumb\" src=\"https://calendar.example.org/files/1/a b.png\"")
+        Regex("<a href=\"https://calendar.dallasmakerspace.org/events/view/12345\"[^>]*><img class=\"dms-thumb-auto\" src=\"https://calendar.example.org/files/1/a b.png\"")
             .containsMatchIn(html),
         html)
     assertTrue(html.contains("alt=\"Intro to Laser Cutting\""))
-    assertTrue(html.indexOf("dms-thumb") < html.indexOf("Intro to Laser Cutting</h3>"))
+    assertTrue(html.contains("height:auto") && !html.contains("object-fit"), html)
+    assertTrue(html.indexOf("dms-thumb-auto") < html.indexOf("Intro to Laser Cutting</h3>"))
     assertTrue(html.indexOf("You are receiving this") > html.indexOf("View the full details"))
   }
 

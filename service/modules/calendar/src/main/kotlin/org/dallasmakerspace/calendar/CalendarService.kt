@@ -53,13 +53,9 @@ constructor(private val calendarRepository: CalendarRepository, loggerFactory: L
   suspend fun getEventPrerequisite(eventId: Long): EventPrerequisite? =
       calendarRepository.getEventPrerequisite(eventId)
 
-  /** Web path of event [eventId]'s first public image (see [CalendarRepository.getEventImagePath]). */
-  suspend fun getEventImagePath(eventId: Long): String? =
-      calendarRepository.getEventImagePath(eventId)
-
-  /** Long (else short) description of event [eventId] (see [CalendarRepository.getEventDescription]). */
-  suspend fun getEventDescription(eventId: Long): String? =
-      calendarRepository.getEventDescription(eventId)
+  /** Image path and description start of event [eventId] for emails; null on failure. */
+  suspend fun getEventPreviewData(eventId: Long): EventPreviewData? =
+      calendarRepository.getEventPreviewData(eventId)
 
   /**
    * Gets distinct event names that a member has attended, ordered by most recent first.

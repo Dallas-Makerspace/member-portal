@@ -29,4 +29,16 @@ class PlainExcerptTest {
   fun `leaves markup alone since the result is escaped later`() {
     assertEquals("a <b> & c", plainExcerpt("a <b> & c"))
   }
+
+  @Test
+  fun `a word ending exactly at the limit is kept`() {
+    assertEquals("abcde fghij…", plainExcerpt("abcde fghij klmno", maxLength = 11))
+  }
+
+  @Test
+  fun `never leaves half of an emoji`() {
+    val result = plainExcerpt("a".repeat(9) + "😀 more text", maxLength = 10)
+
+    assertTrue(result.none { it == '\uD83D' }, result)
+  }
 }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.activedirectory.ADUser
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.calendar.CalendarService
+import org.dallasmakerspace.calendar.EventPreviewData
 import org.dallasmakerspace.notifications.Channel
 import org.dallasmakerspace.notifications.FanOutResult
 import org.dallasmakerspace.notifications.NotificationService
@@ -14,6 +15,7 @@ import org.dallasmakerspace.notifications.topics.FollowingTopic
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.dallasmakerspace.webhook.handlers.CommitteeClassAnnouncer
 import org.dallasmakerspace.webhook.handlers.EventPreview
+import org.dallasmakerspace.webhook.handlers.EventPreviewProvider
 import org.dallasmakerspace.webhook.handlers.absoluteImageUrl
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -203,7 +205,7 @@ class CalendarEventWebhookTest {
         assertTrue(result.success)
         assertTrue(result.message.contains("No followers for jdoe"))
         assertTrue(result.message.contains("Committee followers: none to notify"))
-        verify(mockAnnouncer).announce(any(), eq("Mon Aug 10 7:00 PM"), eq(emptySet()), eq(EventPreview()))
+        verify(mockAnnouncer).announce(any(), eq("Mon Aug 10 7:00 PM"), eq(emptySet()), any())
         Unit
       }
 
@@ -251,74 +253,98 @@ class CalendarEventWebhookTest {
     Unit
   }
 
-  @Test
-  fun `handleWebhook should put the event image on both announcements`() = runBlocking {
-    whenever(mockCalendar.getEventImagePath(12345)).thenReturn("/files/12345/my flyer.jpg")
+  private suspend fun givenPreview(data: EventPreviewData?) {
+    whenever(mockCalendar.getEventPreviewData(12345)).thenReturn(data)
+  }
+
+  private suspend fun givenOneFollower() {
     whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
     whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
         .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
     givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
+  }
 
-    handler.handleWebhook(requestBody())
-
-    val expected = "https://calendar.dallasmakerspace.org/files/12345/my%20flyer.jpg"
-    verifyFanOut(listOf("alice"))
-    assertTrue(payload.lastValue.contains("\"imageUrl\":\"$expected\""), payload.lastValue)
-    verify(mockAnnouncer).announce(any(), any(), any(), eq(EventPreview(expected, "")))
-    Unit
+  /** The preview the committee announcer would get, by calling the provider the webhook passed. */
+  private suspend fun previewGivenToAnnouncer(): EventPreview {
+    val provider = argumentCaptor<EventPreviewProvider>()
+    verify(mockAnnouncer).announce(any(), any(), any(), provider.capture())
+    return provider.lastValue()
   }
 
   @Test
-  fun `handleWebhook should send without an image when the lookup finds none or fails`() =
+  fun `handleWebhook should put the event image and a description teaser on both announcements`() =
       runBlocking {
-        whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
-        whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
-            .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
-        givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
+        val description = "Learn to cut and engrave.   " + "Bring safety glasses. ".repeat(30)
+        givenPreview(EventPreviewData("/files/12345/my flyer.jpg", description))
+        givenOneFollower()
 
-        whenever(mockCalendar.getEventImagePath(12345)).thenReturn(null)
         handler.handleWebhook(requestBody())
-        whenever(mockCalendar.getEventImagePath(12345)).thenThrow(IllegalStateException("db down"))
-        val result = handler.handleWebhook(requestBody())
 
-        assertTrue(result.success)
-        verify(mockAnnouncer, times(2)).announce(any(), any(), any(), eq(EventPreview()))
-        Unit
+        val image = "https://calendar.dallasmakerspace.org/files/12345/my%20flyer.jpg"
+        verifyFanOut(listOf("alice"))
+        assertTrue(payload.lastValue.contains("\"imageUrl\":\"$image\""), payload.lastValue)
+        assertTrue(
+            payload.lastValue.contains("\"excerpt\":\"Learn to cut and engrave. Bring safety"),
+            payload.lastValue)
+        assertTrue(payload.lastValue.contains("…\""), payload.lastValue)
+        val preview = previewGivenToAnnouncer()
+        assertEquals(image, preview.imageUrl)
+        assertTrue(preview.excerpt.startsWith("Learn to cut and engrave. Bring") && preview.excerpt.length <= 201)
       }
 
   @Test
-  fun `handleWebhook should add a short description teaser to both announcements`() = runBlocking {
-    val long = "Learn to cut and engrave.   " + "Bring safety glasses. ".repeat(30)
-    whenever(mockCalendar.getEventDescription(12345)).thenReturn(long)
-    whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(listOf("alice"))
-    whenever(mockAd.getMembersByUsernameList(listOf("jdoe")))
-        .thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
-    givenFanOut(FanOutResult(created = 1, duplicates = 0, failed = 0))
+  fun `handleWebhook should look the preview up once for both announcements`() = runBlocking {
+    givenPreview(EventPreviewData(null, "Hello"))
+    givenOneFollower()
 
     handler.handleWebhook(requestBody())
+    previewGivenToAnnouncer()
 
-    verifyFanOut(listOf("alice"))
-    assertTrue(payload.lastValue.contains("\"excerpt\":\"Learn to cut and engrave. Bring safety"), payload.lastValue)
-    assertTrue(payload.lastValue.contains("…\""), payload.lastValue)
-    verify(mockAnnouncer)
-        .announce(any(), any(), any(), argThat { excerpt.startsWith("Learn to cut and engrave. Bring") && excerpt.length <= 201 })
+    verify(mockCalendar, times(1)).getEventPreviewData(12345)
     Unit
   }
 
   @Test
-  fun `handleWebhook should send without a teaser when the description lookup fails`() = runBlocking {
-    whenever(mockCalendar.getEventDescription(12345)).thenThrow(IllegalStateException("db down"))
+  fun `handleWebhook should not look anything up when nobody is notified`() = runBlocking {
     whenever(mockSubscriptions.getFollowers("jdoe")).thenReturn(emptyList())
+
+    handler.handleWebhook(requestBody())
+
+    verify(mockCalendar, never()).getEventPreviewData(any())
+    Unit
+  }
+
+  @Test
+  fun `handleWebhook should send without extras when the event has none or the lookup fails`() =
+      runBlocking {
+        givenOneFollower()
+
+        givenPreview(null)
+        handler.handleWebhook(requestBody())
+
+        verifyFanOut(listOf("alice"))
+        assertTrue(!payload.lastValue.contains("imageUrl"), payload.lastValue)
+        assertEquals(EventPreview(), previewGivenToAnnouncer())
+      }
+
+  @Test
+  fun `handleWebhook should still succeed when the preview lookup throws`() = runBlocking {
+    whenever(mockCalendar.getEventPreviewData(12345)).thenThrow(IllegalStateException("db down"))
+    givenOneFollower()
 
     val result = handler.handleWebhook(requestBody())
 
     assertTrue(result.success)
-    verify(mockAnnouncer).announce(any(), any(), any(), eq(EventPreview()))
-    Unit
+    assertTrue(result.message.contains("Notified 1 of 1"))
+    verifyFanOut(listOf("alice"))
+    assertTrue(!payload.lastValue.contains("imageUrl"), payload.lastValue)
   }
 
   @Test
   fun `absoluteImageUrl takes the origin from the event page and encodes the path`() {
+    assertEquals(
+        "https://calendar.example.org/files/7/%E3%83%95.png",
+        absoluteImageUrl("https://calendar.example.org/events/view/7", "/files/7/フ.png"))
     assertEquals(
         "https://calendar.example.org/files/7/a%20b%25.png",
         absoluteImageUrl("https://calendar.example.org/events/view/7?x=1", "/files/7/a b%.png"))

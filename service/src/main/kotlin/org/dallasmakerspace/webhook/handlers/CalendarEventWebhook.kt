@@ -6,7 +6,10 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
@@ -76,21 +79,26 @@ constructor(
     val event = envelope.data
     val eventStart = formatEventStart(event.eventStart, event.eventStartTimezone)
     val followers = profileSubscriptionService.getFollowers(event.organizerUsername)
-    val preview = lookUpPreview(event)
-    val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart, preview)
-    val committeeSummary =
-        announceToCommitteeFollowers(event, eventStart, followers.toSet(), preview)
-    return WebhookResult(true, "$organizerSummary; $committeeSummary")
+    return coroutineScope {
+      // Looked up at most once, and only if someone is actually going to be emailed.
+      val lookup = async(start = CoroutineStart.LAZY) { lookUpPreview(event) }
+      val preview: EventPreviewProvider = { lookup.await() }
+      val organizerSummary = notifyOrganizerFollowers(event, followers, eventStart, preview)
+      val committeeSummary =
+          announceToCommitteeFollowers(event, eventStart, followers.toSet(), preview)
+      WebhookResult(true, "$organizerSummary; $committeeSummary")
+    }
   }
 
   private suspend fun notifyOrganizerFollowers(
       event: CalendarEventWebhookData,
       followers: List<String>,
       eventStart: String,
-      preview: EventPreview,
+      preview: EventPreviewProvider,
   ): String {
     if (followers.isEmpty()) return "No followers for ${event.organizerUsername}, nothing to send"
 
+    val eventPreview = preview()
     val payload =
         json.encodeToString(
             EventAnnouncementData.serializer(),
@@ -100,8 +108,8 @@ constructor(
                 organizerUsername = event.organizerUsername,
                 eventStart = eventStart,
                 eventUrl = event.url,
-                imageUrl = preview.imageUrl,
-                excerpt = preview.excerpt))
+                imageUrl = eventPreview.imageUrl,
+                excerpt = eventPreview.excerpt))
 
     val result =
         notificationService.createForMembers(
@@ -125,7 +133,7 @@ constructor(
       event: CalendarEventWebhookData,
       eventStart: String,
       alreadyNotified: Set<String>,
-      preview: EventPreview,
+      preview: EventPreviewProvider,
   ): String =
       try {
         committeeClassAnnouncer.announce(event, eventStart, alreadyNotified, preview)
@@ -134,29 +142,17 @@ constructor(
         "Committee followers: failed (${e.javaClass.simpleName})"
       }
 
-  /** Each part is blank when the event has none or its lookup fails; the emails just omit it. */
-  private suspend fun lookUpPreview(event: CalendarEventWebhookData): EventPreview =
-      EventPreview(
-          imageUrl =
-              lookUp(event, "image") {
-                calendarService.getEventImagePath(event.id)?.let { absoluteImageUrl(event.url, it) }
-              },
-          excerpt =
-              lookUp(event, "description") {
-                calendarService.getEventDescription(event.id)?.let { plainExcerpt(it) }
-              })
-
+  /** Each part is blank when the event has none or the lookup fails; the emails just omit it. */
   @Suppress("TooGenericExceptionCaught")
-  private suspend fun lookUp(
-      event: CalendarEventWebhookData,
-      what: String,
-      block: suspend () -> String?,
-  ): String =
+  private suspend fun lookUpPreview(event: CalendarEventWebhookData): EventPreview =
       try {
-        block().orEmpty()
+        val data = calendarService.getEventPreviewData(event.id)
+        EventPreview(
+            imageUrl = data?.imagePath?.let { absoluteImageUrl(event.url, it) }.orEmpty(),
+            excerpt = data?.description?.let { plainExcerpt(it) }.orEmpty())
       } catch (e: Exception) {
-        logger.warn("The $what lookup failed for event ${event.id}, sending without it", e)
-        ""
+        logger.warn("Preview lookup failed for event ${event.id}, sending without it", e)
+        EventPreview()
       }
 
   /**
@@ -212,3 +208,6 @@ internal fun absoluteImageUrl(eventUrl: String, path: String): String =
 
 /** The optional extras shown next to an event in emails: an absolute image URL and a short teaser. */
 data class EventPreview(val imageUrl: String = "", val excerpt: String = "")
+
+/** Fetches the preview on first call; shared by both fan-outs so it is looked up at most once. */
+typealias EventPreviewProvider = suspend () -> EventPreview

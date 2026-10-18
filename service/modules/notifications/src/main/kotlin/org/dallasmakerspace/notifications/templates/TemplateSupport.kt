@@ -26,7 +26,8 @@ fun notificationPreferencesUrl(username: String): String =
 fun plainExcerpt(text: String, maxLength: Int = 200): String {
   val collapsed = text.replace(WHITESPACE_REGEX, " ").trim()
   if (collapsed.length <= maxLength) return collapsed
-  val cut = collapsed.take(maxLength)
+  val cut = collapsed.take(maxLength).dropLastWhile { Character.isHighSurrogate(it) }
+  if (collapsed[maxLength] == ' ') return cut.trimEnd() + "…"
   val atWord = cut.substringBeforeLast(' ', "")
   return (if (atWord.length >= maxLength / 2) atWord else cut).trimEnd() + "…"
 }

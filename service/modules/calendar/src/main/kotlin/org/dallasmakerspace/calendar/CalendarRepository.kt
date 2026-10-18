@@ -7,6 +7,8 @@ import kotlinx.serialization.Serializable
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.db.master.GenericRepository
 
+private const val DESCRIPTION_CHARS = 1000
+
 private val SQL_TIMESTAMP_FORMAT: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
@@ -216,48 +218,26 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   }
 
   /**
-   * Web path (for example `/files/123/flyer.jpg`, relative to the calendar site) of event
-   * [eventId]'s first public image attachment, or null when it has none or the lookup fails or
-   * times out. Only formats every mail client can show are considered.
+   * What an email needs to show beside event [eventId]: its first public image attachment and the
+   * start of its description, from one query. Null when the event isn't found or the lookup fails
+   * or times out; each field is null when the event has none.
    */
-  suspend fun getEventImagePath(eventId: Long): String? {
+  suspend fun getEventPreviewData(eventId: Long): EventPreviewData? {
+    // Only formats every mail client can show are considered images. The description is cut in SQL
+    // because only the start is used and the link to this database is slow.
     val query =
         """
       SET STATEMENT max_statement_time=1.5 FOR
-      SELECT f.dir AS dir, f.file AS file
-      FROM `dms-calendar`.files f
-      WHERE f.event_id = $eventId
-        AND f.`private` = 0
-        AND LOWER(f.file) REGEXP '[.](png|jpe?g|gif)$'
-      ORDER BY f.id ASC
-      LIMIT 1
-    """
-
-    val result =
-        try {
-          genericRepository.getReportData(query)
-        } catch (ex: Exception) {
-          log.warn("Failed fetching the image for event $eventId - ${ex.message}")
-          return null
-        }
-
-    val row = result?.data?.firstOrNull() ?: return null
-    val dir = row["dir"]?.toString()?.trim().orEmpty()
-    val file = row["file"]?.toString()?.trim().orEmpty()
-    if (file.isEmpty()) return null
-    val folder = dir.removePrefix("webroot/").trim('/')
-    return "/" + (if (folder.isEmpty()) "" else "$folder/") + file
-  }
-
-  /**
-   * The text describing event [eventId]: its long description, or the short one when that is
-   * empty. Null when the event isn't found, has neither, or the lookup fails or times out.
-   */
-  suspend fun getEventDescription(eventId: Long): String? {
-    val query =
-        """
-      SET STATEMENT max_statement_time=1.5 FOR
-      SELECT e.long_description AS long_description, e.short_description AS short_description
+      SELECT
+        LEFT(e.long_description, $DESCRIPTION_CHARS) AS long_description,
+        e.short_description AS short_description,
+        (SELECT CONCAT_WS('/', TRIM(TRAILING '/' FROM f.dir), f.file)
+           FROM `dms-calendar`.files f
+          WHERE f.event_id = e.id
+            AND f.`private` = 0
+            AND LOWER(f.file) REGEXP '[.](png|jpe?g|gif)$'
+          ORDER BY f.id ASC
+          LIMIT 1) AS image_path
       FROM `dms-calendar`.events e
       WHERE e.id = $eventId
       LIMIT 1
@@ -267,13 +247,21 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
         try {
           genericRepository.getReportData(query)
         } catch (ex: Exception) {
-          log.warn("Failed fetching the description for event $eventId - ${ex.message}")
+          log.warn("Failed fetching the email preview data for event $eventId - ${ex.message}")
           return null
         }
 
     val row = result?.data?.firstOrNull() ?: return null
-    return listOf("long_description", "short_description")
-        .firstNotNullOfOrNull { row[it]?.toString()?.trim()?.takeIf { text -> text.isNotEmpty() } }
+    fun text(column: String) = row[column]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+    // Calendar stores "webroot/files/<id>/<name>" and serves it from the site root.
+    val imagePath =
+        text("image_path")?.removePrefix("webroot/")?.trimStart('/')?.takeIf {
+          it.startsWith("files/")
+        }
+    return EventPreviewData(
+        imagePath = imagePath?.let { "/$it" },
+        description = text("long_description") ?: text("short_description"),
+    )
   }
 
   /**
@@ -744,6 +732,9 @@ data class EventSummary(
  * event.
  */
 data class EventPrerequisite(val adGroup: String?, val partOfId: Long?)
+
+/** An event's first public image ([imagePath], like `/files/12/flyer.jpg`) and description start. */
+data class EventPreviewData(val imagePath: String?, val description: String?)
 
 /** How many calendar prerequisites name an AD group, and how many events use them. */
 data class PrerequisiteReferences(

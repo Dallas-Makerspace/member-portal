@@ -30,10 +30,14 @@ loops in the service deliver them.
 
 `event-announcement` and `committee-class` emails show the event's first public image attachment
 (png, jpg or gif) as a thumbnail beside the text, laid out like `project-post`
-(`templates/ThumbnailLayout.kt`). The calendar webhook doesn't send it: the portal looks it up in
-the calendar DB (`CalendarRepository.getEventImagePath`) and builds the URL from the event page URL.
-They also carry the first ~200 characters of the event's description (long, else short;
-`getEventDescription`). Either part is simply left out when the event has none or its lookup fails.
+(`templates/ThumbnailLayout.kt`) but keeping the image's proportions instead of cropping it, so
+flyers stay readable. They also carry the first ~200 characters of the event's description (long,
+else short).
+
+The calendar webhook sends neither: the portal reads both from the calendar DB in one query
+(`CalendarRepository.getEventPreviewData`), only when someone is actually going to be emailed, and
+builds the image URL from the event page URL. Either part is simply left out when the event has
+none or its lookup fails.
 
 ### No duplicates
 

@@ -15,13 +15,16 @@ private const val GUTTER = "16px"
  * for Outlook desktop (which ignores inline-block), and `dms-col` / `dms-thumb` classes that the
  * email shell's mobile media query uses to make the stacked thumbnail full width. With a blank
  * [imageUrl] the text takes the full width. [bodyHtml] must already be escaped; [imageUrl] and
- * [imageAlt] are escaped here. The thumbnail links to [linkUrl].
+ * [imageAlt] are escaped here. The thumbnail links to [linkUrl]. By default the image is cropped to a
+ * fixed 218x147 box; with [keepAspectRatio] it keeps its own proportions at that width (for flyers,
+ * where cropping would cut off the text).
  */
-fun thumbnailColumnsHtml(
+internal fun thumbnailColumnsHtml(
     imageUrl: String,
     imageAlt: String,
     linkUrl: String,
     bodyHtml: String,
+    keepAspectRatio: Boolean = false,
 ): String = buildString {
   val hasImage = imageUrl.isNotBlank()
   append("<div style=\"font-size:0;line-height:0;\">")
@@ -31,10 +34,17 @@ fun thumbnailColumnsHtml(
     append("<div class=\"dms-col\" style=\"display:inline-block;vertical-align:top;")
     append("width:${THUMB_WIDTH}px;max-width:100%;font-size:16px;line-height:22px;\">")
     append("<a href=\"${escapeHtml(linkUrl)}\" style=\"text-decoration:none;\">")
-    append("<img class=\"dms-thumb\" src=\"${escapeHtml(imageUrl)}\" ")
-    append("alt=\"${escapeHtml(imageAlt)}\" width=\"$THUMB_WIDTH\" ")
-    append("height=\"$THUMB_HEIGHT\" style=\"display:block;width:${THUMB_WIDTH}px;")
-    append("height:${THUMB_HEIGHT}px;object-fit:cover;border:0;border-radius:12px;")
+    if (keepAspectRatio) {
+      append("<img class=\"dms-thumb-auto\" src=\"${escapeHtml(imageUrl)}\" ")
+      append("alt=\"${escapeHtml(imageAlt)}\" width=\"$THUMB_WIDTH\" ")
+      append("style=\"display:block;width:${THUMB_WIDTH}px;max-width:100%;height:auto;")
+      append("border:0;border-radius:12px;")
+    } else {
+      append("<img class=\"dms-thumb\" src=\"${escapeHtml(imageUrl)}\" ")
+      append("alt=\"${escapeHtml(imageAlt)}\" width=\"$THUMB_WIDTH\" ")
+      append("height=\"$THUMB_HEIGHT\" style=\"display:block;width:${THUMB_WIDTH}px;")
+      append("height:${THUMB_HEIGHT}px;object-fit:cover;border:0;border-radius:12px;")
+    }
     append("background-color:#1a1a1a;box-shadow:0 2px 10px rgba(0,0,0,0.09);\"></a></div>")
     append("<!--[if mso]></td><td width=\"${COLUMNS_WIDTH - THUMB_WIDTH}\" valign=\"top\"><![endif]-->")
   }
