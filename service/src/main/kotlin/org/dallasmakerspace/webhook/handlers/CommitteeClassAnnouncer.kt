@@ -1,10 +1,7 @@
 package org.dallasmakerspace.webhook.handlers
 
 import javax.inject.Inject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.calendar.CalendarService
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.notifications.Channel
@@ -13,7 +10,6 @@ import org.dallasmakerspace.notifications.db.CommitteeSubscriptionsRepository
 import org.dallasmakerspace.notifications.templates.CommitteeClassData
 import org.dallasmakerspace.notifications.topics.CommitteeUpdatesTopic
 import org.dallasmakerspace.webhook.models.CalendarEventWebhookData
-import org.slf4j.LoggerFactory
 
 /**
  * Tells members who follow a committee that it has a new class they haven't taken yet. Calendar's
@@ -28,9 +24,8 @@ constructor(
     private val calendarService: CalendarService,
     private val subscriptions: CommitteeSubscriptionsRepository,
     private val notificationService: NotificationService,
-    private val activeDirectoryService: IActiveDirectoryService,
+    private val followerFilter: CommitteeFollowerFilter,
 ) {
-  private val logger = LoggerFactory.getLogger(CommitteeClassAnnouncer::class.java)
   private val json = Json { ignoreUnknownKeys = true }
 
   /**
@@ -56,7 +51,7 @@ constructor(
             event.organizerUsername
     if (subscribers.isEmpty()) return "Committee followers: none to notify"
 
-    val eligible = withoutGroup(subscribers, adGroup)
+    val eligible = followerFilter.withoutGroup(subscribers, adGroup)
     if (eligible.isEmpty()) return "Committee followers: all ${subscribers.size} already have it"
 
     val payload =
@@ -80,30 +75,5 @@ constructor(
     return "Committee followers: notified ${result.created} of ${eligible.size}" +
         " (already have it=${subscribers.size - eligible.size}," +
         " duplicates=${result.duplicates}, failed=${result.failed})"
-  }
-
-  /**
-   * [members] minus those already in AD group [adGroup], by direct membership (how calendar and
-   * Moodle assign it). If AD can't answer for a batch its members are kept: a repeat notice is
-   * better than a missed one.
-   */
-  @Suppress("TooGenericExceptionCaught")
-  private suspend fun withoutGroup(members: List<String>, adGroup: String): List<String> =
-      withContext(Dispatchers.IO) {
-        members.chunked(AD_BATCH_SIZE).flatMap { batch ->
-          try {
-            val users = activeDirectoryService.getMembersByUsernameList(batch)
-            batch.filter { name ->
-              users[name]?.groups?.none { it.cn.equals(adGroup, ignoreCase = true) } ?: true
-            }
-          } catch (e: Exception) {
-            logger.warn("AD lookup failed for ${batch.size} committee followers, keeping them", e)
-            batch
-          }
-        }
-      }
-
-  private companion object {
-    const val AD_BATCH_SIZE = 100
   }
 }

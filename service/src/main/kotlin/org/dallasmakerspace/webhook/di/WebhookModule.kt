@@ -5,6 +5,7 @@ import dagger.Provides
 import dagger.multibindings.ElementsIntoSet
 import dagger.multibindings.IntoSet
 import org.dallasmakerspace.notifications.templates.CommitteeClassTemplate
+import org.dallasmakerspace.notifications.templates.CommitteeCourseTemplate
 import org.dallasmakerspace.notifications.templates.EventAnnouncementTemplate
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
 import org.dallasmakerspace.notifications.templates.ProjectPostTemplate
@@ -13,6 +14,7 @@ import org.dallasmakerspace.webhook.handlers.ActivityLogWebhook
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.dallasmakerspace.webhook.handlers.DiscoursePostWebhook
 import org.dallasmakerspace.webhook.handlers.GroupHistoryWebhook
+import org.dallasmakerspace.webhook.handlers.MoodleCourseWebhook
 import org.dallasmakerspace.webhook.handlers.NotificationWebhook
 import org.dallasmakerspace.webhook.handlers.SmartWaiverWebhook
 import org.dallasmakerspace.webhook.handlers.SparkPostWebhook
@@ -39,6 +41,11 @@ class WebhookModule {
   @IntoSet
   fun provideCommitteeClassTemplate(): NotificationTemplate<*> = CommitteeClassTemplate()
 
+  /** Produced by [MoodleCourseWebhook] (via MoodleCourseAnnouncer) for committee followers. */
+  @Provides
+  @IntoSet
+  fun provideCommitteeCourseTemplate(): NotificationTemplate<*> = CommitteeCourseTemplate()
+
   @Provides
   @ElementsIntoSet
   fun provideWebhookHandlers(
@@ -49,6 +56,7 @@ class WebhookModule {
       sparkPostWebhook: SparkPostWebhook,
       calendarEventWebhook: CalendarEventWebhook,
       discoursePostWebhook: DiscoursePostWebhook,
+      moodleCourseWebhook: MoodleCourseWebhook,
   ): Set<WebhookHandler> {
     return setOf(
         groupHistoryWebhook,
@@ -57,6 +65,7 @@ class WebhookModule {
         notificationWebhook,
         sparkPostWebhook,
         calendarEventWebhook,
-        discoursePostWebhook)
+        discoursePostWebhook,
+        moodleCourseWebhook)
   }
 }

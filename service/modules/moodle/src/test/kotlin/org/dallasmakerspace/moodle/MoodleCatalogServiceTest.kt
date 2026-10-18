@@ -143,4 +143,46 @@ class MoodleCatalogServiceTest {
     assertEquals(listOf(1), catalog.courses.map { it.id })
     assertEquals(3, service.getAllCourses().size)
   }
+
+  private fun serviceFor(client: IMoodleApiClient): MoodleCatalogService {
+    whenever(client.baseUrl).thenReturn(learnUrl)
+    val loggerFactory = mock<LoggerFactory>()
+    whenever(loggerFactory.create(any())).thenReturn(mock<Logger>())
+    return MoodleCatalogService(client, loggerFactory)
+  }
+
+  @Test
+  fun `refreshNow reads Moodle again instead of serving the one-hour cache`() = runBlocking<Unit> {
+    val client = mock<IMoodleApiClient>()
+    whenever(client.getCategories()).thenReturn(categories)
+    whenever(client.getUsernames(any())).thenReturn(emptyMap())
+    whenever(client.getCourses())
+        .thenReturn(listOf(course(1, 1, 1)))
+        .thenReturn(listOf(course(1, 1, 1), course(2, 1, 2)))
+    val service = serviceFor(client)
+    assertEquals(listOf(1), service.getAllCourses().map { it.id })
+
+    val fresh = service.refreshNow()
+
+    assertEquals(listOf(1, 2), fresh.map { it.id })
+    assertEquals(listOf(1, 2), service.getAllCourses().map { it.id })
+  }
+
+  @Test
+  fun `refreshNow throws when Moodle can't be read, and the cache keeps the last good catalog`() =
+      runBlocking<Unit> {
+        val client = mock<IMoodleApiClient>()
+        whenever(client.getCategories()).thenReturn(categories)
+        whenever(client.getUsernames(any())).thenReturn(emptyMap())
+        whenever(client.getCourses())
+            .thenReturn(listOf(course(1, 1, 1)))
+            .thenThrow(MoodleApiException("down"))
+        val service = serviceFor(client)
+        assertEquals(1, service.getAllCourses().size)
+
+        val failure = runCatching { service.refreshNow() }.exceptionOrNull()
+
+        assertTrue(failure is MoodleApiException)
+        assertEquals(listOf(1), service.getAllCourses().map { it.id })
+      }
 }

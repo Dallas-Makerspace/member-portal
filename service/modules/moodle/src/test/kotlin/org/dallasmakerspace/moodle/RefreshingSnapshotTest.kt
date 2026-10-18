@@ -55,6 +55,31 @@ class RefreshingSnapshotTest {
   }
 
   @Test
+  fun `refreshOrThrow loads fresh, replaces the cache and returns the value`() = runBlocking<Unit> {
+    var calls = 0
+    val s = snapshot { ++calls }
+    assertEquals(1, s.get())
+
+    assertEquals(2, s.refreshOrThrow())
+
+    assertEquals(2, s.get())
+    assertEquals(2, calls)
+  }
+
+  @Test
+  fun `refreshOrThrow throws on failure and keeps the last good value`() = runBlocking<Unit> {
+    var fail = false
+    val s = snapshot { if (fail) error("down") else 42 }
+    assertEquals(42, s.get())
+
+    fail = true
+    val failure = runCatching { s.refreshOrThrow() }.exceptionOrNull()
+
+    assertEquals("down", failure?.message)
+    assertEquals(42, s.get())
+  }
+
+  @Test
   fun `after an initial failure, waits before trying again`() = runBlocking<Unit> {
     var calls = 0
     var fail = true

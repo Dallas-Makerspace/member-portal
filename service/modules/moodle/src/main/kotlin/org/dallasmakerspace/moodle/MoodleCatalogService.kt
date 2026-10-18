@@ -41,6 +41,13 @@ constructor(
   /** All courses, hidden ones included (stats need them); empty if Moodle is unreachable. */
   suspend fun getAllCourses(): List<LearnCourse> = snapshot.get() ?: emptyList()
 
+  /**
+   * Reads the catalog from Moodle right now, bypassing the 1-hour cache, and replaces the cache.
+   * Throws if Moodle can't be read, so a caller acting on "what is published" never works from
+   * stale data (the cached [getAllCourses] swallows failures).
+   */
+  suspend fun refreshNow(): List<LearnCourse> = snapshot.refreshOrThrow()
+
   suspend fun getCatalog(committee: Committee? = null): LearnCatalog =
       LearnCatalog(
           learnUrl = learnUrl,

@@ -51,6 +51,17 @@ internal class RefreshingSnapshot<T : Any>(
     return current.second
   }
 
+  /**
+   * Loads fresh now and stores it as the snapshot. Unlike [refresh] a failure is thrown (and the
+   * last good value kept), for callers that must not act on stale data.
+   */
+  suspend fun refreshOrThrow(): T {
+    val loaded = loader()
+    value.set(clock.now() to loaded)
+    lastFailure.set(null)
+    return loaded
+  }
+
   @Suppress("TooGenericExceptionCaught")
   suspend fun refresh() {
     try {

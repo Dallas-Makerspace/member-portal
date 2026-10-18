@@ -15,6 +15,7 @@ import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.db.CommitteeSubscriptionsRepository
 import org.dallasmakerspace.notifications.topics.CommitteeUpdatesTopic
 import org.dallasmakerspace.webhook.handlers.CommitteeClassAnnouncer
+import org.dallasmakerspace.webhook.handlers.CommitteeFollowerFilter
 import org.dallasmakerspace.webhook.models.CalendarEventWebhookData
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -33,7 +34,7 @@ class CommitteeClassAnnouncerTest {
   private val subscriptions = mock<CommitteeSubscriptionsRepository>()
   private val notifications = mock<NotificationService>()
   private val ad = mock<IActiveDirectoryService>()
-  private val announcer = CommitteeClassAnnouncer(calendar, subscriptions, notifications, ad)
+  private val announcer = CommitteeClassAnnouncer(calendar, subscriptions, notifications, CommitteeFollowerFilter(ad))
 
   private val laser = Committees.findByName("Laser")!!
   private val event =
