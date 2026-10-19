@@ -74,7 +74,10 @@
 <section th:if="${followsMenuEnabled}" id="membersToFollowSection"
          class="suggested-events-section members-to-follow-section">
     <div class="container">
-        <h2 class="suggested-events-heading">Members to Follow</h2>
+        <div class="suggested-events-header d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-baseline gap-1 mb-3">
+            <h2 class="suggested-events-heading mb-0">Members to Follow</h2>
+            <a href="/reports/calendar/top-members" class="small text-muted text-decoration-underline align-self-end align-self-sm-auto">Top teachers</a>
+        </div>
         <div id="membersToFollowGrid" class="dms-member-grid">
             <div class="dms-member-grid-item member-skeleton" aria-hidden="true">
                 <div class="shimmer-line member-skeleton-avatar"></div>
