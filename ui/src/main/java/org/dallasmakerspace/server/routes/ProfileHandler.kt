@@ -50,6 +50,9 @@ constructor(
     private const val FOLLOW_FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
     private const val PROFILE_PHOTO_FEATURE_FLAG_KEY = "profile-photo.enabled"
     private const val FACEPILE_LIMIT = 5
+
+    /** Events on the "Events Organized" card: upcoming ones first, with room for two past ones. */
+    private const val EVENTS_ORGANIZED_LIMIT = 7
     private const val FACEPILE_AVATAR_SIZE = 90
     private const val PROFILE_PIC_FALLBACK = "/static/images/profile-pic-not-set.svg"
   }
@@ -70,7 +73,8 @@ constructor(
     val memberDeferred = async { memberService.getMember(requestedUsername, session.sessionId) }
     val eventsDeferred = async {
       try {
-        memberService.getEventsOrganizedByMember(requestedUsername, 5, session.sessionId)
+        memberService.getEventsOrganizedByMember(
+            requestedUsername, EVENTS_ORGANIZED_LIMIT, session.sessionId)
       } catch (e: Exception) {
         log.warn("Failed to fetch events for member: $requestedUsername", e)
         emptyList()

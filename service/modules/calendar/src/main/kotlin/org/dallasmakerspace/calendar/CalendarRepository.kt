@@ -9,16 +9,19 @@ import org.dallasmakerspace.db.master.GenericRepository
 
 private const val DESCRIPTION_CHARS = 1000
 
-/** Upcoming events the profile card reserves slots for before it fills up with past ones. */
-const val PROFILE_UPCOMING_EVENTS = 3
+/** Past events the profile card keeps room for, so it never shows only what is still to come. */
+const val PROFILE_MIN_PAST_EVENTS = 2
+
+/** How many of [limit] slots upcoming events may take (every slot but the reserved past ones). */
+fun profileUpcomingSlots(limit: Int): Int = (limit - PROFILE_MIN_PAST_EVENTS).coerceIn(1, limit)
 
 /**
  * Chooses the events the profile card shows from rows tagged upcoming (true) or past (false), each
- * group already nearest-first: up to [PROFILE_UPCOMING_EVENTS] upcoming, then past events fill the
- * remaining slots up to [limit]. Newest first.
+ * group already nearest-first: upcoming events fill every slot but [PROFILE_MIN_PAST_EVENTS], and
+ * past events fill whatever is left, up to [limit]. Newest first.
  */
 fun pickProfileEvents(rows: List<Pair<Boolean, EventSummary>>, limit: Int): List<EventSummary> {
-  val upcoming = rows.filter { it.first }.map { it.second }.take(minOf(limit, PROFILE_UPCOMING_EVENTS))
+  val upcoming = rows.filter { it.first }.map { it.second }.take(profileUpcomingSlots(limit))
   val past = rows.filter { !it.first }.map { it.second }.take((limit - upcoming.size).coerceAtLeast(0))
   return (upcoming + past).sortedByDescending { it.eventStart }
 }
@@ -33,10 +36,11 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   private val log = loggerFactory.create(javaClass)
 
   /**
-   * Fetches events organized by a member for the profile's "Events Organized" card: up to
-   * [PROFILE_UPCOMING_EVENTS] upcoming events (soonest first) so a newly announced event is always
-   * there, then the most recent past events fill the remaining slots. Returned newest first. A pure
-   * "closest to today" ranking let a few recent past sessions push every upcoming event off the card.
+   * Fetches events organized by a member for the profile's "Events Organized" card: upcoming events
+   * (soonest first) take every slot but [PROFILE_MIN_PAST_EVENTS], so a newly announced event is
+   * there even when the organizer has several sessions coming up; the most recent past events fill
+   * the rest. Returned newest first. A pure "closest to today" ranking let a few recent past
+   * sessions push every upcoming event off the card.
    *
    * @param username The username of the member to fetch events for.
    * @param limit The maximum number of events to return (default 5).
@@ -62,7 +66,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
         JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
         WHERE c.ad_username = '$owner' AND e.event_start >= NOW()
         ORDER BY e.event_start ASC
-        LIMIT $PROFILE_UPCOMING_EVENTS)
+        LIMIT ${profileUpcomingSlots(limit)})
         UNION ALL
         (SELECT
             e.id,
