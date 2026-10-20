@@ -9,21 +9,17 @@ import org.dallasmakerspace.db.master.GenericRepository
 
 private const val DESCRIPTION_CHARS = 1000
 
-/** Past events the profile card keeps room for, so it never shows only what is still to come. */
-const val PROFILE_MIN_PAST_EVENTS = 2
-
-/** How many of [limit] slots upcoming events may take (every slot but the reserved past ones). */
-fun profileUpcomingSlots(limit: Int): Int = (limit - PROFILE_MIN_PAST_EVENTS).coerceIn(1, limit)
+/** Upcoming events returned for the profile card (a safety cap; organizers have a handful). */
+const val PROFILE_MAX_UPCOMING_EVENTS = 30
 
 /**
- * Chooses the events the profile card shows from rows tagged upcoming (true) or past (false), each
- * group already nearest-first: upcoming events fill every slot but [PROFILE_MIN_PAST_EVENTS], and
- * past events fill whatever is left, up to [limit]. Newest first.
+ * Orders the profile card's rows (tagged upcoming = true or past = false): upcoming events soonest
+ * first, then past events newest first, which is the order the card reads in.
  */
-fun pickProfileEvents(rows: List<Pair<Boolean, EventSummary>>, limit: Int): List<EventSummary> {
-  val upcoming = rows.filter { it.first }.map { it.second }.take(profileUpcomingSlots(limit))
-  val past = rows.filter { !it.first }.map { it.second }.take((limit - upcoming.size).coerceAtLeast(0))
-  return (upcoming + past).sortedByDescending { it.eventStart }
+fun orderProfileEvents(rows: List<Pair<Boolean, EventSummary>>): List<EventSummary> {
+  val upcoming = rows.filter { it.first }.map { it.second }.sortedBy { it.eventStart }
+  val past = rows.filter { !it.first }.map { it.second }.sortedByDescending { it.eventStart }
+  return upcoming + past
 }
 
 private val SQL_TIMESTAMP_FORMAT: DateTimeFormatter =
@@ -36,17 +32,16 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   private val log = loggerFactory.create(javaClass)
 
   /**
-   * Fetches events organized by a member for the profile's "Events Organized" card: upcoming events
-   * (soonest first) take every slot but [PROFILE_MIN_PAST_EVENTS], so a newly announced event is
-   * there even when the organizer has several sessions coming up; the most recent past events fill
-   * the rest. Returned newest first. A pure "closest to today" ranking let a few recent past
-   * sessions push every upcoming event off the card.
+   * Fetches events organized by a member for the profile's "Events Organized" card: every
+   * upcoming event (up to [PROFILE_MAX_UPCOMING_EVENTS]), soonest first, then the [pastLimit] most
+   * recent past events, newest first. Upcoming events are never crowded out by recent past ones,
+   * so a newly announced session is always in the list; the card decides how many to show.
    *
    * @param username The username of the member to fetch events for.
-   * @param limit The maximum number of events to return (default 5).
+   * @param pastLimit How many past events to include after the upcoming ones (default 5).
    * @return A list of [EventSummary] objects.
    */
-  suspend fun getEventsOrganizedByMember(username: String, limit: Int = 5): List<EventSummary> {
+  suspend fun getEventsOrganizedByMember(username: String, pastLimit: Int = 5): List<EventSummary> {
     val owner = username.replace("'", "''")
     // Use MariaDB server-side statement timeout (1.5s) so the DB kills the query and frees the
     // JDBC connection. withTimeoutOrNull does NOT work here because blocking JDBC calls on
@@ -66,7 +61,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
         JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
         WHERE c.ad_username = '$owner' AND e.event_start >= NOW()
         ORDER BY e.event_start ASC
-        LIMIT ${profileUpcomingSlots(limit)})
+        LIMIT $PROFILE_MAX_UPCOMING_EVENTS)
         UNION ALL
         (SELECT
             e.id,
@@ -78,11 +73,11 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
         JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
         WHERE c.ad_username = '$owner' AND e.event_start < NOW()
         ORDER BY e.event_start DESC
-        LIMIT $limit)
+        LIMIT $pastLimit)
       ) AS organized_events
     """
 
-    log.debug("Fetching events organized by member: $username (limit: $limit)")
+    log.debug("Fetching events organized by member: $username (past: $pastLimit)")
 
     val result =
         try {
@@ -109,7 +104,7 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
           val upcoming = (row["is_upcoming"] as? Number)?.toInt() == 1
           upcoming to EventSummary(id = id, name = name, eventStart = eventStart, status = status)
         }
-    return pickProfileEvents(rows, limit)
+    return orderProfileEvents(rows)
   }
 
   /**

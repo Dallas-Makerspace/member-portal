@@ -200,6 +200,10 @@
             border-left: 3px solid #0d6efd;
         }
 
+        [data-expandable] {
+            scroll-margin-top: 16px;
+        }
+
         .event-past {
             opacity: 0.7;
         }
@@ -663,15 +667,18 @@
             </div>
 
             <!-- Events Organized card -->
-            <div th:if="${events_organized}" class="dms-card shadow-sm mt-4">
+            <div th:if="${events_organized}" id="events-organized" data-expandable
+                 class="dms-card shadow-sm mt-4">
                 <div class="card-body pt-0 pb-4">
                     <h4 class="card-title mt-3 mb-4 dms-card-title">Events Organized</h4>
-                    <div class="list-group list-group-flush">
+                    <!-- Only the first few show until expanded; /profile/@user#events-organized opens it. -->
+                    <div class="list-group list-group-flush" id="events-organized-list">
                         <a th:each="event : ${events_organized}"
                            th:href="${event.url}"
                            target="_blank"
                            class="list-group-item list-group-item-action px-0 border-0 event-item"
-                           th:classappend="${event.isUpcoming} ? 'event-upcoming' : 'event-past'">
+                           th:classappend="${event.isUpcoming} ? 'event-upcoming' : 'event-past'"
+                           th:attr="hidden=${event.collapsed} ? 'hidden',data-expandable-extra=${event.collapsed} ? ''">
                             <div class="d-flex align-items-start">
                                 <span class="material-symbols-outlined card-item-icon mt-1 ms-md-3">event</span>
                                 <div class="flex-grow-1">
@@ -688,6 +695,10 @@
                             </div>
                         </a>
                     </div>
+                    <button th:if="${events_hidden_count > 0}" type="button" class="btn btn-link px-0 mt-2"
+                            data-expandable-toggle aria-expanded="false" aria-controls="events-organized-list"
+                            th:attr="data-more-label='Show ' + ${events_hidden_count} + ' more',data-less-label='Show fewer'"
+                            th:text="'Show ' + ${events_hidden_count} + ' more'"></button>
                 </div>
             </div>
 
@@ -794,6 +805,7 @@
         crossorigin="anonymous"></script>
 <!-- App JS -->
 <script src="../static/js/app.js"></script>
+<script src="../static/js/dms-expandable.js"></script>
 <script src="../static/js/dms-subscribe-button.js" th:if="${follow_subscription != null}"></script>
 <script src="../static/js/dms-page-loader.js" defer></script>
 <script type="module" src="../static/js/dms-group-pill.js"></script>

@@ -68,8 +68,9 @@ class EventAnnouncementTemplate :
   }
 
   /**
-   * The inbox card opens the organizer's portal profile (keeping members in the portal); the
-   * calendar link is the fallback when the payload has no organizer username.
+   * The inbox card opens the organizer's portal profile with the "Events Organized" card expanded
+   * (keeping members in the portal); the calendar link is the fallback when the payload has no
+   * organizer username.
    */
   override fun card(data: EventAnnouncementData): NotificationCard =
       NotificationCard(
@@ -77,7 +78,12 @@ class EventAnnouncementTemplate :
           title = data.eventName,
           excerpt = data.excerpt,
           imageUrl = data.imageUrl,
-          url = if (data.organizerUsername.isNotBlank()) portalProfilePath(data.organizerUsername) else data.eventUrl,
+          url =
+              if (data.organizerUsername.isNotBlank()) {
+                portalProfilePath(data.organizerUsername) + "#events-organized"
+              } else {
+                data.eventUrl
+              },
           ctaLabel = if (data.organizerUsername.isNotBlank()) "View profile" else "View event",
           sender = "@${data.organizerUsername}",
           whenLine = data.eventStart)

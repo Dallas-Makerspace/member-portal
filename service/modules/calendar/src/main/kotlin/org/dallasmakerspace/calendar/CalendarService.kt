@@ -11,16 +11,16 @@ constructor(private val calendarRepository: CalendarRepository, loggerFactory: L
   private val log = loggerFactory.create(javaClass)
 
   /**
-   * Gets events organized by a member, prioritized by proximity to today. Events closest to the
-   * current date (whether past or future) are returned first.
+   * Gets events organized by a member: every upcoming event (soonest first), then the [pastLimit]
+   * most recent past events (newest first).
    *
    * @param username The username of the member.
-   * @param limit The maximum number of events to return (default 5).
+   * @param pastLimit How many past events to include (default 5).
    * @return A list of [EventSummary] objects.
    */
-  suspend fun getEventsOrganizedByMember(username: String, limit: Int = 5): List<EventSummary> {
+  suspend fun getEventsOrganizedByMember(username: String, pastLimit: Int = 5): List<EventSummary> {
     log.info("Getting events organized by member: $username")
-    return calendarRepository.getEventsOrganizedByMember(username, limit)
+    return calendarRepository.getEventsOrganizedByMember(username, pastLimit)
   }
 
   /**

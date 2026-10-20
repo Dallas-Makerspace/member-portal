@@ -25,6 +25,7 @@ class Members(val loggedInDays: Int = 90) {
       @Resource("add") class Add(val parent: ActivityLog)
     }
 
+    /** Events organized: every upcoming one plus [limit] past ones (not a total cap). */
     @Resource("events") class Events(val parent: DMSMember, val limit: Int = 5)
 
     @Resource("attended-event-names")

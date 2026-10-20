@@ -120,7 +120,7 @@ class TemplateRegistryTest {
             kind = "event",
             title = "Open Build Night",
             excerpt = "Bring a project.",
-            url = "/profile/@asmith",
+            url = "/profile/@asmith#events-organized",
             ctaLabel = "View profile",
             sender = "@asmith",
             whenLine = "Thu Nov 6 7:00 PM"),
