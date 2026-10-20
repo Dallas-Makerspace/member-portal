@@ -103,11 +103,19 @@
     }).catch(function () { return GENERIC_FAILURE; });
   }
 
+  function sameState(a, b) {
+    return a.length === b.length && a.every(function (s, i) {
+      return s.el === b[i].el && s.checked === b[i].checked && s.value === b[i].value;
+    });
+  }
+
   function saveOne(form, scope, control) {
     const state = stateFor(form);
     const status = statusEl(form, scope);
     const previous = state.snapshots.get(scope) || [];
     const sent = snapshot(scope);
+    // Changed and changed back (or undone) before the save ran: nothing to tell the server.
+    if (sameState(previous, sent)) return Promise.resolve();
     form.setAttribute('aria-busy', 'true');
     setStatus(status, 'Saving…');
 
@@ -122,7 +130,8 @@
         return failureMessage(response).then(function (message) { throw new SaveError(message); });
       }
       state.snapshots.set(scope, sent);
-      onSaved(form, scope, status, previous, sent);
+      // Feedback is best-effort: a problem showing it must not read as a failed save.
+      try { onSaved(form, scope, status, previous, sent); } catch (e) { /* saved already */ }
     }).catch(function (err) {
       const message = err instanceof SaveError ? err.message : GENERIC_FAILURE;
       // Later changes in this scope were made on top of the one that failed.
@@ -143,11 +152,15 @@
     const after = sent.find(function (s) { return s.checked && s.el.type === 'radio'; });
     const canUndo = form.hasAttribute('data-autosave-undo') && before && after && before.el !== after.el;
     if (typeof showToast !== 'function' || (inView(status) && !canUndo)) return;
+    // The toast says it; don't also announce "Saved" from the status line.
+    if (canUndo) setStatus(status, '');
     const message = form.dataset.autosaveMessage || 'Saved';
     showToast(message, 'success', canUndo ? {
       action: {
         label: 'Undo',
         onClick: function () {
+          const state = stateFor(form);
+          if (state.timers.has(scope)) { clearTimeout(state.timers.get(scope)); state.timers.delete(scope); }
           restore(previous);
           enqueue(form, before.el);
         }
@@ -222,6 +235,9 @@
     link.setAttribute('aria-disabled', 'true');
     idleWaiters.push(function () { window.location.href = link.href; });
   });
+
+  // Back from the bfcache must be able to wait for a link again.
+  window.addEventListener('pageshow', function () { waiting = false; });
 
   window.addEventListener('beforeunload', function (e) {
     if (!pending()) return;
