@@ -8,6 +8,7 @@ import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberSettingsHandler
+import org.dallasmakerspace.server.memberservice.SettingsSections
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
 import org.dallasmakerspace.server.routes.isSameOriginRequest
@@ -30,7 +31,8 @@ constructor(
             ?: throw AuthException("No username found in user info")
     memberService.unlinkDiscourseAccount(username, session.sessionId)
     call.respondRedirect(
-        "/profile/@$username/settings?updated=${MemberSettingsHandler.TALK_UNLINKED}",
+        "/profile/@$username/settings?updated=${MemberSettingsHandler.TALK_UNLINKED}" +
+            "#${SettingsSections.LINKED_ACCOUNTS}",
         permanent = false)
   }
 }

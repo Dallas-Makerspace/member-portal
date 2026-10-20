@@ -3,6 +3,7 @@ package org.dallasmakerspace.server.attention
 import javax.inject.Inject
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.memberservice.SettingsSections
 import org.dallasmakerspace.server.routes.NotificationsInboxHandler
 
 /** Member hasn't told others how to reach them. */
@@ -15,7 +16,7 @@ constructor(private val memberService: MemberService) : AttentionSource {
     return AttentionItem(
         key = "settings",
         message = "Set your contact preference",
-        url = "/profile/@$username/settings")
+        url = SettingsSections.url(username, SettingsSections.CONTACT_PREFERENCE))
   }
 }
 

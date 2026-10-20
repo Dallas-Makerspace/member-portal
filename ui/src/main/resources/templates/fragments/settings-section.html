@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en-US" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  A collapsible card on the settings page. Its id is the deep link: /settings#<id> opens it (see
+  static/js/dms-sections.js, which finds cards by [data-settings-section]; nothing lists them).
+  Call: ~{fragments/settings-section :: section('my-id', 'Title', ${openByDefault}, ~{::#my-id-content})}
+  with the card's markup in an element id="my-id-content" inside the calling th:replace element.
+-->
+<section th:fragment="section(id, title, expanded, body)" class="dms-card shadow-sm mt-4 settings-section"
+         th:id="${id}" data-settings-section>
+    <div class="card-body pt-0 pb-4">
+        <h4 class="card-title mt-3 mb-0 dms-card-title">
+            <button type="button" class="settings-section-toggle" data-bs-toggle="collapse"
+                    th:attr="data-bs-target='#' + ${id} + '-body',aria-controls=${id} + '-body',aria-expanded=${expanded} ? 'true' : 'false'">
+                <span th:text="${title}"></span>
+                <span class="material-symbols-outlined ms-auto text-muted settings-section-icon"
+                      aria-hidden="true" th:text="${expanded} ? 'expand_less' : 'expand_more'"></span>
+            </button>
+        </h4>
+        <div class="collapse" th:classappend="${expanded} ? 'show'" th:id="${id} + '-body'">
+            <div class="pt-3" th:insert="${body}"></div>
+        </div>
+    </div>
+</section>
+</body>
+</html>

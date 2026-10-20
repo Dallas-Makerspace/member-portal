@@ -1,9 +1,11 @@
 package org.dallasmakerspace.server.memberservice
 
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Parameters
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.request.header
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.response.respond
@@ -12,8 +14,10 @@ import io.ktor.server.sessions.sessions
 import io.ktor.server.sessions.set
 import io.ktor.server.thymeleaf.ThymeleafContent
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.Serializable
 import org.dallasmakerspace.models.CommunicationPreference
 import org.dallasmakerspace.models.SocialNetwork
 import org.dallasmakerspace.server.auth.Permission
@@ -24,6 +28,7 @@ import org.dallasmakerspace.server.routes.AuthenticatedHandler
 import org.dallasmakerspace.server.routes.NotificationPreferences
 import org.dallasmakerspace.server.routes.NotificationsInboxHandler
 import org.dallasmakerspace.server.routes.SocialLinks
+import org.dallasmakerspace.server.routes.isSameOriginRequest
 
 private const val COMMUNICATION_PREFERENCE_KEY = "communication_preference"
 
@@ -133,12 +138,17 @@ constructor(
       requestedUsername: String,
       currentUsername: String?,
   ) {
+    val wantsJson = acceptsJson(call.request.header(HttpHeaders.Accept))
+    if (wantsJson && !call.isSameOriginRequest()) {
+      call.respond(HttpStatusCode.Forbidden, SettingsSaveResponse(false, "Request rejected."))
+      return
+    }
     val params = call.receiveParameters()
     when (params["form"]) {
       NotificationPreferences.FORM_NAME ->
-          saveNotificationPreferences(call, requestedUsername, currentUsername, params)
+          saveNotificationPreferences(call, requestedUsername, currentUsername, params, wantsJson)
       SocialLinks.FORM_NAME -> saveSocialLinks(call, requestedUsername, currentUsername, params)
-      null -> saveContactPreference(call, requestedUsername, currentUsername, params)
+      null -> saveContactPreference(call, requestedUsername, currentUsername, params, wantsJson)
       else -> call.respond(HttpStatusCode.BadRequest)
     }
   }
@@ -148,15 +158,37 @@ constructor(
       requestedUsername: String,
       currentUsername: String?,
       params: Parameters,
+      wantsJson: Boolean,
   ) {
     if (!notificationsEnabled(currentUsername)) {
       call.respond(HttpStatusCode.NotFound)
       return
     }
+    if (wantsJson) {
+      respondJson(call) { notificationPreferences.save(requestedUsername, session.sessionId, params) }
+      return
+    }
     notificationPreferences.save(requestedUsername, session.sessionId, params)
     call.respondRedirect(
-        "/profile/@$requestedUsername/settings?updated=${NotificationPreferences.FORM_NAME}",
+        "/profile/@$requestedUsername/settings?updated=${NotificationPreferences.FORM_NAME}" +
+            "#${SettingsSections.NOTIFICATION_PREFERENCES}",
         permanent = false)
+  }
+
+  /** Runs [save] for the autosave script; a failure answers in JSON, never the HTML error page. */
+  @Suppress("TooGenericExceptionCaught")
+  private suspend fun respondJson(call: ApplicationCall, save: suspend () -> Unit) {
+    try {
+      save()
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      log.warn("Autosave failed", e)
+      call.respond(
+          HttpStatusCode.InternalServerError, SettingsSaveResponse(false, "Couldn't save. Try again."))
+      return
+    }
+    call.respond(SettingsSaveResponse(true, "Saved."))
   }
 
   private suspend fun saveSocialLinks(
@@ -182,10 +214,22 @@ constructor(
       requestedUsername: String,
       currentUsername: String?,
       params: Parameters,
+      wantsJson: Boolean,
   ) {
     val preference = params[COMMUNICATION_PREFERENCE_KEY]
     if (CommunicationPreference.entries.none { it.name == preference }) {
-      call.respond(HttpStatusCode.BadRequest)
+      if (wantsJson) {
+        call.respond(HttpStatusCode.BadRequest, SettingsSaveResponse(false, "Pick one of the options."))
+      } else {
+        call.respond(HttpStatusCode.BadRequest)
+      }
+      return
+    }
+    if (wantsJson) {
+      respondJson(call) {
+        memberService.updateMemberSettings(
+            requestedUsername, currentUsername, preference, session.sessionId)
+      }
       return
     }
     memberService.updateMemberSettings(
@@ -270,6 +314,13 @@ internal fun contactOptions(
           label = "Don't list a contact method"),
   )
 }
+
+/** What the settings page's autosave script gets back instead of a redirect. */
+@Serializable internal data class SettingsSaveResponse(val success: Boolean, val message: String)
+
+/** The autosave script asks for JSON; plain form posts (no JS) keep the redirect flow. */
+internal fun acceptsJson(accept: String?): Boolean =
+    accept?.contains("application/json", ignoreCase = true) == true
 
 /** Toast for the settings page's `updated` query parameter, if it names a known change. */
 internal fun settingsUpdatedToast(updated: String?): String? =

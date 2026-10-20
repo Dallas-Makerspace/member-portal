@@ -7,6 +7,7 @@ import javax.inject.Inject
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
+import org.dallasmakerspace.server.memberservice.SettingsSections
 import org.dallasmakerspace.server.plugins.AuthException
 import org.dallasmakerspace.server.plugins.UserSession
 import org.dallasmakerspace.server.routes.IRouteHandler
@@ -116,7 +117,7 @@ constructor(
     if (pendingPreference == "DISCORD") {
       memberService.updateMemberSettings(username, username, "DISCORD", session.sessionId)
       session.isSettingsUpdateSuccess = true
-      return "/profile/@$username/settings"
+      return SettingsSections.url(username, SettingsSections.CONTACT_PREFERENCE)
     }
     return "/profile/@$username"
   }

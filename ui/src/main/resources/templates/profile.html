@@ -289,7 +289,7 @@
                             <span class="material-symbols-outlined card-item-icon">contact_mail</span>
                             <span>Contact preference: <th:block th:text="${pref_label}"></th:block></span>
                             <a th:if="${is_self == 'true' or authz.can('MANAGE_MEMBERS')}" class="profile-action"
-                               th:href="'/profile/@' + ${preferred_username} + '/settings'"
+                               th:href="'/profile/@' + ${preferred_username} + '/settings#contact-preference'"
                                aria-label="Change contact preference">Change</a>
                         </div>
 

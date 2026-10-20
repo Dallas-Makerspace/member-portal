@@ -221,6 +221,28 @@ div.error-details > p { color: #c1c1c1; }
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
+/* Collapsible settings cards (templates/fragments/settings-section.html). */
+.settings-section {
+    scroll-margin-top: 16px;
+}
+.settings-section-toggle {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.settings-section-toggle:focus-visible {
+    outline: 3px solid #0d6efd;
+    outline-offset: 4px;
+    border-radius: 4px;
+}
+
 /* Contact preference cards: native radios, visually hidden, with the label as the card. */
 .contact-options {
     display: grid;
@@ -366,21 +388,9 @@ div.error-details > p { color: #c1c1c1; }
 .contact-option-status {
     align-items: flex-start;
 }
-/* Keeps Save in reach below the cards; skipped on short (landscape) screens. */
-.contact-save-bar {
-    padding: 12px 0;
-    background: #f8f9fa;
-    z-index: 2;
-}
-@media (min-height: 600px) {
-    .contact-save-bar {
-        position: sticky;
-        bottom: 0;
-    }
-    /* Keyboard focus must not land under the sticky bar. */
-    .contact-option {
-        scroll-margin-bottom: 88px;
-    }
+/* Autosave status under the cards; reserves its line so the page doesn't jump. */
+.contact-save-status {
+    min-height: 1.5em;
 }
 @media (forced-colors: active) {
     .contact-option-input:checked + .contact-option-card {

@@ -30,22 +30,27 @@
                 </a>
             </div>
 
-            <!-- Communication Preferences card -->
-            <div class="dms-card shadow-sm mt-3">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Contact Preference</h4>
+            <!--
+              Every card below is a settings-section: collapsible, and /settings#<its id> opens and scrolls to
+              it (static/js/dms-sections.js). To add a card, add another section(...) call; nothing else
+              needs registering. Open by default only when the card has something for the member to do.
+            -->
+
+            <!-- Contact Preference; autosaves, so there is no Save button -->
+            <th:block th:replace="~{fragments/settings-section :: section('contact-preference', 'Contact Preference', ${communication_preference == ''}, ~{::#contact-preference-content})}">
+                <div id="contact-preference-content">
                     <span th:if="${!is_self}" class="text-sm text-danger">[Member View for testing -
                         Infra only]</span>
 
                     <p class="text-muted" id="contactPreferenceHint">
-                        How should other members reach you?
-                        <th:block th:if="${communication_preference == '' and is_self == 'true'}">Saving
-                            clears the reminder at the top of the page.</th:block>
+                        How should other members reach you? Your choice is saved as soon as you pick it.
+                        <th:block th:if="${communication_preference == '' and is_self == 'true'}">Choosing
+                            one also clears the reminder at the top of the page.</th:block>
                     </p>
 
-                    <form method="post"
+                    <form method="post" data-autosave data-autosave-refresh-attention
                           th:action="'/profile/@' + ${preferred_username} + '/settings'">
-                        <fieldset class="contact-options mb-3" aria-describedby="contactPreferenceHint">
+                        <fieldset class="contact-options mb-2" aria-describedby="contactPreferenceHint">
                             <legend class="visually-hidden">How members can reach you</legend>
                             <div class="contact-option" th:each="opt : ${contact_options}"
                                  th:with="id=|contact_${opt['value']}|"
@@ -87,14 +92,10 @@
                                 <div th:if="${opt['link_state'] == 'unlinked'}" th:id="|${id}_warn|"
                                      class="contact-option-warning">
                                     <th:block th:if="${is_self == 'true'}">
-                                        <th:block th:if="${communication_preference == opt['value']}">Members
-                                            won't see this until you link your</th:block>
-                                        <th:block th:unless="${communication_preference == opt['value']}">You
-                                            can save this now, but members won't see it until you link
-                                            your</th:block>
+                                        Members won't see this until you link your
                                         <span th:text="${opt['label']}"></span> account. You'll
                                         come right back here.
-                                        <a class="btn btn-sm btn-dark d-inline-block mt-2"
+                                        <a class="btn btn-sm btn-dark d-inline-block mt-2" data-autosave-wait
                                            th:href="${opt['value'] == 'DISCOURSE'} ? '/link-discourse?pref=DISCOURSE' : '/link-discord?pref=DISCORD'"
                                            th:text="|Link ${opt['label']}|"></a>
                                     </th:block>
@@ -105,191 +106,188 @@
                                 </div>
                             </div>
                         </fieldset>
-                        <div class="contact-save-bar d-flex align-items-center flex-wrap gap-2">
-                            <button type="submit" class="btn btn-primary" id="saveBtn"
-                                    aria-describedby="saveHint" disabled>Save</button>
-                            <span id="saveHint" class="form-text mt-0">Choose an option to save.</span>
-                        </div>
+                        <p class="form-text mb-0 contact-save-status" data-autosave-status
+                           role="status"></p>
+                        <noscript>
+                            <button type="submit" class="btn btn-primary mt-2">Save</button>
+                        </noscript>
                     </form>
                 </div>
-            </div>
+            </th:block>
 
-            <!-- Linked Accounts card; the unlink routes act on the signed-in member, so self only -->
-            <div class="dms-card shadow-sm mt-4" id="linked-accounts"
-                 th:if="${is_self == 'true' and member_loaded}">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Linked Accounts</h4>
-                    <p class="text-muted">
-                        Link your Talk and Discord accounts so other members can reach you there.
-                    </p>
-                    <ul class="list-group">
-                        <li class="list-group-item d-flex align-items-center gap-3">
-                            <img src="/static/images/discourse.svg" alt="" width="32" height="32">
-                            <div class="flex-grow-1">
-                                <div class="fw-semibold">Talk</div>
-                                <div class="text-muted small"
-                                     th:text="${discourse_username != null} ? '@' + ${discourse_username} : 'Not linked'"></div>
-                            </div>
-                            <button th:if="${discourse_linked}" type="button" class="btn btn-sm btn-outline-danger"
-                                    data-bs-toggle="modal" data-bs-target="#unlinkTalkModal">Unlink</button>
-                            <a th:unless="${discourse_linked}" href="/link-discourse"
-                               class="btn btn-sm btn-primary">Link</a>
-                        </li>
-                        <li class="list-group-item d-flex align-items-center gap-3">
-                            <img src="/static/images/discord.svg" alt="" width="32" height="32">
-                            <div class="flex-grow-1">
-                                <div class="fw-semibold">Discord</div>
-                                <div class="text-muted small"
-                                     th:text="${discord_username != null} ? '@' + ${discord_username} : (${discord_linked} ? 'Linked' : 'Not linked')"></div>
-                            </div>
-                            <button th:if="${discord_linked}" type="button" class="btn btn-sm btn-outline-danger"
-                                    data-bs-toggle="modal" data-bs-target="#unlinkDiscordModal">Unlink</button>
-                            <a th:unless="${discord_linked}" href="/link-discord"
-                               class="btn btn-sm btn-primary">Link</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Notification Preferences card -->
-            <div class="dms-card shadow-sm mt-4" id="notification-preferences"
-                 th:if="${notification_preferences_enabled}">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Notification Preferences</h4>
-                    <p class="text-muted mb-1">
-                        Choose which topics you want to hear about, and whether to get each email
-                        right away or bundled into a digest. Notifications are delivered by email.
-                    </p>
-                    <p class="text-muted small" th:if="${!#strings.isEmpty(digest_schedule)}"
-                       th:text="${digest_schedule}"></p>
-                    <div th:if="${suppressed}" class="alert alert-warning" role="alert">
-                        <strong>Emails are paused.</strong>
-                        A recent notification to your email address bounced, so we've stopped
-                        sending to it. Check the email address on your account, then ask an admin
-                        to resume notifications.
+            <!-- Linked Accounts; the unlink routes act on the signed-in member, so self only -->
+            <th:block th:if="${is_self == 'true' and member_loaded}">
+                <th:block th:replace="~{fragments/settings-section :: section('linked-accounts', 'Linked Accounts', false, ~{::#linked-accounts-content})}">
+                    <div id="linked-accounts-content">
+                        <p class="text-muted">
+                            Link your Talk and Discord accounts so other members can reach you there.
+                        </p>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex align-items-center gap-3">
+                                <img src="/static/images/discourse.svg" alt="" width="32" height="32">
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold">Talk</div>
+                                    <div class="text-muted small"
+                                         th:text="${discourse_username != null} ? '@' + ${discourse_username} : 'Not linked'"></div>
+                                </div>
+                                <button th:if="${discourse_linked}" type="button" class="btn btn-sm btn-outline-danger"
+                                        data-bs-toggle="modal" data-bs-target="#unlinkTalkModal">Unlink</button>
+                                <a th:unless="${discourse_linked}" href="/link-discourse"
+                                   class="btn btn-sm btn-primary">Link</a>
+                            </li>
+                            <li class="list-group-item d-flex align-items-center gap-3">
+                                <img src="/static/images/discord.svg" alt="" width="32" height="32">
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold">Discord</div>
+                                    <div class="text-muted small"
+                                         th:text="${discord_username != null} ? '@' + ${discord_username} : (${discord_linked} ? 'Linked' : 'Not linked')"></div>
+                                </div>
+                                <button th:if="${discord_linked}" type="button" class="btn btn-sm btn-outline-danger"
+                                        data-bs-toggle="modal" data-bs-target="#unlinkDiscordModal">Unlink</button>
+                                <a th:unless="${discord_linked}" href="/link-discord"
+                                   class="btn btn-sm btn-primary">Link</a>
+                            </li>
+                        </ul>
                     </div>
+                </th:block>
+            </th:block>
 
-                    <!-- Shown when the member has been getting a lot of immediate email. Submits the
-                         same fields as the form below with every immediate topic switched to DAILY. -->
-                    <form th:if="${suggest_daily_digest}" method="post"
-                          th:action="'/profile/@' + ${preferred_username} + '/settings'"
-                          class="alert alert-info d-flex flex-wrap align-items-center gap-2" role="status">
-                        <input type="hidden" name="form" value="notifications">
-                        <span class="material-symbols-outlined">inbox</span>
-                        <span class="flex-grow-1">
-                            You've received <span th:text="${suggestion_threshold}"></span>+ notification
-                            emails this week. Prefer one email a day?
-                        </span>
-                        <th:block th:each="topic : ${preference_topics}">
-                            <input type="hidden" th:if="${topic['enabled']}"
-                                   th:name="|enabled_${topic['topic']}|" value="true">
-                            <input type="hidden" th:name="|aggregation_${topic['topic']}|"
-                                   th:value="${topic['digestSupported'] and topic['effectiveAggregation'] == 'IMMEDIATE'} ? 'DAILY' : ${topic['effectiveAggregation']}">
-                        </th:block>
-                        <button type="submit" class="btn btn-sm btn-primary">Switch to daily digest</button>
-                    </form>
+            <!-- Notification Preferences; each switch/select autosaves its own row -->
+            <th:block th:if="${notification_preferences_enabled}">
+                <th:block th:replace="~{fragments/settings-section :: section('notification-preferences', 'Notification Preferences', false, ~{::#notification-preferences-content})}">
+                    <div id="notification-preferences-content">
+                        <p class="text-muted mb-1">
+                            Choose which topics you want to hear about, and whether to get each email
+                            right away or bundled into a digest. Notifications are delivered by email.
+                            Changes save as soon as you make them.
+                        </p>
+                        <p class="text-muted small" th:if="${!#strings.isEmpty(digest_schedule)}"
+                           th:text="${digest_schedule}"></p>
+                        <div th:if="${suppressed}" class="alert alert-warning" role="alert">
+                            <strong>Emails are paused.</strong>
+                            A recent notification to your email address bounced, so we've stopped
+                            sending to it. Check the email address on your account, then ask an admin
+                            to resume notifications.
+                        </div>
 
-                    <form method="post"
-                          th:action="'/profile/@' + ${preferred_username} + '/settings'">
-                        <input type="hidden" name="form" value="notifications">
+                        <!-- Shown when the member has been getting a lot of immediate email. Submits the
+                             same fields as the form below with every immediate topic switched to DAILY. -->
+                        <form th:if="${suggest_daily_digest}" method="post"
+                              th:action="'/profile/@' + ${preferred_username} + '/settings'"
+                              class="alert alert-info d-flex flex-wrap align-items-center gap-2" role="status">
+                            <input type="hidden" name="form" value="notifications">
+                            <span class="material-symbols-outlined">inbox</span>
+                            <span class="flex-grow-1">
+                                You've received <span th:text="${suggestion_threshold}"></span>+ notification
+                                emails this week. Prefer one email a day?
+                            </span>
+                            <th:block th:each="topic : ${preference_topics}">
+                                <input type="hidden" th:if="${topic['enabled']}"
+                                       th:name="|enabled_${topic['topic']}|" value="true">
+                                <input type="hidden" th:name="|aggregation_${topic['topic']}|"
+                                       th:value="${topic['digestSupported'] and topic['effectiveAggregation'] == 'IMMEDIATE'} ? 'DAILY' : ${topic['effectiveAggregation']}">
+                            </th:block>
+                            <button type="submit" class="btn btn-sm btn-primary">Switch to daily digest</button>
+                        </form>
+
+                        <form method="post" data-autosave data-autosave-scope="tr"
+                              th:action="'/profile/@' + ${preferred_username} + '/settings'">
+                            <input type="hidden" name="form" value="notifications">
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                    <tr>
+                                        <th scope="col">Topic</th>
+                                        <th scope="col">Email</th>
+                                        <th scope="col">Delivery</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="topic : ${preference_topics}">
+                                        <td>
+                                            <label class="form-check-label" th:for="|enabled_${topic['topic']}|"
+                                                   th:text="${topic['topicDisplayName']}"></label>
+                                        </td>
+                                        <td>
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" role="switch"
+                                                       th:id="|enabled_${topic['topic']}|"
+                                                       th:name="|enabled_${topic['topic']}|" value="true"
+                                                       th:checked="${topic['enabled']}">
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <!-- Every row must submit aggregation_<topic>: the handler saves exactly
+                                                 the topics that carry it, and a value is always sent so saving never
+                                                 clears a setting the member didn't touch. -->
+                                            <select th:if="${topic['digestSupported']}" class="form-select form-select-sm"
+                                                    th:name="|aggregation_${topic['topic']}|"
+                                                    th:attr="aria-label=${topic['topicDisplayName']} + ' delivery'">
+                                                <option th:each="opt : ${aggregation_options}"
+                                                        th:value="${opt.key}" th:text="${opt.value}"
+                                                        th:selected="${opt.key == topic['effectiveAggregation']}"></option>
+                                            </select>
+                                            <th:block th:unless="${topic['digestSupported']}">
+                                                <input type="hidden" th:name="|aggregation_${topic['topic']}|"
+                                                       th:value="${topic['effectiveAggregation']}">
+                                                <span class="text-muted" th:text="${topic['effectiveAggregationDisplay']}"></span>
+                                            </th:block>
+                                            <span class="form-text d-block mt-0" data-autosave-status
+                                                  role="status"></span>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <noscript>
+                                <button type="submit" class="btn btn-sm btn-primary">Save preferences</button>
+                            </noscript>
+                        </form>
+                    </div>
+                </th:block>
+            </th:block>
+
+            <!-- Settings History -->
+            <th:block th:if="${settings_history != null and !settings_history.empty}">
+                <th:block th:replace="~{fragments/settings-section :: section('settings-history', 'Settings History', false, ~{::#settings-history-content})}">
+                    <div id="settings-history-content">
                         <div class="table-responsive">
-                            <table class="table table-sm align-middle">
+                            <table class="table table-sm">
                                 <thead>
                                 <tr>
-                                    <th scope="col">Topic</th>
-                                    <th scope="col">Email</th>
-                                    <th scope="col">Delivery</th>
+                                    <th scope="col">When</th>
+                                    <th scope="col">Change</th>
+                                    <th scope="col">Updated by</th>
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <tr th:each="topic : ${preference_topics}">
+                                <tr th:each="entry : ${settings_history}">
                                     <td>
-                                        <label class="form-check-label" th:for="|enabled_${topic['topic']}|"
-                                               th:text="${topic['topicDisplayName']}"></label>
+                                        <dms-relative-date
+                                                th:attr="timestamp=${entry['updated_at']}"></dms-relative-date>
                                     </td>
                                     <td>
-                                        <div class="form-check form-switch mb-0">
-                                            <input class="form-check-input" type="checkbox" role="switch"
-                                                   th:id="|enabled_${topic['topic']}|"
-                                                   th:name="|enabled_${topic['topic']}|" value="true"
-                                                   th:checked="${topic['enabled']}">
-                                        </div>
+                                        <div class="text-muted" th:text="${entry['label'] + ':'}"></div>
+                                        <span class="text-break" th:classappend="${entry['is_cleared']} ? 'text-muted' : ''"
+                                              th:text="${entry['display_value']}"></span>
                                     </td>
                                     <td>
-                                        <!-- Every row must submit aggregation_<topic>: the handler saves exactly
-                                             the topics that carry it, and a value is always sent so saving never
-                                             clears a setting the member didn't touch. -->
-                                        <select th:if="${topic['digestSupported']}" class="form-select form-select-sm"
-                                                th:name="|aggregation_${topic['topic']}|"
-                                                th:attr="aria-label=${topic['topicDisplayName']} + ' delivery'">
-                                            <option th:each="opt : ${aggregation_options}"
-                                                    th:value="${opt.key}" th:text="${opt.value}"
-                                                    th:selected="${opt.key == topic['effectiveAggregation']}"></option>
-                                        </select>
-                                        <th:block th:unless="${topic['digestSupported']}">
-                                            <input type="hidden" th:name="|aggregation_${topic['topic']}|"
-                                                   th:value="${topic['effectiveAggregation']}">
-                                            <span class="text-muted" th:text="${topic['effectiveAggregationDisplay']}"></span>
+                                        <th:block th:if="${entry['updated_by'] != null and !entry['updated_by'].isEmpty()}">
+                                            <dms-member-card
+                                                    th:attr="username=${entry['updated_by']}"
+                                                    state="mini">
+                                            </dms-member-card>
                                         </th:block>
+                                        <span th:if="${entry['updated_by'] == null or entry['updated_by'].isEmpty()}"
+                                              class="text-muted">Unknown</span>
                                     </td>
                                 </tr>
                                 </tbody>
                             </table>
                         </div>
-                        <button type="submit" class="btn btn-sm btn-primary">Save preferences</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Settings History card -->
-            <div class="dms-card shadow-sm mt-4"
-                 th:if="${settings_history != null and !settings_history.empty}">
-                <div class="card-body pt-0 pb-4">
-                    <div class="d-flex align-items-center mt-3" style="cursor:pointer;"
-                         data-bs-toggle="collapse" data-bs-target="#settingsHistoryContent"
-                         aria-expanded="false" aria-controls="settingsHistoryContent">
-                        <h4 class="card-title mb-0 dms-card-title">Settings History</h4>
-                        <span class="material-symbols-outlined ms-auto text-muted"
-                              id="settingsHistoryToggleIcon">expand_more</span>
                     </div>
-                    <div class="collapse" id="settingsHistoryContent">
-                    <div class="table-responsive mt-3">
-                        <table class="table table-sm">
-                            <thead>
-                            <tr>
-                                <th scope="col">When</th>
-                                <th scope="col">Change</th>
-                                <th scope="col">Updated by</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <tr th:each="entry : ${settings_history}">
-                                <td>
-                                    <dms-relative-date
-                                            th:attr="timestamp=${entry['updated_at']}"></dms-relative-date>
-                                </td>
-                                <td>
-                                    <div class="text-muted" th:text="${entry['label'] + ':'}"></div>
-                                    <span class="text-break" th:classappend="${entry['is_cleared']} ? 'text-muted' : ''"
-                                          th:text="${entry['display_value']}"></span>
-                                </td>
-                                <td>
-                                    <th:block th:if="${entry['updated_by'] != null and !entry['updated_by'].isEmpty()}">
-                                        <dms-member-card
-                                                th:attr="username=${entry['updated_by']}"
-                                                state="mini">
-                                        </dms-member-card>
-                                    </th:block>
-                                    <span th:if="${entry['updated_by'] == null or entry['updated_by'].isEmpty()}"
-                                          class="text-muted">Unknown</span>
-                                </td>
-                            </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    </div><!-- end collapse -->
-                </div>
-            </div>
+                </th:block>
+            </th:block>
         </div>
     </div>
 
@@ -344,32 +342,23 @@
 <script type="module" src="/static/js/dms-member-card.js"></script>
 <!-- App JS -->
 <script src="/static/js/app.js"></script>
+<!-- Collapsible cards + deep links, and autosave for [data-autosave] forms -->
+<script src="/static/js/dms-sections.js"></script>
+<script src="/static/js/dms-autosave.js"></script>
 <!-- Page Loader (REQUIRED for all pages) -->
 <script src="/static/js/dms-page-loader.js" defer></script>
 
-<!-- Contact preference cards -->
+<!-- Contact preference cards: only the selected card's link note is announced -->
 <script>
     (function() {
         'use strict';
         const radios = Array.from(
             document.querySelectorAll('input[name="communication_preference"]'));
-
-        const saveBtn = document.getElementById('saveBtn');
-        const saveHint = document.getElementById('saveHint');
-        const initialRadio = radios.find(function(r) { return r.defaultChecked; });
-        const initialValue = initialRadio ? initialRadio.value : '';
         const baseDescribedBy = new Map(
             radios.map(function(r) { return [r, r.getAttribute('aria-describedby')]; }));
 
         function update() {
             const current = radios.find(function(r) { return r.checked; });
-            if (saveBtn) saveBtn.disabled = !current || current.value === initialValue;
-            if (saveHint) {
-                saveHint.textContent = !current ? 'Choose an option to save.'
-                    : current.value === initialValue ? 'No changes to save.'
-                    : 'You can change this anytime.';
-            }
-            // Only the selected card's link note is relevant, so only it is announced.
             radios.forEach(function(r) {
                 const warn = document.getElementById(r.id + '_warn');
                 r.setAttribute('aria-describedby',
@@ -381,17 +370,6 @@
         // Restores form state when returning with the back button.
         window.addEventListener('pageshow', update);
         update();
-
-        const historyToggle = document.getElementById('settingsHistoryContent');
-        const historyIcon = document.getElementById('settingsHistoryToggleIcon');
-        if (historyToggle && historyIcon) {
-            historyToggle.addEventListener('show.bs.collapse', function() {
-                historyIcon.textContent = 'expand_less';
-            });
-            historyToggle.addEventListener('hide.bs.collapse', function() {
-                historyIcon.textContent = 'expand_more';
-            });
-        }
     })();
 </script>
 </body>

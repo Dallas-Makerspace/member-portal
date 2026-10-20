@@ -6,6 +6,7 @@ import javax.inject.Inject
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
+import org.dallasmakerspace.server.memberservice.SettingsSections
 
 /**
  * Internal JSON endpoint backing the sitewide "set your communication preference" banner in the
@@ -37,6 +38,9 @@ constructor(
           false
         }
 
-    call.respond(mapOf("showBanner" to showBanner, "settingsUrl" to "/profile/@$username/settings"))
+    call.respond(
+        mapOf(
+            "showBanner" to showBanner,
+            "settingsUrl" to SettingsSections.url(username, SettingsSections.CONTACT_PREFERENCE)))
   }
 }

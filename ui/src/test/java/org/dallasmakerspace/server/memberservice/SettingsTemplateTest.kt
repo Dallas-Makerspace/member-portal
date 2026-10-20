@@ -102,19 +102,139 @@ class SettingsTemplateTest {
 
   @Test
   fun bannerReminderCopyShowsOnlyToTheMemberThemselves() {
-    assertTrue(render().contains("Saving"))
-    assertFalse(render(isSelf = false).contains("clears the"))
-    assertFalse(render(saved = "EMAIL").contains("clears the"))
+    assertTrue(render().contains("also clears the reminder"))
+    assertFalse(render(isSelf = false).contains("clears the reminder"))
+    assertFalse(render(saved = "EMAIL").contains("clears the reminder"))
   }
 
   @Test
-  fun savedButUnlinkedChoiceDoesNotOfferToSaveAgain() {
-    val html = render(saved = "DISCORD")
-    val text = html.replace(Regex("\\s+"), " ")
+  fun unlinkedNoteDoesNotTalkAboutSavingBecauseChoicesSaveThemselves() {
+    for (saved in listOf("", "DISCORD")) {
+      val html = render(saved = saved)
+      val text = html.replace(Regex("\\s+"), " ")
 
-    assertTrue(text.contains("Members won't see this until you link your"))
-    assertFalse(text.contains("You can save this now"))
-    assertTrue(radio(html, "DISCORD").contains("checked"))
+      assertTrue(text.contains("Members won't see this until you link your"))
+      assertFalse(text.contains("You can save this now"))
+    }
+    assertTrue(radio(render(saved = "DISCORD"), "DISCORD").contains("checked"))
+  }
+
+  @Test
+  fun linkButtonWaitsForPendingAutosave() {
+    assertTrue(Regex("<a[^>]*data-autosave-wait[^>]*link-discord").containsMatchIn(render()))
+  }
+
+  @Test
+  fun contactPreferenceAutosavesWithoutASaveButton() {
+    val html = render()
+    val withoutNoscript = html.replace(Regex("(?s)<noscript>.*?</noscript>"), "")
+
+    assertTrue(html.contains("data-autosave"))
+    assertFalse(withoutNoscript.contains("id=\"saveBtn\""))
+    assertFalse(Regex(">\\s*Save\\s*<").containsMatchIn(withoutNoscript))
+  }
+
+  private fun renderFull(saved: String = "", withHistory: Boolean = true): String {
+    val context =
+        Context().apply {
+          setVariables(
+              mapOf(
+                  "preferred_username" to "jdoe",
+                  "is_self" to "true",
+                  "authz" to Authz(emptySet()),
+                  "contact_options" to contactOptions(true, "jdoe-talk", true, "jdoe-chat"),
+                  "communication_preference" to saved,
+                  "member_loaded" to true,
+                  "discourse_linked" to true,
+                  "discord_linked" to true,
+                  "discourse_username" to "jdoe-talk",
+                  "discord_username" to "jdoe-chat",
+                  "notification_preferences_enabled" to true,
+                  "preference_topics" to
+                      listOf(
+                          mapOf(
+                              "topic" to "CLASS_UPDATES",
+                              "topicDisplayName" to "Class updates",
+                              "enabled" to true,
+                              "digestSupported" to true,
+                              "effectiveAggregation" to "IMMEDIATE",
+                              "effectiveAggregationDisplay" to "Immediately")),
+                  "aggregation_options" to mapOf("IMMEDIATE" to "Immediately").entries.toList(),
+                  "digest_schedule" to "",
+                  "suppressed" to false,
+                  "suggest_daily_digest" to false,
+                  "suggestion_threshold" to 5,
+                  "settings_history" to
+                      if (withHistory) {
+                        listOf(
+                            mapOf(
+                                "updated_at" to "2026-01-01T00:00:00Z",
+                                "label" to "Contact preference",
+                                "display_value" to "Email",
+                                "is_cleared" to false,
+                                "updated_by" to "jdoe"))
+                      } else {
+                        emptyList()
+                      },
+              ))
+        }
+    return engine.process("settings", context)
+  }
+
+  private fun sectionBodyClass(html: String, id: String): String =
+      Regex("<div class=\"([^\"]*)\" id=\"$id-body\"").find(html)!!.groupValues[1]
+
+  @Test
+  fun everySectionIsACollapsibleCardWithItsOwnDeepLinkId() {
+    val html = renderFull()
+    val ids =
+        Regex("<section[^>]*id=\"([^\"]+)\"[^>]*data-settings-section")
+            .findAll(html)
+            .map { it.groupValues[1] }
+            .toList()
+
+    assertEquals(
+        listOf(
+            "contact-preference",
+            "linked-accounts",
+            "notification-preferences",
+            "settings-history"),
+        ids)
+    ids.forEach { id ->
+      assertTrue(html.contains("aria-controls=\"$id-body\""), "toggle for $id")
+      assertTrue(html.contains("data-bs-target=\"#$id-body\""), "target for $id")
+      sectionBodyClass(html, id)
+    }
+  }
+
+  @Test
+  fun onlyTheContactCardWithAPendingChoiceStartsOpen() {
+    val unset = renderFull(saved = "")
+    assertEquals("collapse show", sectionBodyClass(unset, "contact-preference"))
+    assertTrue(unset.contains("aria-expanded=\"true\""))
+    listOf("linked-accounts", "notification-preferences", "settings-history").forEach {
+      assertEquals("collapse", sectionBodyClass(unset, it))
+    }
+
+    assertEquals("collapse", sectionBodyClass(renderFull(saved = "EMAIL"), "contact-preference"))
+  }
+
+  @Test
+  fun absentSectionsAreNotRendered() {
+    val html = renderFull(withHistory = false)
+
+    assertFalse(html.contains("id=\"settings-history\""))
+    assertTrue(html.contains("id=\"contact-preference\""))
+  }
+
+  @Test
+  fun notificationRowsAutosaveIndividuallyWithoutASaveButton() {
+    val html = renderFull()
+    val withoutNoscript = html.replace(Regex("(?s)<noscript>.*?</noscript>"), "")
+
+    assertTrue(html.contains("data-autosave-scope=\"tr\""))
+    assertFalse(withoutNoscript.contains("Save preferences"))
+    assertTrue(html.contains("name=\"form\" value=\"notifications\""))
   }
 
   @Test

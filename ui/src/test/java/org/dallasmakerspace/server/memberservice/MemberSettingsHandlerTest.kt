@@ -103,6 +103,23 @@ class MemberSettingsHandlerTest {
   }
 
   @Test
+  fun autosaveAsksForJsonAndPlainFormsDoNot() {
+    assertEquals(true, acceptsJson("application/json"))
+    assertEquals(true, acceptsJson("application/json, text/plain, */*"))
+    assertEquals(true, acceptsJson("Application/JSON"))
+    assertEquals(false, acceptsJson("text/html,application/xhtml+xml"))
+    assertEquals(false, acceptsJson(null))
+  }
+
+  @Test
+  fun sectionDeepLinksPointAtTheCardId() {
+    assertEquals(
+        "/profile/@jdoe/settings#contact-preference",
+        SettingsSections.url("jdoe", SettingsSections.CONTACT_PREFERENCE))
+    assertEquals("notification-preferences", SettingsSections.NOTIFICATION_PREFERENCES)
+  }
+
+  @Test
   fun updatedToastNamesTheChange() {
     assertEquals("Notification preferences updated.", settingsUpdatedToast("notifications"))
     assertEquals(

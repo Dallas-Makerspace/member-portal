@@ -23,7 +23,7 @@ class AttentionSourcesTest {
     val item = ContactPreferenceAttentionSource(memberService).check("jdoe", "s1")
 
     assertEquals("settings", item!!.key)
-    assertEquals("/profile/@jdoe/settings", item.url)
+    assertEquals("/profile/@jdoe/settings#contact-preference", item.url)
   }
 
   @Test

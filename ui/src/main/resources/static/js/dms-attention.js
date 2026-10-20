@@ -9,7 +9,14 @@
 
   function render(items) {
     menu.querySelectorAll('[data-attention-generated]').forEach(function (n) { n.remove(); });
-    menu.querySelectorAll('.has-attention').forEach(function (n) { n.classList.remove('has-attention'); });
+    menu.querySelectorAll('.has-attention').forEach(function (n) {
+      n.classList.remove('has-attention');
+      // Undo the deep link set below.
+      if (n.hasAttribute('data-attention-href')) {
+        n.setAttribute('href', n.getAttribute('data-attention-href'));
+        n.removeAttribute('data-attention-href');
+      }
+    });
 
     const anchor = menu.querySelector('[data-attention-anchor]');
     let addedEntries = 0;
@@ -22,6 +29,11 @@
       if (target) {
         target.classList.add('has-attention');
         target.appendChild(note);
+        // Send the member straight to the part of the page the note is about.
+        if (item.url && target.tagName === 'A') {
+          target.setAttribute('data-attention-href', target.getAttribute('href'));
+          target.setAttribute('href', item.url);
+        }
         return;
       }
       const li = document.createElement('li');
@@ -56,7 +68,7 @@
   }
 
   menu.querySelectorAll('a.dropdown-item:not(.account-identity)').forEach(function (link) {
-    if (link.getAttribute('href') === window.location.pathname) link.setAttribute('aria-current', 'page');
+    if (link.pathname === window.location.pathname) link.setAttribute('aria-current', 'page');
   });
 
   window.DmsAttention = { refresh: refresh };
