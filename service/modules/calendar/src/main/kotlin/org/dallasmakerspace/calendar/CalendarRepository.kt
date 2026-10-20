@@ -9,6 +9,20 @@ import org.dallasmakerspace.db.master.GenericRepository
 
 private const val DESCRIPTION_CHARS = 1000
 
+/** Upcoming events the profile card reserves slots for before it fills up with past ones. */
+const val PROFILE_UPCOMING_EVENTS = 3
+
+/**
+ * Chooses the events the profile card shows from rows tagged upcoming (true) or past (false), each
+ * group already nearest-first: up to [PROFILE_UPCOMING_EVENTS] upcoming, then past events fill the
+ * remaining slots up to [limit]. Newest first.
+ */
+fun pickProfileEvents(rows: List<Pair<Boolean, EventSummary>>, limit: Int): List<EventSummary> {
+  val upcoming = rows.filter { it.first }.map { it.second }.take(minOf(limit, PROFILE_UPCOMING_EVENTS))
+  val past = rows.filter { !it.first }.map { it.second }.take((limit - upcoming.size).coerceAtLeast(0))
+  return (upcoming + past).sortedByDescending { it.eventStart }
+}
+
 private val SQL_TIMESTAMP_FORMAT: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
@@ -19,14 +33,17 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
   private val log = loggerFactory.create(javaClass)
 
   /**
-   * Fetches events organized by a member, prioritized by proximity to today. Events closest to the
-   * current date (whether past or future) are returned first.
+   * Fetches events organized by a member for the profile's "Events Organized" card: up to
+   * [PROFILE_UPCOMING_EVENTS] upcoming events (soonest first) so a newly announced event is always
+   * there, then the most recent past events fill the remaining slots. Returned newest first. A pure
+   * "closest to today" ranking let a few recent past sessions push every upcoming event off the card.
    *
    * @param username The username of the member to fetch events for.
    * @param limit The maximum number of events to return (default 5).
    * @return A list of [EventSummary] objects.
    */
   suspend fun getEventsOrganizedByMember(username: String, limit: Int = 5): List<EventSummary> {
+    val owner = username.replace("'", "''")
     // Use MariaDB server-side statement timeout (1.5s) so the DB kills the query and frees the
     // JDBC connection. withTimeoutOrNull does NOT work here because blocking JDBC calls on
     // Dispatchers.IO are not responsive to coroutine cancellation, which exhausts the connection
@@ -35,22 +52,30 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
         """
       SET STATEMENT max_statement_time=1.5 FOR
       SELECT * FROM (
-        SELECT
+        (SELECT
             e.id,
             e.name,
             CONVERT_TZ(e.event_start, '+00:00', 'America/Chicago') AS event_start_cst,
-            e.status
-        FROM
-            `dms-calendar`.events e
-        JOIN
-            `dms-calendar`.contacts c ON e.contact_id = c.id
-        WHERE
-            c.ad_username = '$username'
-        ORDER BY
-            ABS(TIMESTAMPDIFF(SECOND, e.event_start, NOW())) ASC
-        LIMIT $limit
-      ) AS closest_events
-      ORDER BY event_start_cst DESC
+            e.status,
+            1 AS is_upcoming
+        FROM `dms-calendar`.events e
+        JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
+        WHERE c.ad_username = '$owner' AND e.event_start >= NOW()
+        ORDER BY e.event_start ASC
+        LIMIT $PROFILE_UPCOMING_EVENTS)
+        UNION ALL
+        (SELECT
+            e.id,
+            e.name,
+            CONVERT_TZ(e.event_start, '+00:00', 'America/Chicago') AS event_start_cst,
+            e.status,
+            0 AS is_upcoming
+        FROM `dms-calendar`.events e
+        JOIN `dms-calendar`.contacts c ON e.contact_id = c.id
+        WHERE c.ad_username = '$owner' AND e.event_start < NOW()
+        ORDER BY e.event_start DESC
+        LIMIT $limit)
+      ) AS organized_events
     """
 
     log.debug("Fetching events organized by member: $username (limit: $limit)")
@@ -71,14 +96,16 @@ constructor(private val genericRepository: GenericRepository, loggerFactory: Log
       return emptyList()
     }
 
-    return result.data.map { row ->
-      val id = (row["id"] as? Number)?.toInt() ?: 0
-      val name = row["name"]?.toString() ?: ""
-      val eventStart = row["event_start_cst"]?.toString() ?: ""
-      val status = row["status"]?.toString() ?: ""
-
-      EventSummary(id = id, name = name, eventStart = eventStart, status = status)
-    }
+    val rows =
+        result.data.map { row ->
+          val id = (row["id"] as? Number)?.toInt() ?: 0
+          val name = row["name"]?.toString() ?: ""
+          val eventStart = row["event_start_cst"]?.toString() ?: ""
+          val status = row["status"]?.toString() ?: ""
+          val upcoming = (row["is_upcoming"] as? Number)?.toInt() == 1
+          upcoming to EventSummary(id = id, name = name, eventStart = eventStart, status = status)
+        }
+    return pickProfileEvents(rows, limit)
   }
 
   /**
