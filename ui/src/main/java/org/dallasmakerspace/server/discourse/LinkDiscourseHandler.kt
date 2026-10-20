@@ -29,8 +29,10 @@ constructor(
 
     // If the user came from the settings page with a pending preference (e.g. chose Talk before
     // linking), remember it so the callback can apply it after a successful link.
-    if (call.request.queryParameters["pref"] == "DISCOURSE") {
-      call.sessions.set(session.copy(pendingCommunicationPreference = "DISCOURSE"))
+    // Any other start clears a stale one left by an abandoned link attempt.
+    val pending = if (call.request.queryParameters["pref"] == "DISCOURSE") "DISCOURSE" else null
+    if (pending != session.pendingCommunicationPreference) {
+      call.sessions.set(session.copy(pendingCommunicationPreference = pending))
     }
 
     val randomNonce = Random.nextInt(NONCE_RANGE_START, NONCE_RANGE_END).toString()

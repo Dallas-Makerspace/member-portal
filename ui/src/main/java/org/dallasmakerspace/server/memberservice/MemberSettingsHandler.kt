@@ -219,16 +219,25 @@ internal fun contactOptions(
       description: String,
       icon: String? = null,
       image: String? = null,
+      label: String = pref.label,
+      linkable: Boolean = false,
       linked: Boolean? = null,
       username: String? = null,
   ) =
       mapOf(
           "value" to pref.name,
-          "label" to pref.label,
+          "label" to label,
           "description" to description,
           "icon" to icon,
           "image" to image,
-          "link_state" to linked?.let { if (it) "linked" else "unlinked" },
+          "link_state" to
+              if (!linkable) null
+              else
+                  when (linked) {
+                    true -> "linked"
+                    false -> "unlinked"
+                    null -> "unknown"
+                  },
           "link_detail" to username?.takeIf { it.isNotEmpty() }?.let { "@$it" })
 
   return listOf(
@@ -240,12 +249,14 @@ internal fun contactOptions(
           CommunicationPreference.DISCOURSE,
           "Members message you on Talk.",
           image = "/static/images/discourse.svg",
+          linkable = true,
           linked = talkLinked,
           username = talkUsername),
       option(
           CommunicationPreference.DISCORD,
           "Members message you on Discord.",
           image = "/static/images/discord.svg",
+          linkable = true,
           linked = discordLinked,
           username = discordUsername),
       option(
@@ -255,7 +266,8 @@ internal fun contactOptions(
       option(
           CommunicationPreference.NONE,
           "Members won't see a way to reach you.",
-          icon = "visibility_off"),
+          icon = "visibility_off",
+          label = "Don't list a contact method"),
   )
 }
 
@@ -275,7 +287,7 @@ internal fun settingsHistoryRow(entry: Map<String, String?>): Map<String, Any?> 
   val network = SocialNetwork.fromSettingKey(key)
   val label =
       when {
-        key == COMMUNICATION_PREFERENCE_KEY -> "Communication preference"
+        key == COMMUNICATION_PREFERENCE_KEY -> "Contact preference"
         network != null -> network.displayName
         else -> key
       }
@@ -283,7 +295,7 @@ internal fun settingsHistoryRow(entry: Map<String, String?>): Map<String, Any?> 
       when {
         key == COMMUNICATION_PREFERENCE_KEY ->
             value?.let { v -> CommunicationPreference.entries.find { it.name == v }?.label ?: v }
-                ?: "No preference"
+                ?: "Not set"
         network != null -> value?.let { network.profileUrl(it) } ?: "Removed"
         else -> value ?: "Cleared"
       }

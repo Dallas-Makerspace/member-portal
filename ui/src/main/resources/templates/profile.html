@@ -262,7 +262,7 @@
                             </span>
                         </div>
 
-                        <div th:if="${discourse_username != null and is_self != 'true'}"
+                        <div th:if="${discourse_username != null and is_self != 'true' and communication_preference != 'NONE'}"
                              class="d-flex align-items-center mb-3">
                             <img class="card-item-icon" alt="" src="../static/images/discourse.svg"/>
                             <span>Send message on <a target="_blank" rel="noopener"
@@ -273,7 +273,7 @@
                                     onclick="copyUsernameToClipboard(this.dataset.copyText, this)">Copy</button>
                         </div>
 
-                        <div th:if="${discord_userid != null and is_self != 'true'}"
+                        <div th:if="${discord_userid != null and is_self != 'true' and communication_preference != 'NONE'}"
                              class="d-flex align-items-center mb-3">
                             <img class="card-item-icon" alt="" src="../static/images/discord.svg"/>
                             <span>Send message on <a target="_blank" rel="noopener"

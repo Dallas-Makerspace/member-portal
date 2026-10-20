@@ -38,7 +38,9 @@
                         Infra only]</span>
 
                     <p class="text-muted" id="contactPreferenceHint">
-                        Pick one so other members know how to reach you.
+                        Choose one so other members know how to reach you. You can change it anytime.
+                        <th:block th:if="${communication_preference == ''}">Saving clears the
+                            reminder at the top of the page.</th:block>
                     </p>
 
                     <form method="post"
@@ -46,47 +48,63 @@
                         <fieldset class="contact-options mb-3" aria-describedby="contactPreferenceHint">
                             <legend class="visually-hidden">How members can reach you</legend>
                             <div class="contact-option" th:each="opt : ${contact_options}"
+                                 th:with="id=|contact_${opt['value']}|"
                                  th:classappend="${opt['value'] == 'NONE'} ? 'contact-option-none' : ''">
                                 <input class="contact-option-input" type="radio"
                                        name="communication_preference"
-                                       th:id="|contact_${opt['value']}|"
+                                       th:id="${id}"
                                        th:value="${opt['value']}"
                                        th:checked="${communication_preference == opt['value']}"
-                                       th:attr="data-link-state=${opt['link_state']}">
-                                <label class="contact-option-card" th:for="|contact_${opt['value']}|">
+                                       th:attr="data-link-state=${opt['link_state']},
+                                                aria-labelledby=|${id}_title|,
+                                                aria-describedby=|${id}_desc${opt['link_state'] != null ? ' ' + id + '_status' : ''}${opt['link_state'] == 'unlinked' ? ' ' + id + '_warn' : ''}|">
+                                <label class="contact-option-card" th:for="${id}">
                                     <img th:if="${opt['image'] != null}" class="contact-option-icon"
                                          th:src="${opt['image']}" alt="" width="32" height="32">
                                     <span th:if="${opt['icon'] != null}"
                                           class="material-symbols-outlined contact-option-icon"
                                           aria-hidden="true" th:text="${opt['icon']}"></span>
                                     <span class="contact-option-body">
-                                        <span class="contact-option-title" th:text="${opt['label']}"></span>
-                                        <span class="contact-option-desc" th:text="${opt['description']}"></span>
-                                        <span th:if="${opt['link_state'] == 'linked'}"
-                                              class="contact-option-status text-success">
-                                            <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-                                            Linked<th:block th:if="${opt['link_detail'] != null}"
-                                                            th:text="| as ${opt['link_detail']}|"></th:block>
-                                        </span>
-                                        <span th:if="${opt['link_state'] == 'unlinked'}"
-                                              class="contact-option-status text-danger">
-                                            <span class="material-symbols-outlined" aria-hidden="true">link_off</span>
-                                            Not linked yet
+                                        <span class="contact-option-title" th:id="|${id}_title|"
+                                              th:text="${opt['label']}"></span>
+                                        <span class="contact-option-desc" th:id="|${id}_desc|"
+                                              th:text="${opt['description']}"></span>
+                                        <span th:if="${opt['link_state'] != null}" th:id="|${id}_status|"
+                                              class="contact-option-status"
+                                              th:classappend="${opt['link_state'] == 'linked'} ? 'is-linked' : ''">
+                                            <span class="material-symbols-outlined" aria-hidden="true"
+                                                  th:text="${opt['link_state'] == 'linked'} ? 'check_circle' : (${opt['link_state'] == 'unlinked'} ? 'link_off' : 'help')"></span>
+                                            <th:block th:if="${opt['link_state'] == 'linked'}"
+                                                      th:text="${opt['link_detail'] != null} ? 'Linked as ' + ${opt['link_detail']} : 'Linked'"></th:block>
+                                            <th:block th:if="${opt['link_state'] == 'unlinked'}">Not linked yet</th:block>
+                                            <th:block th:if="${opt['link_state'] == 'unknown'}">Link status unavailable</th:block>
                                         </span>
                                     </span>
                                     <span class="material-symbols-outlined contact-option-check"
                                           aria-hidden="true">check_circle</span>
                                 </label>
+                                <!-- Shown by CSS while this card is selected; outside the label so the link is its own control. -->
+                                <div th:if="${opt['link_state'] == 'unlinked'}" th:id="|${id}_warn|"
+                                     class="contact-option-warning">
+                                    <th:block th:if="${is_self == 'true'}">
+                                        You can save this now, but members won't see it until you link
+                                        your <span th:text="${opt['label']}"></span> account.
+                                        <a class="fw-semibold"
+                                           th:href="${opt['value'] == 'DISCOURSE'} ? '/link-discourse?pref=DISCOURSE' : '/link-discord?pref=DISCORD'"
+                                           th:text="|Link ${opt['label']}|"></a>
+                                    </th:block>
+                                    <th:block th:unless="${is_self == 'true'}">
+                                        This member hasn't linked <span th:text="${opt['label']}"></span>
+                                        yet, so other members won't see it until they do.
+                                    </th:block>
+                                </div>
                             </div>
                         </fieldset>
-                        <div id="unlinkedAccountWarning" class="form-text text-danger mb-3 d-none"
-                             role="status">
-                            Your <span id="unlinkedAccountLabel">Talk</span> account isn't linked
-                            to your profile yet. You can save this preference, but members won't
-                            see it until you link your account.
-                            <a id="unlinkedAccountLink" href="/link-discourse">Link account</a>
+                        <div class="d-flex align-items-center flex-wrap gap-2">
+                            <button type="submit" class="btn btn-primary" id="saveBtn"
+                                    aria-describedby="saveHint" disabled>Save</button>
+                            <span id="saveHint" class="form-text mt-0" role="status">Choose an option to save.</span>
                         </div>
-                        <button type="submit" class="btn btn-primary" id="saveBtn" disabled>Save</button>
                     </form>
                 </div>
             </div>
@@ -332,47 +350,21 @@
             document.querySelectorAll('input[name="communication_preference"]'));
 
         const saveBtn = document.getElementById('saveBtn');
+        const saveHint = document.getElementById('saveHint');
         const initialRadio = radios.find(function(r) { return r.checked; });
         const initialValue = initialRadio ? initialRadio.value : '';
 
-        const unlinkedWarning = document.getElementById('unlinkedAccountWarning');
-        const unlinkedLabel = document.getElementById('unlinkedAccountLabel');
-        const unlinkedLink = document.getElementById('unlinkedAccountLink');
-
-        function selected() {
-            return radios.find(function(r) { return r.checked; });
-        }
-
-        function updateSaveButton() {
-            if (!saveBtn) return;
-            const current = selected();
-            saveBtn.disabled = !current || current.value === initialValue;
-        }
-
-        function updateWarnings() {
-            const current = selected();
-            const unlinked = !!current && current.dataset.linkState === 'unlinked';
-            radios.forEach(function(r) {
-                r.nextElementSibling.classList.toggle('is-unlinked', r === current && unlinked);
-            });
-            if (!unlinkedWarning) return;
-            unlinkedWarning.classList.toggle('d-none', !unlinked);
-            if (!unlinked) return;
-            if (current.value === 'DISCOURSE') {
-                unlinkedLabel.textContent = 'Talk';
-                unlinkedLink.href = '/link-discourse?pref=DISCOURSE';
-            } else if (current.value === 'DISCORD') {
-                unlinkedLabel.textContent = 'Discord';
-                unlinkedLink.href = '/link-discord?pref=DISCORD';
+        function update() {
+            const current = radios.find(function(r) { return r.checked; });
+            if (saveBtn) saveBtn.disabled = !current || current.value === initialValue;
+            if (saveHint) {
+                saveHint.textContent = !current ? 'Choose an option to save.'
+                    : current.value === initialValue ? 'No changes to save.' : '';
             }
         }
 
-        radios.forEach(function(r) {
-            r.addEventListener('change', updateWarnings);
-            r.addEventListener('change', updateSaveButton);
-        });
-        updateWarnings();
-        updateSaveButton();
+        radios.forEach(function(r) { r.addEventListener('change', update); });
+        update();
 
         const historyToggle = document.getElementById('settingsHistoryContent');
         const historyIcon = document.getElementById('settingsHistoryToggleIcon');

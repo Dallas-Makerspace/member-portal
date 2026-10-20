@@ -16,7 +16,7 @@ class MemberSettingsHandlerTest {
         settingsHistoryRow(
             mapOf("setting_key" to "communication_preference", "setting_value" to "DISCOURSE"))
 
-    assertEquals("Communication preference", row["label"])
+    assertEquals("Contact preference", row["label"])
     assertEquals("Talk", row["display_value"])
     assertEquals(false, row["is_cleared"])
   }
@@ -27,7 +27,7 @@ class MemberSettingsHandlerTest {
         settingsHistoryRow(
             mapOf("setting_key" to "communication_preference", "setting_value" to null))
 
-    assertEquals("No preference", row["display_value"])
+    assertEquals("Not set", row["display_value"])
     assertEquals(true, row["is_cleared"])
   }
 
@@ -37,7 +37,7 @@ class MemberSettingsHandlerTest {
         settingsHistoryRow(
             mapOf("setting_key" to "communication_preference", "setting_value" to "NONE"))
 
-    assertEquals("None", row["display_value"])
+    assertEquals("None listed", row["display_value"])
     assertEquals(false, row["is_cleared"])
   }
 
@@ -68,11 +68,19 @@ class MemberSettingsHandlerTest {
   }
 
   @Test
-  fun contactOptionsOmitLinkStateWhenMemberNotLoaded() {
+  fun contactOptionsMarkLinkStateUnknownWhenMemberNotLoaded() {
     val byValue = contactOptions(null, null, null, null).associateBy { it["value"] }
 
-    assertNull(byValue.getValue("DISCOURSE")["link_state"])
-    assertNull(byValue.getValue("DISCORD")["link_state"])
+    assertEquals("unknown", byValue.getValue("DISCOURSE")["link_state"])
+    assertEquals("unknown", byValue.getValue("DISCORD")["link_state"])
+    assertNull(byValue.getValue("EMAIL")["link_state"])
+  }
+
+  @Test
+  fun contactOptionLabelsAreDistinctFromHistoryLabels() {
+    val none = contactOptions(null, null, null, null).last()
+
+    assertEquals("Don't list a contact method", none["label"])
   }
 
   @Test

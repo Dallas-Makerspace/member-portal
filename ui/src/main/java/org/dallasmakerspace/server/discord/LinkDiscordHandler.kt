@@ -33,8 +33,10 @@ constructor(
 
     // If the user came from the settings page with a pending preference (e.g. chose Discord before
     // linking), remember it so the callback can apply it after a successful link.
-    if (call.request.queryParameters["pref"] == "DISCORD") {
-      call.sessions.set(session.copy(pendingCommunicationPreference = "DISCORD"))
+    // Any other start clears a stale one left by an abandoned link attempt.
+    val pending = if (call.request.queryParameters["pref"] == "DISCORD") "DISCORD" else null
+    if (pending != session.pendingCommunicationPreference) {
+      call.sessions.set(session.copy(pendingCommunicationPreference = pending))
     }
 
     // Generate random state for CSRF protection

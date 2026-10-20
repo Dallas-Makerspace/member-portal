@@ -230,14 +230,6 @@ div.error-details > p { color: #c1c1c1; }
     padding: 0;
     min-width: 0;
 }
-@media (min-width: 576px) {
-    .contact-options {
-        grid-template-columns: 1fr 1fr;
-    }
-    .contact-option-none {
-        grid-column: 1 / -1;
-    }
-}
 .contact-option {
     position: relative;
 }
@@ -253,29 +245,60 @@ div.error-details > p { color: #c1c1c1; }
 }
 .contact-option-card {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    height: 100%;
+    align-items: center;
+    gap: 14px;
     padding: 14px 16px;
     background: #fff;
-    border: 2px solid #dee2e6;
+    border: 2px solid #adb5bd;
     border-radius: 8px;
     transition: border-color 0.15s, background-color 0.15s;
 }
 .contact-option-input:hover + .contact-option-card {
-    border-color: #adb5bd;
+    border-color: #6c757d;
+    background: #f8f9fa;
 }
 .contact-option-input:focus-visible + .contact-option-card {
-    outline: 3px solid rgba(13, 110, 253, 0.4);
+    outline: 3px solid #0d6efd;
     outline-offset: 2px;
 }
 .contact-option-input:checked + .contact-option-card {
     border-color: var(--bs-primary, #0d6efd);
     background: var(--bs-primary-bg-subtle, #e7f1ff);
 }
-.contact-option-input:checked + .contact-option-card.is-unlinked {
-    border-color: var(--bs-danger, #dc3545);
-    background: var(--bs-danger-bg-subtle, #f8d7da);
+/* Savable but incomplete: amber, not error red. */
+.contact-option-input[data-link-state="unlinked"]:checked + .contact-option-card {
+    border-color: #cc9a06;
+    background: #fff3cd;
+}
+.contact-option-warning {
+    display: none;
+    margin-top: 8px;
+    padding: 10px 14px;
+    border: 1px solid #ffe69c;
+    border-radius: 8px;
+    background: #fff3cd;
+    color: #664d03;
+    font-size: 0.875rem;
+}
+.contact-option-warning a {
+    color: #664d03;
+}
+.contact-option-input:checked ~ .contact-option-warning {
+    display: block;
+}
+@media (max-width: 575.98px) {
+    .contact-options {
+        gap: 10px;
+    }
+    .contact-option-card {
+        padding: 12px;
+        gap: 10px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .contact-option-card {
+        transition: none;
+    }
 }
 .contact-option-icon {
     flex: 0 0 32px;
@@ -297,7 +320,7 @@ div.error-details > p { color: #c1c1c1; }
 }
 .contact-option-desc {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: #495057;
 }
 .contact-option-status {
     display: inline-flex;
@@ -306,19 +329,35 @@ div.error-details > p { color: #c1c1c1; }
     margin-top: 4px;
     font-size: 0.8125rem;
     font-weight: 600;
+    color: #495057;
+}
+.contact-option-status.is-linked {
+    color: #0f5132;
+}
+.contact-option-input[data-link-state="unlinked"]:checked + .contact-option-card .contact-option-status {
+    color: #664d03;
 }
 .contact-option-status .material-symbols-outlined {
     font-size: 16px;
 }
-.contact-option-check {
-    visibility: hidden;
+/* Empty ring when unselected, filled check when selected. */
+.contact-option-card .contact-option-check {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    box-sizing: border-box;
+    border: 2px solid #adb5bd;
+    border-radius: 50%;
+    font-size: 0;
     color: var(--bs-primary, #0d6efd);
 }
 .contact-option-input:checked + .contact-option-card .contact-option-check {
-    visibility: visible;
+    border-color: transparent;
+    font-size: 24px;
+    line-height: 24px;
 }
-.contact-option-input:checked + .contact-option-card.is-unlinked .contact-option-check {
-    color: var(--bs-danger, #dc3545);
+.contact-option-input[data-link-state="unlinked"]:checked + .contact-option-card .contact-option-check {
+    color: #cc9a06;
 }
 
 

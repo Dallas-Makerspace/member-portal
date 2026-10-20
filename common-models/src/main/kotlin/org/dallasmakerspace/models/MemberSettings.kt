@@ -16,7 +16,7 @@ enum class CommunicationPreference(val label: String) {
   DISCOURSE("Talk"),
   DISCORD("Discord"),
   SMS("Text/SMS"),
-  NONE("None");
+  NONE("None listed");
 
   companion object {
     fun fromValue(value: String): CommunicationPreference =
