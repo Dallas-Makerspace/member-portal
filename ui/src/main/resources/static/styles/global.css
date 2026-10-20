@@ -239,8 +239,8 @@ div.error-details > p { color: #c1c1c1; }
 .inbox-new-pill {
     padding: 4px 12px;
     border-radius: 999px;
-    background: #e0f2fe;
-    color: #064e65;
+    background: var(--bs-primary-bg-subtle, #cfe2ff);
+    color: var(--bs-primary-text-emphasis, #052c65);
     font-size: 0.875rem;
     font-weight: 600;
 }
@@ -250,7 +250,7 @@ div.error-details > p { color: #c1c1c1; }
     align-items: center;
     gap: 4px;
     min-height: 44px;
-    color: #006684;
+    color: var(--bs-link-color, #0d6efd);
     font-weight: 600;
     text-decoration: none;
 }
@@ -281,8 +281,8 @@ div.error-details > p { color: #c1c1c1; }
     background: #f1f3f5;
 }
 .inbox-chip.is-active {
-    background: #08789b;
-    border-color: #08789b;
+    background: var(--bs-primary, #0d6efd);
+    border-color: var(--bs-primary, #0d6efd);
     color: #fff;
 }
 .inbox-chip:focus-visible {
@@ -327,9 +327,9 @@ div.error-details > p { color: #c1c1c1; }
     outline-offset: 2px;
 }
 .inbox-card.is-unread {
-    background: #eefaff;
-    border-color: #b9e0f0;
-    border-left: 4px solid #0b9cc9;
+    background: #e7f1ff;
+    border-color: #cfe2ff;
+    border-left: 4px solid var(--bs-primary, #0d6efd);
 }
 .inbox-icon {
     flex: 0 0 40px;
@@ -343,7 +343,7 @@ div.error-details > p { color: #c1c1c1; }
     color: #6c757d;
 }
 .inbox-card.is-unread .inbox-icon {
-    background: #0b9cc9;
+    background: var(--bs-primary, #0d6efd);
     color: #fff;
 }
 .inbox-body {
@@ -410,7 +410,7 @@ div.error-details > p { color: #c1c1c1; }
     padding-left: 12px;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #006684;
+    color: #0a58ca;
     white-space: nowrap;
 }
 .inbox-thumb {
@@ -459,7 +459,7 @@ div.error-details > p { color: #c1c1c1; }
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #0b9cc9;
+    background: var(--bs-primary, #0d6efd);
 }
 .inbox-digest-preview {
     margin: 2px 0 0;
@@ -484,18 +484,13 @@ div.error-details > p { color: #c1c1c1; }
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    background: #e0f2fe;
-    color: #006684;
+    background: var(--bs-primary-bg-subtle, #cfe2ff);
+    color: #0a58ca;
 }
 .inbox-empty-icon .material-symbols-outlined {
     font-size: 40px;
 }
-.inbox-empty .btn-primary {
-    background: #006684;
-    border-color: #006684;
-}
 .inbox-empty a:not(.btn) {
-    color: #006684;
     font-weight: 600;
 }
 .inbox-caught-up {
