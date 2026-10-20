@@ -14,7 +14,7 @@
             <button type="button" class="settings-section-toggle" data-bs-toggle="collapse"
                     th:attr="data-bs-target='#' + ${id} + '-body',aria-controls=${id} + '-body',aria-expanded=${expanded} ? 'true' : 'false'">
                 <span th:text="${title}"></span>
-                <span class="material-symbols-outlined ms-auto text-muted settings-section-icon"
+                <span class="material-symbols-outlined ms-auto settings-section-icon"
                       aria-hidden="true" th:text="${expanded} ? 'expand_less' : 'expand_more'"></span>
             </button>
         </h4>

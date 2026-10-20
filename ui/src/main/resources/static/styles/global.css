@@ -229,6 +229,7 @@ div.error-details > p { color: #c1c1c1; }
     display: flex;
     align-items: center;
     width: 100%;
+    min-height: 44px;
     padding: 0;
     border: 0;
     background: none;
@@ -237,10 +238,36 @@ div.error-details > p { color: #c1c1c1; }
     text-align: left;
     cursor: pointer;
 }
+.settings-section-toggle:hover > span:first-child {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
 .settings-section-toggle:focus-visible {
     outline: 3px solid #0d6efd;
     outline-offset: 4px;
     border-radius: 4px;
+}
+.settings-section-icon {
+    font-size: 28px;
+    color: #495057;
+}
+.settings-section-toggle:hover .settings-section-icon {
+    color: #212529;
+}
+/* A collapsed card is just its header, so trim the padding meant for open content. */
+.settings-section .card-body:has(> h4 .settings-section-toggle[aria-expanded="false"]) {
+    padding-bottom: 0.75rem !important;
+}
+.settings-section .collapse.show > div > :last-child {
+    margin-bottom: 0;
+}
+.settings-section .text-danger {
+    color: #b02a37 !important;
+}
+/* Reserves the autosave status line so saving a row doesn't push the rows below it down. */
+.autosave-row-status {
+    min-height: 1.3em;
+    line-height: 1.3;
 }
 
 /* Contact preference cards: native radios, visually hidden, with the label as the card. */

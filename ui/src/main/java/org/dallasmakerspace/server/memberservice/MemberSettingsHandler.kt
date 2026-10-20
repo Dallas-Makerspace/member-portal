@@ -139,8 +139,12 @@ constructor(
       currentUsername: String?,
   ) {
     val wantsJson = acceptsJson(call.request.header(HttpHeaders.Accept))
-    if (wantsJson && !call.isSameOriginRequest()) {
-      call.respond(HttpStatusCode.Forbidden, SettingsSaveResponse(false, "Request rejected."))
+    if (!call.isSameOriginRequest()) {
+      if (wantsJson) {
+        call.respond(HttpStatusCode.Forbidden, SettingsSaveResponse(false, "Request rejected."))
+      } else {
+        call.respond(HttpStatusCode.Forbidden)
+      }
       return
     }
     val params = call.receiveParameters()
