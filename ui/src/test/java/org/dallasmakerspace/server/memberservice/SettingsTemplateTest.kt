@@ -108,6 +108,21 @@ class SettingsTemplateTest {
   }
 
   @Test
+  fun savedButUnlinkedChoiceDoesNotOfferToSaveAgain() {
+    val html = render(saved = "DISCORD")
+    val text = html.replace(Regex("\\s+"), " ")
+
+    assertTrue(text.contains("Members won't see this until you link your"))
+    assertFalse(text.contains("You can save this now"))
+    assertTrue(radio(html, "DISCORD").contains("checked"))
+  }
+
+  @Test
+  fun noneCardCanBeSelected() {
+    assertTrue(radio(render(saved = "NONE"), "NONE").contains("checked"))
+  }
+
+  @Test
   fun linkStateIsUnavailableWhenMemberDidNotLoad() {
     val html = render(talkLinked = null, discordLinked = null)
 

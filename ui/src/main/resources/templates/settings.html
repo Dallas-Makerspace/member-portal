@@ -87,8 +87,12 @@
                                 <div th:if="${opt['link_state'] == 'unlinked'}" th:id="|${id}_warn|"
                                      class="contact-option-warning">
                                     <th:block th:if="${is_self == 'true'}">
-                                        You can save this now, but members won't see it until you link
-                                        your <span th:text="${opt['label']}"></span> account. You'll
+                                        <th:block th:if="${communication_preference == opt['value']}">Members
+                                            won't see this until you link your</th:block>
+                                        <th:block th:unless="${communication_preference == opt['value']}">You
+                                            can save this now, but members won't see it until you link
+                                            your</th:block>
+                                        <span th:text="${opt['label']}"></span> account. You'll
                                         come right back here.
                                         <a class="btn btn-sm btn-dark d-inline-block mt-2"
                                            th:href="${opt['value'] == 'DISCOURSE'} ? '/link-discourse?pref=DISCOURSE' : '/link-discord?pref=DISCORD'"

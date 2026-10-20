@@ -366,13 +366,21 @@ div.error-details > p { color: #c1c1c1; }
 .contact-option-status {
     align-items: flex-start;
 }
-/* Keeps Save in reach below the cards on short screens. */
+/* Keeps Save in reach below the cards; skipped on short (landscape) screens. */
 .contact-save-bar {
-    position: sticky;
-    bottom: 0;
     padding: 12px 0;
     background: #f8f9fa;
     z-index: 2;
+}
+@media (min-height: 600px) {
+    .contact-save-bar {
+        position: sticky;
+        bottom: 0;
+    }
+    /* Keyboard focus must not land under the sticky bar. */
+    .contact-option {
+        scroll-margin-bottom: 88px;
+    }
 }
 @media (forced-colors: active) {
     .contact-option-input:checked + .contact-option-card {
