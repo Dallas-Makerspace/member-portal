@@ -40,6 +40,23 @@ class TemplateRegistry @Inject constructor(templates: Set<@JvmSuppressWildcards 
     return renderTemplate(template, payload ?: "{}")
   }
 
+  /**
+   * The inbox card for a stored notification, or null if the template is unknown/retired, has no
+   * card, or the stored payload no longer decodes (an old row must never break the inbox).
+   */
+  @Suppress("TooGenericExceptionCaught")
+  fun card(templateName: String, payload: String?): NotificationCard? {
+    val template = templatesByName[templateName] ?: return null
+    return try {
+      cardFor(template, payload ?: "{}")
+    } catch (e: Exception) {
+      null
+    }
+  }
+
+  private fun <T : Any> cardFor(template: NotificationTemplate<T>, payload: String): NotificationCard? =
+      template.card(json.decodeFromString(template.serializer, payload))
+
   private fun <T : Any> renderTemplate(
       template: NotificationTemplate<T>,
       payload: String,

@@ -4,6 +4,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
 import io.ktor.server.thymeleaf.ThymeleafContent
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -56,14 +57,25 @@ constructor(
       return
     }
 
-    // Viewing your own inbox clears the unread dot; an admin viewing someone else's must not.
-    if (requestedUsername == currentUsername) {
-      memberServiceClient.markAllNotificationsRead(requestedUsername, session.sessionId)
-    }
-    showInbox(call, requestedUsername)
+    showInbox(
+        call,
+        requestedUsername,
+        viewingOther = requestedUsername != currentUsername,
+        filter = call.request.queryParameters["filter"],
+    )
   }
 
-  private suspend fun showInbox(call: ApplicationCall, username: String) = coroutineScope {
+  /**
+   * The feed is built from the rows as they are on arrival (so what's new is highlighted), and
+   * only then is the inbox marked read: opening your own inbox clears the unread dot, and an admin
+   * looking at someone else's must not.
+   */
+  private suspend fun showInbox(
+      call: ApplicationCall,
+      username: String,
+      viewingOther: Boolean,
+      filter: String?,
+  ) = coroutineScope {
     val showErrors = authz.can(Permission.MANAGE_MEMBERS.name)
     val notificationsDeferred = async {
       memberServiceClient.getNotifications(username, INBOX_LIMIT, session.sessionId)
@@ -71,21 +83,31 @@ constructor(
     val statusDeferred = async {
       memberServiceClient.getNotificationDeliveryStatus(username, session.sessionId)
     }
-    val notifications =
-        groupDigests(notificationsDeferred.await().map { enrichNotification(it, showErrors) })
+    val activeFilter = filter?.takeIf { it in INBOX_FILTER_TOPICS }
+    val feed =
+        buildInboxFeed(
+            notificationsDeferred.await(),
+            today = LocalDate.now(ZoneId.of("America/Chicago")),
+            filter = activeFilter,
+            showErrors = showErrors)
+    if (!viewingOther) {
+      memberServiceClient.markAllNotificationsRead(username, session.sessionId)
+    }
     val model =
-        mapOf<String, Any>(
-            "preferred_username" to username,
-            "notifications" to notifications,
-            "suppressed" to (statusDeferred.await()["suppressed"] == true),
-        )
-    call.respond(ThymeleafContent("notifications", model))
+        feed +
+            mapOf<String, Any?>(
+                "preferred_username" to username,
+                "suppressed" to (statusDeferred.await()["suppressed"] == true),
+                "viewing_other" to viewingOther,
+                "filter" to (activeFilter ?: "all"),
+            )
+    call.respond(ThymeleafContent("notifications", model.filterValues { it != null } as Map<String, Any>))
   }
 
   companion object {
     /** Gates this page and the settings page's preferences card. */
     const val FEATURE_FLAG_KEY = "notifications.follow-feature-enabled"
-    private const val INBOX_LIMIT = 50
+    private const val INBOX_LIMIT = 200
   }
 }
 
@@ -155,13 +177,13 @@ private val CENTRAL_ZONE: ZoneId = ZoneId.of("America/Chicago")
 private val DIGEST_DUE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE, MMM d 'at' h:mm a")
 
 /** Service timestamps are UTC local date-times; convert to Central for display. */
-private fun toCentral(utc: String?): ZonedDateTime? =
+internal fun toCentral(utc: String?): ZonedDateTime? =
     utc?.let { runCatching { LocalDateTime.parse(it).atZone(UTC_ZONE).withZoneSameInstant(CENTRAL_ZONE) }.getOrNull() }
 
-private fun toCentralIso(utc: String?): String? =
+internal fun toCentralIso(utc: String?): String? =
     toCentral(utc)?.toLocalDateTime()?.toString() ?: utc
 
-private fun formatCentral(utc: String?): String? = toCentral(utc)?.format(DIGEST_DUE_FORMAT)
+internal fun formatCentral(utc: String?): String? = toCentral(utc)?.format(DIGEST_DUE_FORMAT)
 
 /**
  * Collapses rows that were mailed out together in a single digest email into one parent row with

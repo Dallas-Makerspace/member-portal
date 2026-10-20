@@ -21,6 +21,7 @@ import org.dallasmakerspace.notifications.MemberPreferenceView
 import org.dallasmakerspace.notifications.Notification
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationStatus
+import org.dallasmakerspace.notifications.templates.NotificationCard
 
 /** API view of a notification (dates as ISO-8601 strings). */
 data class NotificationView(
@@ -39,9 +40,13 @@ data class NotificationView(
     /** For IN_DIGEST rows, when the digest is due; for FAILED rows, the next retry. */
     val nextAttemptAt: String?,
     val createdAt: String?,
+    /** When the member opened the inbox after this was delivered; null while unread. */
+    val readAt: String? = null,
+    /** What the inbox shows for this notification; null for templates without a card. */
+    val card: NotificationCard? = null,
 ) {
   companion object {
-    fun from(notification: Notification): NotificationView =
+    fun from(notification: Notification, card: NotificationCard? = null): NotificationView =
         NotificationView(
             id = notification.id,
             memberUsername = notification.memberUsername,
@@ -57,6 +62,8 @@ data class NotificationView(
             sentAt = notification.sentAt?.toString(),
             nextAttemptAt = notification.nextAttemptAt?.toString(),
             createdAt = notification.createdAt.toString(),
+            readAt = notification.readAt?.toString(),
+            card = card,
         )
   }
 }
@@ -192,7 +199,7 @@ private fun Route.listNotificationsRoute(notificationService: NotificationServic
         ApiResponse(
             Status.SUCCESS,
             "Notifications: ${notifications.size}",
-            notifications.map(NotificationView::from),
+            notifications.map { NotificationView.from(it, notificationService.card(it)) },
         ))
   }
 }

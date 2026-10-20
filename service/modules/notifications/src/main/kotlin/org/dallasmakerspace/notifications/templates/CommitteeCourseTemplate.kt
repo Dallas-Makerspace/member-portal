@@ -21,6 +21,14 @@ class CommitteeCourseTemplate :
     ) {
   override val serializer: KSerializer<CommitteeCourseData> = CommitteeCourseData.serializer()
 
+  override fun card(data: CommitteeCourseData): NotificationCard =
+      NotificationCard(
+          kind = CardKinds.COURSE,
+          title = data.courseName,
+          url = data.courseUrl,
+          ctaLabel = "Start course",
+          sender = data.committeeName)
+
   override fun renderSubject(data: CommitteeCourseData): String =
       "New online course from ${data.committeeName}: ${data.courseName}"
 

@@ -27,6 +27,17 @@ class CommitteeClassTemplate :
     ) {
   override val serializer: KSerializer<CommitteeClassData> = CommitteeClassData.serializer()
 
+  override fun card(data: CommitteeClassData): NotificationCard =
+      NotificationCard(
+          kind = CardKinds.CLASS,
+          title = data.eventName,
+          excerpt = data.excerpt,
+          imageUrl = data.imageUrl,
+          url = data.eventUrl,
+          ctaLabel = "View class",
+          sender = data.committeeName,
+          whenLine = data.eventStart)
+
   /** Includes the start time so repeat sessions of the same class are distinguishable. */
   override fun renderSubject(data: CommitteeClassData): String =
       "New class from ${data.committeeName}: ${data.eventName}" +

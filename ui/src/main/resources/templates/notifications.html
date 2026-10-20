@@ -16,22 +16,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <title th:text="'Notifications - @' + ${preferred_username}"></title>
-    <style>
-        .digest-toggle .material-symbols-outlined {
-            transition: transform 0.15s ease;
-        }
-
-        .digest-toggle[aria-expanded="true"] .material-symbols-outlined {
-            transform: rotate(180deg);
-        }
-    </style>
 </head>
 <body>
 <header class="top-nav" th:replace="~{fragments/header :: header}"></header>
 <div class="container pb-8">
     <div class="row">
-        <div class="col-md-10 col-lg-9 mx-auto">
-            <!-- Back to profile link -->
+        <div class="col-md-10 col-lg-8 mx-auto">
             <div class="mt-4">
                 <a th:href="'/profile/@' + ${preferred_username}" class="text-decoration-none">
                     <span class="material-symbols-outlined align-middle" style="font-size:18px;">arrow_back</span>
@@ -39,94 +29,111 @@
                 </a>
             </div>
 
-            <!-- Inbox card -->
-            <div class="dms-card shadow-sm mt-3">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Notifications</h4>
-                    <p class="text-muted">
-                        Recent notifications sent to you from the member portal.
-                        <a th:href="'/profile/@' + ${preferred_username} + '/settings#notification-preferences'">Choose which notifications you get</a>
-                    </p>
-                    <div th:if="${suppressed}" class="alert alert-warning" role="alert">
-                        <strong>Emails are paused.</strong>
-                        A recent notification to your email address bounced, so we've stopped
-                        sending to it. Check the email address on your account, then ask an admin
-                        to resume notifications.
-                    </div>
+            <div class="inbox-header">
+                <h1 class="inbox-heading">Notifications</h1>
+                <span th:if="${new_count > 0}" class="inbox-new-pill"
+                      th:text="${new_count} + ' new'"></span>
+                <a class="inbox-prefs"
+                   th:href="'/profile/@' + ${preferred_username} + '/settings#notification-preferences'">
+                    <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+                    Preferences
+                </a>
+            </div>
 
-                    <div th:if="${notifications == null or notifications.empty}" class="text-muted">
-                        No notifications yet.
-                    </div>
-                    <div th:if="${notifications != null and !notifications.empty}"
-                         class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                            <tr>
-                                <th scope="col">Subject</th>
-                                <th scope="col">Topic</th>
-                                <th scope="col">When</th>
-                                <th scope="col">Status</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <th:block th:each="n : ${notifications}">
-                                <!-- Digest: several notifications delivered in one batched email -
-                                     shown as a single collapsed row (what the member actually got)
-                                     with the underlying items nested below it. -->
-                                <th:block th:if="${n['isDigest']}">
-                                    <tr class="align-middle">
-                                        <td>
-                                            <button class="btn btn-sm btn-link p-0 text-decoration-none digest-toggle"
-                                                    type="button" data-bs-toggle="collapse"
-                                                    th:attr="data-bs-target='.' + ${n['groupId']}"
-                                                    aria-expanded="false">
-                                                <span class="material-symbols-outlined align-middle"
-                                                      style="font-size:18px;">expand_more</span>
-                                                <span th:text="${n['subject']}"></span>
-                                            </button>
-                                        </td>
-                                        <td th:text="${n['topic_display']}"></td>
-                                        <td>
-                                            <dms-relative-date
-                                                    th:attr="timestamp=${n['when']}"></dms-relative-date>
-                                        </td>
-                                        <td>
-                                            <span class="badge text-bg-success">Sent</span>
-                                        </td>
-                                    </tr>
-                                    <tr th:each="child : ${n['children']}"
-                                        th:class="'collapse ' + ${n['groupId']}">
-                                        <td class="ps-4 text-muted" th:text="${child['subject']}"></td>
-                                        <td class="text-muted" th:text="${child['topic_display']}"></td>
-                                        <td class="text-muted">
-                                            <dms-relative-date
-                                                    th:attr="timestamp=${child['when']}"></dms-relative-date>
-                                        </td>
-                                        <td></td>
-                                    </tr>
-                                </th:block>
-                                <!-- Standalone notification, delivered (or pending/failed) on its own -->
-                                <tr th:unless="${n['isDigest']}">
-                                    <td th:text="${n['subject']}"></td>
-                                    <td th:text="${n['topic_display']}"></td>
-                                    <td>
-                                        <dms-relative-date
-                                                th:attr="timestamp=${n['when']}"></dms-relative-date>
-                                    </td>
-                                    <td>
-                                        <span class="badge" th:classappend="'text-bg-' + ${n['status_class']}"
-                                              th:text="${n['status_display']}"></span>
-                                        <div th:if="${n['status_reason'] != null}" class="text-muted small mt-1"
-                                             th:text="${n['status_reason']}"></div>
-                                        <div th:if="${n['error_detail'] != null}" class="text-muted small font-monospace mt-1"
-                                             th:text="${n['error_detail']}"></div>
-                                    </td>
-                                </tr>
-                            </th:block>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div th:if="${viewing_other}" class="alert alert-secondary" role="status">
+                You're viewing <strong th:text="'@' + ${preferred_username}"></strong>'s inbox. Nothing
+                here is marked read.
+            </div>
+
+            <div th:if="${suppressed}" class="alert alert-warning inbox-paused" role="status">
+                <strong>Paused.</strong>
+                A recent notification to the email address on this account bounced, so we've stopped
+                sending to it. Check the address on the account, then ask an admin to resume
+                notifications.
+            </div>
+
+            <nav aria-label="Filter notifications" th:if="${has_any}">
+                <ul class="inbox-chips">
+                    <li><a class="inbox-chip"
+                           th:classappend="${filter == 'all'} ? 'is-active'"
+                           th:attr="aria-current=${filter == 'all'} ? 'page'"
+                           th:href="'/profile/@' + ${preferred_username} + '/notifications'">All</a></li>
+                    <li><a class="inbox-chip"
+                           th:classappend="${filter == 'people'} ? 'is-active'"
+                           th:attr="aria-current=${filter == 'people'} ? 'page'"
+                           th:href="'/profile/@' + ${preferred_username} + '/notifications?filter=people'">People I follow</a></li>
+                    <li><a class="inbox-chip"
+                           th:classappend="${filter == 'committees'} ? 'is-active'"
+                           th:attr="aria-current=${filter == 'committees'} ? 'page'"
+                           th:href="'/profile/@' + ${preferred_username} + '/notifications?filter=committees'">Committees</a></li>
+                </ul>
+            </nav>
+
+            <!-- Nothing has ever been sent -->
+            <section th:if="${!has_any}" class="inbox-empty">
+                <span class="inbox-empty-icon material-symbols-outlined" aria-hidden="true">notifications</span>
+                <h2 class="inbox-empty-title">Nothing new yet</h2>
+                <p class="text-muted">
+                    Follow a committee or a member and their new classes, events and projects will
+                    show up here.
+                </p>
+                <a class="btn btn-primary" href="/committees">Browse committees</a>
+                <a class="ms-3"
+                   th:href="'/profile/@' + ${preferred_username} + '/settings#notification-preferences'">Notification
+                    preferences</a>
+            </section>
+
+            <!-- Something exists, but not in this view -->
+            <section th:if="${has_any and total_count == 0}" class="inbox-empty">
+                <h2 class="inbox-empty-title">No updates in this view</h2>
+                <a th:href="'/profile/@' + ${preferred_username} + '/notifications'">Show all notifications</a>
+            </section>
+
+            <div id="inboxStatus" class="visually-hidden" role="status" aria-live="polite"></div>
+
+            <section th:each="group : ${groups}" class="inbox-group"
+                     th:classappend="${group['items'][0]['position'] > page_size} ? 'inbox-extra'"
+                     th:attr="hidden=${group['items'][0]['position'] > page_size} ? 'hidden'">
+                <h2 class="inbox-day" th:text="${group['label']}"></h2>
+                <ul class="inbox-list">
+                    <th:block th:each="item : ${group['items']}">
+                        <!-- A digest email: one bundle that expands to the items inside it -->
+                        <li th:if="${item['isDigest']}" class="inbox-item"
+                            th:classappend="${item['position'] > page_size} ? 'inbox-extra'"
+                            th:attr="hidden=${item['position'] > page_size} ? 'hidden'">
+                            <article class="inbox-digest" th:classappend="${item['unread']} ? 'is-unread'">
+                                <h3 class="inbox-digest-title">
+                                    <button type="button" class="inbox-digest-toggle" data-bs-toggle="collapse"
+                                            aria-expanded="false"
+                                            th:attr="data-bs-target='#' + ${item['groupId']},aria-controls=${item['groupId']}">
+                                        <span th:if="${item['unread']}" class="inbox-dot" aria-hidden="true"></span>
+                                        <span th:if="${item['unread']}" class="visually-hidden">New: </span>
+                                        <span th:text="${item['title']}"></span>
+                                        <span class="material-symbols-outlined inbox-chevron" aria-hidden="true">expand_more</span>
+                                    </button>
+                                </h3>
+                                <p class="inbox-digest-preview" th:text="${item['preview']}"></p>
+                                <div class="collapse" th:id="${item['groupId']}">
+                                    <ul class="inbox-list inbox-children">
+                                        <th:block th:each="child : ${item['children']}">
+                                            <th:block th:replace="~{fragments/inbox-card :: card(${child}, ${page_size})}"></th:block>
+                                        </th:block>
+                                    </ul>
+                                </div>
+                            </article>
+                        </li>
+                        <th:block th:unless="${item['isDigest']}">
+                            <th:block th:replace="~{fragments/inbox-card :: card(${item}, ${page_size})}"></th:block>
+                        </th:block>
+                    </th:block>
+                </ul>
+            </section>
+
+            <div th:if="${total_count > page_size}" class="inbox-more">
+                <button type="button" class="btn btn-outline-secondary" id="inboxLoadMore"
+                        th:attr="data-page-size=${page_size},data-total=${total_count}">Load more</button>
+                <p class="inbox-count" id="inboxCount" th:attr="data-total=${total_count}"
+                   th:text="'Showing ' + ${page_size} + ' of ' + ${total_count} + ' updates'"></p>
             </div>
         </div>
     </div>
@@ -142,6 +149,8 @@
 <script type="module" src="/static/js/dms-relative-date.js"></script>
 <!-- App JS -->
 <script src="/static/js/app.js"></script>
+<!-- Inbox: Load more, digest chevron -->
+<script src="/static/js/dms-inbox.js"></script>
 <!-- Page Loader (REQUIRED for all pages) -->
 <script src="/static/js/dms-page-loader.js" defer></script>
 </body>

@@ -97,6 +97,85 @@ class TemplateRegistryTest {
     assertEquals("Test notification from DMS", rendered.subject)
   }
 
+  private val cardRegistry =
+      TemplateRegistry(
+          setOf(
+              EventAnnouncementTemplate(),
+              ProjectPostTemplate(),
+              CommitteeClassTemplate(),
+              CommitteeCourseTemplate(),
+              SystemTestTemplate()))
+
+  @Test
+  fun `card for an event announcement names the organizer and links the event`() {
+    val card =
+        cardRegistry.card(
+            "event-announcement",
+            """{"eventName":"Open Build Night","organizerName":"Alex Smith",
+                "organizerUsername":"asmith","eventStart":"Thu Nov 6 7:00 PM",
+                "eventUrl":"https://example.test/events/9","excerpt":"Bring a project."}""")
+
+    assertEquals(
+        NotificationCard(
+            kind = "event",
+            title = "Open Build Night",
+            excerpt = "Bring a project.",
+            url = "https://example.test/events/9",
+            ctaLabel = "View event",
+            sender = "@asmith",
+            whenLine = "Thu Nov 6 7:00 PM"),
+        card)
+  }
+
+  @Test
+  fun `card for a committee class carries the committee and start time`() {
+    val card =
+        cardRegistry.card(
+            "committee-class",
+            """{"eventName":"Intro to Laser Cutting","committeeName":"Laser",
+                "eventStart":"Sat Nov 8 10:00 AM","eventUrl":"https://example.test/events/3",
+                "imageUrl":"https://example.test/i.jpg"}""")!!
+
+    assertEquals("class", card.kind)
+    assertEquals("View class", card.ctaLabel)
+    assertEquals("Laser", card.sender)
+    assertEquals("https://example.test/i.jpg", card.imageUrl)
+  }
+
+  @Test
+  fun `card for a course has no date or excerpt and starts the course`() {
+    val card =
+        cardRegistry.card(
+            "committee-course",
+            """{"courseName":"Table Saw Safety","committeeName":"Woodshop",
+                "courseUrl":"https://example.test/courses/2"}""")!!
+
+    assertEquals("course", card.kind)
+    assertEquals("Start course", card.ctaLabel)
+    assertEquals("", card.whenLine)
+    assertEquals("", card.excerpt)
+  }
+
+  @Test
+  fun `card for a project post is generic and opens the member's profile`() {
+    val card =
+        cardRegistry.card(
+            "project-post",
+            """{"memberName":"Jane Doe","memberUsername":"jdoe","topicTitle":"Show and Tell"}""")!!
+
+    assertEquals("project", card.kind)
+    assertEquals("New project from Jane Doe", card.title)
+    assertTrue(card.url.endsWith("/profile/@jdoe"))
+    assertEquals("@jdoe", card.sender)
+  }
+
+  @Test
+  fun `card is null for templates without one, unknown templates and broken payloads`() {
+    assertNull(cardRegistry.card("system-test", """{"message":"hi"}"""))
+    assertNull(cardRegistry.card("retired-template", "{}"))
+    assertNull(cardRegistry.card("event-announcement", "not json"))
+  }
+
   @Test
   fun `render throws for an unregistered template name`() {
     val registry = TemplateRegistry(setOf(SystemTestTemplate()))

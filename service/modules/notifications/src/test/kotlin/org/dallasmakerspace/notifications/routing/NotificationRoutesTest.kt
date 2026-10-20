@@ -144,6 +144,38 @@ class NotificationRoutesTest {
   }
 
   @Test
+  fun `get notifications should expose read state and the inbox card`() = testApplication {
+    configureApp()
+    val read = notification(8L).copy(readAt = LocalDateTime.of(2026, 8, 3, 9, 0))
+    val card =
+        org.dallasmakerspace.notifications.templates.NotificationCard(
+            kind = "class",
+            title = "Intro to Laser Cutting",
+            url = "https://example.test/events/1",
+            ctaLabel = "View class",
+            sender = "Laser")
+    runBlocking {
+      whenever(mockService.list(eq(50), eq("jdoe"), eq(null)))
+          .thenReturn(listOf(notification(7L), read))
+    }
+    whenever(mockService.card(eq(read))).thenReturn(card)
+
+    val response =
+        client.get("/notifications?username=jdoe") {
+          header("X-Api-Key", "test-key")
+          header("X-Api-Client", "test-client")
+        }
+
+    val views = response.body<ApiResponse<List<NotificationView>>>().data!!
+    assertEquals(null, views[0].readAt)
+    assertEquals(null, views[0].card)
+    assertEquals("2026-08-03T09:00", views[1].readAt)
+    assertEquals("Intro to Laser Cutting", views[1].card!!.title)
+    assertEquals("View class", views[1].card!!.ctaLabel)
+    Unit
+  }
+
+  @Test
   fun `get notifications should reject an invalid status filter`() = testApplication {
     configureApp()
 

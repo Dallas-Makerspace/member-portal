@@ -11,6 +11,7 @@ import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.notifications.channels.NotifierRegistry
 import org.dallasmakerspace.notifications.db.NotificationsRepository
+import org.dallasmakerspace.notifications.templates.NotificationCard
 import org.dallasmakerspace.notifications.templates.RenderedNotification
 import org.dallasmakerspace.notifications.templates.TemplateRegistry
 
@@ -107,6 +108,10 @@ constructor(
    * ever talk to this service).
    */
   fun findTopic(key: String): NotificationTopic? = templateRegistry.findTopic(key)
+
+  /** The inbox card for [notification], or null when its template provides none. */
+  fun card(notification: Notification): NotificationCard? =
+      templateRegistry.card(notification.templateName, notification.payload)
 
   /** Most recent [limit] notifications, optionally filtered by member/status (newest first). */
   suspend fun list(

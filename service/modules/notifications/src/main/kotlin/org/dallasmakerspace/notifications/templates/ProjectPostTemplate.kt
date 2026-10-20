@@ -32,6 +32,17 @@ class ProjectPostTemplate :
   override fun renderSubject(data: ProjectPostData): String =
       "New project from ${data.memberName}"
 
+  /** The payload has no project title or post link, so the card names the member and opens their profile. */
+  override fun card(data: ProjectPostData): NotificationCard =
+      NotificationCard(
+          kind = CardKinds.PROJECT,
+          title = renderSubject(data),
+          excerpt = data.excerpt,
+          imageUrl = data.imageUrl,
+          url = memberProfileUrl(data.memberUsername),
+          ctaLabel = "See projects",
+          sender = "@${data.memberUsername}")
+
   override fun renderText(data: ProjectPostData): String = buildString {
     appendLine("${memberLabel(data)} shared a project in ${data.topicTitle}:")
     if (data.excerpt.isNotBlank()) {

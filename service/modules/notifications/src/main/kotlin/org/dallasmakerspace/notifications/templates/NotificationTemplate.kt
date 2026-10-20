@@ -36,6 +36,9 @@ abstract class NotificationTemplate<T : Any>(
 
   abstract fun renderHtml(data: T): String
 
+  /** The inbox card for [data]; null when the template has none (the inbox shows the subject). */
+  open fun card(data: T): NotificationCard? = null
+
   fun render(data: T): RenderedNotification =
       RenderedNotification(
           subject = renderSubject(data),

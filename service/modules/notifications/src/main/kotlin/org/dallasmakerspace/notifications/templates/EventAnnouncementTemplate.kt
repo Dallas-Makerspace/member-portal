@@ -67,6 +67,17 @@ class EventAnnouncementTemplate :
     append(".</p>")
   }
 
+  override fun card(data: EventAnnouncementData): NotificationCard =
+      NotificationCard(
+          kind = CardKinds.EVENT,
+          title = data.eventName,
+          excerpt = data.excerpt,
+          imageUrl = data.imageUrl,
+          url = data.eventUrl,
+          ctaLabel = "View event",
+          sender = "@${data.organizerUsername}",
+          whenLine = data.eventStart)
+
   /** Plain-text "Full Name (@username)" label. */
   private fun organizerLabel(data: EventAnnouncementData): String =
       "${data.organizerName} (@${data.organizerUsername})"
