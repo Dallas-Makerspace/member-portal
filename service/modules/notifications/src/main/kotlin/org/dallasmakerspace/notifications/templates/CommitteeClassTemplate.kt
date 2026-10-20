@@ -2,6 +2,7 @@ package org.dallasmakerspace.notifications.templates
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.notifications.topics.CommitteeUpdatesTopic
 
 /** Template data for "a committee you follow added a class". */
@@ -27,16 +28,29 @@ class CommitteeClassTemplate :
     ) {
   override val serializer: KSerializer<CommitteeClassData> = CommitteeClassData.serializer()
 
-  override fun card(data: CommitteeClassData): NotificationCard =
-      NotificationCard(
-          kind = CardKinds.CLASS,
-          title = data.eventName,
-          excerpt = data.excerpt,
-          imageUrl = data.imageUrl,
-          url = data.eventUrl,
-          ctaLabel = "View class",
-          sender = data.committeeName,
-          whenLine = data.eventStart)
+  /**
+   * The inbox card opens the committee's portal page (one committee) or the committee list
+   * (several); the calendar link is the fallback when no committee name resolves.
+   */
+  override fun card(data: CommitteeClassData): NotificationCard {
+    val committees =
+        data.committeeName.split(",").mapNotNull { Committees.findByName(it.trim()) }
+    val (url, cta) =
+        when {
+          committees.size == 1 -> "/committees/${committees.single().slug}" to "View committee"
+          committees.size > 1 -> "/committees" to "View committees"
+          else -> data.eventUrl to "View class"
+        }
+    return NotificationCard(
+        kind = CardKinds.CLASS,
+        title = data.eventName,
+        excerpt = data.excerpt,
+        imageUrl = data.imageUrl,
+        url = url,
+        ctaLabel = cta,
+        sender = data.committeeName,
+        whenLine = data.eventStart)
+  }
 
   /** Includes the start time so repeat sessions of the same class are distinguishable. */
   override fun renderSubject(data: CommitteeClassData): String =

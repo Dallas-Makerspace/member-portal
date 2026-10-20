@@ -148,9 +148,47 @@ class TemplateRegistryTest {
                 "imageUrl":"https://example.test/i.jpg"}""")!!
 
     assertEquals("class", card.kind)
-    assertEquals("View class", card.ctaLabel)
+    assertEquals("/committees/laser", card.url)
+    assertEquals("View committee", card.ctaLabel)
     assertEquals("Laser", card.sender)
+    assertEquals("Sat Nov 8 10:00 AM", card.whenLine)
     assertEquals("https://example.test/i.jpg", card.imageUrl)
+  }
+
+  @Test
+  fun `a class for several committees opens the committee list`() {
+    val card =
+        cardRegistry.card(
+            "committee-class",
+            """{"eventName":"Joint Safety Class","committeeName":"Laser, Woodshop",
+                "eventUrl":"https://example.test/events/4"}""")!!
+
+    assertEquals("/committees", card.url)
+    assertEquals("View committees", card.ctaLabel)
+    assertEquals("Laser, Woodshop", card.sender)
+  }
+
+  @Test
+  fun `a class whose committee is unknown falls back to the event link`() {
+    val card =
+        cardRegistry.card(
+            "committee-class",
+            """{"eventName":"Mystery Class","committeeName":"Retired Committee",
+                "eventUrl":"https://example.test/events/5"}""")!!
+
+    assertEquals("https://example.test/events/5", card.url)
+    assertEquals("View class", card.ctaLabel)
+  }
+
+  @Test
+  fun `a committee with a multi-word name links by its slug`() {
+    val card =
+        cardRegistry.card(
+            "committee-class",
+            """{"eventName":"Intro to Machining","committeeName":"Machine Shop",
+                "eventUrl":"https://example.test/events/6"}""")!!
+
+    assertEquals("/committees/machine-shop", card.url)
   }
 
   @Test
