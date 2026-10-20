@@ -107,7 +107,7 @@ class TemplateRegistryTest {
               SystemTestTemplate()))
 
   @Test
-  fun `card for an event announcement names the organizer and links the event`() {
+  fun `card for an event announcement names the organizer and opens their profile`() {
     val card =
         cardRegistry.card(
             "event-announcement",
@@ -120,11 +120,22 @@ class TemplateRegistryTest {
             kind = "event",
             title = "Open Build Night",
             excerpt = "Bring a project.",
-            url = "https://example.test/events/9",
-            ctaLabel = "View event",
+            url = "/profile/@asmith",
+            ctaLabel = "View profile",
             sender = "@asmith",
             whenLine = "Thu Nov 6 7:00 PM"),
         card)
+  }
+
+  @Test
+  fun `an event announcement without an organizer username falls back to the event link`() {
+    val card =
+        cardRegistry.card(
+            "event-announcement",
+            """{"eventName":"Open Build Night","eventUrl":"https://example.test/events/9"}""")!!
+
+    assertEquals("https://example.test/events/9", card.url)
+    assertEquals("View event", card.ctaLabel)
   }
 
   @Test
@@ -165,7 +176,7 @@ class TemplateRegistryTest {
 
     assertEquals("project", card.kind)
     assertEquals("New project from Jane Doe", card.title)
-    assertTrue(card.url.endsWith("/profile/@jdoe"))
+    assertEquals("/profile/@jdoe", card.url)
     assertEquals("@jdoe", card.sender)
   }
 

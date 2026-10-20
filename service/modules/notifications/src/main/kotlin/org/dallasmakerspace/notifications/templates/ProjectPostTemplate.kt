@@ -39,7 +39,7 @@ class ProjectPostTemplate :
           title = renderSubject(data),
           excerpt = data.excerpt,
           imageUrl = data.imageUrl,
-          url = memberProfileUrl(data.memberUsername),
+          url = portalProfilePath(data.memberUsername),
           ctaLabel = "See projects",
           sender = "@${data.memberUsername}")
 

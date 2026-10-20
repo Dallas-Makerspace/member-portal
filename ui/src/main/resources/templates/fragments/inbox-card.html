@@ -17,19 +17,27 @@
             <span class="material-symbols-outlined" th:case="*">notifications</span>
         </span>
         <div class="inbox-body">
-            <div class="inbox-card-title" role="heading" th:attr="aria-level=${level}">
-                <a th:if="${!#strings.isEmpty(item['url'])}" class="inbox-link stretched-link"
-                   th:href="${item['url']}">
-                    <span th:if="${item['unread']}" class="visually-hidden">New: </span><span
-                        th:text="${item['title']}"></span>
-                </a>
-                <th:block th:if="${#strings.isEmpty(item['url'])}">
-                    <span th:if="${item['unread']}" class="visually-hidden">New: </span><span
-                        th:text="${item['title']}"></span>
-                </th:block>
+            <!-- Text and thumbnail share a row; the meta row (and its CTA) spans the full width so the
+                 CTA sits at the same right edge on every card. -->
+            <div class="inbox-main">
+                <div class="inbox-text">
+                    <div class="inbox-card-title" role="heading" th:attr="aria-level=${level}">
+                        <a th:if="${!#strings.isEmpty(item['url'])}" class="inbox-link stretched-link"
+                           th:href="${item['url']}">
+                            <span th:if="${item['unread']}" class="visually-hidden">New: </span><span
+                                th:text="${item['title']}"></span>
+                        </a>
+                        <th:block th:if="${#strings.isEmpty(item['url'])}">
+                            <span th:if="${item['unread']}" class="visually-hidden">New: </span><span
+                                th:text="${item['title']}"></span>
+                        </th:block>
+                    </div>
+                    <p class="inbox-excerpt" th:if="${!#strings.isEmpty(item['excerpt'])}"
+                       th:text="${item['excerpt']}"></p>
+                </div>
+                <img th:if="${!#strings.isEmpty(item['imageUrl'])}" class="inbox-thumb" alt="" loading="lazy"
+                     th:src="${item['imageUrl']}">
             </div>
-            <p class="inbox-excerpt" th:if="${!#strings.isEmpty(item['excerpt'])}"
-               th:text="${item['excerpt']}"></p>
             <p class="inbox-meta">
                 <span th:if="${!#strings.isEmpty(item['whenLine'])}" th:text="${item['whenLine']}"></span>
                 <dms-relative-date th:if="${#strings.isEmpty(item['whenLine']) and item['when'] != null}"
@@ -46,8 +54,6 @@
                       th:text="${item['ctaLabel']} + ' ›'"></span>
             </p>
         </div>
-        <img th:if="${!#strings.isEmpty(item['imageUrl'])}" class="inbox-thumb" alt="" loading="lazy"
-             th:src="${item['imageUrl']}">
     </article>
 </li>
 </body>

@@ -67,14 +67,18 @@ class EventAnnouncementTemplate :
     append(".</p>")
   }
 
+  /**
+   * The inbox card opens the organizer's portal profile (keeping members in the portal); the
+   * calendar link is the fallback when the payload has no organizer username.
+   */
   override fun card(data: EventAnnouncementData): NotificationCard =
       NotificationCard(
           kind = CardKinds.EVENT,
           title = data.eventName,
           excerpt = data.excerpt,
           imageUrl = data.imageUrl,
-          url = data.eventUrl,
-          ctaLabel = "View event",
+          url = if (data.organizerUsername.isNotBlank()) portalProfilePath(data.organizerUsername) else data.eventUrl,
+          ctaLabel = if (data.organizerUsername.isNotBlank()) "View profile" else "View event",
           sender = "@${data.organizerUsername}",
           whenLine = data.eventStart)
 

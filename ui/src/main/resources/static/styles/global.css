@@ -350,6 +350,18 @@ div.error-details > p { color: #c1c1c1; }
     flex: 1 1 auto;
     min-width: 0;
 }
+.inbox-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+.inbox-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.inbox-main .inbox-excerpt {
+    margin-bottom: 0;
+}
 .inbox-card-title {
     margin: 0 0 2px;
     font-family: 'Outfit', sans-serif;
@@ -378,7 +390,7 @@ div.error-details > p { color: #c1c1c1; }
     overflow: hidden;
 }
 .inbox-meta {
-    margin: 0;
+    margin: 4px 0 0;
     display: flex;
     flex-wrap: wrap;
     gap: 2px 0;

@@ -20,6 +20,9 @@ data class NotificationCard(
     val whenLine: String = "",
 )
 
+/** A member's profile as a same-site path, so the inbox keeps members on whichever portal they're on. */
+fun portalProfilePath(username: String): String = "/profile/@$username"
+
 object CardKinds {
   const val EVENT = "event"
   const val CLASS = "class"
