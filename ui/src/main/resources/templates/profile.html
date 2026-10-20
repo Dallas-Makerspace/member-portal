@@ -667,40 +667,9 @@
             </div>
 
             <!-- Events Organized card -->
-            <div th:if="${events_organized}" id="events-organized" data-expandable
-                 class="dms-card shadow-sm mt-4">
-                <div class="card-body pt-0 pb-4">
-                    <h4 class="card-title mt-3 mb-4 dms-card-title">Events Organized</h4>
-                    <!-- Only the first few show until expanded; /profile/@user#events-organized opens it. -->
-                    <div class="list-group list-group-flush" id="events-organized-list">
-                        <a th:each="event : ${events_organized}"
-                           th:href="${event.url}"
-                           target="_blank"
-                           class="list-group-item list-group-item-action px-0 border-0 event-item"
-                           th:classappend="${event.isUpcoming} ? 'event-upcoming' : 'event-past'"
-                           th:attr="hidden=${event.collapsed} ? 'hidden',data-expandable-extra=${event.collapsed} ? ''">
-                            <div class="d-flex align-items-start">
-                                <span class="material-symbols-outlined card-item-icon mt-1 ms-md-3">event</span>
-                                <div class="flex-grow-1">
-                                    <div class="fw-medium event-name" th:text="${event.name}"></div>
-                                    <small class="text-muted">
-                                        <span th:text="${event.eventStart}"></span>
-                                        <span class="ms-1 fw-semibold"><dms-relative-date
-                                                th:attr="timestamp=${event.eventStartRaw}" prefix="(" suffix=")"
-                                                relativeOnly="true"></dms-relative-date></span>
-                                    </small>
-                                </div>
-                                <span class="material-symbols-outlined text-muted ms-2 me-md-3 align-self-center"
-                                      style="font-size: 18px;">open_in_new</span>
-                            </div>
-                        </a>
-                    </div>
-                    <button th:if="${events_hidden_count > 0}" type="button" class="btn btn-link px-0 mt-2"
-                            data-expandable-toggle aria-expanded="false" aria-controls="events-organized-list"
-                            th:attr="data-more-label='Show ' + ${events_hidden_count} + ' more',data-less-label='Show fewer'"
-                            th:text="'Show ' + ${events_hidden_count} + ' more'"></button>
-                </div>
-            </div>
+            <th:block th:if="${events_organized}">
+                <th:block th:replace="~{fragments/events-organized :: card(${events_organized}, ${events_hidden_count})}"></th:block>
+            </th:block>
 
             <!-- Following & Followers card -->
             <div class="dms-card shadow-sm mt-4" th:if="${follow_feature_enabled}">
