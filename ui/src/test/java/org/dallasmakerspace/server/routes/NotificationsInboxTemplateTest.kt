@@ -107,7 +107,49 @@ class NotificationsInboxTemplateTest {
   fun `the header says how many are new`() {
     val html = render(listOf(row(1), row(2), row(3, readAt = "2026-11-05T16:00:00")))
 
-    assertTrue(html.flat().contains("2 new"))
+    assertTrue(html.flat().contains("2 new since your last visit"))
+  }
+
+  @Test
+  fun `with nothing new the header says you are caught up`() {
+    val html = render(listOf(row(1, readAt = "2026-11-05T16:00:00")))
+
+    assertTrue(html.contains("You're all caught up"))
+    assertFalse(html.contains("inbox-new-pill"))
+    assertFalse(render(emptyList()).contains("all caught up"))
+  }
+
+  @Test
+  fun `card titles are headings, one level below a bundle's heading inside it`() {
+    val html =
+        render(
+            listOf(
+                row(1),
+                row(2, providerId = "p"),
+                row(3, providerId = "p")))
+
+    assertTrue(Regex("role=\"heading\"[^>]*aria-level=\"3\"|aria-level=\"3\"[^>]*role=\"heading\"")
+        .containsMatchIn(html))
+    assertTrue(Regex("role=\"heading\"[^>]*aria-level=\"4\"|aria-level=\"4\"[^>]*role=\"heading\"")
+        .containsMatchIn(html))
+  }
+
+  @Test
+  fun `a capped feed says it is the latest updates`() {
+    val feed = buildInboxFeed((1..30).map { row(it) }, today, capped = true)
+    val context =
+        Context().apply {
+          setVariables(
+              feed +
+                  mapOf(
+                      "preferred_username" to "jdoe",
+                      "authz" to Authz(emptySet()),
+                      "suppressed" to false,
+                      "viewing_other" to false,
+                      "filter" to "all"))
+        }
+
+    assertTrue(engine.process("notifications", context).contains("Showing 25 of your latest 30 updates"))
   }
 
   @Test
@@ -164,15 +206,15 @@ class NotificationsInboxTemplateTest {
 
     assertTrue(Regex("inbox-paused\"[^>]*role=\"status\"|role=\"status\"[^>]*inbox-paused")
         .containsMatchIn(html.flat()))
-    assertTrue(html.contains("Paused."))
+    assertTrue(html.flat().contains("Email notifications are paused"))
   }
 
   @Test
   fun `an admin viewing another inbox is told nothing is marked read`() {
     val html = render(listOf(row(1)), viewingOther = true)
 
-    assertTrue(html.flat().contains("Nothing here is marked read"))
-    assertFalse(render(listOf(row(1))).contains("Nothing here is marked read"))
+    assertTrue(html.flat().contains("(read-only)"))
+    assertFalse(render(listOf(row(1))).contains("(read-only)"))
   }
 
   @Test

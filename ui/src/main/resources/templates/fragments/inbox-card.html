@@ -5,7 +5,7 @@
   One notification card in the inbox feed (see NotificationsInboxFeed.kt for the item map).
   The title is the only link and is stretched over the card; the CTA text is decoration.
 -->
-<li th:fragment="card(item, pageSize)" class="inbox-item"
+<li th:fragment="card(item, pageSize, level)" class="inbox-item"
     th:classappend="${item['position'] != null and item['position'] > pageSize} ? 'inbox-extra' : ''"
     th:attr="hidden=${item['position'] != null and item['position'] > pageSize} ? 'hidden'">
     <article class="inbox-card" th:classappend="${item['unread']} ? 'is-unread'">
@@ -17,7 +17,7 @@
             <span class="material-symbols-outlined" th:case="*">notifications</span>
         </span>
         <div class="inbox-body">
-            <h3 class="inbox-card-title">
+            <div class="inbox-card-title" role="heading" th:attr="aria-level=${level}">
                 <a th:if="${!#strings.isEmpty(item['url'])}" class="inbox-link stretched-link"
                    th:href="${item['url']}">
                     <span th:if="${item['unread']}" class="visually-hidden">New: </span><span
@@ -27,7 +27,7 @@
                     <span th:if="${item['unread']}" class="visually-hidden">New: </span><span
                         th:text="${item['title']}"></span>
                 </th:block>
-            </h3>
+            </div>
             <p class="inbox-excerpt" th:if="${!#strings.isEmpty(item['excerpt'])}"
                th:text="${item['excerpt']}"></p>
             <p class="inbox-meta">
@@ -36,9 +36,10 @@
                                    th:attr="timestamp=${item['when']}"></dms-relative-date>
                 <span th:if="${!#strings.isEmpty(item['sender'])}" class="inbox-sep"
                       th:text="${item['sender']}"></span>
+                <span th:if="${item['posted'] != null}" class="inbox-sep" th:text="${item['posted']}"></span>
                 <span th:if="${item['note'] != null}" class="inbox-note inbox-sep"
                       th:classappend="${item['noteProblem']} ? 'is-problem'"
-                      th:attr="title=${item['noteDetail']}" th:text="${item['note']}"></span>
+                      th:text="${item['note']}"></span>
                 <span th:if="${!#strings.isEmpty(item['errorDetail'])}"
                       class="inbox-error font-monospace" th:text="${item['errorDetail']}"></span>
                 <span th:if="${!#strings.isEmpty(item['ctaLabel'])}" class="inbox-cta" aria-hidden="true"

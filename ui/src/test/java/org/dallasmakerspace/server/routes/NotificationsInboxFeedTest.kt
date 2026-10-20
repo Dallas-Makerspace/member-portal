@@ -132,7 +132,7 @@ class NotificationsInboxFeedTest {
     assertEquals("A, B +1 more", digest["preview"])
     assertEquals(3, digest["childCount"])
     assertEquals(true, digest["unread"])
-    assertEquals(1, feed["new_count"])
+    assertEquals(2, feed["new_count"])
   }
 
   @Test
@@ -192,6 +192,97 @@ class NotificationsInboxFeedTest {
     val none = buildInboxFeed(listOf(row(1, topic = "COMMITTEE_UPDATES")), today, filter = "people")
     assertTrue(none["has_any"] == true)
     assertEquals(0, none["total_count"])
+  }
+
+  @Test
+  fun `a filtered digest keeps the original size in its title`() {
+    val rows =
+        listOf(
+            row(1, providerId = "p", aggregation = "DAILY", topic = "EVENT_ANNOUNCEMENT"),
+            row(2, providerId = "p", aggregation = "DAILY", topic = "EVENT_ANNOUNCEMENT"),
+            row(3, providerId = "p", aggregation = "DAILY", topic = "COMMITTEE_UPDATES"))
+
+    val people = items(buildInboxFeed(rows, today, filter = "people")).single()
+    assertEquals("Daily digest · 2 of 3 updates", people["title"])
+
+    // One left in a bundle is just a card.
+    val committees = items(buildInboxFeed(rows, today, filter = "committees")).single()
+    assertEquals(false, committees["isDigest"])
+    assertEquals(3, committees["id"])
+  }
+
+  @Test
+  fun `the new count is notifications, not bundles`() {
+    val rows =
+        listOf(
+            row(1, providerId = "p", aggregation = "DAILY"),
+            row(2, providerId = "p", aggregation = "DAILY"),
+            row(3, providerId = "p", aggregation = "DAILY", readAt = "2026-11-05T16:00:00"),
+            row(4, sentAt = "2026-11-05T09:00:00"))
+
+    val feed = buildInboxFeed(rows, today)
+
+    assertEquals(3, feed["new_count"])
+    assertEquals(2, feed["total_count"])
+  }
+
+  @Test
+  fun `cards with an event date also say when they were posted`() {
+    // Sent 15:00 UTC = 9:00 AM Central; "now" is 11:00 AM Central the same day.
+    val feed = buildInboxFeed(listOf(row(1)), today, now = today.atTime(11, 0))
+
+    assertEquals("Posted 2 h ago", items(feed)[0]["posted"])
+    val noDate = mapOf("kind" to "course", "title" to "Table Saw Safety", "url" to "https://example.test/c")
+    assertEquals(null, items(buildInboxFeed(listOf(row(2, card = noDate)), today))[0]["posted"])
+  }
+
+  @Test
+  fun `posted wording steps from minutes to a date`() {
+    val now = today.atTime(12, 0)
+
+    assertEquals("Posted just now", postedAgo("2026-11-05T12:00:00", now))
+    assertEquals("Posted 25 min ago", postedAgo("2026-11-05T11:35:00", now))
+    assertEquals("Posted 5 h ago", postedAgo("2026-11-05T07:00:00", now))
+    assertEquals("Posted yesterday", postedAgo("2026-11-04T09:00:00", now))
+    assertEquals("Posted Oct 20", postedAgo("2026-10-20T09:00:00", now))
+    assertEquals(null, postedAgo(null, now))
+  }
+
+  @Test
+  fun `rows sent out of id order are shown newest first`() {
+    val feed =
+        buildInboxFeed(
+            listOf(row(1, sentAt = "2026-11-04T15:00:00"), row(2, sentAt = "2026-11-05T15:00:00")),
+            today)
+
+    assertEquals(listOf(2, 1), items(feed).map { it["id"] })
+  }
+
+  @Test
+  fun `same-site paths link but protocol-relative and script urls do not`() {
+    fun urlOf(url: String) =
+        items(buildInboxFeed(listOf(row(1, card = mapOf("title" to "x", "url" to url))), today))[0]["url"]
+
+    assertEquals("/profile/@jdoe", urlOf("/profile/@jdoe"))
+    assertEquals("", urlOf("//evil.test/x"))
+    assertEquals("", urlOf("javascript:alert(1)"))
+  }
+
+  @Test
+  fun `images load over https only`() {
+    fun imageOf(url: String) =
+        items(
+                buildInboxFeed(
+                    listOf(row(1, card = mapOf("title" to "x", "imageUrl" to url))), today))[0]["imageUrl"]
+
+    assertEquals("https://example.test/a.jpg", imageOf("https://example.test/a.jpg"))
+    assertEquals("", imageOf("http://example.test/a.jpg"))
+  }
+
+  @Test
+  fun `the feed says when the service returned as many rows as it was asked for`() {
+    assertEquals(true, buildInboxFeed(listOf(row(1)), today, capped = true)["capped"])
+    assertEquals(false, buildInboxFeed(listOf(row(1)), today)["capped"])
   }
 
   @Test

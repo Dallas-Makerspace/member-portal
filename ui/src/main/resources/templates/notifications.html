@@ -32,7 +32,8 @@
             <div class="inbox-header">
                 <h1 class="inbox-heading">Notifications</h1>
                 <span th:if="${new_count > 0}" class="inbox-new-pill"
-                      th:text="${new_count} + ' new'"></span>
+                      th:text="${new_count} + ' new since your last visit'"></span>
+                <span th:if="${new_count == 0 and has_any}" class="inbox-caught-up">You're all caught up</span>
                 <a class="inbox-prefs"
                    th:href="'/profile/@' + ${preferred_username} + '/settings#notification-preferences'">
                     <span class="material-symbols-outlined" aria-hidden="true">settings</span>
@@ -41,15 +42,12 @@
             </div>
 
             <div th:if="${viewing_other}" class="alert alert-secondary" role="status">
-                You're viewing <strong th:text="'@' + ${preferred_username}"></strong>'s inbox. Nothing
-                here is marked read.
+                Viewing <strong th:text="'@' + ${preferred_username}"></strong>'s inbox (read-only).
             </div>
 
             <div th:if="${suppressed}" class="alert alert-warning inbox-paused" role="status">
-                <strong>Paused.</strong>
-                A recent notification to the email address on this account bounced, so we've stopped
-                sending to it. Check the address on the account, then ask an admin to resume
-                notifications.
+                Email notifications are paused because our last email to you bounced. Check the email
+                address on your account, then ask an admin to resume them. Your inbox here still works.
             </div>
 
             <nav aria-label="Filter notifications" th:if="${has_any}">
@@ -71,7 +69,8 @@
 
             <!-- Nothing has ever been sent -->
             <section th:if="${!has_any}" class="inbox-empty">
-                <span class="inbox-empty-icon material-symbols-outlined" aria-hidden="true">notifications</span>
+                <span class="inbox-empty-icon" aria-hidden="true"><span
+                        class="material-symbols-outlined">notifications</span></span>
                 <h2 class="inbox-empty-title">Nothing new yet</h2>
                 <p class="text-muted">
                     Follow a committee or a member and their new classes, events and projects will
@@ -116,14 +115,14 @@
                                 <div class="collapse" th:id="${item['groupId']}">
                                     <ul class="inbox-list inbox-children">
                                         <th:block th:each="child : ${item['children']}">
-                                            <th:block th:replace="~{fragments/inbox-card :: card(${child}, ${page_size})}"></th:block>
+                                            <th:block th:replace="~{fragments/inbox-card :: card(${child}, ${page_size}, 4)}"></th:block>
                                         </th:block>
                                     </ul>
                                 </div>
                             </article>
                         </li>
                         <th:block th:unless="${item['isDigest']}">
-                            <th:block th:replace="~{fragments/inbox-card :: card(${item}, ${page_size})}"></th:block>
+                            <th:block th:replace="~{fragments/inbox-card :: card(${item}, ${page_size}, 3)}"></th:block>
                         </th:block>
                     </th:block>
                 </ul>
@@ -132,8 +131,9 @@
             <div th:if="${total_count > page_size}" class="inbox-more">
                 <button type="button" class="btn btn-outline-secondary" id="inboxLoadMore"
                         th:attr="data-page-size=${page_size},data-total=${total_count}">Load more</button>
-                <p class="inbox-count" id="inboxCount" th:attr="data-total=${total_count}"
-                   th:text="'Showing ' + ${page_size} + ' of ' + ${total_count} + ' updates'"></p>
+                <p class="inbox-count" id="inboxCount" tabindex="-1"
+                   th:attr="data-total=${total_count},data-capped=${capped}"
+                   th:text="'Showing ' + ${page_size} + ' of ' + (${capped} ? 'your latest ' : '') + ${total_count} + ' updates'"></p>
             </div>
         </div>
     </div>

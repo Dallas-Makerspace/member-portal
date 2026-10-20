@@ -7,15 +7,15 @@
   const count = document.getElementById('inboxCount');
   const status = document.getElementById('inboxStatus');
 
-  function updateCount(shown, total) {
-    if (count) count.textContent = 'Showing ' + shown + ' of ' + total + ' updates';
-    return 'Showing ' + shown + ' of ' + total + ' updates';
-  }
-
   if (button) {
     const pageSize = parseInt(button.dataset.pageSize, 10);
     const total = parseInt(button.dataset.total, 10);
+    const capped = count && count.dataset.capped === 'true';
     let shown = pageSize;
+
+    function countText() {
+      return 'Showing ' + shown + ' of ' + (capped ? 'your latest ' : '') + total + ' updates';
+    }
 
     button.addEventListener('click', function () {
       // Day groups that start past the first page are hidden as a whole.
@@ -27,10 +27,11 @@
         if (group) group.hidden = false;
       });
       shown = Math.min(total, shown + reveal.length);
-      const message = updateCount(shown, total);
-      if (status) status.textContent = reveal.length + ' more loaded. ' + message + '.';
-      const first = reveal.length ? reveal[0].querySelector('a') : null;
-      if (first) first.focus();
+      if (count) count.textContent = countText();
+      if (status) status.textContent = reveal.length + ' more loaded. ' + countText() + '.';
+      // A digest's links are inside its collapsed panel, so focus its toggle instead.
+      const target = reveal.length ? reveal[0].querySelector('a, .inbox-digest-toggle') : null;
+      (target || count || button).focus();
       if (shown >= total) button.hidden = true;
     });
   }

@@ -4,7 +4,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
 import io.ktor.server.thymeleaf.ThymeleafContent
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -84,13 +83,18 @@ constructor(
       memberServiceClient.getNotificationDeliveryStatus(username, session.sessionId)
     }
     val activeFilter = filter?.takeIf { it in INBOX_FILTER_TOPICS }
+    val rows = notificationsDeferred.await()
+    val now = LocalDateTime.now(ZoneId.of("America/Chicago"))
     val feed =
         buildInboxFeed(
-            notificationsDeferred.await(),
-            today = LocalDate.now(ZoneId.of("America/Chicago")),
+            rows,
+            today = now.toLocalDate(),
             filter = activeFilter,
-            showErrors = showErrors)
-    if (!viewingOther) {
+            showErrors = showErrors,
+            now = now,
+            capped = rows.size >= INBOX_LIMIT)
+    // Only the unfiltered view shows everything, so only it clears the unread dot.
+    if (!viewingOther && activeFilter == null) {
       memberServiceClient.markAllNotificationsRead(username, session.sessionId)
     }
     val model =
