@@ -31,9 +31,9 @@
 
             <div class="inbox-header">
                 <h1 class="inbox-heading">Notifications</h1>
-                <span th:if="${new_count > 0}" class="inbox-new-pill"
+                <span th:if="${new_count > 0 and !viewing_other}" class="inbox-new-pill"
                       th:text="${new_count} + ' new since your last visit'"></span>
-                <span th:if="${new_count == 0 and has_any}" class="inbox-caught-up">You're all caught up</span>
+                <span th:if="${new_count == 0 and has_any and !viewing_other}" class="inbox-caught-up">You're all caught up</span>
                 <a class="inbox-prefs"
                    th:href="'/profile/@' + ${preferred_username} + '/settings#notification-preferences'">
                     <span class="material-symbols-outlined" aria-hidden="true">settings</span>

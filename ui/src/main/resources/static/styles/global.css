@@ -388,9 +388,13 @@ div.error-details > p { color: #c1c1c1; }
 .inbox-meta dms-relative-date {
     color: #59616d;
 }
-.inbox-sep:not(:first-child)::before {
+/* The dot trails the item before it, so a wrapped line never starts with one. */
+.inbox-meta > :not(:last-child):not(:has(+ .inbox-cta)):not(:has(+ .inbox-error))::after {
     content: "·";
     margin: 0 6px;
+}
+.inbox-card .inbox-link:focus-visible {
+    outline: none;
 }
 .inbox-note.is-problem {
     color: #92400e;

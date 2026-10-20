@@ -244,6 +244,9 @@ class NotificationsInboxFeedTest {
     assertEquals("Posted 25 min ago", postedAgo("2026-11-05T11:35:00", now))
     assertEquals("Posted 5 h ago", postedAgo("2026-11-05T07:00:00", now))
     assertEquals("Posted yesterday", postedAgo("2026-11-04T09:00:00", now))
+    // 24-48 hours ago but two calendar days back is a date, not "yesterday".
+    assertEquals("Posted Nov 3", postedAgo("2026-11-03T23:30:00", now))
+    assertEquals("Posted Nov 3", postedAgo("2026-11-03T13:00:00", today.atTime(23, 0)))
     assertEquals("Posted Oct 20", postedAgo("2026-10-20T09:00:00", now))
     assertEquals(null, postedAgo(null, now))
   }

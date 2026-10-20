@@ -214,6 +214,8 @@ class NotificationsInboxTemplateTest {
     val html = render(listOf(row(1)), viewingOther = true)
 
     assertTrue(html.flat().contains("(read-only)"))
+    assertFalse(html.contains("since your last visit"))
+    assertFalse(html.contains("all caught up"))
     assertFalse(render(listOf(row(1))).contains("(read-only)"))
   }
 

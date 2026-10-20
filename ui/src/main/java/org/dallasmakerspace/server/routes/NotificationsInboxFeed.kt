@@ -2,7 +2,9 @@ package org.dallasmakerspace.server.routes
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 import org.dallasmakerspace.models.TopicKeys
 
 /** Cards shown before "Load more". */
@@ -174,8 +176,8 @@ fun postedAgo(centralIso: String?, now: LocalDateTime): String? {
     minutes < 1 -> "Posted just now"
     minutes < 60 -> "Posted $minutes min ago"
     minutes < MINUTES_PER_DAY -> "Posted ${minutes / 60} h ago"
-    minutes < 2 * MINUTES_PER_DAY -> "Posted yesterday"
-    else -> "Posted " + at.format(java.time.format.DateTimeFormatter.ofPattern("MMM d"))
+    ChronoUnit.DAYS.between(at.toLocalDate(), now.toLocalDate()) == 1L -> "Posted yesterday"
+    else -> "Posted " + at.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
   }
 }
 
