@@ -210,6 +210,8 @@ constructor(
           }
       val marked = markCollapsedEvents(formattedEvents)
       jsonMap["events_organized"] = marked
+      jsonMap["events_upcoming"] = marked.filter { it["isUpcoming"] == true }
+      jsonMap["events_past"] = marked.filter { it["isUpcoming"] != true }
       jsonMap["events_hidden_count"] = marked.count { it["collapsed"] == true }
     }
 

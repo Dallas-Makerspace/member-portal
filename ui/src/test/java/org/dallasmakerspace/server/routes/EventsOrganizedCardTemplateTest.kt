@@ -33,20 +33,23 @@ class EventsOrganizedCardTemplateTest {
     val events = markCollapsedEvents((1..upcoming).map { event(it, true) } + (100..<(100 + past)).map { event(it, false) })
     val context =
         Context().apply {
-          setVariable("events_organized", events)
+          setVariable("events_upcoming", events.filter { it["isUpcoming"] == true })
+          setVariable("events_past", events.filter { it["isUpcoming"] != true })
           setVariable("events_hidden_count", events.count { it["collapsed"] == true })
         }
     return engine.process("test-events-organized", context)
   }
+
+  private fun items(html: String) = Regex("<li[^>]*>").findAll(html).map { it.value }.toList()
 
   @Test
   fun `hidden events carry both the hidden attribute and the marker the script looks for`() {
     val html = render(upcoming = 6, past = 4)
 
     // Thymeleaf drops empty-string attributes, so the marker must have a value.
-    val hiddenLinks = Regex("<a [^>]*hidden=\"hidden\"[^>]*>").findAll(html).toList()
-    assertEquals(5, hiddenLinks.size)
-    assertTrue(hiddenLinks.all { it.value.contains("data-expandable-extra=\"true\"") }, hiddenLinks.toString())
+    val hiddenItems = items(html).filter { it.contains("hidden=\"hidden\"") }
+    assertEquals(5, hiddenItems.size)
+    assertTrue(hiddenItems.all { it.contains("data-expandable-extra=\"true\"") }, hiddenItems.toString())
     assertEquals(5, Regex("data-expandable-extra").findAll(html).count())
   }
 
@@ -54,9 +57,23 @@ class EventsOrganizedCardTemplateTest {
   fun `visible events have neither`() {
     val html = render(upcoming = 6, past = 4)
 
-    val visible = Regex("<a [^>]*href=\"[^\"]*events/view/[^\"]*\"[^>]*>").findAll(html).map { it.value }.toList()
-    assertEquals(10, visible.size)
-    assertEquals(5, visible.count { !it.contains("hidden") })
+    assertEquals(10, Regex("href=\"https://calendar.example.test/events/view/").findAll(html).count())
+    assertEquals(5, items(html).count { !it.contains("hidden") })
+  }
+
+  @Test
+  fun `upcoming and past are separate labelled groups in that order`() {
+    val html = render(upcoming = 6, past = 4)
+
+    val upcomingHeading = html.indexOf("Upcoming<span")
+    val pastHeading = html.indexOf("Recently held")
+    assertTrue(upcomingHeading in 0..<pastHeading, "Upcoming must come before Recently held")
+    assertTrue(html.contains(" (6)"))
+    assertTrue(html.contains("aria-labelledby=\"events-upcoming-heading\""))
+    assertTrue(html.contains("aria-labelledby=\"events-past-heading\""))
+    // The past events (ids 100+) are all after the past heading, the upcoming ones before it.
+    assertTrue(html.indexOf("events/view/100") > pastHeading)
+    assertTrue(html.indexOf("events/view/6\"") < pastHeading)
   }
 
   @Test
@@ -74,11 +91,35 @@ class EventsOrganizedCardTemplateTest {
   }
 
   @Test
+  fun `links announce that they open a new tab and icons are hidden from screen readers`() {
+    val html = render(upcoming = 1, past = 1)
+
+    assertEquals(2, Regex("\\(opens in new tab\\)").findAll(html).count())
+    assertEquals(4, Regex("material-symbols-outlined[^>]*aria-hidden=\"true\"").findAll(html).count())
+  }
+
+  @Test
   fun `a short list has no toggle and nothing hidden`() {
     val html = render(upcoming = 2, past = 2)
 
     assertFalse(html.contains("data-expandable-toggle"))
-    assertFalse(html.contains("hidden="))
+    assertFalse(html.contains("hidden=\"hidden\""))
     assertFalse(html.contains("data-expandable-extra"))
+  }
+
+  @Test
+  fun `with nothing upcoming it says so and still lists the past ones`() {
+    val html = render(upcoming = 0, past = 3)
+
+    assertTrue(html.contains("No upcoming events."))
+    assertTrue(html.contains("Recently held"))
+    assertFalse(html.contains("Upcoming ("))
+  }
+
+  @Test
+  fun `with nothing past there is no past group`() {
+    val html = render(upcoming = 3, past = 0)
+
+    assertFalse(html.contains("Recently held"))
   }
 }

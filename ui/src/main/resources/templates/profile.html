@@ -196,16 +196,8 @@
             color: #0d6efd;
         }
 
-        .event-upcoming {
-            border-left: 3px solid #0d6efd;
-        }
-
         [data-expandable] {
             scroll-margin-top: 16px;
-        }
-
-        .event-past {
-            opacity: 0.7;
         }
 
         .status-container {
@@ -668,7 +660,7 @@
 
             <!-- Events Organized card -->
             <th:block th:if="${events_organized}">
-                <th:block th:replace="~{fragments/events-organized :: card(${events_organized}, ${events_hidden_count})}"></th:block>
+                <th:block th:replace="~{fragments/events-organized :: card(${events_upcoming}, ${events_past}, ${events_hidden_count})}"></th:block>
             </th:block>
 
             <!-- Following & Followers card -->

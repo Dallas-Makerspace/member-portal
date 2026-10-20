@@ -2,36 +2,37 @@
 <html lang="en-US" xmlns:th="http://www.thymeleaf.org">
 <body>
 <!--
-  The profile's "Events Organized" card. Only the first few events show until expanded;
-  /profile/@user#events-organized opens it expanded (static/js/dms-expandable.js). Hidden items carry
-  data-expandable-extra="true": Thymeleaf drops attributes whose value is an empty string.
+  The profile's "Events Organized" card: an "Upcoming" group (soonest first) and a "Recently held" group
+  (newest first). Only the first few events show until expanded; /profile/@user#events-organized opens it
+  expanded (static/js/dms-expandable.js). Hidden items carry data-expandable-extra="true": Thymeleaf drops
+  attributes whose value is an empty string.
 -->
-<div th:fragment="card(events, hiddenCount)" id="events-organized" data-expandable
+<div th:fragment="card(upcoming, past, hiddenCount)" id="events-organized" data-expandable
      class="dms-card shadow-sm mt-4">
     <div class="card-body pt-0 pb-4">
-        <h4 class="card-title mt-3 mb-4 dms-card-title">Events Organized</h4>
-        <div class="list-group list-group-flush" id="events-organized-list">
-            <a th:each="event : ${events}"
-               th:href="${event.url}"
-               target="_blank"
-               class="list-group-item list-group-item-action px-0 border-0 event-item"
-               th:classappend="${event.isUpcoming} ? 'event-upcoming' : 'event-past'"
-               th:attr="hidden=${event.collapsed} ? 'hidden',data-expandable-extra=${event.collapsed} ? 'true'">
-                <div class="d-flex align-items-start">
-                    <span class="material-symbols-outlined card-item-icon mt-1 ms-md-3">event</span>
-                    <div class="flex-grow-1">
-                        <div class="fw-medium event-name" th:text="${event.name}"></div>
-                        <small class="text-muted">
-                            <span th:text="${event.eventStart}"></span>
-                            <span class="ms-1 fw-semibold"><dms-relative-date
-                                    th:attr="timestamp=${event.eventStartRaw}" prefix="(" suffix=")"
-                                    relativeOnly="true"></dms-relative-date></span>
-                        </small>
-                    </div>
-                    <span class="material-symbols-outlined text-muted ms-2 me-md-3 align-self-center"
-                          style="font-size: 18px;">open_in_new</span>
-                </div>
-            </a>
+        <h4 class="card-title mt-3 mb-3 dms-card-title">Events Organized</h4>
+        <div id="events-organized-list">
+            <section aria-labelledby="events-upcoming-heading">
+                <h5 id="events-upcoming-heading" class="h6 text-uppercase text-muted fw-semibold mb-1">
+                    Upcoming<span th:if="${!#lists.isEmpty(upcoming)}" th:text="' (' + ${#lists.size(upcoming)} + ')'"></span>
+                </h5>
+                <p th:if="${#lists.isEmpty(upcoming)}" class="text-muted small mb-2">No upcoming events.</p>
+                <ul th:unless="${#lists.isEmpty(upcoming)}" class="list-unstyled mb-3">
+                    <li th:each="event : ${upcoming}"
+                        th:attr="hidden=${event.collapsed} ? 'hidden',data-expandable-extra=${event.collapsed} ? 'true'">
+                        <th:block th:replace="~{fragments/events-organized :: eventLink(${event})}"></th:block>
+                    </li>
+                </ul>
+            </section>
+            <section th:unless="${#lists.isEmpty(past)}" aria-labelledby="events-past-heading">
+                <h5 id="events-past-heading" class="h6 text-uppercase text-muted fw-semibold mb-1">Recently held</h5>
+                <ul class="list-unstyled mb-0">
+                    <li th:each="event : ${past}"
+                        th:attr="hidden=${event.collapsed} ? 'hidden',data-expandable-extra=${event.collapsed} ? 'true'">
+                        <th:block th:replace="~{fragments/events-organized :: eventLink(${event})}"></th:block>
+                    </li>
+                </ul>
+            </section>
         </div>
         <button th:if="${hiddenCount > 0}" type="button" class="btn btn-link px-0 mt-2"
                 data-expandable-toggle aria-expanded="false" aria-controls="events-organized-list"
@@ -39,5 +40,24 @@
                 th:text="'Show ' + ${hiddenCount} + ' more'"></button>
     </div>
 </div>
+
+<a th:fragment="eventLink(event)" th:href="${event.url}" target="_blank" rel="noopener"
+   class="list-group-item list-group-item-action px-0 border-0 event-item">
+    <div class="d-flex align-items-start">
+        <span class="material-symbols-outlined card-item-icon mt-1 ms-md-3" aria-hidden="true">event</span>
+        <div class="flex-grow-1">
+            <div class="fw-medium event-name" th:text="${event.name}"></div>
+            <small class="text-muted">
+                <span th:text="${event.eventStart}"></span>
+                <span class="ms-1 fw-semibold"><dms-relative-date
+                        th:attr="timestamp=${event.eventStartRaw}" prefix="(" suffix=")"
+                        relativeOnly="true"></dms-relative-date></span>
+            </small>
+        </div>
+        <span class="material-symbols-outlined text-muted ms-2 me-md-3 align-self-center" aria-hidden="true"
+              style="font-size: 18px;">open_in_new</span>
+        <span class="visually-hidden">(opens in new tab)</span>
+    </div>
+</a>
 </body>
 </html>

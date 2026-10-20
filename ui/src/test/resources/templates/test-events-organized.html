@@ -2,6 +2,6 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <body>
 <!-- Test harness: renders the profile's Events Organized card the way profile.html includes it. -->
-<th:block th:replace="~{fragments/events-organized :: card(${events_organized}, ${events_hidden_count})}"></th:block>
+<th:block th:replace="~{fragments/events-organized :: card(${events_upcoming}, ${events_past}, ${events_hidden_count})}"></th:block>
 </body>
 </html>
