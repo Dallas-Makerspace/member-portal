@@ -3,7 +3,6 @@
 //   data-autosave-scope="<selector>"   post only the changed control's closest match (e.g. "tr"),
 //                                      plus hidden inputs outside any match; default: the whole form
 //   data-autosave-message="<text>"     toast text after a save (default "Saved")
-//   data-autosave-undo                 offer Undo in the toast (back to the previously saved choice)
 //   data-autosave-refresh-attention    refresh the account-menu attention dot after a save
 // A [data-autosave-status] element (inside the scope, else the form) shows Saving / Saved / errors;
 // a toast backs it up only when that element is off screen. Radio changes wait briefly so arrowing
@@ -114,7 +113,7 @@
     const status = statusEl(form, scope);
     const previous = state.snapshots.get(scope) || [];
     const sent = snapshot(scope);
-    // Changed and changed back (or undone) before the save ran: nothing to tell the server.
+    // Changed and changed back before the save ran: nothing to tell the server.
     if (sameState(previous, sent)) return Promise.resolve();
     form.setAttribute('aria-busy', 'true');
     setStatus(status, 'Saving…');
@@ -131,7 +130,7 @@
       }
       state.snapshots.set(scope, sent);
       // Feedback is best-effort: a problem showing it must not read as a failed save.
-      try { onSaved(form, scope, status, previous, sent); } catch (e) { /* saved already */ }
+      try { onSaved(form, status); } catch (e) { /* saved already */ }
     }).catch(function (err) {
       const message = err instanceof SaveError ? err.message : GENERIC_FAILURE;
       // Later changes in this scope were made on top of the one that failed.
@@ -142,30 +141,16 @@
     });
   }
 
-  function onSaved(form, scope, status, previous, sent) {
+  function onSaved(form, status) {
     setStatus(status, 'Saved');
     if (form.hasAttribute('data-autosave-refresh-attention') && window.DmsAttention) {
       window.DmsAttention.refresh();
     }
-    // Undo only returns to a choice the member had actually made before.
-    const before = previous.find(function (s) { return s.checked && s.el.type === 'radio'; });
-    const after = sent.find(function (s) { return s.checked && s.el.type === 'radio'; });
-    const canUndo = form.hasAttribute('data-autosave-undo') && before && after && before.el !== after.el;
-    if (typeof showToast !== 'function' || (inView(status) && !canUndo)) return;
-    // The toast says it; don't also announce "Saved" from the status line.
-    if (canUndo) setStatus(status, '');
-    const message = form.dataset.autosaveMessage || 'Saved';
-    showToast(message, 'success', canUndo ? {
-      action: {
-        label: 'Undo',
-        onClick: function () {
-          const state = stateFor(form);
-          if (state.timers.has(scope)) { clearTimeout(state.timers.get(scope)); state.timers.delete(scope); }
-          restore(previous);
-          enqueue(form, before.el);
-        }
-      }
-    } : {});
+    if (typeof showToast !== 'function' || inView(status)) return;
+    // Off screen (e.g. below the contact cards on a phone): the toast says it instead, and the
+    // status line stays quiet so "saved" isn't announced twice.
+    setStatus(status, '');
+    showToast(form.dataset.autosaveMessage || 'Saved', 'success');
   }
 
   function enqueue(form, control) {
