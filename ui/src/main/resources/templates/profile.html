@@ -285,7 +285,7 @@
                         </div>
 
                         <div class="d-flex align-items-center mb-3"
-                             th:with="pref_label=${communication_preference == 'EMAIL'} ? 'Email' : (${communication_preference == 'DISCOURSE'} ? 'Talk' : (${communication_preference == 'DISCORD'} ? 'Discord' : (${communication_preference == 'SMS'} ? 'Text/SMS' : 'Not set')))">
+                             th:with="pref_label=${communication_preference == 'EMAIL'} ? 'Email' : (${communication_preference == 'DISCOURSE'} ? 'Talk' : (${communication_preference == 'DISCORD'} ? 'Discord' : (${communication_preference == 'SMS'} ? 'Text/SMS' : (${communication_preference == 'NONE'} ? 'None listed' : 'Not set'))))">
                             <span class="material-symbols-outlined card-item-icon">contact_mail</span>
                             <span>Contact preference: <th:block th:text="${pref_label}"></th:block></span>
                             <a th:if="${is_self == 'true' or authz.can('MANAGE_MEMBERS')}" class="profile-action"

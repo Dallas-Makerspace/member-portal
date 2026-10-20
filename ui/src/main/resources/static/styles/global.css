@@ -221,6 +221,106 @@ div.error-details > p { color: #c1c1c1; }
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
+/* Contact preference cards: native radios, visually hidden, with the label as the card. */
+.contact-options {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    border: 0;
+    padding: 0;
+    min-width: 0;
+}
+@media (min-width: 576px) {
+    .contact-options {
+        grid-template-columns: 1fr 1fr;
+    }
+    .contact-option-none {
+        grid-column: 1 / -1;
+    }
+}
+.contact-option {
+    position: relative;
+}
+.contact-option-input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+.contact-option-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    height: 100%;
+    padding: 14px 16px;
+    background: #fff;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+.contact-option-input:hover + .contact-option-card {
+    border-color: #adb5bd;
+}
+.contact-option-input:focus-visible + .contact-option-card {
+    outline: 3px solid rgba(13, 110, 253, 0.4);
+    outline-offset: 2px;
+}
+.contact-option-input:checked + .contact-option-card {
+    border-color: var(--bs-primary, #0d6efd);
+    background: var(--bs-primary-bg-subtle, #e7f1ff);
+}
+.contact-option-input:checked + .contact-option-card.is-unlinked {
+    border-color: var(--bs-danger, #dc3545);
+    background: var(--bs-danger-bg-subtle, #f8d7da);
+}
+.contact-option-icon {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    font-size: 32px;
+    line-height: 32px;
+    color: #495057;
+}
+.contact-option-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.contact-option-title {
+    font-weight: 700;
+}
+.contact-option-desc {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+.contact-option-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+.contact-option-status .material-symbols-outlined {
+    font-size: 16px;
+}
+.contact-option-check {
+    visibility: hidden;
+    color: var(--bs-primary, #0d6efd);
+}
+.contact-option-input:checked + .contact-option-card .contact-option-check {
+    visibility: visible;
+}
+.contact-option-input:checked + .contact-option-card.is-unlinked .contact-option-check {
+    color: var(--bs-danger, #dc3545);
+}
+
 
 :root {
 /* fonts */

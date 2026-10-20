@@ -37,37 +37,54 @@
                     <span th:if="${!is_self}" class="text-sm text-danger">[Member View for testing -
                         Infra only]</span>
 
-                    <p class="text-muted">
-                        Choose how other members can reach you.
+                    <p class="text-muted" id="contactPreferenceHint">
+                        Pick one so other members know how to reach you.
                     </p>
 
                     <form method="post"
                           th:action="'/profile/@' + ${preferred_username} + '/settings'">
-                        <div class="mb-3">
-                            <select class="form-select" id="communication_preference"
-                                    name="communication_preference">
-                                <option value="" th:selected="${communication_preference == ''}">
-                                    No preference
-                                </option>
-                                <option th:each="pref : ${communication_preferences}"
-                                        th:value="${pref['value']}"
-                                        th:selected="${communication_preference == pref['value']}"
-                                        th:text="${pref['label']}"></option>
-                            </select>
-                            <div id="emailSmsWarning" class="form-text d-none">
-                                Note: Your
-                                <span id="emailWarningLabel">email address</span><span
-                                    id="smsWarningLabel" class="d-none">phone number</span>
-                                will be visible to all members on your profile.
+                        <fieldset class="contact-options mb-3" aria-describedby="contactPreferenceHint">
+                            <legend class="visually-hidden">How members can reach you</legend>
+                            <div class="contact-option" th:each="opt : ${contact_options}"
+                                 th:classappend="${opt['value'] == 'NONE'} ? 'contact-option-none' : ''">
+                                <input class="contact-option-input" type="radio"
+                                       name="communication_preference"
+                                       th:id="|contact_${opt['value']}|"
+                                       th:value="${opt['value']}"
+                                       th:checked="${communication_preference == opt['value']}"
+                                       th:attr="data-link-state=${opt['link_state']}">
+                                <label class="contact-option-card" th:for="|contact_${opt['value']}|">
+                                    <img th:if="${opt['image'] != null}" class="contact-option-icon"
+                                         th:src="${opt['image']}" alt="" width="32" height="32">
+                                    <span th:if="${opt['icon'] != null}"
+                                          class="material-symbols-outlined contact-option-icon"
+                                          aria-hidden="true" th:text="${opt['icon']}"></span>
+                                    <span class="contact-option-body">
+                                        <span class="contact-option-title" th:text="${opt['label']}"></span>
+                                        <span class="contact-option-desc" th:text="${opt['description']}"></span>
+                                        <span th:if="${opt['link_state'] == 'linked'}"
+                                              class="contact-option-status text-success">
+                                            <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+                                            Linked<th:block th:if="${opt['link_detail'] != null}"
+                                                            th:text="| as ${opt['link_detail']}|"></th:block>
+                                        </span>
+                                        <span th:if="${opt['link_state'] == 'unlinked'}"
+                                              class="contact-option-status text-danger">
+                                            <span class="material-symbols-outlined" aria-hidden="true">link_off</span>
+                                            Not linked yet
+                                        </span>
+                                    </span>
+                                    <span class="material-symbols-outlined contact-option-check"
+                                          aria-hidden="true">check_circle</span>
+                                </label>
                             </div>
-                            <div id="unlinkedAccountWarning" class="form-text text-danger d-none"
-                                 th:attr="data-talk-linked=${discourse_linked},
-                                          data-discord-linked=${discord_linked}">
-                                Your <span id="unlinkedAccountLabel">Talk</span> account isn't linked
-                                to your profile yet. You can save this preference, but members won't
-                                see it until you link your account.
-                                <a id="unlinkedAccountLink" href="/link-discourse">Link account</a>
-                            </div>
+                        </fieldset>
+                        <div id="unlinkedAccountWarning" class="form-text text-danger mb-3 d-none"
+                             role="status">
+                            Your <span id="unlinkedAccountLabel">Talk</span> account isn't linked
+                            to your profile yet. You can save this preference, but members won't
+                            see it until you link your account.
+                            <a id="unlinkedAccountLink" href="/link-discourse">Link account</a>
                         </div>
                         <button type="submit" class="btn btn-primary" id="saveBtn" disabled>Save</button>
                     </form>
@@ -307,59 +324,53 @@
 <!-- Page Loader (REQUIRED for all pages) -->
 <script src="/static/js/dms-page-loader.js" defer></script>
 
-<!-- Communication preference warning toggle -->
+<!-- Contact preference cards -->
 <script>
     (function() {
         'use strict';
-        const select = document.getElementById('communication_preference');
-        const warning = document.getElementById('emailSmsWarning');
-        const emailLabel = document.getElementById('emailWarningLabel');
-        const smsLabel = document.getElementById('smsWarningLabel');
-        if (!select || !warning) return;
+        const radios = Array.from(
+            document.querySelectorAll('input[name="communication_preference"]'));
 
         const saveBtn = document.getElementById('saveBtn');
-        const initialValue = select.value;
+        const initialRadio = radios.find(function(r) { return r.checked; });
+        const initialValue = initialRadio ? initialRadio.value : '';
 
         const unlinkedWarning = document.getElementById('unlinkedAccountWarning');
         const unlinkedLabel = document.getElementById('unlinkedAccountLabel');
         const unlinkedLink = document.getElementById('unlinkedAccountLink');
-        const talkLinked = unlinkedWarning && unlinkedWarning.dataset.talkLinked === 'true';
-        const discordLinked = unlinkedWarning && unlinkedWarning.dataset.discordLinked === 'true';
+
+        function selected() {
+            return radios.find(function(r) { return r.checked; });
+        }
 
         function updateSaveButton() {
             if (!saveBtn) return;
-            const value = select.value;
-            saveBtn.disabled = (value === '') || (value === initialValue);
+            const current = selected();
+            saveBtn.disabled = !current || current.value === initialValue;
         }
 
         function updateWarnings() {
-            const value = select.value;
-            warning.classList.toggle('d-none', value !== 'EMAIL' && value !== 'SMS');
-            emailLabel.classList.toggle('d-none', value !== 'EMAIL');
-            smsLabel.classList.toggle('d-none', value !== 'SMS');
-
+            const current = selected();
+            const unlinked = !!current && current.dataset.linkState === 'unlinked';
+            radios.forEach(function(r) {
+                r.nextElementSibling.classList.toggle('is-unlinked', r === current && unlinked);
+            });
             if (!unlinkedWarning) return;
-            const unlinked =
-                (value === 'DISCOURSE' && !talkLinked) ||
-                (value === 'DISCORD' && !discordLinked);
             unlinkedWarning.classList.toggle('d-none', !unlinked);
-            select.classList.toggle('is-invalid', unlinked);
-            if (value === 'DISCOURSE') {
+            if (!unlinked) return;
+            if (current.value === 'DISCOURSE') {
                 unlinkedLabel.textContent = 'Talk';
-                if (unlinkedLink) {
-                    unlinkedLink.href = '/link-discourse?pref=' + encodeURIComponent(value);
-                }
-            }
-            if (value === 'DISCORD') {
+                unlinkedLink.href = '/link-discourse?pref=DISCOURSE';
+            } else if (current.value === 'DISCORD') {
                 unlinkedLabel.textContent = 'Discord';
-                if (unlinkedLink) {
-                    unlinkedLink.href = '/link-discord?pref=' + encodeURIComponent(value);
-                }
+                unlinkedLink.href = '/link-discord?pref=DISCORD';
             }
         }
 
-        select.addEventListener('change', updateWarnings);
-        select.addEventListener('change', updateSaveButton);
+        radios.forEach(function(r) {
+            r.addEventListener('change', updateWarnings);
+            r.addEventListener('change', updateSaveButton);
+        });
         updateWarnings();
         updateSaveButton();
 

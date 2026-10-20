@@ -96,10 +96,12 @@ constructor(
             "preferred_username" to requestedUsername,
             "is_self" to (requestedUsername == currentUsername).toString(),
             "authz" to authz,
-            "communication_preferences" to
-                CommunicationPreference.entries.map { pref ->
-                  mapOf("value" to pref.name, "label" to pref.label)
-                },
+            "contact_options" to
+                contactOptions(
+                    talkLinked = memberValue?.let { it.discourseUsername?.isNotEmpty() == true },
+                    talkUsername = memberValue?.discourseUsername,
+                    discordLinked = memberValue?.let { it.discordUserId?.isNotEmpty() == true },
+                    discordUsername = memberValue?.discordUsername),
             "communication_preference" to
                 (settings.await()[COMMUNICATION_PREFERENCE_KEY] ?: ""),
             "member_loaded" to (memberValue != null),
@@ -181,11 +183,13 @@ constructor(
       currentUsername: String?,
       params: Parameters,
   ) {
+    val preference = params[COMMUNICATION_PREFERENCE_KEY]
+    if (CommunicationPreference.entries.none { it.name == preference }) {
+      call.respond(HttpStatusCode.BadRequest)
+      return
+    }
     memberService.updateMemberSettings(
-        requestedUsername,
-        currentUsername,
-        params[COMMUNICATION_PREFERENCE_KEY],
-        session.sessionId)
+        requestedUsername, currentUsername, preference, session.sessionId)
 
     // The profile shows the "updated" toast (see ProfileHandler.setToastMessage).
     call.sessions.set(session.copy(isSettingsUpdateSuccess = true))
@@ -197,6 +201,62 @@ constructor(
     const val TALK_UNLINKED = "talk-unlinked"
     const val DISCORD_UNLINKED = "discord-unlinked"
   }
+}
+
+/**
+ * The cards on the contact preference form. Talk and Discord carry a `link_state` ("linked" or
+ * "unlinked", absent when the member couldn't be loaded) so the card can show whether choosing it
+ * will actually reach the member.
+ */
+internal fun contactOptions(
+    talkLinked: Boolean?,
+    talkUsername: String?,
+    discordLinked: Boolean?,
+    discordUsername: String?,
+): List<Map<String, Any?>> {
+  fun option(
+      pref: CommunicationPreference,
+      description: String,
+      icon: String? = null,
+      image: String? = null,
+      linked: Boolean? = null,
+      username: String? = null,
+  ) =
+      mapOf(
+          "value" to pref.name,
+          "label" to pref.label,
+          "description" to description,
+          "icon" to icon,
+          "image" to image,
+          "link_state" to linked?.let { if (it) "linked" else "unlinked" },
+          "link_detail" to username?.takeIf { it.isNotEmpty() }?.let { "@$it" })
+
+  return listOf(
+      option(
+          CommunicationPreference.EMAIL,
+          "Members see your email address on your profile.",
+          icon = "mail"),
+      option(
+          CommunicationPreference.DISCOURSE,
+          "Members message you on Talk.",
+          image = "/static/images/discourse.svg",
+          linked = talkLinked,
+          username = talkUsername),
+      option(
+          CommunicationPreference.DISCORD,
+          "Members message you on Discord.",
+          image = "/static/images/discord.svg",
+          linked = discordLinked,
+          username = discordUsername),
+      option(
+          CommunicationPreference.SMS,
+          "Members see your phone number on your profile.",
+          icon = "sms"),
+      option(
+          CommunicationPreference.NONE,
+          "Members won't see a way to reach you.",
+          icon = "visibility_off"),
+  )
 }
 
 /** Toast for the settings page's `updated` query parameter, if it names a known change. */

@@ -8,14 +8,15 @@ import kotlinx.serialization.Serializable
  *
  * Email and SMS are opt-in: choosing them makes the member's contact details (personal email /
  * phone number) visible to other members, so the default is "unset" (absent) rather than a specific
- * method.
+ * method. [NONE] is a deliberate "don't list a contact method" answer, distinct from unset.
  */
 @Serializable
 enum class CommunicationPreference(val label: String) {
   EMAIL("Email"),
   DISCOURSE("Talk"),
   DISCORD("Discord"),
-  SMS("Text/SMS");
+  SMS("Text/SMS"),
+  NONE("None");
 
   companion object {
     fun fromValue(value: String): CommunicationPreference =

@@ -63,6 +63,15 @@ class MemberSettingsServiceTest {
   }
 
   @Test
+  fun `updateSettings stores the deliberate NONE contact preference`() = runBlocking {
+    whenever(mockRepository.getProfileId("user1")).thenReturn(1)
+
+    service.updateSettings("user1", mapOf("communication_preference" to "NONE"), "user1")
+
+    verify(mockRepository).append(eq(1), eq("communication_preference"), eq("NONE"), eq(1))
+  }
+
+  @Test
   fun `updateSettings appends valid value with actor`() = runBlocking {
     whenever(mockRepository.getProfileId("user1")).thenReturn(1)
     whenever(mockRepository.getProfileId("admin")).thenReturn(2)
