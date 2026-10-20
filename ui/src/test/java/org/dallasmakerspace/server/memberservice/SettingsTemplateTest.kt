@@ -93,6 +93,21 @@ class SettingsTemplateTest {
   }
 
   @Test
+  fun unlinkedNoteIsNotDescribingTheRadioUntilSelected() {
+    val html = render()
+
+    assertFalse(radio(html, "DISCORD").contains("_warn"))
+    assertTrue(html.contains("id=\"contact_DISCORD_warn\""))
+  }
+
+  @Test
+  fun bannerReminderCopyShowsOnlyToTheMemberThemselves() {
+    assertTrue(render().contains("Saving"))
+    assertFalse(render(isSelf = false).contains("clears the"))
+    assertFalse(render(saved = "EMAIL").contains("clears the"))
+  }
+
+  @Test
   fun linkStateIsUnavailableWhenMemberDidNotLoad() {
     val html = render(talkLinked = null, discordLinked = null)
 

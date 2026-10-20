@@ -249,12 +249,12 @@ div.error-details > p { color: #c1c1c1; }
     gap: 14px;
     padding: 14px 16px;
     background: #fff;
-    border: 2px solid #adb5bd;
+    border: 2px solid #6c757d;
     border-radius: 8px;
     transition: border-color 0.15s, background-color 0.15s;
 }
 .contact-option-input:hover + .contact-option-card {
-    border-color: #6c757d;
+    border-color: #495057;
     background: #f8f9fa;
 }
 .contact-option-input:focus-visible + .contact-option-card {
@@ -267,7 +267,7 @@ div.error-details > p { color: #c1c1c1; }
 }
 /* Savable but incomplete: amber, not error red. */
 .contact-option-input[data-link-state="unlinked"]:checked + .contact-option-card {
-    border-color: #cc9a06;
+    border-color: #8a6a00;
     background: #fff3cd;
 }
 .contact-option-warning {
@@ -280,7 +280,7 @@ div.error-details > p { color: #c1c1c1; }
     color: #664d03;
     font-size: 0.875rem;
 }
-.contact-option-warning a {
+.contact-option-warning a:not(.btn) {
     color: #664d03;
 }
 .contact-option-input:checked ~ .contact-option-warning {
@@ -346,7 +346,7 @@ div.error-details > p { color: #c1c1c1; }
     width: 24px;
     height: 24px;
     box-sizing: border-box;
-    border: 2px solid #adb5bd;
+    border: 2px solid #6c757d;
     border-radius: 50%;
     font-size: 0;
     color: var(--bs-primary, #0d6efd);
@@ -357,7 +357,31 @@ div.error-details > p { color: #c1c1c1; }
     line-height: 24px;
 }
 .contact-option-input[data-link-state="unlinked"]:checked + .contact-option-card .contact-option-check {
-    color: #cc9a06;
+    color: #8a6a00;
+}
+/* The icon font's own size rule would otherwise win over the image icons' 32px. */
+.contact-option-icon.material-symbols-outlined {
+    font-size: 32px;
+}
+.contact-option-status {
+    align-items: flex-start;
+}
+/* Keeps Save in reach below the cards on short screens. */
+.contact-save-bar {
+    position: sticky;
+    bottom: 0;
+    padding: 12px 0;
+    background: #f8f9fa;
+    z-index: 2;
+}
+@media (forced-colors: active) {
+    .contact-option-input:checked + .contact-option-card {
+        border-color: Highlight;
+        outline: 2px solid Highlight;
+    }
+    .contact-option-input:checked + .contact-option-card .contact-option-check {
+        border-color: Highlight;
+    }
 }
 
 
