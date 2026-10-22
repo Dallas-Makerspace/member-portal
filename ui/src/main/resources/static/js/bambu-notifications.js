@@ -35,7 +35,7 @@
             var result = await response.json().catch(function () { return {}; });
             if (response.ok && result.data && result.data.id) {
                 setArmed(btn, result.data.id);
-                showToast('Reminder set — we\'ll email you about this print.', 'success');
+                showToast('Reminder set — we\'ll notify you about this print.', 'success');
             } else {
                 showToast(result.message || 'Could not set the reminder. Please try again.', 'danger');
             }
