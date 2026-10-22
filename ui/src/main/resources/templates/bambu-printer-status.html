@@ -98,6 +98,18 @@
         </button>
     </div>
 
+    <!-- Committee offline alerts: the shared subscribe button for bambu.committee-alerts. Only
+         rendered when notifications are enabled for the viewer and the status call succeeded. -->
+    <div th:if="${committeeSubscription != null}" class="card mb-3">
+        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
+            <div>
+                <div class="fw-semibold">3D printer offline alerts</div>
+                <div class="text-muted small">One email when a printer stays offline for about 5 minutes.</div>
+            </div>
+            <th:block th:replace="~{fragments/subscribe-button :: button(${committeeSubscription})}"></th:block>
+        </div>
+    </div>
+
     <div th:if="${printers == null or printers.empty}" class="text-center text-muted py-5">
         No printers reported by Bambuddy right now.
     </div>
@@ -197,12 +209,46 @@
                             <div th:if="${p.layerDisplay != ''}" class="text-muted small mt-1">
                                 Layer <span th:text="${p.layerDisplay}"></span>
                             </div>
+                            <!-- One-shot watches (bambu-notifications): your own print gets
+                                 its notify button here; anyone else's print gets the
+                                 printer-available button instead. Never both. -->
+                            <div th:if="${p.isOwnCurrentJob}" class="mt-2">
+                                <button type="button" class="btn btn-sm bambu-watch-btn"
+                                        th:classappend="${p.currentJobWatchId != null} ? 'btn-outline-primary' : 'btn-primary'"
+                                        th:attr="data-scope='OWN_JOB',data-printer-id=${p.id},data-queue-id=${p.currentQueueId},data-watch-id=${p.currentJobWatchId}">
+                                    <span class="material-symbols-outlined align-middle" style="font-size:16px;"
+                                          th:text="${p.currentJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
+                                    <span class="bambu-watch-label"
+                                          th:text="${p.currentJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this finishes'"></span>
+                                </button>
+                            </div>
+                            <div th:if="${p.notificationsEnabled and !p.isOwnCurrentJob}" class="mt-2">
+                                <button type="button" class="btn btn-sm bambu-watch-btn"
+                                        th:classappend="${p.availableWatchId != null} ? 'btn-outline-primary' : 'btn-outline-secondary'"
+                                        th:attr="data-scope='PRINTER_AVAILABLE',data-printer-id=${p.id},data-watch-id=${p.availableWatchId}">
+                                    <span class="material-symbols-outlined align-middle" style="font-size:16px;"
+                                          th:text="${p.availableWatchId != null} ? 'notifications_active' : 'notifications'"></span>
+                                    <span class="bambu-watch-label"
+                                          th:text="${p.availableWatchId != null} ? 'Watching · Cancel' : 'Notify me when free'"></span>
+                                </button>
+                            </div>
                         </div>
 
                         <div th:if="${p.isIdle}" class="d-flex align-items-center gap-2 small text-success-emphasis">
                             <span class="material-symbols-outlined" style="font-size:18px;">check_circle</span>
                             <span th:if="${p.nextJobName}">Next up: <span th:text="${p.nextJobName}"></span></span>
                             <span th:unless="${p.nextJobName}">Ready for a print.</span>
+                        </div>
+
+                        <div th:if="${p.isOwnNextJob}" class="mt-2">
+                            <button type="button" class="btn btn-sm bambu-watch-btn"
+                                    th:classappend="${p.nextJobWatchId != null} ? 'btn-outline-primary' : 'btn-primary'"
+                                    th:attr="data-scope='OWN_JOB',data-printer-id=${p.id},data-queue-id=${p.nextQueueId},data-watch-id=${p.nextJobWatchId}">
+                                <span class="material-symbols-outlined align-middle" style="font-size:16px;"
+                                      th:text="${p.nextJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
+                                <span class="bambu-watch-label"
+                                      th:text="${p.nextJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this finishes'"></span>
+                            </button>
                         </div>
 
                         <div th:if="${p.state == 'FINISH'}" class="printer-info-panel">
@@ -263,6 +309,8 @@
     </div>
 </div>
 
+<th:block th:replace="~{fragments/toast :: toast}"></th:block>
+
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
@@ -272,6 +320,8 @@
 <!-- Page Loader (REQUIRED for all pages) -->
 <script src="/static/js/dms-page-loader.js" defer></script>
 <script type="module" src="/static/js/dms-member-card.js"></script>
+<script src="/static/js/dms-subscribe-button.js" th:if="${committeeSubscription != null}"></script>
+<script src="/static/js/bambu-notifications.js" th:if="${notificationsEnabled}"></script>
 
 <script>
 (function () {

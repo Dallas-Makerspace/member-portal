@@ -88,7 +88,7 @@ class CalendarEventWebhookTest {
 
   private suspend fun givenFanOut(result: FanOutResult) {
     whenever(
-            mockNotifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any()))
+            mockNotifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any()))
         .thenReturn(result)
   }
 
@@ -100,7 +100,8 @@ class CalendarEventWebhookTest {
             eq("event-announcement"),
             payload.capture(),
             eq(Channel.EMAIL),
-            dedupe.capture())
+            dedupe.capture(),
+            any())
   }
 
   @Test
@@ -143,7 +144,7 @@ class CalendarEventWebhookTest {
     assertTrue(result.success)
     assertTrue(result.message.contains("No followers"))
     verify(mockNotifications, never())
-        .createForMembers(any(), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any())
     Unit
   }
 
@@ -176,7 +177,7 @@ class CalendarEventWebhookTest {
     assertTrue(result.message.contains("Ignoring event_type=event.updated"))
     verify(mockSubscriptions, never()).getFollowers(any())
     verify(mockNotifications, never())
-        .createForMembers(any(), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any())
     Unit
   }
 

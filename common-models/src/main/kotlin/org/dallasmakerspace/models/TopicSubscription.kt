@@ -6,6 +6,11 @@ import kotlinx.serialization.Serializable
 object TopicKeys {
   const val FOLLOWING = "EVENT_ANNOUNCEMENT"
   const val COMMITTEE_UPDATES = "COMMITTEE_UPDATES"
+  const val BAMBU_PRINT_FINISHED = "bambu.print.finished"
+  const val BAMBU_PRINT_ACTION_REQUIRED = "bambu.print.action-required"
+  const val BAMBU_PRINTER_AVAILABLE = "bambu.printer.available"
+  const val BAMBU_WATCH = "bambu.watch"
+  const val BAMBU_COMMITTEE_ALERTS = "bambu.committee-alerts"
 }
 
 @Serializable

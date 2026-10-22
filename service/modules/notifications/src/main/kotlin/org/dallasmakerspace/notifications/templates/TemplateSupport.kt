@@ -18,6 +18,9 @@ fun memberProfileUrl(username: String): String = "$MEMBER_PORTAL_BASE_URL/profil
 fun notificationPreferencesUrl(username: String): String =
     "$MEMBER_PORTAL_BASE_URL/profile/@$username/notifications"
 
+/** Link to the Bambu 3D printer status page. */
+fun bambuStatusUrl(): String = "$MEMBER_PORTAL_BASE_URL/committees/3d-fab/printers"
+
 /**
  * Plain-text preview of already-plain text (e.g. a calendar event description): whitespace
  * collapsed, cut at a word boundary to at most [maxLength] characters plus an ellipsis. Escape the

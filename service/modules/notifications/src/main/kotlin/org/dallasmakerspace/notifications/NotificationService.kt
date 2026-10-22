@@ -159,6 +159,7 @@ constructor(
       payload: String?,
       channel: Channel = Channel.EMAIL,
       dedupeKey: (String) -> String? = { null },
+      consentOverride: Boolean = false,
   ): FanOutResult {
     validate(topic, templateName, channel)
     val recipients = memberUsernames.filter { it.isNotBlank() }.distinct()
@@ -179,7 +180,8 @@ constructor(
               channel,
               dedupeKey(username),
               rendered,
-              memberActive = username in active)
+              memberActive = username in active,
+              consentOverride = consentOverride)
       when (outcome) {
         FanOutOutcome.CREATED -> created++
         FanOutOutcome.DUPLICATE -> duplicates++
@@ -205,13 +207,15 @@ constructor(
       dedupeKey: String?,
       rendered: RenderedNotification,
       memberActive: Boolean,
+      consentOverride: Boolean = false,
   ): FanOutOutcome =
       try {
         if (dedupeKey?.let { repository.getByDedupeKey(it) } != null) {
           FanOutOutcome.DUPLICATE
         } else {
           insert(
-              CreateNotificationRequest(username, topic, templateName, payload, channel, dedupeKey),
+              CreateNotificationRequest(
+                  username, topic, templateName, payload, channel, dedupeKey, consentOverride),
               rendered,
               memberActive)
           FanOutOutcome.CREATED
@@ -262,6 +266,15 @@ constructor(
     val enabled = preference?.enabled != false
     val aggregation = effectiveAggregation(request.channel, preference?.aggregation)
 
+    // Guardrail (architect review): the override silently defeating a member's explicit
+    // opt-out must be visible. Log exactly that case — member, topic and dedupe key — so a
+    // "why did I get this?" question is answerable. Semantics are unchanged.
+    if (request.consentOverride && !enabled) {
+      log.warn(
+          "consentOverride defeated disabled preference: member=${request.memberUsername} " +
+              "topic=${request.topic.key} dedupeKey=${request.dedupeKey}")
+    }
+
     val (status, reason) =
         when {
           suppression != null ->
@@ -269,7 +282,11 @@ constructor(
           !memberActive ->
               NotificationStatus.SKIPPED to
                   "Member is inactive; topic ${request.topic.key} does not notify inactive members"
-          !enabled -> NotificationStatus.SKIPPED to "Disabled in notification preferences"
+          // consentOverride defeats only this on/off drop (a one-shot click is newer, narrower
+          // consent than the standing toggle); suppression, inactive and aggregation above/below
+          // are untouched, so digest/cap/hold shaping still applies to overriding creates.
+          !enabled && !request.consentOverride ->
+              NotificationStatus.SKIPPED to "Disabled in notification preferences"
           aggregation != Aggregation.IMMEDIATE -> NotificationStatus.IN_DIGEST to null
           else -> NotificationStatus.QUEUED to null
         }

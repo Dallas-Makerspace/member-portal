@@ -79,12 +79,12 @@ class CommitteeClassAnnouncerTest {
   }
 
   private suspend fun givenFanOut() {
-    whenever(notifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any()))
+    whenever(notifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any()))
         .thenReturn(FanOutResult(created = 1, duplicates = 0, failed = 0))
   }
 
   private suspend fun verifyNothingSent() {
-    verify(notifications, never()).createForMembers(any(), any(), any(), anyOrNull(), any(), any())
+    verify(notifications, never()).createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any())
   }
 
   private val noPreview: EventPreviewProvider = { EventPreview() }
@@ -114,7 +114,8 @@ class CommitteeClassAnnouncerTest {
                 eq("committee-class"),
                 payload.capture(),
                 eq(Channel.EMAIL),
-                dedupe.capture())
+                dedupe.capture(),
+                eq(false)) // announcer fan-out: standing consent, never a consent override
         assertTrue(payload.lastValue.contains("\"committeeName\":\"Laser\""))
         assertTrue(payload.lastValue.contains("\"eventName\":\"Intro to Laser Cutting\""))
         assertTrue(payload.lastValue.contains("Mon Aug 10 7:00 PM"))
@@ -135,7 +136,7 @@ class CommitteeClassAnnouncerTest {
     }
 
     verify(notifications)
-        .createForMembers(any(), any(), any(), payload.capture(), any(), any())
+        .createForMembers(any(), any(), any(), payload.capture(), any(), any(), any())
     assertTrue(
         payload.lastValue.contains("\"imageUrl\":\"https://calendar.example.org/files/1/a.png\""),
         payload.lastValue)
@@ -185,7 +186,7 @@ class CommitteeClassAnnouncerTest {
     announcer.announce(event, "", emptySet(), noPreview)
 
     verify(notifications)
-        .createForMembers(any(), any(), any(), anyOrNull(), any(), dedupe.capture())
+        .createForMembers(any(), any(), any(), anyOrNull(), any(), dedupe.capture(), any())
     assertEquals("committee-class-77-bob", dedupe.lastValue("bob"))
   }
 
@@ -199,7 +200,7 @@ class CommitteeClassAnnouncerTest {
     announcer.announce(event, "", alreadyNotified = setOf("alice"), preview = noPreview)
 
     verify(notifications)
-        .createForMembers(eq(listOf("bob")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("bob")), any(), any(), anyOrNull(), any(), any(), any())
     Unit
   }
 
@@ -247,7 +248,7 @@ class CommitteeClassAnnouncerTest {
     announcer.announce(event, "", emptySet(), noPreview)
 
     verify(notifications)
-        .createForMembers(eq(listOf("alice", "bob")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("alice", "bob")), any(), any(), anyOrNull(), any(), any(), any())
     Unit
   }
 
@@ -262,7 +263,7 @@ class CommitteeClassAnnouncerTest {
     announcer.announce(event, "", emptySet(), noPreview)
 
     verify(notifications)
-        .createForMembers(eq(listOf("alice", "ghost")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("alice", "ghost")), any(), any(), anyOrNull(), any(), any(), any())
     Unit
   }
 
@@ -281,7 +282,7 @@ class CommitteeClassAnnouncerTest {
 
     verify(ad, times(3)).getMembersByUsernameList(any())
     verify(notifications)
-        .createForMembers(eq(names), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(names), any(), any(), anyOrNull(), any(), any(), any())
     Unit
   }
 }

@@ -11,6 +11,7 @@ import org.dallasmakerspace.server.bambustatus.BambuCameraApiHandler
 import org.dallasmakerspace.server.bambustatus.BambuCameraProxyClient
 import org.dallasmakerspace.server.bambustatus.BambuModelIconApiHandler
 import org.dallasmakerspace.server.bambustatus.BambuPrinterStatusHandler
+import org.dallasmakerspace.server.bambustatus.BambuWatchApiHandler
 import org.dallasmakerspace.server.bambustatus.BambuStatusCommitteeSection
 import org.dallasmakerspace.server.committees.CommitteePageSectionProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -49,6 +50,26 @@ abstract class BambuStatusModule {
         memberServiceClient: MemberServiceClient,
     ): IRouteHandler =
         BambuCameraApiHandler(loggerFactory, userInfoProvider, bambuCameraProxyClient, memberServiceClient)
+
+    @IntoMap
+    @Provides
+    @StringKey("/bambu-api/watches")
+    fun providesBambuWatchApiHandler(
+        loggerFactory: LoggerFactory,
+        userInfoProvider: UserInfoProvider,
+        memberServiceClient: MemberServiceClient,
+    ): IRouteHandler =
+        BambuWatchApiHandler(loggerFactory, userInfoProvider, memberServiceClient)
+
+    @IntoMap
+    @Provides
+    @StringKey("/bambu-api/watches/{id}")
+    fun providesBambuWatchDeleteApiHandler(
+        loggerFactory: LoggerFactory,
+        userInfoProvider: UserInfoProvider,
+        memberServiceClient: MemberServiceClient,
+    ): IRouteHandler =
+        BambuWatchApiHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
     @IntoMap
     @Provides

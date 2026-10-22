@@ -101,6 +101,40 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val BAMBU_NOTIFICATIONS_ENABLED =
+      ConfigKey(
+          key = "bambu-notifications.enabled",
+          description =
+              "Enable Bambu printer notifications (one-shot print watches and committee " +
+                  "printer-offline alerts, backed by Bambuddy webhooks); can be piloted for " +
+                  "specific members/AD groups before a full rollout",
+          category = "3D Fab",
+          defaultValue = FeatureFlagValue(enabled = false),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
+  val BAMBU_NOTIFICATIONS_OFFLINE_HOLD_MINUTES =
+      ConfigKey(
+          key = "bambu-notifications.offline-hold-minutes",
+          description =
+              "Minutes a printer-offline committee alert is held before it is re-checked " +
+                  "against Bambuddy and (only if the printer is still offline) sent",
+          category = "3D Fab",
+          defaultValue = 5,
+          type = ConfigValueType.IntType,
+      )
+
+  val BAMBU_NOTIFICATIONS_TOMBSTONE_RETENTION_DAYS =
+      ConfigKey(
+          key = "bambu-notifications.tombstone-retention-days",
+          description =
+              "Days a fired/expired/cancelled Bambu print watch (or resolved offline alert) " +
+                  "row is kept for support/debugging before the sweeper purges it",
+          category = "3D Fab",
+          defaultValue = 7,
+          type = ConfigValueType.IntType,
+      )
+
   val MOODLE_ENABLED =
       ConfigKey(
           key = "moodle.enabled",
@@ -241,6 +275,9 @@ object ConfigRegistry {
           REMOTE_ACCESS_MASTERCAM_CONNECTION_IDS,
           REMOTE_ACCESS_MASTERCAM_AD_GROUP,
           BAMBU_STATUS_ENABLED,
+          BAMBU_NOTIFICATIONS_ENABLED,
+          BAMBU_NOTIFICATIONS_OFFLINE_HOLD_MINUTES,
+          BAMBU_NOTIFICATIONS_TOMBSTONE_RETENTION_DAYS,
           MOODLE_ENABLED,
           WAIVER_REPORT_ALLOWED_USERNAMES,
           NOTIFICATIONS_ENABLED,

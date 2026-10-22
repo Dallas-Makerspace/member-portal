@@ -51,7 +51,7 @@ class DiscoursePostWebhookTest {
       whenever(subscriptions.getFollowers("jdoe")).thenReturn(listOf("alice", "bob"))
       whenever(activeDirectory.getMembersByUsernameList(listOf("jdoe")))
           .thenReturn(mapOf("jdoe" to adUser("Jane Doe")))
-      whenever(notifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any()))
+      whenever(notifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any()))
           .thenReturn(FanOutResult(created = 2, duplicates = 0, failed = 0))
     }
   }
@@ -108,7 +108,7 @@ class DiscoursePostWebhookTest {
     val result = handler.handleWebhook(body)
     assertTrue(result.success, result.message)
     assertTrue(result.message.contains(fragment), result.message)
-    verify(notifications, never()).createForMembers(any(), any(), any(), anyOrNull(), any(), any())
+    verify(notifications, never()).createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any())
   }
 
   @Test
@@ -126,7 +126,8 @@ class DiscoursePostWebhookTest {
             eq("project-post"),
             payload.capture(),
             any(),
-            dedupe.capture())
+            dedupe.capture(),
+            any())
     assertTrue(payload.lastValue.contains("\"memberName\":\"Jane Doe\""))
     assertTrue(payload.lastValue.contains("https://talk.dallasmakerspace.org/uploads/big.png"))
     assertEquals("project-post-900-alice", dedupe.lastValue("alice"))
@@ -141,7 +142,7 @@ class DiscoursePostWebhookTest {
 
     val payload = argumentCaptor<String>()
     verify(notifications)
-        .createForMembers(any(), any(), any(), payload.capture(), any(), any())
+        .createForMembers(any(), any(), any(), payload.capture(), any(), any(), any())
     assertTrue(payload.lastValue.contains("\"memberName\":\"jdoe\""))
   }
 

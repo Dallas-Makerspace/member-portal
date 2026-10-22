@@ -94,12 +94,12 @@ class MoodleCourseAnnouncerTest {
   }
 
   private suspend fun givenFanOut(result: FanOutResult = FanOutResult(1, 0, 0)) {
-    whenever(notifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any()))
+    whenever(notifications.createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any()))
         .thenReturn(result)
   }
 
   private suspend fun verifyNothingSent() =
-      verify(notifications, never()).createForMembers(any(), any(), any(), anyOrNull(), any(), any())
+      verify(notifications, never()).createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any())
 
   private fun adUser(username: String, vararg groups: String) =
       ADUser(
@@ -177,7 +177,8 @@ class MoodleCourseAnnouncerTest {
                 eq("committee-course"),
                 payload.capture(),
                 eq(Channel.EMAIL),
-                dedupe.capture())
+                dedupe.capture(),
+                any())
         assertTrue(payload.lastValue.contains("\"courseName\":\"Example Course 2\""))
         assertTrue(payload.lastValue.contains("\"committeeName\":\"Laser\""))
         assertTrue(payload.lastValue.contains("course/view.php?id=2"))
@@ -201,7 +202,7 @@ class MoodleCourseAnnouncerTest {
         announcer.announce()
 
         verify(notifications, org.mockito.kotlin.times(1))
-            .createForMembers(any(), any(), any(), anyOrNull(), any(), any())
+            .createForMembers(any(), any(), any(), anyOrNull(), any(), any(), any())
       }
 
   @Test
@@ -233,7 +234,7 @@ class MoodleCourseAnnouncerTest {
     announcer.announce()
 
     verify(notifications)
-        .createForMembers(eq(listOf("alice")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("alice")), any(), any(), anyOrNull(), any(), any(), any())
   }
 
   @Test
@@ -248,7 +249,7 @@ class MoodleCourseAnnouncerTest {
     announcer.announce()
 
     verify(notifications)
-        .createForMembers(eq(listOf("bob")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("bob")), any(), any(), anyOrNull(), any(), any(), any())
   }
 
   @Test
@@ -261,7 +262,7 @@ class MoodleCourseAnnouncerTest {
     announcer.announce()
 
     verify(notifications)
-        .createForMembers(eq(listOf("alice", "bob")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("alice", "bob")), any(), any(), anyOrNull(), any(), any(), any())
     verify(ad, never()).getMembersByUsernameList(any())
   }
 
@@ -276,9 +277,9 @@ class MoodleCourseAnnouncerTest {
     announcer.announce()
 
     verify(notifications)
-        .createForMembers(eq(listOf("alice")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("alice")), any(), any(), anyOrNull(), any(), any(), any())
     verify(notifications)
-        .createForMembers(eq(listOf("bob")), any(), any(), anyOrNull(), any(), any())
+        .createForMembers(eq(listOf("bob")), any(), any(), anyOrNull(), any(), any(), any())
     assertTrue(store.contains(ns, "2") && store.contains(ns, "3"))
   }
 

@@ -6,6 +6,9 @@ import javax.inject.Singleton
 import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.askai.di.AskAiModule
 import org.dallasmakerspace.bambuddy.BambuddyStatusService
+import org.dallasmakerspace.bambuddy.notifications.BambuNotificationSweeper
+import org.dallasmakerspace.bambuddy.notifications.EphemeralNotificationService
+import org.dallasmakerspace.bambuddy.notifications.webhook.BambuddyWebhookHandler
 import org.dallasmakerspace.calendar.CalendarService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.FeatureFlagService
@@ -141,6 +144,12 @@ interface AppComponent {
   fun getRemoteAccessService(): RemoteAccessService
 
   fun getBambuddyStatusService(): BambuddyStatusService
+
+  fun getBambuddyWebhookHandler(): BambuddyWebhookHandler
+
+  fun getEphemeralNotificationService(): EphemeralNotificationService
+
+  fun getBambuNotificationSweeper(): BambuNotificationSweeper
 
   fun getMoodleCatalogService(): MoodleCatalogService
 

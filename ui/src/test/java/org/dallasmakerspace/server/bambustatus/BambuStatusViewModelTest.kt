@@ -150,4 +150,121 @@ class BambuStatusViewModelTest {
 
     assertEquals("asmith", vm["previousPrintedByUsername"])
   }
+
+  // -------------------------------------------------------------------------------------------
+  // Notification watch state (bambu-notifications)
+  // -------------------------------------------------------------------------------------------
+
+  private fun watchedPrinter(
+      state: String = "RUNNING",
+      printedByUsername: String? = "jdoe",
+      nextPrintedByUsername: String? = null,
+  ): Map<String, Any?> =
+      mapOf(
+          "id" to 7,
+          "name" to "Printer 7",
+          "model" to "X1C",
+          "state" to state,
+          "progress" to 10,
+          "remainingTimeMinutes" to 90,
+          "layerNum" to null,
+          "totalLayers" to null,
+          "currentJobName" to "Current.3mf",
+          "nextJobName" to "Next.3mf",
+          "printedByUsername" to printedByUsername,
+          "nextPrintedByUsername" to nextPrintedByUsername,
+          "currentQueueId" to 70,
+          "nextQueueId" to 71,
+      )
+
+  private fun watchMap(id: Long, scope: String, printerId: Int = 7, queueId: Int): Map<String, Any?> =
+      mapOf(
+          "id" to id,
+          "scope" to scope,
+          "printerId" to printerId,
+          "queueId" to queueId,
+          "status" to "ARMED",
+      )
+
+  @Test
+  fun `the viewer's own current job is flagged and an armed watch is matched to it`() {
+    val vm =
+        buildPrinterViewModel(
+            watchedPrinter(),
+            viewerUsername = "jdoe",
+            watches = listOf(watchMap(5L, "OWN_JOB", queueId = 70)),
+            notificationsEnabled = true)
+
+    assertEquals(true, vm["isOwnCurrentJob"])
+    assertEquals(5L, vm["currentJobWatchId"])
+    assertEquals(null, vm["availableWatchId"])
+  }
+
+  @Test
+  fun `another member's job is not flagged as own, and their available watch is matched`() {
+    val vm =
+        buildPrinterViewModel(
+            watchedPrinter(printedByUsername = "asmith"),
+            viewerUsername = "jdoe",
+            watches = listOf(watchMap(9L, "PRINTER_AVAILABLE", queueId = 70)),
+            notificationsEnabled = true)
+
+    assertEquals(false, vm["isOwnCurrentJob"])
+    assertEquals(9L, vm["availableWatchId"])
+  }
+
+  @Test
+  fun `the viewer's queued next job is flagged with its watch`() {
+    val vm =
+        buildPrinterViewModel(
+            watchedPrinter(printedByUsername = "asmith", nextPrintedByUsername = "jdoe"),
+            viewerUsername = "jdoe",
+            watches = listOf(watchMap(6L, "OWN_JOB", queueId = 71)),
+            notificationsEnabled = true)
+
+    assertEquals(true, vm["isOwnNextJob"])
+    assertEquals(6L, vm["nextJobWatchId"])
+    assertEquals(false, vm["isOwnCurrentJob"])
+  }
+
+  @Test
+  fun `watch state is hidden when notifications are off for the viewer`() {
+    val vm =
+        buildPrinterViewModel(
+            watchedPrinter(),
+            viewerUsername = "jdoe",
+            watches = listOf(watchMap(5L, "OWN_JOB", queueId = 70)),
+            notificationsEnabled = false)
+
+    assertEquals(false, vm["isOwnCurrentJob"])
+    assertEquals(false, vm["isOwnNextJob"])
+    assertEquals(null, vm["currentJobWatchId"])
+    assertEquals(null, vm["availableWatchId"])
+  }
+
+  @Test
+  fun `a watch for a different printer or queue row does not match`() {
+    val vm =
+        buildPrinterViewModel(
+            watchedPrinter(),
+            viewerUsername = "jdoe",
+            watches =
+                listOf(
+                    watchMap(5L, "OWN_JOB", printerId = 8, queueId = 70),
+                    watchMap(6L, "OWN_JOB", queueId = 99)),
+            notificationsEnabled = true)
+
+    assertEquals(true, vm["isOwnCurrentJob"]) // ownership is about the job, not the watch
+    assertEquals(null, vm["currentJobWatchId"])
+  }
+
+  @Test
+  fun `no viewer means no own-job flags`() {
+    val vm =
+        buildPrinterViewModel(
+            watchedPrinter(), viewerUsername = null, notificationsEnabled = true)
+
+    assertEquals(false, vm["isOwnCurrentJob"])
+    assertEquals(false, vm["isOwnNextJob"])
+  }
 }

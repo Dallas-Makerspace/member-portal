@@ -3,6 +3,7 @@ package org.dallasmakerspace.plugins
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
+import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.plugins.swagger.*
 import io.ktor.server.request.*
@@ -25,6 +26,8 @@ import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.apiKey
 import org.dallasmakerspace.auth.authorize
+import org.dallasmakerspace.bambuddy.notifications.configuredBambuddyWebhookSecret
+import org.dallasmakerspace.bambuddy.routing.bambuWatchRoutes
 import org.dallasmakerspace.bambuddy.routing.bambuddyRoutes
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
@@ -81,6 +84,10 @@ import org.dallasmakerspace.workflows.routing.workflowRoutes
 
 /** Dev-only default for `app.notifications.webhook-token`; rejected outside development. */
 private const val DEV_NOTIFICATIONS_WEBHOOK_TOKEN = "dev-insecure-webhook-token-change-in-prod"
+
+
+/** Max accepted BamBuddy webhook body (~256 KB); legitimate v1 payloads are a few hundred bytes. */
+private const val BAMBU_WEBHOOK_MAX_BODY_BYTES = 256L * 1024L
 
 @Suppress("LongMethod")
 fun Application.configureRouting() {
@@ -180,6 +187,41 @@ fun Application.configureRouting() {
       }
   if (notificationsWebhookToken == null) {
     log.warn("NOTIFICATIONS_WEBHOOK_TOKEN not set; /webhook/notifications will reject all calls")
+  }
+
+  // BamBuddy webhook secret: the handler resolves and enforces it per call (fail closed) via
+  // the shared configuredBambuddyWebhookSecret(); this startup check only warns once at boot.
+  if (configuredBambuddyWebhookSecret(appConfig) == null) {
+    log.warn("BAMBUDDY_WEBHOOK_SECRET not set; /webhook/bambuddy will reject all calls")
+  }
+
+  // Bambu notification sweeper: expiry checks for due watches, offline-hold release, tombstone
+  // purge. Each pass no-ops while the feature is fully off.
+  if (appConfig.requireBooleanProperty("app.bambuddy.notifications.sweeper.enabled")) {
+    val bambuSweeper = AppComponentHolder.instance.getBambuNotificationSweeper()
+    val sweeperIntervalMs =
+        appConfig.requireLongProperty("app.bambuddy.notifications.sweeper-interval-ms")
+    launch {
+      while (isActive) {
+        // Each pass is isolated (design §10.1): a failure in one must not starve the others.
+        try {
+          bambuSweeper.processDueWatches()
+        } catch (e: Exception) {
+          log.error("Bambu notification sweeper processDueWatches failed: ${e.message}", e)
+        }
+        try {
+          bambuSweeper.releaseDueOfflineAlerts()
+        } catch (e: Exception) {
+          log.error("Bambu notification sweeper releaseDueOfflineAlerts failed: ${e.message}", e)
+        }
+        try {
+          bambuSweeper.purgeTombstones()
+        } catch (e: Exception) {
+          log.error("Bambu notification sweeper purgeTombstones failed: ${e.message}", e)
+        }
+        delay(sweeperIntervalMs)
+      }
+    }
   }
 
   routing {
@@ -1266,6 +1308,12 @@ fun Application.configureRouting() {
       val bambuddyStatusService by lazy { AppComponentHolder.instance.getBambuddyStatusService() }
       bambuddyRoutes(bambuddyStatusService)
 
+      /** Bambu print watches — arm/list/cancel one-shot notifications (actor = X-Username) * */
+      val ephemeralNotificationService by lazy {
+        AppComponentHolder.instance.getEphemeralNotificationService()
+      }
+      bambuWatchRoutes(ephemeralNotificationService, featureFlagService)
+
       /** Workflows — definitions, preflight, runs, operator actions, SSE streams * */
       workflowRoutes(
           workflowService,
@@ -1314,6 +1362,31 @@ fun Application.configureRouting() {
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */
     featureFlagRoutes(featureFlagService)
+
+    // BamBuddy's outbound notification webhooks: a dedicated route, NOT the generic webhook
+    // router below — BamBuddy authenticates with an Authorization bearer secret (which the
+    // generic route cannot see and must never log; it logs every header). Registered before
+    // post("/webhook/*") so it wins the match. Plain status response; BamBuddy only reads the
+    // code.
+    post("/webhook/bambuddy") {
+      val handler = AppComponentHolder.instance.getBambuddyWebhookHandler()
+      val authorization = call.request.headers[HttpHeaders.Authorization]
+      // Authenticate BEFORE buffering the body, and reject oversized requests: legitimate
+      // v1 payloads (photo off) are a few hundred bytes, so anything past ~256 KB is abuse
+      // or a misconfigured attach_photo — never worth reading into memory unauthenticated.
+      if (!handler.isRequestAuthorized(authorization)) {
+        call.respond(HttpStatusCode.Unauthorized)
+        return@post
+      }
+      val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+      if (contentLength != null && contentLength > BAMBU_WEBHOOK_MAX_BODY_BYTES) {
+        call.respond(HttpStatusCode.PayloadTooLarge)
+        return@post
+      }
+      val status =
+          handler.handle(authorization, call.receiveText(), call.request.origin.remoteHost)
+      call.respond(status)
+    }
 
     // The notifications webhook is protected by a shared secret token; calendar-event and other
     // externally-sourced webhooks stay public here the same way smartwaiver/groups-audit do - this

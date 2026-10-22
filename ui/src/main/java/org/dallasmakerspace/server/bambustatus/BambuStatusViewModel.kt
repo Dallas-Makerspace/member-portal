@@ -95,8 +95,17 @@ private fun resolveStateLabel(state: String): String =
  * a pure function so it's unit-testable without Ktor, matching the `buildMachineViewModel`
  * convention used for Remote Access. The state-to-label/badge/filter resolution is split into the
  * small named functions above rather than inlined here, to keep this one readable.
+ *
+ * [viewerUsername]/[watches]/[notificationsEnabled] drive the notification buttons: a watch
+ * button renders only for the viewer's own jobs (or, for printer-available, on a busy printer),
+ * and only when the notifications feature is on for the viewer.
  */
-fun buildPrinterViewModel(printer: Map<String, Any?>): Map<String, Any?> {
+fun buildPrinterViewModel(
+    printer: Map<String, Any?>,
+    viewerUsername: String? = null,
+    watches: List<Map<String, Any?>> = emptyList(),
+    notificationsEnabled: Boolean = false,
+): Map<String, Any?> {
   val state = (printer["state"] as? String) ?: "UNKNOWN"
   val isPrinting = state in ACTIVE_JOB_STATES
   val needsAttention = state in NEEDS_ATTENTION_STATES
@@ -117,6 +126,30 @@ fun buildPrinterViewModel(printer: Map<String, Any?>): Map<String, Any?> {
   val currentJobName = printer["currentJobName"] as? String
   val nextJobName = printer["nextJobName"] as? String
   val previousPrintedByUsername = printer["previousPrintedByUsername"] as? String
+  val printedByUsername = printer["printedByUsername"] as? String
+  val nextPrintedByUsername = printer["nextPrintedByUsername"] as? String
+  val printerId = (printer["id"] as? Number)?.toLong()
+  val currentQueueId = (printer["currentQueueId"] as? Number)?.toLong()
+  val nextQueueId = (printer["nextQueueId"] as? Number)?.toLong()
+  val isOwnCurrentJob =
+      notificationsEnabled && viewerUsername != null && currentQueueId != null &&
+          printedByUsername == viewerUsername
+  val isOwnNextJob =
+      notificationsEnabled && viewerUsername != null && nextQueueId != null &&
+          nextPrintedByUsername == viewerUsername
+  fun watchIdFor(scope: String, queueId: Long?): Long? {
+    if (!notificationsEnabled || printerId == null || queueId == null) return null
+    return watches
+        .firstOrNull {
+          it["scope"] == scope &&
+              (it["printerId"] as? Number)?.toLong() == printerId &&
+              (it["queueId"] as? Number)?.toLong() == queueId
+        }
+        ?.let { (it["id"] as? Number)?.toLong() }
+  }
+  val currentJobWatchId = watchIdFor("OWN_JOB", currentQueueId)
+  val nextJobWatchId = watchIdFor("OWN_JOB", nextQueueId)
+  val availableWatchId = watchIdFor("PRINTER_AVAILABLE", currentQueueId)
   // Precomputed here (not with OGNL string concatenation in the template) so the client-side
   // search filter has one plain lowercase field to substring-match against.
   val searchText =
@@ -151,7 +184,16 @@ fun buildPrinterViewModel(printer: Map<String, Any?>): Map<String, Any?> {
           if (layerNum != null && totalLayers != null) "$layerNum / $totalLayers" else "",
       "currentJobName" to currentJobName,
       "nextJobName" to nextJobName,
-      "printedByUsername" to (printer["printedByUsername"] as? String),
+      "printedByUsername" to printedByUsername,
       "previousPrintedByUsername" to previousPrintedByUsername,
+      "nextPrintedByUsername" to nextPrintedByUsername,
+      "currentQueueId" to currentQueueId,
+      "nextQueueId" to nextQueueId,
+      "notificationsEnabled" to notificationsEnabled,
+      "isOwnCurrentJob" to isOwnCurrentJob,
+      "isOwnNextJob" to isOwnNextJob,
+      "currentJobWatchId" to currentJobWatchId,
+      "nextJobWatchId" to nextJobWatchId,
+      "availableWatchId" to availableWatchId,
   )
 }
