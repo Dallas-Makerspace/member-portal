@@ -14,7 +14,7 @@
         if (label) {
             label.textContent = armed
                 ? 'Watching · Cancel'
-                : (btn.dataset.scope === 'PRINTER_AVAILABLE' ? 'Notify me when free' : 'Notify me when this finishes');
+                : (btn.dataset.scope === 'PRINTER_AVAILABLE' ? 'Notify me when free' : 'Notify me when this print finishes');
         }
         if (icon) icon.textContent = armed ? 'notifications_active' : 'notifications';
         btn.classList.toggle('btn-outline-primary', armed);

@@ -34,7 +34,7 @@ constructor(private val repository: BambuCommitteeSubscriptionsRepository) :
 
   override fun copy(args: Map<String, String>): SubscriptionCopy =
       SubscriptionCopy(
-          subscribeLabel = "Notify me",
+          subscribeLabel = "Notify \"Offline\"",
           subscribedLabel = "Notifying",
           unsubscribeLabel = "Stop notifying",
           subscribeIcon = "notifications",
@@ -44,7 +44,7 @@ constructor(private val repository: BambuCommitteeSubscriptionsRepository) :
           unsubscribeBusy = "Unsubscribing…",
           subscribedToast =
               "You're subscribed to 3D printer offline alerts. You'll be notified when a " +
-                  "printer stays offline for about 5 minutes.",
+                  "printer stays offline for over 5 minutes.",
           unsubscribedToast = "You unsubscribed from 3D printer offline alerts.",
           hint = "Get notified when a 3D printer goes offline",
           subscribedHint = "You'll be notified when a 3D printer goes offline",
@@ -52,8 +52,8 @@ constructor(private val repository: BambuCommitteeSubscriptionsRepository) :
               ConfirmCopy(
                   title = "Get printer offline alerts?",
                   message =
-                      "You'll be emailed, along with every other subscriber, whenever a 3D " +
-                          "printer stays offline for about 5 minutes. You can change how in " +
+                      "You'll be notified, along with every other subscriber, whenever a 3D " +
+                          "printer stays offline for over 5 minutes. You can change how in " +
                           "Notification Preferences.",
                   confirmLabel = "Notify me"),
       )

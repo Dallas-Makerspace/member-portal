@@ -104,7 +104,7 @@
         <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
             <div>
                 <div class="fw-semibold">3D printer offline alerts</div>
-                <div class="text-muted small">One notification when a printer stays offline for about 5 minutes.</div>
+                <div class="text-muted small">Get notified when a printer stays offline for over 5 minutes.</div>
             </div>
             <th:block th:replace="~{fragments/subscribe-button :: button(${committeeSubscription})}"></th:block>
         </div>
@@ -219,7 +219,7 @@
                                     <span class="material-symbols-outlined align-middle" style="font-size:16px;"
                                           th:text="${p.currentJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
                                     <span class="bambu-watch-label"
-                                          th:text="${p.currentJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this finishes'"></span>
+                                          th:text="${p.currentJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this print finishes'"></span>
                                 </button>
                             </div>
                             <div th:if="${p.notificationsEnabled and !p.isOwnCurrentJob}" class="mt-2">
@@ -247,7 +247,7 @@
                                 <span class="material-symbols-outlined align-middle" style="font-size:16px;"
                                       th:text="${p.nextJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
                                 <span class="bambu-watch-label"
-                                      th:text="${p.nextJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this finishes'"></span>
+                                      th:text="${p.nextJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this print finishes'"></span>
                             </button>
                         </div>
 

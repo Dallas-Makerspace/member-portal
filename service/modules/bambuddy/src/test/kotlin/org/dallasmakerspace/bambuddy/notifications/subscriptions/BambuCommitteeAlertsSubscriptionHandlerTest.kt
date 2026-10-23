@@ -49,7 +49,7 @@ class BambuCommitteeAlertsSubscriptionHandlerTest {
   fun `copy carries the notify-me labels, hint and confirm`() {
     val copy = handler.copy(emptyMap())
 
-    assertEquals("Notify me", copy.subscribeLabel)
+    assertEquals("Notify \"Offline\"", copy.subscribeLabel)
     assertEquals("Notifying", copy.subscribedLabel)
     assertEquals("Stop notifying", copy.unsubscribeLabel)
     assertTrue(copy.hint!!.contains("offline"))
