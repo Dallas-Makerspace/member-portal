@@ -11,7 +11,7 @@ import org.dallasmakerspace.core.LoggerFactory
 
 private const val CACHE_TTL_MS = 10_000L
 
-private val PRINTING_STATES = setOf("RUNNING", "PREPARE", "SLICING", "PAUSE")
+private val PRINTING_STATES = BAMBU_PRINTING_STATES
 // FAILED is a genuine problem - the printer needs a person's attention. FINISH is its own,
 // separate bucket (not "needs attention"): a Bambu printer's firmware only reports whether a NEW
 // print has started since the last one finished, not whether anyone has physically cleared the
@@ -46,6 +46,10 @@ data class BambuPrinterDetailDTO(
     val totalLayers: Int?,
     val currentJobName: String?,
     val nextJobName: String?,
+    // Queue ids behind currentJobName/nextJobName (same rows they're selected from), so the UI
+    // can name the exact job a "notify me" click refers to. Additive; older UI builds ignore them.
+    val currentQueueId: Int? = null,
+    val nextQueueId: Int? = null,
     // Whoever queued the currently-printing (or just-failed) job, from the queue item's
     // created_by_username - null when idle/finished/offline, or when Bambuddy has no queue record
     // for the job (e.g. started directly from the slicer rather than through Bambuddy's queue).
@@ -54,6 +58,8 @@ data class BambuPrinterDetailDTO(
     // FINISH state (see NEEDS_ATTENTION_STATES/FINISHED_STATES comment: FINISH means the print sitting
     // on the bed hasn't necessarily been claimed yet), so members can tell whose part to remove.
     val previousPrintedByUsername: String?,
+    // Whoever queued the next (pending) job, so the UI can offer its owner a watch on it.
+    val nextPrintedByUsername: String? = null,
 )
 
 /**
@@ -84,14 +90,8 @@ constructor(
       val fetchedAtMs: Long,
   )
 
-  /** Effective state, folding "Bambuddy couldn't reach the printer at all" (no status / a
-   * connected=false status) into OFFLINE regardless of what a stale `state` value might say. */
-  private fun effectiveState(status: BambuPrinterStatus?): String =
-      when {
-        status == null -> "OFFLINE"
-        !status.connected -> "OFFLINE"
-        else -> status.state
-      }
+  /** Effective state — see [bambuEffectiveState] (shared with the watch domain). */
+  private fun effectiveState(status: BambuPrinterStatus?): String = bambuEffectiveState(status)
 
   private val cache = AtomicReference<Snapshot?>(null)
 
@@ -198,8 +198,11 @@ constructor(
           totalLayers = status?.totalLayers,
           currentJobName = status?.currentPrint,
           nextJobName = next?.archiveName,
+          currentQueueId = current?.id,
+          nextQueueId = next?.id,
           printedByUsername = current?.createdByUsername,
           previousPrintedByUsername = previous?.createdByUsername,
+          nextPrintedByUsername = next?.createdByUsername,
       )
     }
   }

@@ -1,5 +1,6 @@
 package org.dallasmakerspace.server.memberservice
 
+import com.google.gson.Gson
 import io.ktor.client.*
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.*
@@ -48,6 +49,21 @@ data class NotificationPreferenceUpdate(
 )
 
 data class SelfMembershipStatus(val allowed: Boolean, val isMember: Boolean)
+
+/**
+ * Outcome of a Bambu watch create/cancel call: the service's HTTP status plus its member-facing
+ * message and (on success) the watch DTO, so the watch API handler can pass service errors
+ * (403/404/409/422 + message) through to the button verbatim instead of collapsing them to a
+ * message-less 500 the way the generic /backend-api proxy would.
+ */
+data class BambuWatchCallResult(
+    val statusCode: Int,
+    val message: String?,
+    val data: Map<String, Any?>?,
+)
+
+/** Parses the ApiResponse body embedded in a failed watch call's HttpException message. */
+private val watchErrorGson = Gson()
 
 @Suppress("TooGenericExceptionCaught")
 @Singleton
@@ -1203,6 +1219,92 @@ constructor(
     } catch (ex: Exception) {
       log.warn("Failed to get Bambu printers", ex)
       emptyList()
+    }
+  }
+
+  /** The member's ARMED Bambu watches; fail-soft to empty (buttons render un-armed). */
+  suspend fun getBambuWatches(sessionId: String?, username: String): List<Map<String, Any?>> {
+    return try {
+      val apiHeaders = getApiHeaders(sessionId, username)
+      val result = dmsHttpClient.get("$baseUrl/bambu/watches", apiHeaders)
+      val data = result["data"] as? List<*> ?: return emptyList()
+      @Suppress("UNCHECKED_CAST")
+      data as List<Map<String, Any?>>
+    } catch (ex: Exception) {
+      log.warn("Failed to get Bambu watches for $username", ex)
+      emptyList()
+    }
+  }
+
+  /** Arms a Bambu watch for [username]; service errors keep their status + message. */
+  suspend fun createBambuWatch(
+      sessionId: String?,
+      username: String,
+      body: Map<String, Any?>,
+  ): BambuWatchCallResult {
+    return try {
+      val result = dmsHttpClient.post("$baseUrl/bambu/watches", getApiHeaders(sessionId, username), body)
+      @Suppress("UNCHECKED_CAST")
+      BambuWatchCallResult(200, result["message"] as? String, result["data"] as? Map<String, Any?>)
+    } catch (ex: HttpException) {
+      watchErrorResult(ex)
+    } catch (ex: Exception) {
+      log.warn("Failed to create Bambu watch for $username", ex)
+      BambuWatchCallResult(502, "Could not reach the printer service. Please try again.", null)
+    }
+  }
+
+  /** Cancels [username]'s Bambu watch [watchId]; service errors keep their status + message. */
+  suspend fun deleteBambuWatch(
+      sessionId: String?,
+      username: String,
+      watchId: String,
+  ): BambuWatchCallResult {
+    return try {
+      val result =
+          dmsHttpClient.delete("$baseUrl/bambu/watches/$watchId", getApiHeaders(sessionId, username))
+      @Suppress("UNCHECKED_CAST")
+      BambuWatchCallResult(200, result["message"] as? String, result["data"] as? Map<String, Any?>)
+    } catch (ex: HttpException) {
+      watchErrorResult(ex)
+    } catch (ex: Exception) {
+      log.warn("Failed to delete Bambu watch $watchId for $username", ex)
+      BambuWatchCallResult(502, "Could not reach the printer service. Please try again.", null)
+    }
+  }
+
+  /**
+   * DMSHttpClient's post/delete failures carry the service's status and ApiResponse body only
+   * inside the exception message ("... Status: 409 Conflict Response: {json}"); recover both so
+   * the member sees the service's own message. The embedded body is parsed as JSON (not
+   * regex-scraped) so messages containing quotes or escapes survive intact.
+   */
+  internal fun watchErrorResult(ex: HttpException): BambuWatchCallResult {
+    val text = ex.message ?: ""
+    val statusCode =
+        if (ex.httpStatus != 0) ex.httpStatus
+        else Regex("Status: (\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 502
+    val message = extractWatchErrorMessage(text)
+    if (message == null) {
+      log.warn("Could not extract a service message from a Bambu watch error (status $statusCode)")
+    }
+    return BambuWatchCallResult(statusCode, message ?: "Something went wrong. Please try again.", null)
+  }
+
+  /**
+   * The `message` field of the ApiResponse JSON embedded in [text] (from the first `{` to the
+   * last `}`), or null when there is no parseable body with a message.
+   */
+  private fun extractWatchErrorMessage(text: String): String? {
+    val start = text.indexOf('{')
+    val end = text.lastIndexOf('}')
+    if (start < 0 || end <= start) return null
+    return try {
+      val parsed =
+          watchErrorGson.fromJson(text.substring(start, end + 1), Map::class.java) as? Map<*, *>
+      (parsed?.get("message") as? String)?.takeIf { it.isNotBlank() }
+    } catch (e: Exception) {
+      null
     }
   }
 

@@ -20,6 +20,12 @@ import org.dallasmakerspace.notifications.channels.Notifier
 import org.dallasmakerspace.notifications.subscriptions.FollowCommitteeSubscriptionHandler
 import org.dallasmakerspace.notifications.subscriptions.FollowMemberSubscriptionHandler
 import org.dallasmakerspace.notifications.subscriptions.TopicSubscriptionHandler
+import org.dallasmakerspace.notifications.templates.BambuPrintActionRequiredTemplate
+import org.dallasmakerspace.notifications.templates.BambuPrintFinishedTemplate
+import org.dallasmakerspace.notifications.templates.BambuPrinterAvailableTemplate
+import org.dallasmakerspace.notifications.templates.BambuPrinterOfflineTemplate
+import org.dallasmakerspace.notifications.templates.BambuWatchExpiredTemplate
+import org.dallasmakerspace.notifications.templates.BambuWatchOverdueTemplate
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
 import org.dallasmakerspace.notifications.templates.SystemTestTemplate
 
@@ -40,6 +46,37 @@ object NotificationsModule {
   @Provides
   @IntoSet
   fun provideSystemTestTemplate(): NotificationTemplate<*> = SystemTestTemplate()
+
+  /** Bambu print-watch templates; produced by the bambuddy module's watch/webhook/sweeper code. */
+  @Provides
+  @IntoSet
+  fun provideBambuPrintFinishedTemplate(): NotificationTemplate<*> =
+      BambuPrintFinishedTemplate()
+
+  @Provides
+  @IntoSet
+  fun provideBambuPrintActionRequiredTemplate(): NotificationTemplate<*> =
+      BambuPrintActionRequiredTemplate()
+
+  @Provides
+  @IntoSet
+  fun provideBambuPrinterAvailableTemplate(): NotificationTemplate<*> =
+      BambuPrinterAvailableTemplate()
+
+  @Provides
+  @IntoSet
+  fun provideBambuWatchOverdueTemplate(): NotificationTemplate<*> =
+      BambuWatchOverdueTemplate()
+
+  @Provides
+  @IntoSet
+  fun provideBambuWatchExpiredTemplate(): NotificationTemplate<*> =
+      BambuWatchExpiredTemplate()
+
+  @Provides
+  @IntoSet
+  fun provideBambuPrinterOfflineTemplate(): NotificationTemplate<*> =
+      BambuPrinterOfflineTemplate()
 
   /** Email notifier: mocked in development, SparkPost otherwise. */
   @Provides
