@@ -126,6 +126,12 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.BAMBU_MODEL_ICON_API.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      post(RouteFactory.Paths.BAMBU_WATCHES_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      delete(RouteFactory.Paths.BAMBU_WATCH_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.INTERLOCK_TOOLS.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

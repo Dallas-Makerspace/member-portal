@@ -30,7 +30,7 @@ object RouteFactory {
     return getHandler(path)
   }
 
-  private fun sanitizePathInternal(path: String): String {
+  internal fun sanitizePathInternal(path: String): String {
     // Replace "@.*" with "@{preferred_username}"
     return path
         .replace("@[a-zA-Z0-9_-]*".toRegex(), "@{preferred_username}")
@@ -55,6 +55,7 @@ object RouteFactory {
         .replace("/go/.*".toRegex(), "/go/{path...}")
         .replace("/bambu-api/printers/[^/]+/camera".toRegex(), "/bambu-api/printers/{id}/camera")
         .replace("/bambu-api/models/[^/]+/icon".toRegex(), "/bambu-api/models/{model}/icon")
+        .replace("/bambu-api/watches/[^/]+$".toRegex(), "/bambu-api/watches/{id}")
         // Must come before the generic /committees/{committee_slug} rule below, or that rule's
         // [^/]+ would swallow "3d-fab" and leave a stray "/printers" behind.
         .replace("/committees/(?!3d-fab/printers$)[^/]+".toRegex(), "/committees/{committee_slug}")
@@ -109,6 +110,8 @@ object RouteFactory {
     BAMBU_PRINTER_STATUS("/committees/3d-fab/printers"),
     BAMBU_CAMERA_API("/bambu-api/printers/{id}/camera"),
     BAMBU_MODEL_ICON_API("/bambu-api/models/{model}/icon"),
+    BAMBU_WATCHES_API("/bambu-api/watches"),
+    BAMBU_WATCH_API("/bambu-api/watches/{id}"),
     INTERLOCK_TOOLS("/interlock-tools"),
     INTERLOCK_CABINETS("/interlock-cabinets"),
     ACTION_TRACK("/api/track"),
