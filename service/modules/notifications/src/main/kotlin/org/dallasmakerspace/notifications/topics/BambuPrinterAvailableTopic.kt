@@ -7,7 +7,8 @@ import org.dallasmakerspace.notifications.NotificationTopic
 object BambuPrinterAvailableTopic : NotificationTopic {
   override val key = TopicKeys.BAMBU_PRINTER_AVAILABLE
   override val displayName = "Bambu printer available"
-  override val visibleInPreferences = true
+  // Hidden: only produced by a watch click (consent override), so a toggle would do nothing.
+  override val visibleInPreferences = false
 
   override fun combinedSubject(count: Int) = "$count 3D print updates"
 }

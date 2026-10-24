@@ -297,11 +297,11 @@ class BambuTemplatesTest {
   }
 
   @Test
-  fun `watch topic is hidden from preferences while the standing topics are visible`() {
+  fun `click-produced topics are hidden from preferences while the standing topic is visible`() {
     assertFalse(BambuWatchTopic.visibleInPreferences)
-    assertTrue(BambuPrintFinishedTopic.visibleInPreferences)
-    assertTrue(BambuPrintActionRequiredTopic.visibleInPreferences)
-    assertTrue(BambuPrinterAvailableTopic.visibleInPreferences)
+    assertFalse(BambuPrintFinishedTopic.visibleInPreferences)
+    assertFalse(BambuPrintActionRequiredTopic.visibleInPreferences)
+    assertFalse(BambuPrinterAvailableTopic.visibleInPreferences)
     assertTrue(BambuCommitteeAlertsTopic.visibleInPreferences)
     // Finished wording must never claim the bed is still occupied (requirements §5).
     val text =

@@ -7,7 +7,8 @@ import org.dallasmakerspace.notifications.NotificationTopic
 object BambuPrintFinishedTopic : NotificationTopic {
   override val key = TopicKeys.BAMBU_PRINT_FINISHED
   override val displayName = "Bambu print finished"
-  override val visibleInPreferences = true
+  // Hidden: only produced by a watch click (consent override), so a toggle would do nothing.
+  override val visibleInPreferences = false
 
   override fun combinedSubject(count: Int) = "$count 3D print updates"
 }
