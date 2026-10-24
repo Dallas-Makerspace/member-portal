@@ -109,7 +109,10 @@ object ConfigRegistry {
                   "printer-offline alerts, backed by Bambuddy webhooks); can be piloted for " +
                   "specific members/AD groups before a full rollout",
           category = "3D Fab",
-          defaultValue = FeatureFlagValue(enabled = false),
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
           type = ConfigValueType.FeatureFlagType,
       )
 

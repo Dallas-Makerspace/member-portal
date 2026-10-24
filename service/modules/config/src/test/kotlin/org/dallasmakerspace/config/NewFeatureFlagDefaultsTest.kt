@@ -15,4 +15,13 @@ class NewFeatureFlagDefaultsTest {
     assertEquals(setOf("mandarlimaye"), default.enabledUsernames)
     assertEquals(setOf("IT Early Access"), default.enabledGroupNames)
   }
+
+  @Test
+  fun `the bambu notifications flag starts as a pilot for the early access group, off for everyone else`() {
+    val default = ConfigRegistry.BAMBU_NOTIFICATIONS_ENABLED.defaultValue
+
+    assertFalse(default.enabled)
+    assertEquals(setOf("mandarlimaye"), default.enabledUsernames)
+    assertEquals(setOf("IT Early Access"), default.enabledGroupNames)
+  }
 }
