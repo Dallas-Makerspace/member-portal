@@ -62,7 +62,7 @@ class TopicSubscriptionRoutesTest {
       subscribed -= actor to args.getValue("target")
     }
 
-    override fun copy(args: Map<String, String>) =
+    override suspend fun copy(args: Map<String, String>) =
         SubscriptionCopy(
             subscribeLabel = "Sub ${args.getValue("target")}",
             subscribedLabel = "Subbed",

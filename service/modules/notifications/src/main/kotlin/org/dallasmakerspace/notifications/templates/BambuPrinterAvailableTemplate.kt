@@ -27,7 +27,7 @@ class BambuPrinterAvailableTemplate :
       NotificationCard(
           kind = "bambu",
           title = renderSubject(data),
-          excerpt = "The print that was using it has ended.",
+          excerpt = "The last print may still need to be cleared from the bed.",
           url = data.statusPageUrl,
           ctaLabel = "View printer status",
           whenLine = data.occurredAtText)
@@ -41,6 +41,7 @@ class BambuPrinterAvailableTemplate :
     data.freedByJobName?.takeIf { it.isNotBlank() }?.let {
       appendLine("The print that was using it (\"$it\") has ended.")
     }
+    appendLine("The last print may still need to be cleared from the bed.")
     if (data.occurredAtText.isNotBlank()) appendLine("When: ${data.occurredAtText}")
     appendLine()
     appendLine("Printer status: ${data.statusPageUrl}")
@@ -53,6 +54,7 @@ class BambuPrinterAvailableTemplate :
           "<p style=\"margin:0 0 8px;\">The print that was using it " +
               "(&quot;${escapeHtml(it)}&quot;) has ended.</p>")
     }
+    append("<p style=\"margin:0 0 8px;\">The last print may still need to be cleared from the bed.</p>")
     if (data.occurredAtText.isNotBlank()) {
       append("<p style=\"margin:0 0 8px;\">When: ${escapeHtml(data.occurredAtText)}</p>")
     }

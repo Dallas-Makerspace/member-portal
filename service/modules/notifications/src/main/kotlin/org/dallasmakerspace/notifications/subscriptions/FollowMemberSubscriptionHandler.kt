@@ -27,7 +27,7 @@ constructor(private val service: ProfileSubscriptionService) : TopicSubscription
   override suspend fun unsubscribe(actor: String, args: Map<String, String>) =
       service.unfollow(actor, args.getValue(ARG_USERNAME))
 
-  override fun copy(args: Map<String, String>): SubscriptionCopy {
+  override suspend fun copy(args: Map<String, String>): SubscriptionCopy {
     val target = "@${args.getValue(ARG_USERNAME)}"
     return SubscriptionCopy(
         subscribeLabel = "Follow",

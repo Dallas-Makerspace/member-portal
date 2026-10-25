@@ -5,6 +5,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.bambuddy.notifications.db.BambuCommitteeSubscriptionsRepository
+import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.notifications.topics.BambuCommitteeAlertsTopic
 import org.junit.Before
@@ -16,12 +17,18 @@ import org.mockito.kotlin.whenever
 class BambuCommitteeAlertsSubscriptionHandlerTest {
 
   private lateinit var repository: BambuCommitteeSubscriptionsRepository
+  private lateinit var configOverrideService: ConfigOverrideService
   private lateinit var handler: BambuCommitteeAlertsSubscriptionHandler
 
   @Before
   fun setUp() {
     repository = mock()
-    handler = BambuCommitteeAlertsSubscriptionHandler(repository)
+    configOverrideService = mock()
+    runBlocking {
+      whenever(configOverrideService.get(ConfigRegistry.BAMBU_NOTIFICATIONS_OFFLINE_HOLD_MINUTES))
+          .thenReturn(5)
+    }
+    handler = BambuCommitteeAlertsSubscriptionHandler(repository, configOverrideService)
   }
 
   @Test
@@ -46,7 +53,7 @@ class BambuCommitteeAlertsSubscriptionHandlerTest {
   }
 
   @Test
-  fun `copy carries the notify-me labels, hint and confirm`() {
+  fun `copy carries the notify-me labels, hint and confirm`() = runBlocking {
     val copy = handler.copy(emptyMap())
 
     assertEquals("Notify \"Offline\"", copy.subscribeLabel)
@@ -54,6 +61,17 @@ class BambuCommitteeAlertsSubscriptionHandlerTest {
     assertEquals("Stop notifying", copy.unsubscribeLabel)
     assertTrue(copy.hint!!.contains("offline"))
     val confirm = assertNotNull(copy.subscribeConfirm)
-    assertTrue(confirm.message.contains("5 minutes"))
+    assertTrue(confirm.message.contains("over 5 minutes"))
+    assertTrue(copy.hint!!.contains("over 5 minutes"))
+    assertTrue(copy.subscribedToast.contains("over 5 minutes"))
+  }
+
+  @Test
+  fun `copy follows the configured hold`() = runBlocking {
+    whenever(configOverrideService.get(ConfigRegistry.BAMBU_NOTIFICATIONS_OFFLINE_HOLD_MINUTES))
+        .thenReturn(12, 1)
+
+    assertTrue(handler.copy(emptyMap()).hint!!.contains("over 12 minutes"))
+    assertTrue(handler.copy(emptyMap()).hint!!.contains("over 1 minute"))
   }
 }

@@ -136,6 +136,30 @@ class BambuTemplatesTest {
   }
 
   @Test
+  fun `printer offline template states the configured hold, with a generic fallback`() {
+    val template = BambuPrinterOfflineTemplate()
+    val withHold = BambuPrinterOfflineData(printerName = "Printer 4", holdMinutes = 12)
+    assertTrue(template.renderText(withHold).contains("checked again 12 minutes later"))
+    assertTrue(template.renderHtml(withHold).contains("checked again 12 minutes later"))
+    assertTrue(
+        template
+            .renderText(BambuPrinterOfflineData(printerName = "Printer 4", holdMinutes = 1))
+            .contains("checked again 1 minute later"))
+    assertTrue(
+        template
+            .renderText(BambuPrinterOfflineData(printerName = "Printer 4"))
+            .contains("a few minutes later"))
+  }
+
+  @Test
+  fun `printer-available template warns the last print may still be on the bed`() {
+    val template = BambuPrinterAvailableTemplate()
+    val data = BambuPrinterAvailableData(printerName = "Printer 3")
+    assertTrue(template.renderText(data).contains("may still need to be cleared from the bed"))
+    assertTrue(template.renderHtml(data).contains("may still need to be cleared from the bed"))
+  }
+
+  @Test
   fun `registry resolves all five bambu topics from the registered templates`() {
     val registry =
         TemplateRegistry(

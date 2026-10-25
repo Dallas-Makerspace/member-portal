@@ -40,7 +40,7 @@ class FollowMemberSubscriptionHandlerTest {
   }
 
   @Test
-  fun `confirms follow but not unfollow`() {
+  fun `confirms follow but not unfollow`() = runBlocking<Unit> {
     val copy = handler.copy(args)
 
     assertEquals("Follow @asmith?", assertNotNull(copy.subscribeConfirm).title)

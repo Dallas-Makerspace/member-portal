@@ -29,5 +29,5 @@ interface TopicSubscriptionHandler {
   /** Idempotent. */
   suspend fun unsubscribe(actor: String, args: Map<String, String>)
 
-  fun copy(args: Map<String, String>): SubscriptionCopy
+  suspend fun copy(args: Map<String, String>): SubscriptionCopy
 }

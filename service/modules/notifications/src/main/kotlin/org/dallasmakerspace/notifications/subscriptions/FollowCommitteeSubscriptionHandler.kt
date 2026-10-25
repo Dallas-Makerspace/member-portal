@@ -29,7 +29,7 @@ constructor(private val repository: CommitteeSubscriptionsRepository) : TopicSub
   override suspend fun unsubscribe(actor: String, args: Map<String, String>) =
       repository.unsubscribe(actor, committee(args).id)
 
-  override fun copy(args: Map<String, String>): SubscriptionCopy {
+  override suspend fun copy(args: Map<String, String>): SubscriptionCopy {
     val name = committee(args).name
     return SubscriptionCopy(
         subscribeLabel = "Follow",

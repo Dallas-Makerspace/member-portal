@@ -44,7 +44,7 @@ class FollowCommitteeSubscriptionHandlerTest {
   }
 
   @Test
-  fun `copy names the committee, confirms follow and not unfollow, and avoids the word email`() {
+  fun `copy names the committee, confirms follow and not unfollow, and avoids the word email`() = runBlocking<Unit> {
     val copy = handler.copy(args)
 
     assertEquals("Follow Laser?", assertNotNull(copy.subscribeConfirm).title)
@@ -62,7 +62,7 @@ class FollowCommitteeSubscriptionHandlerTest {
   }
 
   @Test
-  fun `rejects unknown, non-numeric, inactive and prefix-less committees`() {
+  fun `rejects unknown, non-numeric, inactive and prefix-less committees`() = runBlocking<Unit> {
     val noPrefixes = Committees.findByName("VECTOR")!!
     listOf("999", "abc", "", noPrefixes.id.toString()).forEach { value ->
       assertFailsWith<IllegalArgumentException>(value) { handler.copy(mapOf("committee" to value)) }
