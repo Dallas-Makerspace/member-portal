@@ -1,8 +1,9 @@
 name: CI
 
 on:
-  pull_request:
+  # Trunk-based: only master is built; stray branches cost no CI.
   push:
+    branches: [master]
   workflow_dispatch:
 
 permissions:
