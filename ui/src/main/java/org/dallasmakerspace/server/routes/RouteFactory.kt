@@ -108,6 +108,7 @@ object RouteFactory {
     COMMITTEES("/committees"),
     COMMITTEE_DETAIL("/committees/{committee_slug}"),
     COMMITTEE_FOLLOWERS("/committees/{committee_slug}/followers"),
+    COMMITTEE_MESSAGE("/committees/{committee_slug}/message"),
     BAMBU_PRINTER_STATUS("/committees/3d-fab/printers"),
     BAMBU_CAMERA_API("/bambu-api/printers/{id}/camera"),
     BAMBU_MODEL_ICON_API("/bambu-api/models/{model}/icon"),

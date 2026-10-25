@@ -26,6 +26,7 @@ import org.dallasmakerspace.server.routes.CamerasApiHandler
 import org.dallasmakerspace.server.routes.CamerasHandler
 import org.dallasmakerspace.server.routes.CommitteeDetailHandler
 import org.dallasmakerspace.server.routes.CommitteeFollowersHandler
+import org.dallasmakerspace.server.routes.CommitteeMessageHandler
 import org.dallasmakerspace.server.routes.CommitteesHandler
 import org.dallasmakerspace.server.routes.ConfigAdminHandler
 import org.dallasmakerspace.server.routes.GroupMemberManagementHandler
@@ -359,6 +360,15 @@ class RoutesModule {
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
   ): IRouteHandler = CommitteeFollowersHandler(loggerFactory, userInfoProvider, memberService)
+
+  @IntoMap
+  @Provides
+  @StringKey("/committees/{committee_slug}/message")
+  fun providesCommitteeMessageHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler = CommitteeMessageHandler(loggerFactory, userInfoProvider, memberServiceClient)
 
   @IntoMap
   @Provides

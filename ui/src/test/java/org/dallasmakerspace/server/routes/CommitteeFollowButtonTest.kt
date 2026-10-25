@@ -29,6 +29,7 @@ import org.dallasmakerspace.models.TopicKeys
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.CommitteeFollowers
+import org.dallasmakerspace.server.memberservice.CommitteeMessageEligibility
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.plugins.UserSession
 import org.mockito.kotlin.any
@@ -77,11 +78,24 @@ class CommitteeFollowButtonTest {
   private fun service(
       subscription: SubscriptionStatus?,
       followers: CommitteeFollowers = CommitteeFollowers(0, emptyList()),
+      chairs: List<String> = emptyList(),
+      eligibility: CommitteeMessageEligibility? = null,
   ): MemberService {
     val service = mock<MemberService>()
     runBlocking {
       whenever(service.getAllGroups(anyOrNull())).thenReturn(emptyList<DMSGroup>())
-      whenever(service.getMultipleGroups(any(), anyOrNull())).thenReturn(emptyList())
+      whenever(service.getMultipleGroups(any(), anyOrNull()))
+          .thenReturn(
+              if (chairs.isEmpty()) emptyList()
+              else
+                  listOf(
+                      DMSGroup(
+                          name = laser.chairGroupName!!,
+                          distinguishedName = "CN=chairs,OU=Groups,DC=example,DC=internal",
+                          objectGuid = null,
+                          members = chairs.mapIndexed { i, name -> DMSMember(id = i, username = name) })))
+      whenever(service.getCommitteeMessageEligibility(any(), any(), anyOrNull()))
+          .thenReturn(eligibility)
       whenever(service.getArchivedGroups(any(), anyOrNull())).thenReturn(emptyList())
       whenever(service.getSubscriptionStatus(any(), any(), any(), anyOrNull()))
           .thenReturn(subscription)
@@ -195,5 +209,88 @@ class CommitteeFollowButtonTest {
     val service = service(null, CommitteeFollowers(3, listOf("jdoe")))
     committeePage(service, laser.slug) { html -> assertFalse("committeeFollowers" in html) }
     runBlocking { verify(service, never()).getCommitteeFollowers(any(), any(), any(), anyOrNull()) }
+  }
+
+  private fun eligibility(
+      talkLinked: Boolean = true,
+      nextAllowedAt: String? = null,
+      canCreateThread: Boolean = true,
+  ) =
+      CommitteeMessageEligibility(
+          canMessage = true,
+          talkLinked = talkLinked,
+          canCreateThread = canCreateThread,
+          followerCount = 12,
+          maxLength = 120,
+          perDayLimit = 2,
+          perWeekLimit = 3,
+          sentToday = 1,
+          sentThisWeek = 2,
+          nextAllowedAt = nextAllowedAt)
+
+  @Test
+  fun `a chair is offered the message form with the limits spelled out`() {
+    val service = service(status(false), chairs = listOf("mia"), eligibility = eligibility())
+    committeePage(service, laser.slug) { html ->
+      assertTrue("id=\"committeeMessageOpen\"" in html, html)
+      assertTrue("id=\"committeeMessageForm\"" in html, html)
+      assertTrue("data-max=\"120\"" in html, html)
+      val text = html.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ")
+      assertTrue("2 messages a day and 3 a week" in text, text)
+      assertTrue("Used so far: 1 today, 2 this week" in text, text)
+      assertTrue("Send to 12 followers" in text, text)
+      assertTrue("/static/js/committee-message.js" in html)
+      assertTrue("Start a new Talk thread for me" in html)
+    }
+  }
+
+  @Test
+  fun `a chair without a linked Talk account is asked to link it instead`() {
+    val service =
+        service(status(false), chairs = listOf("mia"), eligibility = eligibility(talkLinked = false))
+    committeePage(service, laser.slug) { html ->
+      assertTrue("href=\"/link-discourse\"" in html, html)
+      assertFalse("id=\"committeeMessageForm\"" in html)
+    }
+  }
+
+  @Test
+  fun `a chair at a send limit sees when they can send again, not the form`() {
+    val service =
+        service(
+            status(false),
+            chairs = listOf("mia"),
+            eligibility = eligibility(nextAllowedAt = "2026-03-11T09:30:00Z"))
+    committeePage(service, laser.slug) { html ->
+      assertTrue("data-next-allowed=\"2026-03-11T09:30:00Z\"" in html, html)
+      assertTrue("id=\"committeeMessageNext\"" in html, html)
+      assertFalse("id=\"committeeMessageForm\"" in html)
+    }
+  }
+
+  @Test
+  fun `existing thread is the only option when threads can't be created for the committee`() {
+    val service =
+        service(status(false), chairs = listOf("mia"), eligibility = eligibility(canCreateThread = false))
+    committeePage(service, laser.slug) { html ->
+      assertFalse("Start a new Talk thread for me" in html)
+      assertTrue("Use a Talk thread that already exists" in html)
+    }
+  }
+
+  @Test
+  fun `someone who is not a chair gets no form and the service is not asked`() {
+    val service = service(status(false), chairs = listOf("zed"), eligibility = eligibility())
+    committeePage(service, laser.slug) { html -> assertFalse("committeeMessage" in html) }
+    runBlocking { verify(service, never()).getCommitteeMessageEligibility(any(), any(), anyOrNull()) }
+  }
+
+  @Test
+  fun `a chair the service says may not message gets no form`() {
+    val service = service(status(false), chairs = listOf("mia"), eligibility = CommitteeMessageEligibility(
+        canMessage = false, talkLinked = false, canCreateThread = false, followerCount = 0,
+        maxLength = 120, perDayLimit = 2, perWeekLimit = 3, sentToday = 0, sentThisWeek = 0,
+        nextAllowedAt = null))
+    committeePage(service, laser.slug) { html -> assertFalse("committeeMessage" in html) }
   }
 }

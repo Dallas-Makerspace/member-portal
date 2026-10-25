@@ -153,6 +153,17 @@ constructor(
     val chairGroupsMap = chairGroups.associateBy { getSlugFromName(it.name) }
     val chairpersons = getChairMembersFromCache(committee, chairGroupsMap)
 
+    // Only a chair is offered the message form. This just avoids a service call for everyone else;
+    // the service re-checks chair status and the feature flag on every request.
+    val messageEligibility =
+        if (currentUsername != null &&
+            chairpersons.any { (it["username"] as? String).equals(currentUsername, true) }) {
+          memberService.getCommitteeMessageEligibility(
+              committee.id, currentUsername, session.sessionId)
+        } else {
+          null
+        }
+
     // Build teacher group data with members
     val teacherGroupsMap = teacherGroups.associateBy { getSlugFromName(it.name) }
     val teacherGroupsWithMembers =
@@ -281,6 +292,23 @@ constructor(
       jsonMap["committee_subscription"] = subscriptionButtonModel(it)
     }
     followersDeferred.await()?.let { jsonMap["committee_followers"] = it }
+    messageEligibility
+        ?.takeIf { it.canMessage }
+        ?.let {
+          jsonMap["committee_message"] =
+              mapOf(
+                  "url" to "/committees/${committee.slug}/message",
+                  "followerCount" to it.followerCount,
+                  "talkLinked" to it.talkLinked,
+                  "canCreateThread" to it.canCreateThread,
+                  "maxLength" to it.maxLength,
+                  "perDayLimit" to it.perDayLimit,
+                  "perWeekLimit" to it.perWeekLimit,
+                  "sentToday" to it.sentToday,
+                  "sentThisWeek" to it.sentThisWeek,
+                  "nextAllowedAt" to it.nextAllowedAt,
+              )
+        }
 
     val archivedCount = archivedCountDeferred.await()
     if (archivedCount > 0) {

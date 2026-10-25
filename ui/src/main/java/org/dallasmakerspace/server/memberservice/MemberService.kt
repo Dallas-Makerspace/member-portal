@@ -248,6 +248,13 @@ constructor(
   ): CommitteeFollowers =
       memberServiceClient.getCommitteeFollowers(committeeId, limit, offset, sessionId)
 
+  suspend fun getCommitteeMessageEligibility(
+      committeeId: Int,
+      username: String,
+      sessionId: String?,
+  ): CommitteeMessageEligibility? =
+      memberServiceClient.getCommitteeMessageEligibility(committeeId, username, sessionId)
+
   suspend fun getMembersByUsernames(
       usernames: List<String>,
       sessionId: String?,

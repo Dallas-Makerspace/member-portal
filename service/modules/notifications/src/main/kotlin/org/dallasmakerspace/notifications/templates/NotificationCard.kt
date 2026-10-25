@@ -28,4 +28,5 @@ object CardKinds {
   const val CLASS = "class"
   const val PROJECT = "project"
   const val COURSE = "course"
+  const val MESSAGE = "message"
 }

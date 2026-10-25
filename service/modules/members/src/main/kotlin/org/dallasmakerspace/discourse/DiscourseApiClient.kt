@@ -9,6 +9,8 @@ import io.ktor.http.*
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okio.IOException
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.DmsHttpEngine
@@ -155,13 +157,30 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
       title: String,
       raw: String,
       categoryId: Int
-  ): DiscoursePostResponse {
-    val baseUrl = DISCOURSE_BASE_URL
-    val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")
-    val url = "$baseUrl/posts.json"
+  ): DiscoursePostResponse = postTopic("system", title, raw, categoryId)
 
+  override suspend fun createTopicAs(
+      username: String,
+      title: String,
+      raw: String,
+      categoryId: Int
+  ): DiscoursePostResponse = postTopic(username, title, raw, categoryId)
+
+  private suspend fun postTopic(
+      apiUsername: String,
+      title: String,
+      raw: String,
+      categoryId: Int
+  ): DiscoursePostResponse {
+    val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")
+    val url = "$DISCOURSE_BASE_URL/posts.json"
     val jsonBody =
-        """{"title": "${title.replace("\"", "\\\"")}", "raw": "${raw.replace("\"", "\\\"")}", "category": $categoryId}"""
+        buildJsonObject {
+              put("title", title)
+              put("raw", raw)
+              put("category", categoryId)
+            }
+            .toString()
 
     try {
       val response =
@@ -169,7 +188,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
             it.request(url) {
               method = HttpMethod.Post
               header("Api-Key", apiKey)
-              header("Api-Username", "system")
+              header("Api-Username", apiUsername)
               contentType(ContentType.Application.Json)
               setBody(jsonBody)
             }
@@ -178,12 +197,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
       when (response.status) {
         HttpStatusCode.OK -> {
           log.debug("Successfully created post: $title")
-          val responseBody = response.bodyAsText()
-          return json.decodeFromString<DiscoursePostResponse>(responseBody)
-        }
-        HttpStatusCode.UnprocessableEntity -> {
-          throw DiscourseApiException(
-              "Failed to create post '$title': ${response.status} - ${response.bodyAsText()}")
+          return json.decodeFromString<DiscoursePostResponse>(response.bodyAsText())
         }
         else -> {
           throw DiscourseApiException(
@@ -194,6 +208,35 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
       throw DiscourseApiException("Failed to create post '$title'", e)
     } catch (e: kotlinx.serialization.SerializationException) {
       throw DiscourseApiException("Failed to parse create post response for '$title'", e)
+    }
+  }
+
+  override suspend fun getTopic(topicId: Int): DiscourseTopicDetails {
+    val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")
+    val url = "$DISCOURSE_BASE_URL/t/$topicId.json"
+    try {
+      val response =
+          getClient().use {
+            it.request(url) {
+              method = HttpMethod.Get
+              header("Api-Key", apiKey)
+              header("Api-Username", "system")
+            }
+          }
+      when (response.status) {
+        HttpStatusCode.OK ->
+            return json.decodeFromString<DiscourseTopicDetails>(response.bodyAsText())
+        HttpStatusCode.NotFound,
+        HttpStatusCode.Forbidden,
+        HttpStatusCode.Gone -> throw DiscourseTopicNotFoundException(topicId)
+        else ->
+            throw DiscourseApiException(
+                "Failed to fetch topic $topicId: ${response.status} - ${response.bodyAsText()}")
+      }
+    } catch (e: IOException) {
+      throw DiscourseApiException("Failed to fetch topic $topicId", e)
+    } catch (e: kotlinx.serialization.SerializationException) {
+      throw DiscourseApiException("Failed to parse topic response for $topicId", e)
     }
   }
 

@@ -185,6 +185,55 @@ the committee adds a class they haven't taken yet. It is a second use of the sub
   committee info (`events.committee_id`, see `calendar/docs/rfcs/committee-field.md`). It would add a
   template on the same topic, so members keep one toggle.
 
+### Followers on the committee page
+
+Same pilot flag as the follow button, so it shows wherever the button does.
+
+- **Facepile:** the committee info card shows the follower count and a compact avatar stack
+  (`fragments/facepile.html` with `dms-facepile-sm`, 7 avatars then "+N"), linking to
+  `/committees/{slug}/followers`: a paged (48) member grid. The list is visible to any signed-in
+  member, like a member's followers on the profile page.
+- **Service:** `GET /committees/{id}/followers?limit&offset` returns `{total, usernames}`, newest
+  follower first, enabled members only (`CommitteeSubscriptionsRepository.getFollowers`).
+
+### Chair messages
+
+A committee chair can send followers one short message (120 characters) that points at a Talk thread
+through a `dallas.ms` short link.
+
+- **Flag and config:** `notifications.committee-broadcast-enabled` (pilot default, separate from the
+  follow flag) and `notifications.committee-talk-categories` (`committeeId=categoryId` pairs: the Talk
+  category for threads created on a chair's behalf). A committee missing from the map can only use an
+  existing thread.
+- **Who:** `CommitteeMessageService` (`:service`, `committees/`) checks the chair on every request:
+  membership of the committee's `chairGroupName` in AD, direct only, failing closed. The UI's
+  chair-only form is a convenience; `POST /committees/{slug}/message` (a dedicated UI handler, not
+  `/backend-api`) takes the acting member from the session, refuses a missing or foreign `Origin`, and
+  forwards only the message fields.
+- **Talk link, checked up front:** the chair needs `profile.discourse_username`, and it is confirmed
+  with Talk before anything is created (a renamed or deleted Talk account counts as unlinked). The form
+  shows a "Link my Talk account" prompt instead of the fields when it is missing.
+- **Thread:** either a pasted link (exact Talk host; the topic must exist, be public and not be a
+  private message) or "start a new thread for me", which creates a topic as the chair
+  (`IDiscourseApiClient.createTopicAs`, the API key impersonating `Api-Username`) in the committee's
+  category.
+- **Message:** plain single-line text, at most 120 characters, no links (the portal adds the only
+  link, `https://dallas.ms/<slug>`, created with `ShortLinksService`). The 120 limit is the chair's
+  text; the link is on top.
+- **Limits:** 2 per day and 3 per week per committee, counted from `committee_messages` (failed sends
+  don't count). The form shows the limits, how many are used, and when a reached limit lifts; a send
+  over a limit is a 429 with the same information.
+- **Delivery:** the normal pipeline, `committee-message` template on `CommitteeUpdatesTopic`: followers
+  other than the chair, each by their own preferences (so it can be held 5 minutes, combined, or go to
+  a digest, and the daily email cap applies). Dedupe key `committee-msg-<messageId>-<username>`.
+- **Audit:** `committee_messages` (`service/docs/sql/committee-messages-migration.sql`, re-runnable,
+  also in `create.sql`): committee, sender, text, Talk topic and URL, short URL, whether the portal
+  created the thread, recipients and status (`PENDING`, `SENT`, `FAILED`).
+- **Limits of the design:** fan-out runs inside the request (fine for hundreds of followers). A send
+  that fails after the thread was created leaves the thread in Talk; the chair can paste its link to
+  retry. A chair in the Talk-less local mock environment can't be exercised: the mock directory has no
+  chairs.
+
 ### New online courses
 
 Followers are also notified when a committee's Moodle category gets a new online course. Moodle has no

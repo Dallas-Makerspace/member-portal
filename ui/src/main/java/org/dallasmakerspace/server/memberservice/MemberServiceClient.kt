@@ -609,6 +609,69 @@ constructor(
     }
   }
 
+  /**
+   * What [username] can do about messaging [committeeId]'s followers, and what they have left of
+   * the send limits; null when the call fails, so the compose button isn't shown.
+   */
+  suspend fun getCommitteeMessageEligibility(
+      committeeId: Int,
+      username: String,
+      sessionId: String?,
+  ): CommitteeMessageEligibility? {
+    return try {
+      val url = "$baseUrl/committees/$committeeId/message-eligibility"
+      val data = dmsHttpClient.get(url, getApiHeaders(sessionId, username))["data"] as? Map<*, *>
+      data?.let { committeeMessageEligibilityFromMap(it) }
+    } catch (ex: Exception) {
+      log.warn("Failed to get committee message eligibility for $username", ex)
+      null
+    }
+  }
+
+  /** Sends [username]'s message to [committeeId]'s followers; service errors keep status + text. */
+  suspend fun sendCommitteeMessage(
+      committeeId: Int,
+      username: String,
+      body: Map<String, Any?>,
+      sessionId: String?,
+  ): CommitteeMessageCallResult {
+    return try {
+      val result =
+          dmsHttpClient.post(
+              "$baseUrl/committees/$committeeId/messages", getApiHeaders(sessionId, username), body)
+      @Suppress("UNCHECKED_CAST")
+      CommitteeMessageCallResult(
+          200, result["message"] as? String, result["data"] as? Map<String, Any?>)
+    } catch (ex: HttpException) {
+      val text = ex.message ?: ""
+      val statusCode =
+          if (ex.httpStatus != 0) ex.httpStatus
+          else Regex("Status: (\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 502
+      val parsed = embeddedErrorBody(text)
+      @Suppress("UNCHECKED_CAST")
+      CommitteeMessageCallResult(
+          statusCode,
+          (parsed?.get("message") as? String)?.takeIf { it.isNotBlank() }
+              ?: "Something went wrong. Please try again.",
+          parsed?.get("data") as? Map<String, Any?>)
+    } catch (ex: Exception) {
+      log.warn("Failed to send committee message for $username", ex)
+      CommitteeMessageCallResult(502, "Could not reach the member service. Please try again.", null)
+    }
+  }
+
+  /** The ApiResponse JSON embedded in a failed call's message (first `{` to last `}`), if any. */
+  private fun embeddedErrorBody(text: String): Map<*, *>? {
+    val start = text.indexOf('{')
+    val end = text.lastIndexOf('}')
+    if (start < 0 || end <= start) return null
+    return try {
+      watchErrorGson.fromJson(text.substring(start, end + 1), Map::class.java) as? Map<*, *>
+    } catch (e: Exception) {
+      null
+    }
+  }
+
   /** One page of [committeeId]'s followers, newest first; empty on failure. */
   suspend fun getCommitteeFollowers(
       committeeId: Int,

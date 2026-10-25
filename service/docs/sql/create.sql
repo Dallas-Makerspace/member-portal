@@ -436,6 +436,30 @@ CREATE TABLE `committee_subscriptions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Members following a committee, e.g. to be notified when it adds a class.';
 
 --
+-- Table structure for table `committee_messages`
+--
+
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `committee_messages` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `committee_id` int(11) NOT NULL COMMENT 'Committee.id from common-models (stable, never reused), not the slug',
+  `sender_profile_id` int(10) unsigned NOT NULL COMMENT 'The id of the chair who sent the message',
+  `message` varchar(120) NOT NULL COMMENT 'The chair''s text, without the short link',
+  `talk_topic_id` int(11) DEFAULT NULL COMMENT 'Talk (Discourse) topic the message points to',
+  `talk_url` varchar(255) DEFAULT NULL COMMENT 'Full Talk topic URL',
+  `short_url` varchar(255) DEFAULT NULL COMMENT 'Short link sent to followers',
+  `thread_created` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Whether the portal created the Talk thread for the chair',
+  `status` varchar(16) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING, SENT or FAILED; FAILED rows do not count toward send limits',
+  `recipient_count` int(11) NOT NULL DEFAULT 0 COMMENT 'Followers the message was fanned out to',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'When the chair sent the message (UTC)',
+  PRIMARY KEY (`id`),
+  KEY `committee_messages_committee_created_IDX` (`committee_id`,`created_at`) USING BTREE,
+  KEY `committee_messages_sender_profile_FK` (`sender_profile_id`),
+  CONSTRAINT `committee_messages_sender_profile_FK` FOREIGN KEY (`sender_profile_id`) REFERENCES `profile` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Chair messages to committee followers (audit log and send-limit source).';
+
+--
 -- Table structure for table `bambu_ephemeral_notifications`
 --
 
