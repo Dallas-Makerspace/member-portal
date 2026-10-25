@@ -1,9 +1,9 @@
 # Use eclipse temurin JRE 21 (smaller, more secure runtime-only image)
 FROM eclipse-temurin:21-jre-alpine
 
-# Pick up OS security fixes published after the base image was built (CVE-2026-77214 in libexpat,
-# fixed in 2.9.0-r0). Remove once the base image ships it.
-RUN apk upgrade --no-cache libexpat
+# Pick up OS security fixes published after the base image was built; Trivy fails the deploy on
+# fixed HIGH/CRITICAL CVEs (e.g. libexpat, brotli-libs).
+RUN apk upgrade --no-cache
 
 # Add non-root user for security
 RUN addgroup -g 1001 appuser && \
