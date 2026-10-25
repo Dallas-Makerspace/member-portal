@@ -51,6 +51,8 @@ Writes are select-then-update-or-insert because the service user has no DELETE a
   two reports also take `source=local` or `source=api` (on the data-viz URL) to force a side, so the two can be
   compared. Turn it on only after the backfill finished and `/cron/smartwaiver-reconcile` says `RESULT: OK`.
   Every kiosk photo view is logged by the UI as `Kiosk waiver photos viewed: viewer=... subject=...`.
+  The local path counts **Chicago** days (date ranges, "today", the weekday in the weekly report) and shows kiosk
+  waiver dates in Chicago time. The API path still uses UTC days, so the two differ for evening signings.
 
 ## 4. Runbook
 

@@ -117,6 +117,12 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.COMMITTEE_DETAIL.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.COMMITTEE_FOLLOWERS.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      post(RouteFactory.Paths.COMMITTEE_MESSAGE.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.BAMBU_PRINTER_STATUS.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

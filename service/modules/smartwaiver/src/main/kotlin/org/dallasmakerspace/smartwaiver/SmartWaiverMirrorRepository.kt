@@ -38,6 +38,7 @@ private const val EXPIRATION_WIDTH = 30
 private const val TEMPLATE_WIDTH = 64
 private const val CONTACT_NAME_WIDTH = 255
 private const val DEFAULT_LEGACY_COUNT = 1
+private val DATE_COMPLETED = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
 /** A kiosk photo already stored in S3, ready to be recorded against its waiver. */
 data class MirroredPhoto(
@@ -231,15 +232,15 @@ class SmartWaiverMirrorRepository @Inject constructor() {
   }
 
   /**
-   * Waivers signed from the start of [from] through the end of [to] (UTC, like the API's search),
-   * newest first. Filters on the `dateCompleted` text, which every row has, rather than on
-   * `createdOnUtc`, which rows written by the original minimal path lack.
+   * Waivers signed from [fromUtc] (inclusive) to [toUtcExclusive], newest first. Filters on the
+   * `dateCompleted` text, which every row has, rather than on `createdOnUtc`, which rows written
+   * by the original minimal path lack.
    */
-  suspend fun waiversBetween(from: LocalDate, to: LocalDate): List<LocalWaiver> =
+  suspend fun waiversBetween(fromUtc: LocalDateTime, toUtcExclusive: LocalDateTime): List<LocalWaiver> =
       newSuspendedTransaction(Dispatchers.IO, db = DBMasterConnection.db) {
         SmartWaiverMirrorTable.select {
-              (SmartWaiverMirrorTable.dateCompleted greaterEq "$from 00:00:00") and
-                  (SmartWaiverMirrorTable.dateCompleted lessEq "$to 23:59:59")
+              (SmartWaiverMirrorTable.dateCompleted greaterEq fromUtc.format(DATE_COMPLETED)) and
+                  (SmartWaiverMirrorTable.dateCompleted less toUtcExclusive.format(DATE_COMPLETED))
             }
             .orderBy(SmartWaiverMirrorTable.dateCompleted to SortOrder.DESC)
             .map { it.toLocalWaiver() }

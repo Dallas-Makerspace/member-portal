@@ -21,6 +21,20 @@ interface IDiscourseApiClient {
   suspend fun createPost(title: String, raw: String, categoryId: Int): DiscoursePostResponse
 
   /**
+   * Like [createPost] but authored by [username] (the API key impersonates them), so the topic
+   * shows them as its author and is subject to their category permissions.
+   */
+  suspend fun createTopicAs(
+      username: String,
+      title: String,
+      raw: String,
+      categoryId: Int
+  ): DiscoursePostResponse
+
+  /** The topic's details; throws [DiscourseTopicNotFoundException] when it can't be read. */
+  suspend fun getTopic(topicId: Int): DiscourseTopicDetails
+
+  /**
    * Update the status of a topic (pin, unpin, close, etc.).
    *
    * @param topicId The ID of the topic to update

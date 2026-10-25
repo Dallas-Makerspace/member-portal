@@ -35,6 +35,8 @@ import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.ProfilePhotoService
 import org.dallasmakerspace.moodle.MoodleCatalogService
 import org.dallasmakerspace.moodle.MoodleMemberCoursesService
+import org.dallasmakerspace.committees.CommitteeMessageService
+import org.dallasmakerspace.notifications.CommitteeFollowersService
 import org.dallasmakerspace.notifications.DigestProcessor
 import org.dallasmakerspace.notifications.FollowSuggestionService
 import org.dallasmakerspace.notifications.NotificationService
@@ -170,6 +172,10 @@ interface AppComponent {
   fun getFollowSuggestionService(): FollowSuggestionService
 
   fun getTopicSubscriptionService(): TopicSubscriptionService
+
+  fun getCommitteeFollowersService(): CommitteeFollowersService
+
+  fun getCommitteeMessageService(): CommitteeMessageService
 
   fun getObjectStoreFactory(): ObjectStoreFactory
 

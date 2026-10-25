@@ -202,6 +202,33 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val COMMITTEE_BROADCAST_ENABLED =
+      ConfigKey(
+          key = "notifications.committee-broadcast-enabled",
+          description =
+              "Lets a committee chair send a short message to the committee's followers; " +
+                  "can be piloted for specific usernames or AD groups before a full rollout",
+          category = "Notifications",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
+  val COMMITTEE_TALK_CATEGORIES =
+      ConfigKey(
+          key = "notifications.committee-talk-categories",
+          description =
+              "Talk category for threads created on a chair's behalf, as comma-separated " +
+                  "committeeId=categoryId pairs",
+          category = "Notifications",
+          defaultValue =
+              "1=7,2=18,3=12,4=21,5=30,6=9,7=78,8=31,9=10,11=11,19=8,12=19,13=6,14=23,15=13," +
+                  "16=69,20=64,21=42,22=63,23=41,17=17,18=99",
+          type = ConfigValueType.StringType,
+      )
+
   val FOLLOW_FEATURE_ENABLED =
       ConfigKey(
           key = "notifications.follow-feature-enabled",
@@ -285,6 +312,8 @@ object ConfigRegistry {
           WAIVER_REPORT_ALLOWED_USERNAMES,
           NOTIFICATIONS_ENABLED,
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,
+          COMMITTEE_BROADCAST_ENABLED,
+          COMMITTEE_TALK_CATEGORIES,
           FOLLOW_FEATURE_ENABLED,
           PROFILE_PHOTO_ENABLED,
           ACCOUNT_MENU_ENABLED,

@@ -3,6 +3,7 @@ package org.dallasmakerspace.smartwaiver
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
@@ -59,8 +60,9 @@ constructor(
       return cachedResponse!!.copy(metadata = updatedMetadata)
     }
 
-    // Calculate date range: past 90 days
-    val toDate = LocalDate.now()
+    // Calculate date range: past 90 days. The local mirror counts Chicago days; the API path
+    // keeps the server's date.
+    val toDate = if (local) LocalDate.now(ZoneId.of("America/Chicago")) else LocalDate.now()
     val fromDate = toDate.minusDays(REPORT_DAYS)
 
     val waivers =

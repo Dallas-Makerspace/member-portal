@@ -117,5 +117,10 @@ data class DiscoursePostStream(
 data class DiscourseTopicDetails(
     @SerialName("post_stream") val postStream: DiscoursePostStream = DiscoursePostStream(),
     @SerialName("slug") val slug: String = "",
-    @SerialName("title") val title: String = ""
+    @SerialName("title") val title: String = "",
+    @SerialName("id") val id: Int = 0,
+    @SerialName("category_id") val categoryId: Int? = null,
+    /** "regular" for a public topic; "private_message" for a PM. */
+    @SerialName("archetype") val archetype: String = "regular",
+    @SerialName("visible") val visible: Boolean = true,
 )

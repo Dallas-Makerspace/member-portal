@@ -81,6 +81,24 @@ constructor(
       }
     }
 
+    // Follower facepile, shown whenever the follow button is (same committee and pilot gating).
+    val followersDeferred = async {
+      if (subscriptionDeferred.await() == null) {
+        null
+      } else {
+        val page =
+            memberService.getCommitteeFollowers(
+                committee.id, FACEPILE_LIMIT, 0, session.sessionId)
+        val members = memberService.getMembersByUsernames(page.usernames, session.sessionId)
+        mapOf(
+            "count" to page.total,
+            "overflow" to (page.total - page.usernames.size).coerceAtLeast(0),
+            "facepile" to FacepileEntries.build(page.usernames, members),
+            "url" to "/committees/${committee.slug}/followers",
+        )
+      }
+    }
+
     // Fetch chair groups, teacher groups, and all groups in parallel
     val chairGroupsDeferred = async {
       val uniqueChairGroupSlugs =
@@ -134,6 +152,17 @@ constructor(
     // Build committee data
     val chairGroupsMap = chairGroups.associateBy { getSlugFromName(it.name) }
     val chairpersons = getChairMembersFromCache(committee, chairGroupsMap)
+
+    // Only a chair is offered the message form. This just avoids a service call for everyone else;
+    // the service re-checks chair status and the feature flag on every request.
+    val messageEligibility =
+        if (currentUsername != null &&
+            chairpersons.any { (it["username"] as? String).equals(currentUsername, true) }) {
+          memberService.getCommitteeMessageEligibility(
+              committee.id, currentUsername, session.sessionId)
+        } else {
+          null
+        }
 
     // Build teacher group data with members
     val teacherGroupsMap = teacherGroups.associateBy { getSlugFromName(it.name) }
@@ -262,6 +291,24 @@ constructor(
     subscriptionDeferred.await()?.let {
       jsonMap["committee_subscription"] = subscriptionButtonModel(it)
     }
+    followersDeferred.await()?.let { jsonMap["committee_followers"] = it }
+    messageEligibility
+        ?.takeIf { it.canMessage }
+        ?.let {
+          jsonMap["committee_message"] =
+              mapOf(
+                  "url" to "/committees/${committee.slug}/message",
+                  "followerCount" to it.followerCount,
+                  "talkLinked" to it.talkLinked,
+                  "canCreateThread" to it.canCreateThread,
+                  "maxLength" to it.maxLength,
+                  "perDayLimit" to it.perDayLimit,
+                  "perWeekLimit" to it.perWeekLimit,
+                  "sentToday" to it.sentToday,
+                  "sentThisWeek" to it.sentThisWeek,
+                  "nextAllowedAt" to it.nextAllowedAt,
+              )
+        }
 
     val archivedCount = archivedCountDeferred.await()
     if (archivedCount > 0) {
@@ -270,6 +317,10 @@ constructor(
     }
 
     call.respond(ThymeleafContent("committee-detail", jsonMap))
+  }
+
+  private companion object {
+    const val FACEPILE_LIMIT = 7
   }
 
   private fun processMembersList(

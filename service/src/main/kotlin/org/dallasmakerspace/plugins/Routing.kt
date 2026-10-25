@@ -68,6 +68,8 @@ import org.dallasmakerspace.models.AskAiRequest
 import org.dallasmakerspace.models.AskAiStreamResult
 import org.dallasmakerspace.models.NamespaceOwnerType
 import org.dallasmakerspace.moodle.routing.moodleRoutes
+import org.dallasmakerspace.committees.committeeMessageRoutes
+import org.dallasmakerspace.notifications.routing.committeeFollowersRoutes
 import org.dallasmakerspace.notifications.routing.notificationRoutes
 import org.dallasmakerspace.notifications.routing.profileSubscriptionRoutes
 import org.dallasmakerspace.notifications.routing.topicSubscriptionRoutes
@@ -1322,6 +1324,12 @@ fun Application.configureRouting() {
       AppComponentHolder.instance.getTopicSubscriptionService()
     }
     topicSubscriptionRoutes(topicSubscriptionService)
+
+    /** Who follows a committee (follower stack and page) * */
+    committeeFollowersRoutes(AppComponentHolder.instance.getCommitteeFollowersService())
+
+    /** A chair's short message to a committee's followers * */
+    committeeMessageRoutes(AppComponentHolder.instance.getCommitteeMessageService())
 
     /** Upload/remove/serve a member's profile photo * */
     val profilePhotoService by lazy { AppComponentHolder.instance.getProfilePhotoService() }

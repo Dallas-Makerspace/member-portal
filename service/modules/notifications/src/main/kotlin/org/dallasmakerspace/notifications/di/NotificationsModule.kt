@@ -26,6 +26,7 @@ import org.dallasmakerspace.notifications.templates.BambuPrinterAvailableTemplat
 import org.dallasmakerspace.notifications.templates.BambuPrinterOfflineTemplate
 import org.dallasmakerspace.notifications.templates.BambuWatchExpiredTemplate
 import org.dallasmakerspace.notifications.templates.BambuWatchOverdueTemplate
+import org.dallasmakerspace.notifications.templates.CommitteeMessageTemplate
 import org.dallasmakerspace.notifications.templates.NotificationTemplate
 import org.dallasmakerspace.notifications.templates.SystemTestTemplate
 
@@ -77,6 +78,11 @@ object NotificationsModule {
   @IntoSet
   fun provideBambuPrinterOfflineTemplate(): NotificationTemplate<*> =
       BambuPrinterOfflineTemplate()
+
+  /** Produced by the committee message service when a chair writes to their followers. */
+  @Provides
+  @IntoSet
+  fun provideCommitteeMessageTemplate(): NotificationTemplate<*> = CommitteeMessageTemplate()
 
   /** Email notifier: mocked in development, SparkPost otherwise. */
   @Provides

@@ -60,13 +60,25 @@ class LocalWaiverReadsTest {
   }
 
   @Test
-  fun `a date range covers whole days at both ends`() {
-    save("fakewaiver01", "Ann", "Fake", "2024-03-04 23:59:59")
-    save("fakewaiver02", "Bob", "Fake", "2024-03-05 00:00:00")
-    save("fakewaiver03", "Cy", "Fake", "2024-03-06 23:59:59")
-    save("fakewaiver04", "Di", "Fake", "2024-03-07 00:00:00")
+  fun `a date range covers whole Chicago days at both ends (winter, UTC-6)`() {
+    save("fakewaiver01", "Ann", "Fake", "2024-03-05 05:59:59")
+    save("fakewaiver02", "Bob", "Fake", "2024-03-05 06:00:00")
+    save("fakewaiver03", "Cy", "Fake", "2024-03-07 05:59:59")
+    save("fakewaiver04", "Di", "Fake", "2024-03-07 06:00:00")
 
     val ids = runBlocking { reads.signingData(LocalDate.of(2024, 3, 5), LocalDate.of(2024, 3, 6)) }.map { it.waiverId }
+
+    assertEquals(setOf("fakewaiver02", "fakewaiver03"), ids.toSet())
+  }
+
+  @Test
+  fun `a date range covers whole Chicago days at both ends (summer, UTC-5)`() {
+    save("fakewaiver01", "Ann", "Fake", "2024-06-05 04:59:59")
+    save("fakewaiver02", "Bob", "Fake", "2024-06-05 05:00:00")
+    save("fakewaiver03", "Cy", "Fake", "2024-06-06 04:59:59")
+    save("fakewaiver04", "Di", "Fake", "2024-06-06 05:00:00")
+
+    val ids = runBlocking { reads.summaries(LocalDate.of(2024, 6, 5), LocalDate.of(2024, 6, 5)) }.map { it.waiverId }
 
     assertEquals(setOf("fakewaiver02", "fakewaiver03"), ids.toSet())
   }
@@ -79,6 +91,25 @@ class LocalWaiverReadsTest {
 
     assertEquals(4, data.dayOfWeek)
     assertEquals(LocalDate.of(2024, 3, 7), data.date.toLocalDate())
+  }
+
+  @Test
+  fun `an evening signing counts on its Chicago day, not the UTC day`() {
+    save("fakewaiver01", "Ann", "Fake", "2024-03-08 01:30:00") // Friday UTC, Thursday 7:30 pm Chicago
+
+    val data = runBlocking { reads.signingData(LocalDate.of(2024, 3, 7), LocalDate.of(2024, 3, 7)) }.single()
+
+    assertEquals(4, data.dayOfWeek)
+    assertEquals(java.time.LocalDateTime.of(2024, 3, 7, 19, 30), data.date)
+  }
+
+  @Test
+  fun `kiosk photo waivers show the signing time in Chicago time`() {
+    save("fakewaiver01", "Pat", "Sample", "2024-03-08 01:30:00")
+
+    val result = runBlocking { reads.kioskPhotos("Pat", "Sample", "x@example.invalid") }
+
+    assertEquals("2024-03-07 19:30:00", result.single().dateCompleted)
   }
 
   @Test

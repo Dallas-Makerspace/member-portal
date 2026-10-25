@@ -240,6 +240,26 @@ constructor(
     return memberServiceClient.getSubscriptionStatus(topicKey, args, username, sessionId)
   }
 
+  suspend fun getCommitteeFollowers(
+      committeeId: Int,
+      limit: Int,
+      offset: Int,
+      sessionId: String?,
+  ): CommitteeFollowers =
+      memberServiceClient.getCommitteeFollowers(committeeId, limit, offset, sessionId)
+
+  suspend fun getCommitteeMessageEligibility(
+      committeeId: Int,
+      username: String,
+      sessionId: String?,
+  ): CommitteeMessageEligibility? =
+      memberServiceClient.getCommitteeMessageEligibility(committeeId, username, sessionId)
+
+  suspend fun getMembersByUsernames(
+      usernames: List<String>,
+      sessionId: String?,
+  ): Map<String, DMSMember> = memberServiceClient.getMembersByUsernames(usernames, sessionId)
+
   suspend fun askAi(
       sessionId: String?,
       question: String,

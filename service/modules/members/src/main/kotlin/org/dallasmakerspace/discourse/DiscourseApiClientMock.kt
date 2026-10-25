@@ -56,6 +56,26 @@ class DiscourseApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
         topicSlug = title.lowercase().replace(" ", "-").replace(Regex("[^a-z0-9-]"), ""))
   }
 
+  override suspend fun createTopicAs(
+      username: String,
+      title: String,
+      raw: String,
+      categoryId: Int
+  ): DiscoursePostResponse {
+    log.info("Mocked creating topic as $username: $title in category $categoryId")
+    return createPost(title, raw, categoryId)
+  }
+
+  /** Topic ids 404 and 403 are "missing" and "private" so those paths can be tried locally. */
+  override suspend fun getTopic(topicId: Int): DiscourseTopicDetails {
+    log.info("Mocked fetching topic: $topicId")
+    return when (topicId) {
+      404 -> throw DiscourseTopicNotFoundException(topicId)
+      403 -> DiscourseTopicDetails(id = topicId, archetype = "private_message", visible = false)
+      else -> DiscourseTopicDetails(id = topicId, slug = "mock-topic", title = "Mock topic")
+    }
+  }
+
   override suspend fun updateTopicStatus(topicId: Int, status: String, enabled: Boolean) {
     log.info("Mocked updating topic $topicId status: $status = $enabled")
   }
