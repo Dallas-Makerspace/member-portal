@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+    Overlapping avatar stack. items: rows with username, display_name, avatar_url. overflow: how many
+    more there are (the "+N" link to allUrl). sizeClass: '' for the full size, 'dms-facepile-sm' for
+    the compact one used in side rails.
+-->
+<div th:fragment="facepile(items, overflow, allUrl, total, noun, sizeClass)" class="dms-facepile"
+     th:classappend="${sizeClass}">
+    <a th:each="m : ${items}" class="dms-facepile-item"
+       th:href="'/profile/@' + ${m['username']}" th:title="${m['display_name']}">
+        <img class="dms-facepile-avatar" th:src="${m['avatar_url']}"
+             th:alt="${m['display_name']}" loading="lazy">
+    </a>
+    <a th:if="${overflow > 0}" class="dms-facepile-item dms-facepile-more"
+       th:href="${allUrl}" th:text="'+' + ${overflow}"
+       th:title="'View all ' + ${total} + ' ' + ${noun}"></a>
+</div>
+</body>
+</html>

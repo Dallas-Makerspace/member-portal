@@ -81,6 +81,24 @@ constructor(
       }
     }
 
+    // Follower facepile, shown whenever the follow button is (same committee and pilot gating).
+    val followersDeferred = async {
+      if (subscriptionDeferred.await() == null) {
+        null
+      } else {
+        val page =
+            memberService.getCommitteeFollowers(
+                committee.id, FACEPILE_LIMIT, 0, session.sessionId)
+        val members = memberService.getMembersByUsernames(page.usernames, session.sessionId)
+        mapOf(
+            "count" to page.total,
+            "overflow" to (page.total - page.usernames.size).coerceAtLeast(0),
+            "facepile" to FacepileEntries.build(page.usernames, members),
+            "url" to "/committees/${committee.slug}/followers",
+        )
+      }
+    }
+
     // Fetch chair groups, teacher groups, and all groups in parallel
     val chairGroupsDeferred = async {
       val uniqueChairGroupSlugs =
@@ -262,6 +280,7 @@ constructor(
     subscriptionDeferred.await()?.let {
       jsonMap["committee_subscription"] = subscriptionButtonModel(it)
     }
+    followersDeferred.await()?.let { jsonMap["committee_followers"] = it }
 
     val archivedCount = archivedCountDeferred.await()
     if (archivedCount > 0) {
@@ -270,6 +289,10 @@ constructor(
     }
 
     call.respond(ThymeleafContent("committee-detail", jsonMap))
+  }
+
+  private companion object {
+    const val FACEPILE_LIMIT = 7
   }
 
   private fun processMembersList(

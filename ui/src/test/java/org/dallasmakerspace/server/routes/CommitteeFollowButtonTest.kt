@@ -22,11 +22,13 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.DMSGroup
+import org.dallasmakerspace.models.DMSMember
 import org.dallasmakerspace.models.SubscriptionCopy
 import org.dallasmakerspace.models.SubscriptionStatus
 import org.dallasmakerspace.models.TopicKeys
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
+import org.dallasmakerspace.server.memberservice.CommitteeFollowers
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.plugins.UserSession
 import org.mockito.kotlin.any
@@ -72,7 +74,10 @@ class CommitteeFollowButtonTest {
     return provider
   }
 
-  private fun service(subscription: SubscriptionStatus?): MemberService {
+  private fun service(
+      subscription: SubscriptionStatus?,
+      followers: CommitteeFollowers = CommitteeFollowers(0, emptyList()),
+  ): MemberService {
     val service = mock<MemberService>()
     runBlocking {
       whenever(service.getAllGroups(anyOrNull())).thenReturn(emptyList<DMSGroup>())
@@ -80,6 +85,9 @@ class CommitteeFollowButtonTest {
       whenever(service.getArchivedGroups(any(), anyOrNull())).thenReturn(emptyList())
       whenever(service.getSubscriptionStatus(any(), any(), any(), anyOrNull()))
           .thenReturn(subscription)
+      whenever(service.getCommitteeFollowers(any(), any(), any(), anyOrNull())).thenReturn(followers)
+      whenever(service.getMembersByUsernames(any(), anyOrNull()))
+          .thenReturn(emptyMap<String, DMSMember>())
     }
     return service
   }
@@ -160,5 +168,32 @@ class CommitteeFollowButtonTest {
     runBlocking {
       verify(service, never()).getSubscriptionStatus(any(), any(), any(), anyOrNull())
     }
+  }
+
+  @Test
+  fun `followers are shown as a compact facepile with an overflow link`() {
+    val followers = CommitteeFollowers(10, listOf("jdoe", "asmith", "bsmith"))
+    committeePage(service(status(subscribed = false), followers), laser.slug) { html ->
+      assertTrue("id=\"committeeFollowers\"" in html, html)
+      assertTrue("dms-facepile dms-facepile-sm" in html, html)
+      assertTrue("href=\"/profile/@jdoe\"" in html, html)
+      assertTrue(">+7<" in html.replace(Regex("\\s+"), ""), "10 followers, 3 shown, so +7")
+      assertTrue("/committees/${laser.slug}/followers" in html, html)
+    }
+  }
+
+  @Test
+  fun `a committee with no followers says so without a facepile`() {
+    committeePage(service(status(subscribed = false)), laser.slug) { html ->
+      assertTrue("id=\"committeeFollowers\"" in html, html)
+      assertFalse("dms-facepile-sm" in html.substringAfter("committeeFollowers"), html)
+    }
+  }
+
+  @Test
+  fun `no follower list when the follow feature is off for the viewer`() {
+    val service = service(null, CommitteeFollowers(3, listOf("jdoe")))
+    committeePage(service, laser.slug) { html -> assertFalse("committeeFollowers" in html) }
+    runBlocking { verify(service, never()).getCommitteeFollowers(any(), any(), any(), anyOrNull()) }
   }
 }

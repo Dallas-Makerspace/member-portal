@@ -8,6 +8,7 @@ import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.ProfileResolver
 import org.jetbrains.exposed.exceptions.ExposedSQLException
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.and
@@ -73,6 +74,18 @@ class CommitteeSubscriptionsRepository @Inject constructor(loggerFactory: Logger
             .map { it[CommitteeSubscriptionsTable.profileId] }
             .distinct()
     ProfileResolver.resolveUsernames(profileIds).values.sorted()
+  }
+
+  /** Enabled members following [committeeId], newest follower first. */
+  suspend fun getFollowers(committeeId: Int): List<String> = suspendTransaction {
+    val rows =
+        CommitteeSubscriptionsTable.select { CommitteeSubscriptionsTable.committeeId eq committeeId }
+            .orderBy(
+                CommitteeSubscriptionsTable.createdAt to SortOrder.DESC,
+                CommitteeSubscriptionsTable.profileId to SortOrder.DESC)
+            .map { it[CommitteeSubscriptionsTable.profileId] }
+    val usernames = ProfileResolver.resolveEnabledUsernames(rows)
+    rows.mapNotNull { usernames[it] }
   }
 
   /** SQLSTATE class 23 is an integrity violation, which here can only be the primary key. */

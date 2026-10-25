@@ -53,6 +53,16 @@
                     <div th:if="${committee_subscription != null}" class="dms-subscribe-start mt-3">
                         <th:block th:replace="~{fragments/subscribe-button :: button(${committee_subscription})}"></th:block>
                     </div>
+                    <div th:if="${committee_followers != null}" id="committeeFollowers" class="mt-3">
+                        <a th:href="${committee_followers['url']}"
+                           class="d-block text-muted text-decoration-none small mb-2">
+                            <span th:text="${committee_followers['count']}"></span>
+                            <span th:text="${committee_followers['count'] == 1} ? 'follower' : 'followers'"></span>
+                        </a>
+                        <th:block th:if="${committee_followers['count'] > 0}">
+                            <div th:replace="~{fragments/facepile :: facepile(${committee_followers['facepile']}, ${committee_followers['overflow']}, ${committee_followers['url']}, ${committee_followers['count']}, 'followers', 'dms-facepile-sm')}"></div>
+                        </th:block>
+                    </div>
                     <div th:if="${committee.homepageUrl}" class="mt-3">
                         <a th:href="${committee.homepageUrl}" target="_blank"
                            class="text-decoration-none text-muted small"

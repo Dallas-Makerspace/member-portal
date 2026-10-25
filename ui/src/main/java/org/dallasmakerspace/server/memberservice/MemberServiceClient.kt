@@ -609,6 +609,25 @@ constructor(
     }
   }
 
+  /** One page of [committeeId]'s followers, newest first; empty on failure. */
+  suspend fun getCommitteeFollowers(
+      committeeId: Int,
+      limit: Int,
+      offset: Int,
+      sessionId: String?,
+  ): CommitteeFollowers {
+    return try {
+      val url = "$baseUrl/committees/$committeeId/followers?limit=$limit&offset=$offset"
+      val data = dmsHttpClient.get(url, getApiHeaders(sessionId))["data"] as? Map<*, *>
+      CommitteeFollowers(
+          total = (data?.get("total") as? Number)?.toInt() ?: 0,
+          usernames = (data?.get("usernames") as? List<*>)?.filterIsInstance<String>().orEmpty())
+    } catch (ex: Exception) {
+      log.warn("Failed to get followers of committee: $committeeId", ex)
+      CommitteeFollowers(0, emptyList())
+    }
+  }
+
   /**
    * Batch member lookup, username -> member. Mirrors `POST /members/batch` as used by
    * dms-member-service.js for `dms-member-card`. Used for decorative data (e.g. facepile avatars),

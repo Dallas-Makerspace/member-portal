@@ -1140,6 +1140,33 @@ a.dms-facepile-item:focus-visible {
     }
 }
 
+/* Compact facepile for side rails: smaller coins, a plain "+N" circle instead of the two-circle overflow */
+.dms-facepile-sm .dms-facepile-item {
+    width: 28px;
+    height: 28px;
+    margin-left: -7px;
+    border-width: 2px;
+}
+
+.dms-facepile-sm .dms-facepile-item:first-child {
+    margin-left: 0;
+}
+
+.dms-facepile-sm .dms-facepile-item:nth-child(7) { z-index: 9; }
+.dms-facepile-sm .dms-facepile-item:nth-child(8) { z-index: 8; }
+
+.dms-facepile-sm .dms-facepile-more {
+    width: auto;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border: 2px solid #fff;
+    border-radius: 14px;
+    background: #e9ecef;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+    font-size: 11px;
+}
+
 /* Communication preference banner */
 .settings-banner {
     background-color: #fff3cd;

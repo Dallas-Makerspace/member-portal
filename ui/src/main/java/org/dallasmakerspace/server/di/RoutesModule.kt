@@ -25,6 +25,7 @@ import org.dallasmakerspace.server.routes.CabinetsHandler
 import org.dallasmakerspace.server.routes.CamerasApiHandler
 import org.dallasmakerspace.server.routes.CamerasHandler
 import org.dallasmakerspace.server.routes.CommitteeDetailHandler
+import org.dallasmakerspace.server.routes.CommitteeFollowersHandler
 import org.dallasmakerspace.server.routes.CommitteesHandler
 import org.dallasmakerspace.server.routes.ConfigAdminHandler
 import org.dallasmakerspace.server.routes.GroupMemberManagementHandler
@@ -349,6 +350,15 @@ class RoutesModule {
       sectionProviders: Set<@JvmSuppressWildcards CommitteePageSectionProvider>,
   ): IRouteHandler =
       CommitteeDetailHandler(loggerFactory, userInfoProvider, memberService, sectionProviders)
+
+  @IntoMap
+  @Provides
+  @StringKey("/committees/{committee_slug}/followers")
+  fun providesCommitteeFollowersHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberService: MemberService,
+  ): IRouteHandler = CommitteeFollowersHandler(loggerFactory, userInfoProvider, memberService)
 
   @IntoMap
   @Provides

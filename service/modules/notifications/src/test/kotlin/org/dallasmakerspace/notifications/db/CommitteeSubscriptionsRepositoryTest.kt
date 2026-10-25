@@ -9,11 +9,14 @@ import org.dallasmakerspace.core.DBMemberPortalConnection
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.members.db.ProfileTable
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Test
@@ -95,5 +98,21 @@ class CommitteeSubscriptionsRepositoryTest {
     assertEquals(listOf("asmith", "bsmith", "jdoe"), repository.getSubscribers(listOf(7, 9, 12)))
     assertTrue(repository.getSubscribers(emptyList()).isEmpty())
     assertTrue(repository.getSubscribers(listOf(99)).isEmpty())
+  }
+
+  @Test
+  fun `getFollowers lists only enabled followers of that committee, newest first`() = runBlocking {
+    transaction(DBMemberPortalConnection.db) {
+      ProfileTable.update({ ProfileTable.username eq "asmith" }) { it[isEnabled] = false }
+      ProfileTable.update({ ProfileTable.username neq "asmith" }) { it[isEnabled] = true }
+    }
+    repository.subscribe("jdoe", 7)
+    repository.subscribe("asmith", 7)
+    repository.subscribe("bsmith", 7)
+    repository.subscribe("bsmith", 9)
+
+    assertEquals(listOf("bsmith", "jdoe"), repository.getFollowers(7))
+    assertEquals(listOf("bsmith"), repository.getFollowers(9))
+    assertTrue(repository.getFollowers(99).isEmpty())
   }
 }
