@@ -39,7 +39,7 @@ UI status page ──POST/DELETE/GET /backend-api/... (dedicated UI handlers)─
                                               EphemeralNotificationService.arm/cancel/list
                                                 → bambu_ephemeral_notifications (ARMED, expires_at = now + TTL)
 
-BambuNotificationSweeper (service Routing launch loop, 30 s, §10)
+BambuNotificationScheduler (service Routing launch, event/deadline driven, §10)
    ├─ due ARMED watches → one BamBuddy check → fire real notice | overdue notice + re-arm once | expire + check-yourself notice
    ├─ due pending offline alerts → one re-check → suppress if back online | NotificationService.createForMembers to topic subscribers
    └─ purge tombstones / resolved pending rows older than retention (7 days, configurable)
@@ -57,6 +57,7 @@ BambuNotificationSweeper (service Routing launch loop, 30 s, §10)
 | `EphemeralNotificationService` | `:service:bambuddy` · `…bambuddy.notifications` | Arm / cancel / list / fire / expire / re-arm — the state machine (§9) |
 | `BambuddyWebhookPayload`, `BambuddyWebhookHandler` | `:service:bambuddy` · `…bambuddy.notifications.webhook` | Payload model + receiver logic (§6). **Not** a `webhook.WebhookHandler` — see §6.1 |
 | `BambuNotificationSweeper` | `:service:bambuddy` · `…bambuddy.notifications` | Expiry checks, offline-hold release, tombstone purge (§10) |
+| `BambuNotificationScheduler`, `BambuWakeSignal`, `BambuScheduleRepository` | same · `…notifications.db` | Sleeps until the next stored deadline or an in-process wake, then runs the sweeper passes (§10.1) |
 | `BambuCommitteeAlertsSubscriptionHandler` | `:service:bambuddy` · `…bambuddy.notifications.subscriptions` | `TopicSubscriptionHandler` for the committee topic (§11) |
 | 5 topics + 6 templates | `:service:notifications` · `topics/` + `templates/` | §4. Registered `@IntoSet` in `NotificationsModule` (pattern: `SystemTestTemplate`) |
 | `NotificationService` consent override | `:service:notifications` | One new field + one skipped branch (§5) |
@@ -107,7 +108,7 @@ Dependency changes:
   registration is `WebhookModule` registering notification templates.
   All other new bambuddy classes are concrete `@Singleton @Inject` classes
   needing no explicit `@Provides`. `AppComponent` gains
-  `getBambuddyWebhookHandler()` and `getBambuNotificationSweeper()`.
+  `getBambuddyWebhookHandler()` and `getBambuNotificationScheduler()`.
 
 ---
 
@@ -231,9 +232,9 @@ verbatim; the dotted style is used for all five for consistency.)
 
 | Topic object (`notifications/topics/`) | Key | `visibleInPreferences` | Templates (`notifications/templates/`) |
 |---|---|---|---|
-| `BambuPrintFinishedTopic` | `bambu.print.finished` | `true` | `BambuPrintFinishedTemplate` (`bambu-print-finished`) |
-| `BambuPrintActionRequiredTopic` | `bambu.print.action-required` | `true` | `BambuPrintActionRequiredTemplate` (`bambu-print-action-required`) |
-| `BambuPrinterAvailableTopic` | `bambu.printer.available` | `true` | `BambuPrinterAvailableTemplate` (`bambu-printer-available`) |
+| `BambuPrintFinishedTopic` | `bambu.print.finished` | `false` — produced only with the click consent override, so a toggle would do nothing | `BambuPrintFinishedTemplate` (`bambu-print-finished`) |
+| `BambuPrintActionRequiredTopic` | `bambu.print.action-required` | `false` — same reason | `BambuPrintActionRequiredTemplate` (`bambu-print-action-required`) |
+| `BambuPrinterAvailableTopic` | `bambu.printer.available` | `false` — same reason | `BambuPrinterAvailableTemplate` (`bambu-printer-available`) |
 | `BambuWatchTopic` | `bambu.watch` | `false` — lifecycle notices belong to a click, not a standing preference; a toggle would imply control over future watches that doesn't exist | `BambuWatchOverdueTemplate` (`bambu-watch-overdue`), `BambuWatchExpiredTemplate` (`bambu-watch-expired`) |
 | `BambuCommitteeAlertsTopic` | `bambu.committee-alerts` | `true` | `BambuPrinterOfflineTemplate` (`bambu-printer-offline`) |
 
@@ -412,7 +413,8 @@ any of the optional fields being absent without failing the event.
 | Malformed JSON body | **400** | The one client-error case: the payload is not BamBuddy-shaped at all |
 | Missing/wrong `Authorization`; secret not configured | **401** | No body detail beyond "Unauthorized" |
 | Feature fully off (§12) | **200** | Log "ignored, feature off" once per event |
-| Unexpected internal failure (DB down, etc.) | **500** | Deliberate: the event is lost either way (no retries), but 500 surfaces in BamBuddy's provider `last_error`, which an operator can see; a masked 200 would hide a portal outage |
+| Body over ~256 KB (declared `Content-Length`, or more bytes than the cap when read; the read is bounded, so chunked bodies are covered) | **413** | Checked after auth, before the body is buffered |
+| Unexpected internal failure (DB down, etc.), or any watch failing to fire (every correlated watch is still attempted first) | **500** | Deliberate: the event is lost either way (no retries), but 500 surfaces in BamBuddy's provider `last_error`, which an operator can see; a masked 200 would hide a portal outage |
 
 **Inline vs deferred.** BamBuddy's POST is fire-and-forget with no stated
 timeout, but the handler still returns promptly: inline work is auth →
@@ -600,8 +602,14 @@ Check against Revision 3's worked examples: 20 → 80 (1 h 20 m); 300 → 360
    Note its documented quirk: it can be `0`/null early in a print.
 2. The queue row's slicer estimate: `ceil(print_time_seconds / 60)`
    (`BambuQueueItem.printTimeSeconds` — the archive/slicer estimate the
-   requirements' fallback refers to). This is also the *primary* source
-   for `pending` own-job watches, which have no live remaining time.
+   requirements' fallback refers to).
+
+   A `pending` own-job watch does not start until the queue ahead of it
+   is done, so its remaining time is `BambuTtl.pendingFinishMinutes`: the
+   job running on that printer (live remaining, else its estimate) + the
+   estimates of pending rows ahead of it (by queue `position`, then id) +
+   its own estimate. Rows without an estimate count as 0; a missing own
+   estimate is still the 422 below.
 3. Neither exists or both are ≤ 0 → **reject the arm** (422):
    *"We can't estimate how long this print will run yet, so we can't set
    a reminder for it. Try again in a moment, once printing is under way."*
@@ -695,23 +703,41 @@ over an expiry notice.
 
 ## 10. Expiry sweeper
 
-### 10.1 Cadence and hosting
+### 10.1 Scheduling: events and deadlines, no polling
 
-`BambuNotificationSweeper` (`@Singleton`, bambuddy module) with three
-suspend passes: `processDueWatches()`, `releaseDueOfflineAlerts()`,
-`purgeTombstones()` — each returns a summary string for logging, exactly
-like `NotificationWorker.processPending()`. The app launches it in
-`Routing.kt` beside the notification worker / digest loops:
+`BambuNotificationSweeper` (`@Singleton`, bambuddy module) has the passes
+`processDueWatches()`, `releaseDueOfflineAlerts()`, `purgeTombstones()` and
+`reconcile()`; each pass returns a `SweepResult` (log summary + failure
+count). `BambuNotificationScheduler` drives them; the app launches it once
+in `Routing.kt`, gated by `app.bambuddy.notifications.sweeper.enabled`
+(default true). There is no fixed interval and no idle DB traffic:
 
-- gated by `app.bambuddy.notifications.sweeper.enabled` (default true),
-- interval `app.bambuddy.notifications.sweeper-interval-ms`
-  (default **30 000** — fine-grained enough that expiry notices land
-  within ~30 s of their deadline plus one BamBuddy check; coarse enough
-  to be negligible load),
-- each pass wrapped in try/catch + `delay`, failures logged, loop never dies,
-- batch limit 50 watches / 50 pending alerts per pass (oldest first), so a
+- Loop: run the passes, then read the next deadline
+  (`BambuScheduleRepository.nextDue()`: earliest ARMED `expires_at` /
+  PENDING `release_at`, one transaction) and sleep until
+  `min(that, next daily purge)` or a wake.
+- `BambuWakeSignal.wake()` (conflated) is called after a watch is created
+  (not on an idempotent re-click), after a re-arm or a printer-available
+  retarget, and after a new offline episode is inserted. Producers hold the
+  signal rather than the scheduler, so there is no dependency cycle with the
+  sweeper.
+- Feature fully off (§12): nothing is queried; the loop only waits for a
+  wake (the first event after the flag is turned on).
+- Startup: one probe read plus reconciliation. If the probe fails (e.g. the
+  migration was not applied) one warning is logged and the loop waits for a
+  wake; there is no retry loop.
+- Failures: a pass with failed items (or a failing pass after startup) backs
+  off 60 s, doubling to 15 min, and reconciles stranded tombstones. A
+  deadline that stays in the past without any failure is treated the same
+  after 5 back-to-back runs, so it can never spin.
+- Reconciliation runs at startup and after any pass with failures; the purge
+  runs once a day.
+- Several instances (blue/green) may run at once; the atomic claims decide
+  who handles each item. There is no cross-instance signalling, so an
+  instance only learns of another instance's earlier deadline when its own
+  sleep ends (the creating instance wakes itself).
+- Batch limit 50 watches / 50 pending alerts per pass (oldest first), so a
   backlog drains over successive passes instead of one long transaction.
-- When the feature is fully off (§12) passes no-op.
 
 ### 10.2 Expiry decision table (per due ARMED watch)
 
@@ -742,6 +768,16 @@ Overdue and expired-final notices use dedupe keys
 `bambu:watch:{watchId}:overdue` and `bambu:watch:{watchId}:expired`
 (§14 note on dedupe shape) so a sweeper retry can never double-send them.
 
+**Printer-available watches are never announced while work is queued.**
+Before a printer-available watch fires (webhook path and the expiry
+decision above), the queue is checked for a `pending` row on that printer.
+If one exists the watch is retargeted instead (`claimForRetarget`: queue id /
+filename / job name of the next pending row by position, new `expires_at`
+from `BambuTtl`, stays ARMED, `rearm_count` untouched) and the scheduler is
+woken; no notice is sent. A failed queue read skips the check and fires as
+before. The "available" copy also says the last print may still need to be
+cleared from the bed.
+
 ### 10.3 Offline-hold release
 
 Same loop, `releaseDueOfflineAlerts()`: rows `PENDING` with
@@ -754,7 +790,8 @@ fan out for an episode another instance had already resolved as
 SUPPRESSED. The winner then does the one re-check:
 `getPrinterStatus(printer_id)` → effective state, and resolves
 `PROCESSING → SENT | SUPPRESSED`; a failed attempt returns the claim to
-`PENDING` for the next pass. (`status` is a string column, so
+`PENDING` for the next pass. The email states the hold that episode used
+(`release_at - offline_since`). (`status` is a string column, so
 `PROCESSING` needed no DDL change; the migration and `create.sql`
 comments list it.)
 
@@ -781,6 +818,10 @@ purged.
 ---
 
 ## 11. Committee printer-offline flow
+
+The hold length is `bambu-notifications.offline-hold-minutes`; the
+subscribe-button copy (`BambuCommitteeAlertsSubscriptionHandler.copy`, now
+`suspend`) and the status-page hint read it, so no UI text hard-codes "5".
 
 ### 11.1 Receipt
 
@@ -869,7 +910,7 @@ not yet with email-sending watches). The UI page requires
 flag cannot gate them. The receiver processes events when the feature is
 in *any* rollout state — `ConfigOverrideService.get(BAMBU_NOTIFICATIONS_ENABLED)`
 has `enabled == true` **or** a non-empty pilot list (pilot members' watches
-must be fireable). Fully off (shipped default) → 200 + log, nothing else.
+must be fireable). Fully off → 200 + log, nothing else (the shipped default is a pilot, not fully off: see §12.2).
 This is checked per event (cheap; site config is cached) so flipping the
 flag stops processing without a restart. The sweeper applies the same
 check per pass.
@@ -882,15 +923,19 @@ app.bambuddy {
   webhook-secret = ${?BAMBUDDY_WEBHOOK_SECRET}
   notifications {
     sweeper.enabled = true          # ${?BAMBU_NOTIFICATIONS_SWEEPER_ENABLED}
-    sweeper-interval-ms = 30000     # ${?BAMBU_NOTIFICATIONS_SWEEPER_INTERVAL_MS}
   }
 }
 ```
 
-`.env.template` gains `BAMBUDDY_WEBHOOK_SECRET`,
-`BAMBU_NOTIFICATIONS_SWEEPER_ENABLED`,
-`BAMBU_NOTIFICATIONS_SWEEPER_INTERVAL_MS` with comments. No UI-side
+`.env.template` gains `BAMBUDDY_WEBHOOK_SECRET` (placeholder
+`your-bambuddy-webhook-secret-here`, rejected like unset in every mode) and
+`BAMBU_NOTIFICATIONS_SWEEPER_ENABLED` with comments. The old
+`BAMBU_NOTIFICATIONS_SWEEPER_INTERVAL_MS` is gone (§10.1). No UI-side
 secrets: the UI never sees the BamBuddy secret.
+
+`bambu-notifications.enabled` ships as a pilot (not fully off): enabled for
+`mandarlimaye` and the `IT Early Access` group, off for everyone else.
+Receiver and scheduler therefore run in that state (any-rollout gating).
 
 ---
 

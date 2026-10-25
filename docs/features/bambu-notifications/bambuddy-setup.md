@@ -7,11 +7,14 @@ Bambu printer notifications (design: [`design.md`](design.md)).
 `service/docs/sql/bambu-notifications-migration.sql` to the Member Portal
 database **before** setting the secret, deploying, or enabling any flag
 (design §17 step 1). Without it the watch/offline tables don't exist and
-every webhook and sweeper pass fails.
+every webhook fails, and the scheduler logs one warning at startup and then
+idles until the next event.
 
 Do the rest **after** the service is deployed with
-`BAMBUDDY_WEBHOOK_SECRET` set, and after the
-`bambu-notifications.enabled` site config has been piloted.
+`BAMBUDDY_WEBHOOK_SECRET` set (the `.env.template` placeholder is rejected
+like an unset value), and after the `bambu-notifications.enabled` site
+config has been piloted. It ships as a pilot (the early-access group), not
+fully off; the scheduler and receiver run in that state.
 
 ## 1. Create the webhook provider in BamBuddy
 
@@ -65,10 +68,11 @@ and log noise for no benefit.
    email within ~5 minutes (the notification worker's hold window), and
    BamBuddy's notification log should show a successful delivery for the
    `print_complete` event.
-3. Power off (or disconnect) one printer for more than 5 minutes with a
+3. Power off (or disconnect) one printer for longer than the offline hold
+   (`bambu-notifications.offline-hold-minutes`, default 5) with a
    tester subscribed to committee alerts ("Notify me" button on the
    status page): exactly one offline email should arrive after the hold +
-   re-check. Power it back on within 5 minutes on a second test: no
+   re-check. Power it back on within the hold on a second test: no
    email should arrive (the alert is suppressed at release).
 
 ## 5. Switching off
