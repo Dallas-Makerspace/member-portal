@@ -34,8 +34,14 @@
                         <strong id="committeeMessageNext">later</strong>.</p>
                 </div>
 
+                <!-- Followers other than the sender; with none, a send would be refused. -->
+                <p class="mb-0" id="committeeMessageNoFollowers"
+                   th:if="${msg['talkLinked'] and msg['nextAllowedAt'] == null and msg['followerCount'] == 0}">
+                    No one else follows <span th:text="${committeeName}"></span> yet, so there is no one to
+                    message. Followers other than you will appear here.</p>
+
                 <form id="committeeMessageForm" novalidate
-                      th:if="${msg['talkLinked'] and msg['nextAllowedAt'] == null}">
+                      th:if="${msg['talkLinked'] and msg['nextAllowedAt'] == null and msg['followerCount'] > 0}">
                     <div class="mb-3">
                         <label for="committeeMessageText" class="form-label">Message</label>
                         <textarea class="form-control" id="committeeMessageText" rows="3"
@@ -98,7 +104,7 @@
                         id="committeeMessageClose">Close</button>
                 <button type="submit" form="committeeMessageForm" class="btn btn-primary"
                         id="committeeMessageSend"
-                        th:if="${msg['talkLinked'] and msg['nextAllowedAt'] == null}">
+                        th:if="${msg['talkLinked'] and msg['nextAllowedAt'] == null and msg['followerCount'] > 0}">
                     Send to <span th:text="${msg['followerCount']}"></span>
                     <span th:text="${msg['followerCount'] == 1} ? 'follower' : 'followers'"></span>
                 </button>

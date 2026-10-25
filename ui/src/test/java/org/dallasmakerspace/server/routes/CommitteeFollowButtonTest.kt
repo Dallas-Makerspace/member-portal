@@ -218,6 +218,7 @@ class CommitteeFollowButtonTest {
 
   private fun eligibility(
       talkLinked: Boolean = true,
+      followerCount: Int = 12,
       nextAllowedAt: String? = null,
       canCreateThread: Boolean = true,
   ) =
@@ -225,7 +226,7 @@ class CommitteeFollowButtonTest {
           canMessage = true,
           talkLinked = talkLinked,
           canCreateThread = canCreateThread,
-          followerCount = 12,
+          followerCount = followerCount,
           maxLength = 120,
           perDayLimit = 2,
           perWeekLimit = 3,
@@ -246,6 +247,17 @@ class CommitteeFollowButtonTest {
       assertTrue("Send to 12 followers" in text, text)
       assertTrue("/static/js/committee-message.js" in html)
       assertTrue("Start a new Talk thread for me" in html)
+    }
+  }
+
+  @Test
+  fun `with no followers besides the sender the form says so instead of offering a send to 0`() {
+    val service =
+        service(status(false), chairs = listOf("mia"), eligibility = eligibility(followerCount = 0))
+    committeePage(service, laser.slug) { html ->
+      assertTrue("id=\"committeeMessageNoFollowers\"" in html, html)
+      assertFalse("id=\"committeeMessageForm\"" in html)
+      assertFalse("id=\"committeeMessageSend\"" in html)
     }
   }
 
