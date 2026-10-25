@@ -159,7 +159,7 @@ class CommitteeMessageServiceTest {
       assertFailsWith<CommitteeMessageException> { runBlocking { block() } }
 
   @Test
-  fun `a chair sends to followers other than themselves and gets the short link`() = runBlocking {
+  fun `a chair sends to the committee followers, themselves included, and gets the short link`() = runBlocking {
     val result = service.send("chairperson", laser.id, existingThread())
 
     assertEquals(7, result.id)
@@ -180,7 +180,7 @@ class CommitteeMessageServiceTest {
             any(),
             dedupe.capture(),
             any())
-    assertEquals(listOf("asmith", "bsmith"), recipients.firstValue.toList())
+    assertEquals(listOf("chairperson", "asmith", "bsmith"), recipients.firstValue.toList())
     assertEquals("committee-msg-7-asmith", dedupe.firstValue("asmith"))
     assertTrue("Meeting moved to Thursday" in payload.firstValue)
     assertTrue("https://dallas.ms/abc123" in payload.firstValue)
@@ -343,7 +343,7 @@ class CommitteeMessageServiceTest {
 
   @Test
   fun `nothing is sent when no one follows the committee`() {
-    runBlocking { whenever(followers.getFollowers(laser.id)).thenReturn(listOf("chairperson")) }
+    runBlocking { whenever(followers.getFollowers(laser.id)).thenReturn(emptyList()) }
 
     val error = errorOf { service.send("chairperson", laser.id, existingThread()) }
 
@@ -416,7 +416,7 @@ class CommitteeMessageServiceTest {
     assertTrue(eligibility.canMessage)
     assertTrue(eligibility.talkLinked)
     assertTrue(eligibility.canCreateThread)
-    assertEquals(2, eligibility.followerCount)
+    assertEquals(3, eligibility.followerCount)
     assertEquals(1, eligibility.sentToday)
     assertEquals(2, eligibility.sentThisWeek)
     assertEquals(null, eligibility.nextAllowedAt)

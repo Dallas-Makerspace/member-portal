@@ -226,7 +226,7 @@ through a `dallas.ms` short link.
   don't count). The form shows the limits, how many are used, and when a reached limit lifts; a send
   over a limit is a 429 with the same information.
 - **Delivery:** the normal pipeline, `committee-message` template on `CommitteeUpdatesTopic`: followers
-  other than the chair, each by their own preferences (so it can be held 5 minutes, combined, or go to
+  (the sender too, if they follow, so they see what followers see), each by their own preferences (so it can be held 5 minutes, combined, or go to
   a digest, and the daily email cap applies). Dedupe key `committee-msg-<messageId>-<username>`.
 - **Audit:** `committee_messages` (`service/docs/sql/committee-messages-migration.sql`, re-runnable,
   also in `create.sql`): committee, sender, text, Talk topic and URL, short URL, whether the portal

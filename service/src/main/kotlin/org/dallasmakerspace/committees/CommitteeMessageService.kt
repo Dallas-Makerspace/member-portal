@@ -121,7 +121,7 @@ constructor(
         canMessage = true,
         talkLinked = discourseUsername(actor) != null,
         canCreateThread = categoryFor(committee) != null,
-        followerCount = followers.getFollowers(committee.id).count { it != actor },
+        followerCount = followers.getFollowers(committee.id).size,
         sentToday = sends.count { it >= now.minusDays(1) },
         sentThisWeek = sends.size,
         nextAllowedAt = next?.toInstant(ZoneOffset.UTC)?.toString())
@@ -156,7 +156,7 @@ constructor(
                 "Link your Talk account on your profile before sending a message")
     verifyTalkAccount(talkUsername)
 
-    val recipients = followers.getFollowers(committee.id).filter { it != actor }
+    val recipients = followers.getFollowers(committee.id)
     if (recipients.isEmpty()) {
       throw CommitteeMessageException(
           CommitteeMessageError.INVALID, "No one follows ${committee.name} yet")

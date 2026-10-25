@@ -34,11 +34,10 @@
                         <strong id="committeeMessageNext">later</strong>.</p>
                 </div>
 
-                <!-- Followers other than the sender; with none, a send would be refused. -->
+                <!-- With no followers a send would be refused. -->
                 <p class="mb-0" id="committeeMessageNoFollowers"
                    th:if="${msg['talkLinked'] and msg['nextAllowedAt'] == null and msg['followerCount'] == 0}">
-                    No one else follows <span th:text="${committeeName}"></span> yet, so there is no one to
-                    message. Followers other than you will appear here.</p>
+                    No one follows <span th:text="${committeeName}"></span> yet, so there is no one to message.</p>
 
                 <form id="committeeMessageForm" novalidate
                       th:if="${msg['talkLinked'] and msg['nextAllowedAt'] == null and msg['followerCount'] > 0}">
