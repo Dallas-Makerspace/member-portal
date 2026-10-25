@@ -65,9 +65,14 @@ open class EphemeralNotificationsRepository @Inject constructor(loggerFactory: L
    * The existence check is a locking read (`FOR UPDATE`) inside the same transaction as the
    * insert, so two concurrent arms of the same print cannot both insert — the second sees the
    * first's row once it commits (or blocks on the locked index range until it does). Returns the
-   * stored watch and whether this call created it.
+   * stored watch and whether this call created it. A deadlock victim is retried once.
    */
   open suspend fun insertArmedIfAbsent(watch: EphemeralNotification): Pair<EphemeralNotification, Boolean> =
+      retryOnceOnDeadlock { insertArmedIfAbsentOnce(watch) }
+
+  private suspend fun insertArmedIfAbsentOnce(
+      watch: EphemeralNotification
+  ): Pair<EphemeralNotification, Boolean> =
       suspendTransaction {
         val profileId = ProfileResolver.requireProfileId(watch.memberUsername)
         val existing =
@@ -222,6 +227,33 @@ open class EphemeralNotificationsRepository @Inject constructor(loggerFactory: L
         it[filename] = newFilename
         it[jobName] = newJobName
       }
+    } > 0
+  }
+
+  /**
+   * Moves an ARMED watch to another job with a new deadline without touching rearm_count (used
+   * when a printer-available watch finds more queued work). Guarded on the job it still points
+   * at, so a concurrent retarget of the same watch loses cleanly.
+   */
+  @Suppress("LongParameterList")
+  open suspend fun claimForRetarget(
+      id: Long,
+      expectedQueueId: Int?,
+      newExpiresAt: LocalDateTime,
+      newQueueId: Int,
+      newFilename: String?,
+      newJobName: String?,
+  ): Boolean = suspendTransaction {
+    EphemeralNotificationsTable.update({
+      (EphemeralNotificationsTable.idColumn eq id) and
+          (EphemeralNotificationsTable.status eq WatchStatus.ARMED.name) and
+          (if (expectedQueueId == null) EphemeralNotificationsTable.queueId.isNull()
+          else EphemeralNotificationsTable.queueId eq expectedQueueId)
+    }) {
+      it[expiresAt] = newExpiresAt
+      it[queueId] = newQueueId
+      it[filename] = newFilename
+      it[jobName] = newJobName
     } > 0
   }
 

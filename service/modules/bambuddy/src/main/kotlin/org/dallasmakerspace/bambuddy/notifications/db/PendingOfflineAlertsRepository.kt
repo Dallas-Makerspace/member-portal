@@ -21,6 +21,7 @@ import org.jetbrains.exposed.sql.update
 
 /** CRUD + resolution claims for `bambu_pending_offline_alerts` (one row per offline episode). */
 @Singleton
+@Suppress("TooManyFunctions")
 open class PendingOfflineAlertsRepository @Inject constructor(loggerFactory: LoggerFactory) {
 
   open suspend fun insert(alert: PendingOfflineAlert): PendingOfflineAlert {
@@ -46,9 +47,13 @@ open class PendingOfflineAlertsRepository @Inject constructor(loggerFactory: Log
    * nothing; otherwise inserts [alert] and returns it. Terminal rows (SENT/SUPPRESSED) never
    * block a later episode. The existence check is a locking read inside the same transaction
    * as the insert, so concurrent duplicate `printer_offline` webhooks cannot both insert —
-   * there is deliberately no unique key on printer_id, which would break later episodes.
+   * there is deliberately no unique key on printer_id, which would break later episodes. A
+   * deadlock victim is retried once.
    */
   open suspend fun insertIfNoPending(alert: PendingOfflineAlert): PendingOfflineAlert? =
+      retryOnceOnDeadlock { insertIfNoPendingOnce(alert) }
+
+  private suspend fun insertIfNoPendingOnce(alert: PendingOfflineAlert): PendingOfflineAlert? =
       suspendTransaction {
         val existing =
             PendingOfflineAlertsTable.select {

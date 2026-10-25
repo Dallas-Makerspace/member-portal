@@ -93,7 +93,7 @@ class EphemeralNotificationStrandingTest {
       }
     }
     apiClient = mock()
-    service = EphemeralNotificationService(watches, apiClient, notificationService, loggerFactory)
+    service = EphemeralNotificationService(watches, apiClient, notificationService, mock(), loggerFactory)
     transaction(DBMemberPortalConnection.db) { EphemeralNotificationsTable.deleteAll() }
   }
 

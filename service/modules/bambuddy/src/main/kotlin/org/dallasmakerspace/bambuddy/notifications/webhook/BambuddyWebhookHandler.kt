@@ -8,6 +8,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.bambuddy.notifications.BambuCorrelationService
+import org.dallasmakerspace.bambuddy.notifications.BambuWakeSignal
 import org.dallasmakerspace.bambuddy.notifications.CorrelationMode
 import org.dallasmakerspace.bambuddy.notifications.EphemeralNotificationService
 import org.dallasmakerspace.bambuddy.notifications.PendingOfflineAlert
@@ -34,6 +35,7 @@ private val PRINT_EVENTS = setOf("print_complete", "print_failed", "print_stoppe
  * the raw payload are never logged.
  */
 @Singleton
+@Suppress("LongParameterList")
 class BambuddyWebhookHandler
 @Inject
 constructor(
@@ -42,6 +44,7 @@ constructor(
     private val pendingOfflineRepository: PendingOfflineAlertsRepository,
     private val configOverrideService: ConfigOverrideService,
     private val appConfig: AppConfig,
+    private val wakeSignal: BambuWakeSignal,
     loggerFactory: LoggerFactory,
 ) {
   private val log = loggerFactory.create(javaClass)
@@ -106,14 +109,20 @@ constructor(
     }
     val result = correlationService.correlatePrintEvent(payload)
     var fired = 0
+    var failed = 0
     val now = LocalDateTime.now(utcZone)
     for (watch in result.watches) {
-      if (watchService.fireWatch(watch, payload.event, payload, now)) fired++
+      try {
+        if (watchService.fireWatch(watch, payload.event, payload, now)) fired++
+      } catch (e: Exception) {
+        failed++
+        log.error("bambu webhook fire failed watch=${watch.id}: ${e.message}", e)
+      }
     }
     log.info(
         "bambu webhook event=${sanitizeForLog(payload.event)} printer=${sanitizeForLog(payload.printer)} " +
-            "correlation=${correlationLabel(result.mode)} watchesFired=$fired")
-    return HttpStatusCode.OK
+            "correlation=${correlationLabel(result.mode)} watchesFired=$fired watchesFailed=$failed")
+    return if (failed > 0) HttpStatusCode.InternalServerError else HttpStatusCode.OK
   }
 
   private fun correlationLabel(mode: CorrelationMode): String =
@@ -159,6 +168,7 @@ constructor(
       log.info(
           "bambu webhook printer_offline printer=${sanitizeForLog(printerName)} episode already pending")
     } else {
+      wakeSignal.wake()
       log.info(
           "bambu webhook printer_offline printer=${sanitizeForLog(printerName)} episode=${inserted.id} held")
     }

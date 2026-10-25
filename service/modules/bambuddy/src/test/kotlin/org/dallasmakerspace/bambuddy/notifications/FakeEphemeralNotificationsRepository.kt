@@ -133,6 +133,25 @@ class FakeEphemeralNotificationsRepository(loggerFactory: LoggerFactory) :
     return true
   }
 
+  override suspend fun claimForRetarget(
+      id: Long,
+      expectedQueueId: Int?,
+      newExpiresAt: LocalDateTime,
+      newQueueId: Int,
+      newFilename: String?,
+      newJobName: String?,
+  ): Boolean {
+    val watch = getById(id) ?: return false
+    if (watch.status != WatchStatus.ARMED || watch.queueId != expectedQueueId) return false
+    replace(
+        watch.copy(
+            expiresAt = newExpiresAt,
+            queueId = newQueueId,
+            filename = newFilename,
+            jobName = newJobName))
+    return true
+  }
+
   override suspend fun claimForCancel(
       id: Long,
       memberUsername: String,

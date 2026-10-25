@@ -58,6 +58,7 @@ enum class PendingOfflineStatus {
 enum class ExpiryOutcome {
   FIRED,
   OVERDUE_REARMED,
+  RETARGETED,
   EXPIRED,
   CLAIM_LOST,
 }

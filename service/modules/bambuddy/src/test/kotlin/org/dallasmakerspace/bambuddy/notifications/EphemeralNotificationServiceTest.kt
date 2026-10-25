@@ -28,6 +28,8 @@ import org.junit.BeforeClass
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.slf4j.Logger
 
@@ -53,12 +55,14 @@ class EphemeralNotificationServiceTest {
   private lateinit var notificationService: NotificationService
   private lateinit var service: EphemeralNotificationService
   private val createdRequests = mutableListOf<CreateNotificationRequest>()
+  private lateinit var wakeSignal: BambuWakeSignal
 
   @Before
   fun setUp() {
     val loggerFactory = mock<LoggerFactory>()
     whenever(loggerFactory.create(any<Class<*>>())).thenReturn(mock<Logger>())
     repository = FakeEphemeralNotificationsRepository(loggerFactory)
+    wakeSignal = mock()
     apiClient = mock()
     notificationService = mock()
     createdRequests.clear()
@@ -71,7 +75,7 @@ class EphemeralNotificationServiceTest {
         notification
       }
     }
-    service = EphemeralNotificationService(repository, apiClient, notificationService, loggerFactory)
+    service = EphemeralNotificationService(repository, apiClient, notificationService, wakeSignal, loggerFactory)
   }
 
   // -------------------------------------------------------------------------------------------
@@ -173,14 +177,47 @@ class EphemeralNotificationServiceTest {
       }
 
   @Test
-  fun `arm own pending job uses the estimate, never the running job's remaining`() = runBlocking {
+  fun `arm own pending job on an idle printer uses its own estimate`() = runBlocking {
     stubApi(
         queue = listOf(queueItem(status = "pending", printTimeSeconds = 1800)),
-        status = printingStatus(remaining = 999))
+        status = BambuPrinterStatus(id = 1, name = "Printer 1", connected = true, state = "IDLE"))
 
     val dto = service.arm("jdoe", CreateBambuWatchRequest("OWN_JOB", 1, 10))
 
     assertEquals(90, ttlMinutesOf(dto.createdAt, dto.expiresAt)) // estimate 30 + 60 grace
+  }
+
+  @Test
+  fun `arm own pending job behind a long print gets a TTL that covers the wait`() = runBlocking {
+    stubApi(
+        queue =
+            listOf(
+                queueItem(id = 5, status = "printing", owner = "asmith", printTimeSeconds = 36000)
+                    .copy(position = 0),
+                queueItem(id = 6, status = "pending", owner = "asmith", printTimeSeconds = 7200)
+                    .copy(position = 1),
+                queueItem(id = 10, status = "pending", printTimeSeconds = 3600).copy(position = 2),
+                // Behind the watched job and on another printer: must not count.
+                queueItem(id = 11, status = "pending", owner = "asmith", printTimeSeconds = 99999)
+                    .copy(position = 3),
+                queueItem(id = 12, status = "pending", owner = "asmith", printTimeSeconds = 99999)
+                    .copy(printerId = 2, position = 0)),
+        status = printingStatus(remaining = 300))
+
+    val dto = service.arm("jdoe", CreateBambuWatchRequest("OWN_JOB", 1, 10))
+
+    // 300 (running, live) + 120 (ahead) + 60 (own) = 480, + 60 grace.
+    assertEquals(540, ttlMinutesOf(dto.createdAt, dto.expiresAt))
+  }
+
+  @Test
+  fun `arming creates wake the scheduler, an idempotent re-click does not`() = runBlocking {
+    stubApi(queue = listOf(queueItem()), status = printingStatus(remaining = 100))
+
+    service.arm("jdoe", CreateBambuWatchRequest("OWN_JOB", 1, 10))
+    service.arm("jdoe", CreateBambuWatchRequest("OWN_JOB", 1, 10))
+
+    verify(wakeSignal, times(1)).wake()
   }
 
   @Test
@@ -451,6 +488,7 @@ class EphemeralNotificationServiceTest {
   @Test
   fun `an available watch fires the available notice whatever the ending event`() = runBlocking {
     val watch = storedWatch(scope = WatchScope.PRINTER_AVAILABLE, member = "asmith")
+    stubApi(queue = emptyList())
 
     assertTrue(service.fireWatch(watch, "print_failed", null, LocalDateTime.now(utc)))
 
@@ -579,7 +617,7 @@ class EphemeralNotificationServiceTest {
       }
 
   @Test
-  fun `pending own-job re-arm takes its TTL from the estimate, not the other job's remaining`() =
+  fun `pending own-job re-arm takes its TTL from the wait for the running job plus its estimate`() =
       runBlocking {
         val watch = storedWatch(queueId = 20)
         stubApi(
@@ -593,8 +631,96 @@ class EphemeralNotificationServiceTest {
 
         val stored = assertNotNull(repository.getById(watch.id))
         val ttl = java.time.Duration.between(LocalDateTime.now(utc), stored.expiresAt).toMinutes()
-        // Estimate 60m + 60m grace = ~120m; the other job's remaining would give ~680m.
-        assertTrue(ttl in 100..140, "expected ~120m from the estimate, was $ttl")
+        // 500 (running) + 60 (own) = 560, + 60 grace = ~620m.
+        assertTrue(ttl in 600..640, "expected ~620m covering the running job, was $ttl")
+        verify(wakeSignal).wake()
+      }
+
+  // -------------------------------------------------------------------------------------------
+  // Printer-available: more queued work means the printer is not really free
+  // -------------------------------------------------------------------------------------------
+
+  @Test
+  fun `an available watch with pending work on the printer retargets instead of announcing`() =
+      runBlocking {
+        val watch = storedWatch(scope = WatchScope.PRINTER_AVAILABLE, member = "asmith")
+        stubApi(
+            queue =
+                listOf(
+                    queueItem(id = 10, status = "completed"),
+                    queueItem(id = 31, status = "pending", owner = "bwong", archiveName = "Next.3mf",
+                        printTimeSeconds = 7200).copy(position = 2),
+                    queueItem(id = 30, status = "pending", owner = "bwong", archiveName = "First.3mf",
+                        printTimeSeconds = 1800).copy(position = 1)),
+            status = null)
+
+        assertFalse(service.fireWatch(watch, "print_complete", null, LocalDateTime.now(utc)))
+
+        assertTrue(createdRequests.isEmpty())
+        val stored = assertNotNull(repository.getById(watch.id))
+        assertEquals(WatchStatus.ARMED, stored.status)
+        assertEquals(0, stored.rearmCount)
+        assertEquals(30, stored.queueId) // lowest queue position first
+        assertEquals("First.3mf", stored.filename)
+        val ttl = java.time.Duration.between(LocalDateTime.now(utc), stored.expiresAt).toMinutes()
+        assertTrue(ttl in 80..100, "expected ~90m (30 + 60 grace), was $ttl")
+        verify(wakeSignal).wake()
+      }
+
+  @Test
+  fun `an available watch still fires when the queue is empty or unreadable`() = runBlocking {
+    val a = storedWatch(scope = WatchScope.PRINTER_AVAILABLE, member = "asmith")
+    stubApi(queue = emptyList())
+    assertTrue(service.fireWatch(a, "print_complete", null, LocalDateTime.now(utc)))
+
+    val b = storedWatch(scope = WatchScope.PRINTER_AVAILABLE, member = "bwong")
+    whenever(apiClient.getQueue()).thenThrow(RuntimeException("queue endpoint down"))
+    assertTrue(service.fireWatch(b, "print_complete", null, LocalDateTime.now(utc)))
+    assertEquals(2, createdRequests.size)
+  }
+
+  @Test
+  fun `an own-job watch ignores pending work on its printer`() = runBlocking {
+    val watch = storedWatch()
+    stubApi(queue = listOf(queueItem(id = 30, status = "pending", owner = "bwong")))
+
+    assertTrue(service.fireWatch(watch, "print_complete", null, LocalDateTime.now(utc)))
+    assertEquals(WatchStatus.FIRED, repository.getById(watch.id)?.status)
+  }
+
+  @Test
+  fun `available watch expiry retargets to pending work without consuming the re-arm`() =
+      runBlocking {
+        val watch = storedWatch(scope = WatchScope.PRINTER_AVAILABLE, member = "asmith")
+        stubApi(
+            queue =
+                listOf(
+                    queueItem(id = 10, status = "completed"),
+                    queueItem(id = 30, status = "pending", owner = "bwong", printTimeSeconds = 3600)),
+            status =
+                BambuPrinterStatus(id = 1, name = "Printer 1", connected = true, state = "FINISH"))
+
+        assertEquals(ExpiryOutcome.RETARGETED, service.processExpiredWatch(watch))
+
+        val stored = assertNotNull(repository.getById(watch.id))
+        assertEquals(WatchStatus.ARMED, stored.status)
+        assertEquals(0, stored.rearmCount)
+        assertEquals(30, stored.queueId)
+        assertTrue(createdRequests.isEmpty())
+        verify(wakeSignal).wake()
+      }
+
+  @Test
+  fun `available watch expiry still fires on a free printer with FINISH state and no pending work`() =
+      runBlocking {
+        val watch = storedWatch(scope = WatchScope.PRINTER_AVAILABLE, member = "asmith")
+        stubApi(
+            queue = listOf(queueItem(id = 10, status = "completed")),
+            status =
+                BambuPrinterStatus(id = 1, name = "Printer 1", connected = true, state = "FINISH"))
+
+        assertEquals(ExpiryOutcome.FIRED, service.processExpiredWatch(watch))
+        assertEquals(BambuPrinterAvailableTopic, createdRequests.single().topic)
       }
 
   @Test

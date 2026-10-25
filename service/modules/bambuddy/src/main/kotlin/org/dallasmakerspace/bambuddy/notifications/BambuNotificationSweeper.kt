@@ -1,5 +1,6 @@
 package org.dallasmakerspace.bambuddy.notifications
 
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
@@ -24,11 +25,14 @@ import org.dallasmakerspace.notifications.topics.BambuCommitteeAlertsTopic
 
 private const val BATCH_LIMIT = 50
 
+/** One pass's log summary plus how many items it failed on (drives the scheduler's backoff). */
+data class SweepResult(val summary: String, val failed: Int = 0)
+
 /**
- * Background passes for the Bambu watch domain (design §10), launched on a 30 s loop by the app
- * module: due-watch expiry checks, offline-hold release, and tombstone purge. Each pass returns a
- * summary string for logging (pattern: NotificationWorker.processPending). When the feature is
- * fully off, every pass no-ops.
+ * Background passes for the Bambu watch domain (design §10), driven by [BambuNotificationScheduler]:
+ * due-watch expiry checks, offline-hold release, reconciliation and tombstone purge. Each pass
+ * returns a [SweepResult] for logging and backoff. When the feature is fully off, every pass
+ * no-ops.
  */
 @Singleton
 class BambuNotificationSweeper
@@ -47,17 +51,20 @@ constructor(
   private val json = Json { encodeDefaults = true }
   private val utcZone = ZoneId.of("UTC")
 
-  suspend fun processDueWatches(): String {
-    if (!featureInAnyRollout()) return "processed=0\ndisabled=true"
-    // Recovery first: terminal tombstones whose notice was never created (crash between the
-    // claim and the create) are reconciled exactly once before new expiry work runs.
-    val reconciled =
-        try {
-          watchService.reconcileTerminalWatches(BATCH_LIMIT)
-        } catch (e: Exception) {
-          log.error("Bambu watch reconciliation failed: ${e.message}", e)
-          0
-        }
+  /**
+   * Recovers terminal tombstones whose notice was never created (crash between the claim and the
+   * create). Returns how many were recovered.
+   */
+  suspend fun reconcile(): Int =
+      try {
+        watchService.reconcileTerminalWatches(BATCH_LIMIT)
+      } catch (e: Exception) {
+        log.error("Bambu watch reconciliation failed: ${e.message}", e)
+        0
+      }
+
+  suspend fun processDueWatches(): SweepResult {
+    if (!featureInAnyRollout()) return SweepResult("processed=0\ndisabled=true")
     val now = LocalDateTime.now(utcZone)
     val due = watchRepository.findDueArmed(now, BATCH_LIMIT)
     // One shared fetch per pass (not per watch): the queue once, status once per distinct
@@ -65,6 +72,7 @@ constructor(
     val prefetch = if (due.isEmpty()) null else fetchExpiryPrefetch(due)
     var fired = 0
     var rearmed = 0
+    var retargeted = 0
     var expired = 0
     var claimLost = 0
     var failed = 0
@@ -73,6 +81,7 @@ constructor(
         when (watchService.processExpiredWatch(watch, prefetch)) {
           ExpiryOutcome.FIRED -> fired++
           ExpiryOutcome.OVERDUE_REARMED -> rearmed++
+          ExpiryOutcome.RETARGETED -> retargeted++
           ExpiryOutcome.EXPIRED -> expired++
           ExpiryOutcome.CLAIM_LOST -> claimLost++
         }
@@ -85,9 +94,11 @@ constructor(
     }
     if (due.isNotEmpty()) {
       log.info(
-          "bambu sweeper watches: due=${due.size} fired=$fired rearmed=$rearmed expired=$expired claimLost=$claimLost failed=$failed reconciled=$reconciled")
+          "bambu sweeper watches: due=${due.size} fired=$fired rearmed=$rearmed retargeted=$retargeted expired=$expired claimLost=$claimLost failed=$failed")
     }
-    return "due=${due.size}\nfired=$fired\nrearmed=$rearmed\nexpired=$expired\nclaimLost=$claimLost\nfailed=$failed\nreconciled=$reconciled"
+    return SweepResult(
+        "due=${due.size}\nfired=$fired\nrearmed=$rearmed\nretargeted=$retargeted\nexpired=$expired\nclaimLost=$claimLost\nfailed=$failed",
+        failed)
   }
 
   /** Fetches the queue once and each distinct due printer's status once, failures as nulls. */
@@ -112,8 +123,8 @@ constructor(
     return ExpiryPrefetch(queue, statuses)
   }
 
-  suspend fun releaseDueOfflineAlerts(): String {
-    if (!featureInAnyRollout()) return "processed=0\ndisabled=true"
+  suspend fun releaseDueOfflineAlerts(): SweepResult {
+    if (!featureInAnyRollout()) return SweepResult("processed=0\ndisabled=true")
     val now = LocalDateTime.now(utcZone)
     val due = pendingOfflineRepository.findDuePending(now, BATCH_LIMIT)
     var sent = 0
@@ -130,7 +141,7 @@ constructor(
     if (due.isNotEmpty()) {
       log.info("bambu sweeper offline: due=${due.size} sent=$sent suppressed=$suppressed failed=$failed")
     }
-    return "due=${due.size}\nsent=$sent\nsuppressed=$suppressed\nfailed=$failed"
+    return SweepResult("due=${due.size}\nsent=$sent\nsuppressed=$suppressed\nfailed=$failed", failed)
   }
 
   /**
@@ -167,6 +178,7 @@ constructor(
                   printerName = alert.printerName,
                   offlineSinceText = formatCentralTime(alert.offlineSince),
                   statusPageUrl = bambuStatusUrl(),
+                  holdMinutes = Duration.between(alert.offlineSince, alert.releaseAt).toMinutes().toInt(),
               ))
       val result =
           notificationService.createForMembers(
@@ -196,8 +208,8 @@ constructor(
     }
   }
 
-  suspend fun purgeTombstones(): String {
-    if (!featureInAnyRollout()) return "purged=0\ndisabled=true"
+  suspend fun purgeTombstones(): SweepResult {
+    if (!featureInAnyRollout()) return SweepResult("purged=0\ndisabled=true")
     val retentionDays =
         configOverrideService.get(ConfigRegistry.BAMBU_NOTIFICATIONS_TOMBSTONE_RETENTION_DAYS)
     val cutoff = LocalDateTime.now(utcZone).minusDays(retentionDays.coerceAtLeast(0).toLong())
@@ -206,9 +218,9 @@ constructor(
     if (watches > 0 || alerts > 0) {
       log.info("bambu sweeper purge: watches=$watches offlineAlerts=$alerts")
     }
-    return "watches=$watches\nofflineAlerts=$alerts"
+    return SweepResult("watches=$watches\nofflineAlerts=$alerts")
   }
 
-  private suspend fun featureInAnyRollout(): Boolean =
+  suspend fun featureInAnyRollout(): Boolean =
       configOverrideService.get(ConfigRegistry.BAMBU_NOTIFICATIONS_ENABLED).inAnyRollout()
 }

@@ -109,19 +109,20 @@ class BambuNotificationSweeperTest {
             .thenReturn(FanOutResult(created = 2, duplicates = 0, failed = 0))
         whenever(pendingOfflineRepository.claimSent(eq(7L), any(), eq(2))).thenReturn(true)
 
-        val summary = sweeper.releaseDueOfflineAlerts()
+        val summary = sweeper.releaseDueOfflineAlerts().summary
 
         assertTrue(summary.contains("sent=1"), summary)
         val membersCaptor = argumentCaptor<List<String>>()
         val topicCaptor = argumentCaptor<NotificationTopic>()
         val dedupeCaptor = argumentCaptor<(String) -> String?>()
         val consentCaptor = argumentCaptor<Boolean>()
+        val payloadCaptor = argumentCaptor<String>()
         verify(notificationService)
             .createForMembers(
                 membersCaptor.capture(),
                 topicCaptor.capture(),
                 eq("bambu-printer-offline"),
-                any(),
+                payloadCaptor.capture(),
                 eq(Channel.EMAIL),
                 dedupeCaptor.capture(),
                 consentCaptor.capture())
@@ -133,6 +134,8 @@ class BambuNotificationSweeperTest {
         // Standing subscription: normal preference rules apply, no consent override.
         assertEquals(false, consentCaptor.firstValue)
         verify(pendingOfflineRepository).claimSent(eq(7L), any(), eq(2))
+        // The email states the hold this episode actually used (release - since = 5 minutes).
+        assertTrue(payloadCaptor.firstValue.contains("\"holdMinutes\":5"), payloadCaptor.firstValue)
           Unit
   }
 
@@ -144,7 +147,7 @@ class BambuNotificationSweeperTest {
         .thenReturn(BambuPrinterStatus(id = 3, name = "Printer 3", connected = true, state = "IDLE"))
     whenever(pendingOfflineRepository.claimSuppressed(eq(7L), any())).thenReturn(true)
 
-    val summary = sweeper.releaseDueOfflineAlerts()
+    val summary = sweeper.releaseDueOfflineAlerts().summary
 
     assertTrue(summary.contains("suppressed=1"), summary)
     verify(notificationService, never()).createForMembers(any(), any(), any(), any(), any(), any(), any())
@@ -162,7 +165,7 @@ class BambuNotificationSweeperTest {
         .thenReturn(FanOutResult(created = 1, duplicates = 0, failed = 0))
     whenever(pendingOfflineRepository.claimSent(eq(7L), any(), eq(1))).thenReturn(true)
 
-    val summary = sweeper.releaseDueOfflineAlerts()
+    val summary = sweeper.releaseDueOfflineAlerts().summary
 
     assertTrue(summary.contains("sent=1"), summary)
   }
@@ -177,7 +180,7 @@ class BambuNotificationSweeperTest {
         .thenReturn(FanOutResult(created = 0, duplicates = 0, failed = 0))
     whenever(pendingOfflineRepository.claimSent(eq(7L), any(), eq(0))).thenReturn(true)
 
-    val summary = sweeper.releaseDueOfflineAlerts()
+    val summary = sweeper.releaseDueOfflineAlerts().summary
 
     assertTrue(summary.contains("sent=1"), summary)
     verify(pendingOfflineRepository).claimSent(eq(7L), any(), eq(0))
@@ -207,12 +210,43 @@ class BambuNotificationSweeperTest {
     whenever(watchRepository.findDueArmed(any(), any())).thenReturn(listOf(watch))
     whenever(watchService.processExpiredWatch(eq(watch), any())).thenReturn(ExpiryOutcome.FIRED)
 
-    val summary = sweeper.processDueWatches()
+    val summary = sweeper.processDueWatches().summary
 
     assertTrue(summary.contains("fired=1"), summary)
     verify(watchService).processExpiredWatch(eq(watch), any())
       Unit
   }
+
+  @Test
+  fun `a watch whose expiry processing throws is counted as failed so the scheduler backs off`() =
+      runBlocking {
+        val watch =
+            EphemeralNotification(
+                id = 5,
+                memberUsername = "jdoe",
+                scope = WatchScope.OWN_JOB,
+                printerId = 1,
+                printerName = "Printer 1",
+                queueId = 10,
+                filename = "Job.3mf",
+                jobName = "Job.3mf",
+                triggerEvents = listOf("print_complete"),
+                status = WatchStatus.ARMED,
+                rearmCount = 0,
+                createdAt = LocalDateTime.now(utc).minusHours(2),
+                expiresAt = LocalDateTime.now(utc).minusMinutes(1),
+                terminalAt = null,
+                firedNotificationId = null,
+                terminalReason = null)
+        whenever(watchRepository.findDueArmed(any(), any())).thenReturn(listOf(watch))
+        whenever(watchService.processExpiredWatch(eq(watch), any()))
+            .thenThrow(RuntimeException("notification store unavailable"))
+
+        val result = sweeper.processDueWatches()
+
+        assertEquals(1, result.failed)
+        assertTrue(result.summary.contains("failed=1"), result.summary)
+      }
 
   @Test
   fun `purge passes a cutoff of now minus the configured retention to both repositories`() =
@@ -221,7 +255,7 @@ class BambuNotificationSweeperTest {
         whenever(pendingOfflineRepository.purgeResolved(any())).thenReturn(2)
 
         val before = LocalDateTime.now(utc)
-        val summary = sweeper.purgeTombstones()
+        val summary = sweeper.purgeTombstones().summary
         val after = LocalDateTime.now(utc)
 
         assertTrue(summary.contains("watches=3"), summary)
@@ -238,7 +272,7 @@ class BambuNotificationSweeperTest {
     whenever(configOverrideService.get(ConfigRegistry.BAMBU_NOTIFICATIONS_ENABLED))
         .thenReturn(FeatureFlagValue(enabled = false, enabledUsernames = setOf("jdoe")))
 
-    val summary = sweeper.processDueWatches()
+    val summary = sweeper.processDueWatches().summary
 
     assertTrue(!summary.contains("disabled=true"), summary)
     verify(watchRepository).findDueArmed(any(), any())
@@ -251,7 +285,7 @@ class BambuNotificationSweeperTest {
     stubDueAlert(alert)
     whenever(pendingOfflineRepository.claimProcessing(eq(7L))).thenReturn(false)
 
-    val summary = sweeper.releaseDueOfflineAlerts()
+    val summary = sweeper.releaseDueOfflineAlerts().summary
 
     assertTrue(summary.contains("sent=0"), summary)
     verify(notificationService, never()).createForMembers(any(), any(), any(), any(), any(), any(), any())
@@ -264,9 +298,9 @@ class BambuNotificationSweeperTest {
     whenever(configOverrideService.get(ConfigRegistry.BAMBU_NOTIFICATIONS_ENABLED))
         .thenReturn(FeatureFlagValue(enabled = false))
 
-    assertTrue(sweeper.processDueWatches().contains("disabled=true"))
-    assertTrue(sweeper.releaseDueOfflineAlerts().contains("disabled=true"))
-    assertTrue(sweeper.purgeTombstones().contains("disabled=true"))
+    assertTrue(sweeper.processDueWatches().summary.contains("disabled=true"))
+    assertTrue(sweeper.releaseDueOfflineAlerts().summary.contains("disabled=true"))
+    assertTrue(sweeper.purgeTombstones().summary.contains("disabled=true"))
     verify(watchRepository, never()).findDueArmed(any(), any())
     verify(pendingOfflineRepository, never()).findDuePending(any(), any())
       Unit

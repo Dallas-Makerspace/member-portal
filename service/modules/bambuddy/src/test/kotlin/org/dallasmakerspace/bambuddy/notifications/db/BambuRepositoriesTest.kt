@@ -293,6 +293,54 @@ class BambuRepositoriesTest {
   }
 
   @Test
+  fun `retarget moves an ARMED watch to another job without consuming the re-arm`() =
+      runBlocking {
+        val inserted = watches.insert(watch(queueId = 10))
+
+        assertTrue(watches.claimForRetarget(inserted.id, 10, now.plusHours(3), 30, "Next.3mf", "Next.3mf"))
+        // A concurrent retarget still pointing at the old job loses.
+        assertFalse(watches.claimForRetarget(inserted.id, 10, now.plusHours(9), 31, "X.3mf", "X.3mf"))
+
+        val stored = assertNotNull(watches.getById(inserted.id))
+        assertEquals(WatchStatus.ARMED, stored.status)
+        assertEquals(0, stored.rearmCount)
+        assertEquals(30, stored.queueId)
+        assertEquals("Next.3mf", stored.filename)
+        assertEquals(now.plusHours(3), stored.expiresAt)
+
+        watches.claimForFiring(inserted.id, now, "done")
+        assertFalse(watches.claimForRetarget(inserted.id, 30, now.plusHours(3), 32, null, null))
+      }
+
+  @Test
+  fun `nextDue is the earliest ARMED expiry or PENDING release, ignoring resolved rows`() =
+      runBlocking {
+        val schedule = BambuScheduleRepository()
+        assertNull(schedule.nextDue())
+
+        watches.insert(watch(queueId = 10, expiresAt = now.plusHours(5)))
+        val soonest = watches.insert(watch(queueId = 11, expiresAt = now.plusHours(2)))
+        val done = watches.insert(watch(queueId = 12, expiresAt = now.plusMinutes(1)))
+        watches.claimForFiring(done.id, now, "done")
+        assertEquals(now.plusHours(2), schedule.nextDue())
+
+        offlineAlerts.insert(
+            PendingOfflineAlert(
+                id = 0,
+                printerId = 7,
+                printerName = "Printer 7",
+                offlineSince = now,
+                releaseAt = now.plusMinutes(5),
+                status = PendingOfflineStatus.PENDING,
+                resolvedAt = null,
+                notificationsCreated = null))
+        assertEquals(now.plusMinutes(5), schedule.nextDue())
+
+        watches.claimForCancel(soonest.id, "jdoe", now)
+        assertEquals(now.plusMinutes(5), schedule.nextDue())
+      }
+
+  @Test
   fun `committee subscriptions are idempotent and list subscribers`() = runBlocking {
     subscriptions.subscribe("jdoe")
     subscriptions.subscribe("jdoe") // duplicate subscribe is a no-op, not an error

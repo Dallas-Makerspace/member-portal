@@ -65,6 +65,7 @@ constructor(
     private val watchRepository: EphemeralNotificationsRepository,
     private val apiClient: IBambuddyApiClient,
     private val notificationService: NotificationService,
+    private val wakeSignal: BambuWakeSignal,
     loggerFactory: LoggerFactory,
 ) {
   private val log = loggerFactory.create(javaClass)
@@ -120,14 +121,15 @@ constructor(
     if (row.status != "printing" && row.status != "pending") {
       throw BambuWatchException(409, "That print has already finished")
     }
-    val remaining =
+    // A pending job also waits for the running job and the pending jobs queued ahead of it.
+    val estimated =
         if (row.status == "printing") {
           status?.remainingTimeMinutes?.takeIf { it > 0 }
               ?: BambuTtl.estimateMinutes(row.printTimeSeconds)
         } else {
-          BambuTtl.estimateMinutes(row.printTimeSeconds)
+          BambuTtl.pendingFinishMinutes(row, queue, status)
         }
-            ?: throw BambuWatchException(422, BambuTtl.NO_ESTIMATE_MESSAGE)
+    val remaining = estimated ?: throw BambuWatchException(422, BambuTtl.NO_ESTIMATE_MESSAGE)
     return insertWatch(
         actor, WatchScope.OWN_JOB, printerId, printerName, row.id, row.archiveName, remaining)
   }
@@ -202,6 +204,7 @@ constructor(
                 terminalReason = null,
             ))
     if (created) {
+      wakeSignal.wake()
       log.info(
           "watch=${watch.id} created member=$actor scope=${scope.name} printer=$printerId queue=$queueId expiresAt=${watch.expiresAt} rearm=0")
     }
@@ -231,7 +234,8 @@ constructor(
 
   /**
    * Fires [watch] with the real notice for [event] (a BamBuddy event string, or the inferred
-   * terminal event at expiry). Returns true iff this call won the claim and created the notice.
+   * terminal event at expiry). Returns true iff this call won the claim and created the notice
+   * (a printer-available watch that is retargeted to pending work instead returns false).
    * If the create fails after the claim committed, the claim is reverted to ARMED and the
    * failure is rethrown — the watch is never left as a FIRED tombstone with nothing sent.
    */
@@ -240,12 +244,78 @@ constructor(
       event: String,
       payload: BambuddyWebhookPayload?,
       occurredAt: LocalDateTime,
+  ): Boolean =
+      fireOrRetarget(watch, event, payload, occurredAt, queue = null) == FireResult.FIRED
+
+  private enum class FireResult {
+    FIRED,
+    RETARGETED,
+    CLAIM_LOST,
+  }
+
+  /**
+   * [fireWatch] plus the printer-available guard: when more work is queued for the printer it is
+   * not free, so the watch moves to the next pending job instead of announcing "available".
+   * [queue] null means fetch it now (a failed fetch skips the guard); an empty list skips it.
+   */
+  private suspend fun fireOrRetarget(
+      watch: EphemeralNotification,
+      event: String,
+      payload: BambuddyWebhookPayload?,
+      occurredAt: LocalDateTime,
+      queue: List<BambuQueueItem>?,
+  ): FireResult {
+    if (watch.scope == WatchScope.PRINTER_AVAILABLE) {
+      val known =
+          queue
+              ?: try {
+                apiClient.getQueue()
+              } catch (e: Exception) {
+                log.warn("watch=${watch.id} pending-work check skipped: getQueue failed: ${e.message}")
+                emptyList()
+              }
+      val next = BambuTtl.nextPending(known, watch.printerId)
+      if (next != null) {
+        return if (retargetToPending(watch, next, known)) FireResult.RETARGETED
+        else FireResult.CLAIM_LOST
+      }
+    }
+    return claimAndFire(watch, event, payload, occurredAt)
+  }
+
+  private suspend fun retargetToPending(
+      watch: EphemeralNotification,
+      next: BambuQueueItem,
+      queue: List<BambuQueueItem>,
   ): Boolean {
+    val remaining =
+        BambuTtl.pendingFinishMinutes(next, queue, null) ?: BambuTtl.FALLBACK_ESTIMATE_MINUTES
+    val won =
+        watchRepository.claimForRetarget(
+            watch.id,
+            watch.queueId,
+            LocalDateTime.now(utcZone).plusMinutes(BambuTtl.ttlMinutes(remaining).toLong()),
+            next.id,
+            next.archiveName,
+            next.archiveName)
+    if (won) {
+      wakeSignal.wake()
+      log.info("watch=${watch.id} retargeted to queue=${next.id}: printer has more queued work")
+    }
+    return won
+  }
+
+  private suspend fun claimAndFire(
+      watch: EphemeralNotification,
+      event: String,
+      payload: BambuddyWebhookPayload?,
+      occurredAt: LocalDateTime,
+  ): FireResult {
     val (topic, templateName, payloadJson, dedupeKey) =
         realNotice(watch, event, payload, occurredAt)
     val won =
         watchRepository.claimForFiring(watch.id, LocalDateTime.now(utcZone), "Fired by $event")
-    if (!won) return false
+    if (!won) return FireResult.CLAIM_LOST
     try {
       val notification =
           notificationService.create(
@@ -264,7 +334,7 @@ constructor(
       throw e
     }
     log.info("watch=${watch.id} fired member=${watch.memberUsername} event=$event")
-    return true
+    return FireResult.FIRED
   }
 
   /**
@@ -440,11 +510,7 @@ constructor(
       val state = bambuEffectiveState(status)
       return when {
         watch.scope == WatchScope.PRINTER_AVAILABLE && (state == "IDLE" || state == "FINISH") ->
-            if (fireWatch(watch, "print_complete", null, LocalDateTime.now(utcZone))) {
-              ExpiryOutcome.FIRED
-            } else {
-              ExpiryOutcome.CLAIM_LOST
-            }
+            fireAtExpiry(watch, "print_complete", emptyList())
         state == "OFFLINE" -> expireForReal(watch, "Printer offline at expiry check")
         state in PRINTING_STATES &&
             watch.filename != null &&
@@ -461,22 +527,14 @@ constructor(
     // The watched/blocking job ended while its webhook was lost: fire the real notice.
     if (row != null && (row.status == "completed" || row.status == "failed")) {
       val inferred = if (row.status == "completed") "print_complete" else "print_failed"
-      return if (fireWatch(watch, inferred, null, LocalDateTime.now(utcZone))) {
-        ExpiryOutcome.FIRED
-      } else {
-        ExpiryOutcome.CLAIM_LOST
-      }
+      return fireAtExpiry(watch, inferred, queue)
     }
 
     if (watch.scope == WatchScope.PRINTER_AVAILABLE && row == null) {
       // Blocking job gone: the printer is free if it's idle/finished, busy-with-another-job
       // (overdue path below) if something else is printing, and an expiry if it's offline.
       if (state == "IDLE" || state == "FINISH") {
-        return if (fireWatch(watch, "print_complete", null, LocalDateTime.now(utcZone))) {
-          ExpiryOutcome.FIRED
-        } else {
-          ExpiryOutcome.CLAIM_LOST
-        }
+        return fireAtExpiry(watch, "print_complete", queue)
       }
       if (state == "OFFLINE") {
         return expireForReal(watch, "Printer offline at expiry check")
@@ -499,6 +557,17 @@ constructor(
 
     return expireForReal(watch, "Job gone or printer not printing the watched job at expiry check")
   }
+
+  private suspend fun fireAtExpiry(
+      watch: EphemeralNotification,
+      event: String,
+      queue: List<BambuQueueItem>,
+  ): ExpiryOutcome =
+      when (fireOrRetarget(watch, event, null, LocalDateTime.now(utcZone), queue)) {
+        FireResult.FIRED -> ExpiryOutcome.FIRED
+        FireResult.RETARGETED -> ExpiryOutcome.RETARGETED
+        FireResult.CLAIM_LOST -> ExpiryOutcome.CLAIM_LOST
+      }
 
   /** Overdue notice + the single re-arm (or expire-for-real when no fresh estimate exists). */
   private suspend fun overdue(
@@ -527,12 +596,10 @@ constructor(
         estimateRow = currentBlocking
       }
     }
-    // The §8.3 source chain, same as at arm time: the printer's live remaining time describes
-    // the job that is *printing*. For a watched job that is still pending, that number belongs
-    // to somebody else's print, so a pending row's TTL comes from its slicer estimate only.
+    // The §8.3 source chain, same as at arm time: a pending row's TTL covers the queue ahead of it.
     val remaining =
         if (estimateRow?.status == "pending") {
-          BambuTtl.estimateMinutes(estimateRow?.printTimeSeconds)
+          BambuTtl.pendingFinishMinutes(estimateRow, queue, status)
         } else {
           status?.remainingTimeMinutes?.takeIf { it > 0 }
               ?: BambuTtl.estimateMinutes(estimateRow?.printTimeSeconds)
@@ -548,6 +615,7 @@ constructor(
               newFilename,
               newJobName)
       if (!wonRearm) return ExpiryOutcome.CLAIM_LOST
+      wakeSignal.wake()
       try {
         val notification =
             notificationService.create(

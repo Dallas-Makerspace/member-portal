@@ -86,7 +86,7 @@ class BambuDuplicateDeliveryTest {
         notification
       }
     }
-    val watchService = EphemeralNotificationService(repository, apiClient, notificationService, loggerFactory)
+    val watchService = EphemeralNotificationService(repository, apiClient, notificationService, mock(), loggerFactory)
     val correlationService = BambuCorrelationService(apiClient, repository, loggerFactory)
     val configOverrideService = mock<ConfigOverrideService>()
     val appConfig = mock<AppConfig>()
@@ -104,6 +104,7 @@ class BambuDuplicateDeliveryTest {
             mock<PendingOfflineAlertsRepository>(),
             configOverrideService,
             appConfig,
+            mock(),
             loggerFactory)
   }
 

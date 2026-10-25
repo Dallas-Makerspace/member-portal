@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.bambuddy.notifications.BambuCorrelationService
+import org.dallasmakerspace.bambuddy.notifications.BambuWakeSignal
 import org.dallasmakerspace.bambuddy.notifications.CorrelationMode
 import org.dallasmakerspace.bambuddy.notifications.CorrelationResult
 import org.dallasmakerspace.bambuddy.notifications.EphemeralNotification
@@ -39,6 +40,7 @@ class BambuddyWebhookHandlerTest {
   private lateinit var pendingOfflineRepository: PendingOfflineAlertsRepository
   private lateinit var configOverrideService: ConfigOverrideService
   private lateinit var appConfig: AppConfig
+  private lateinit var wakeSignal: BambuWakeSignal
   private lateinit var handler: BambuddyWebhookHandler
 
   @Before
@@ -50,6 +52,7 @@ class BambuddyWebhookHandlerTest {
     pendingOfflineRepository = mock()
     configOverrideService = mock()
     appConfig = mock()
+    wakeSignal = mock()
     runBlocking {
       whenever(appConfig.getStringProperty(eq("app.bambuddy.webhook-secret"), any()))
           .thenReturn("test-secret")
@@ -66,6 +69,7 @@ class BambuddyWebhookHandlerTest {
             pendingOfflineRepository,
             configOverrideService,
             appConfig,
+            wakeSignal,
             loggerFactory)
   }
 
@@ -130,6 +134,18 @@ class BambuddyWebhookHandlerTest {
   }
 
   @Test
+  fun `the env template secret is refused in every mode`() = runBlocking {
+    whenever(appConfig.getStringProperty(eq("app.bambuddy.webhook-secret"), any()))
+        .thenReturn("your-bambuddy-webhook-secret-here")
+    val header = "Bearer your-bambuddy-webhook-secret-here"
+
+    assertEquals(HttpStatusCode.Unauthorized, handler.handle(header, printPayload("print_start")))
+
+    whenever(appConfig.requireBooleanProperty("ktor.development")).thenReturn(true)
+    assertEquals(HttpStatusCode.Unauthorized, handler.handle(header, printPayload("print_start")))
+  }
+
+  @Test
   fun `malformed JSON is 400`() = runBlocking {
     assertEquals(HttpStatusCode.BadRequest, handler.handle("Bearer test-secret", "{not json"))
     assertEquals(HttpStatusCode.BadRequest, handler.handle("Bearer test-secret", """{"printer":"x"}"""))
@@ -163,6 +179,25 @@ class BambuddyWebhookHandlerTest {
     verify(watchService).fireWatch(eq(w), eq("print_complete"), any(), any())
       Unit
   }
+
+  @Test
+  fun `one failing watch does not stop the rest, and the event answers 500 afterwards`() =
+      runBlocking {
+        val first = watch(7)
+        val second = watch(8)
+        whenever(correlationService.correlatePrintEvent(any()))
+            .thenReturn(CorrelationResult(CorrelationMode.FIRED, 1, listOf(first, second)))
+        whenever(watchService.fireWatch(eq(first), any(), any(), any()))
+            .thenThrow(RuntimeException("notification store unavailable"))
+        whenever(watchService.fireWatch(eq(second), any(), any(), any())).thenReturn(true)
+
+        assertEquals(
+            HttpStatusCode.InternalServerError, handler.handle("Bearer test-secret", printPayload()))
+
+        verify(watchService).fireWatch(eq(first), eq("print_complete"), any(), any())
+        verify(watchService).fireWatch(eq(second), eq("print_complete"), any(), any())
+          Unit
+      }
 
   @Test
   fun `a print event with no matching watch is still 200`() = runBlocking {
@@ -213,6 +248,7 @@ class BambuddyWebhookHandlerTest {
         assertTrue(!inserted.offlineSince.isBefore(before))
         assertEquals(
             inserted.offlineSince.plusMinutes(5), inserted.releaseAt, "release = receipt + hold")
+        verify(wakeSignal).wake()
       }
 
   @Test
@@ -226,6 +262,7 @@ class BambuddyWebhookHandlerTest {
             HttpStatusCode.OK,
             handler.handle("Bearer test-secret", """{"event":"printer_offline","printer":"Printer 1"}"""))
         verify(pendingOfflineRepository).insertIfNoPending(any())
+        verify(wakeSignal, never()).wake()
           Unit
   }
 
