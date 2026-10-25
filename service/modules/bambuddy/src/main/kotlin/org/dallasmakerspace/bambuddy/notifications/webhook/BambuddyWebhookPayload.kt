@@ -10,7 +10,8 @@ import kotlinx.serialization.Serializable
  * instance (upstream main may be ahead of the DMS install). Parsed with ignoreUnknownKeys — the
  * payload carries extra variables, and `image` (a potentially huge base64 string when
  * attach_photo is on; it is OFF in the provider config) is deliberately not declared, so it is
- * never decoded into a field.
+ * never decoded into a field. Decode leniently ([BambuddyWebhookHandler]): a number where a
+ * string is declared must not fail the event; undeclared fields (e.g. progress) are ignored.
  */
 @Serializable
 data class BambuddyWebhookPayload(
@@ -22,10 +23,18 @@ data class BambuddyWebhookPayload(
     val message: String? = null,
     /** Naive local ISO from BamBuddy; portal receipt time is authoritative. */
     val timestamp: String? = null,
+    /** BamBuddy sends these three as strings, with the literal "Unknown" when it has no value. */
     val reason: String? = null,
-    /** Display string passthrough when present. */
     val duration: String? = null,
-    @SerialName("filament_grams") val filamentGrams: Double? = null,
-    val progress: Double? = null,
+    @SerialName("filament_grams") val filamentGrams: String? = null,
     @SerialName("finish_photo_url") val finishPhotoUrl: String? = null,
-)
+) {
+  fun reasonText(): String? = presentOrNull(reason)
+
+  fun durationText(): String? = presentOrNull(duration)
+
+  fun filamentGramsText(): String? = presentOrNull(filamentGrams)?.let { "$it g" }
+
+  private fun presentOrNull(value: String?): String? =
+      value?.trim()?.takeIf { it.isNotEmpty() && !it.equals("Unknown", ignoreCase = true) }
+}

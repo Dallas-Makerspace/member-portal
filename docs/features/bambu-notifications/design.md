@@ -451,16 +451,32 @@ decide a one-shot watch) — via `IBambuddyApiClient` directly:
 2. `getQueue()` → rows for that `printerId`.
 3. Candidate watches: `status = ARMED` and `printer_id = printerId` from
    `EphemeralNotificationsRepository`. For each candidate, verify:
-   - `OWN_JOB`: its `queue_id` row in the fresh queue has
-     `archive_name == payload.filename` (exact, trimmed) **and** a status
-     consistent with the event: `print_complete → completed`,
-     `print_failed → failed`, `print_stopped → failed | completed`
-     (BamBuddy's queue vocabulary for a stopped job must be confirmed
-     against the live instance; accept either terminal status — the
-     *event type*, not the queue row, decides which template fires).
-   - `PRINTER_AVAILABLE`: its blocking `queue_id` row is terminal
-     (as above) for the same event — filename must also match that row's
-     `archive_name`, since the event is about the blocking job ending.
+   - `OWN_JOB`: its `queue_id` row in the fresh queue has an
+     `archive_name` that matches `payload.filename` under
+     `normalizeJobName` (see below) **and** a status consistent with the
+     event: `print_complete → completed`, `print_failed → failed`,
+     `print_stopped → cancelled | failed | completed`. The *event type*,
+     not the queue row, decides which template fires. `skipped` rows
+     (never ran) are consistent with no event.
+   - `PRINTER_AVAILABLE`: its blocking `queue_id` row has ended in any way
+     (`completed | failed | cancelled | skipped`) — filename must also
+     match that row's `archive_name`, since the event is about the
+     blocking job ending.
+
+   **Confirmed against live BamBuddy v1.2.5.7.** Queue statuses are
+   `pending, printing, completed, failed, cancelled, skipped`; aborted /
+   stopped / cancelled prints are sent as `print_stopped`. The webhook
+   `filename` is `subtask_name` with `_` → space, else the basename minus
+   `.gcode.3mf` / `.gcode` / `.3mf`; the queue `archive_name` and the
+   printer's `current_print` keep underscores, so every name compare
+   (correlation, vanished-row and unverified fallbacks, expiry
+   `current_print` checks) uses `normalizeJobName`: basename, strip those
+   extensions, `_` → space, collapse whitespace, trim, lowercase. At
+   expiry, a `cancelled` row infers `print_stopped`; a `skipped` own-job
+   row expires with the check-yourself notice and no finished notice.
+   The generic payload sends `duration`, `filament_grams` and `reason` as
+   strings, `"Unknown"` when absent: they decode as `String?` (lenient
+   JSON), and blank/`Unknown` is treated as absent so emails never show it.
 
 ### 7.3 The lingering-FINISH trap
 
@@ -1109,9 +1125,10 @@ respectively.
 2. Set `BAMBUDDY_WEBHOOK_SECRET` in the service environment (long random
    value); deploy service, then UI.
 3. **Verify against the live DMS BamBuddy instance before enabling**
-   (upstream may differ): generic payload field names for filament/duration,
-   the queue status string for a stopped job, and that the DMS install's
-   provider supports all four toggles.
+   (upstream may differ): generic payload field names for filament/duration
+   and that the DMS install's provider supports all four toggles. The queue
+   status vocabulary and payload string types are confirmed for v1.2.5.7
+   (§7.2).
 4. Configure the BamBuddy provider per `bambuddy-setup.md`.
 5. Pilot: set `bambu-notifications.enabled` with
    `enabledUsernames = [a tester]`; arm a watch on a short print; confirm

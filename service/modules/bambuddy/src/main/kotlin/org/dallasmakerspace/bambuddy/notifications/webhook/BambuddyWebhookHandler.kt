@@ -48,7 +48,10 @@ constructor(
     loggerFactory: LoggerFactory,
 ) {
   private val log = loggerFactory.create(javaClass)
-  private val json = Json { ignoreUnknownKeys = true }
+  private val json = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+  }
   private val utcZone = ZoneId.of("UTC")
 
   /**

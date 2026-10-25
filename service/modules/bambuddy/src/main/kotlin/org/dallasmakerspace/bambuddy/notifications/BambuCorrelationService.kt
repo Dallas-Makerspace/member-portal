@@ -110,7 +110,7 @@ constructor(
         when {
           row == null -> Unit // handled by the filename-only fallback below
           !filenameMatches(row, filename) -> Unit // a different job ended; not this watch's
-          isTerminalConsistent(row.status, payload.event) -> fired += watch
+          endedConsistently(watch, row.status, payload.event) -> fired += watch
           else -> sawStateMismatch = true // row still printing/pending: event raced the queue
         }
       }
@@ -127,7 +127,7 @@ constructor(
           candidates.filter { watch ->
             payload.event in watch.triggerEvents &&
                 printerQueue.none { it.id == watch.queueId } &&
-                watch.filename?.trim() == filename
+                sameJobName(watch.filename, filename)
           }
       if (vanished.size == 1) {
         return CorrelationResult(CorrelationMode.FILENAME_ONLY, printerId, vanished)
@@ -153,7 +153,7 @@ constructor(
                 payload.event in watch.triggerEvents &&
                 printerQueue
                     .firstOrNull { it.id == watch.queueId }
-                    ?.let { isTerminalConsistent(it.status, payload.event) } == true
+                    ?.let { it.status in BambuQueueStatus.ENDED } == true
           }
       if (availableFired.isNotEmpty()) {
         return CorrelationResult(CorrelationMode.FIRED, printerId, availableFired)
@@ -181,7 +181,7 @@ constructor(
         watchRepository
             .findArmedByPrinterName(printerName)
             .filter { watch ->
-              payload.event in watch.triggerEvents && watch.filename?.trim() == filename
+              payload.event in watch.triggerEvents && sameJobName(watch.filename, filename)
             }
     return unverifiedResult(watches, printerId = null, printerName)
   }
@@ -199,7 +199,7 @@ constructor(
     }
     val watches =
         watchRepository.findArmedByPrinter(printerId).filter { watch ->
-          payload.event in watch.triggerEvents && watch.filename?.trim() == filename
+          payload.event in watch.triggerEvents && sameJobName(watch.filename, filename)
         }
     return unverifiedResult(watches, printerId, printerName)
   }
@@ -225,18 +225,30 @@ constructor(
       }
 
   private fun filenameMatches(row: BambuQueueItem, filename: String): Boolean =
-      row.archiveName?.trim() == filename
+      sameJobName(row.archiveName, filename)
+
+  /**
+   * Whether the watched row has ended in a way this event can explain. A printer-available
+   * watch only cares that the blocking job ended, however it ended.
+   */
+  private fun endedConsistently(watch: EphemeralNotification, queueStatus: String, event: String) =
+      if (watch.scope == WatchScope.PRINTER_AVAILABLE) {
+        queueStatus in BambuQueueStatus.ENDED
+      } else {
+        isTerminalConsistent(queueStatus, event)
+      }
 
   /**
    * Whether a queue row's status is a terminal state consistent with the event. The event type —
-   * not the queue row — decides which template fires; a stopped job may sit in either terminal
-   * status (the queue vocabulary for stopped jobs must be confirmed against the live instance).
+   * not the queue row — decides which template fires. BamBuddy maps aborted/stopped/cancelled
+   * prints to print_stopped, and its queue marks those `cancelled` (a stopped job may also sit
+   * in failed/completed). `skipped` never ran, so no event is consistent with it.
    */
   internal fun isTerminalConsistent(queueStatus: String, event: String): Boolean =
       when (event) {
         "print_complete" -> queueStatus == "completed"
         "print_failed" -> queueStatus == "failed"
-        "print_stopped" -> queueStatus == "failed" || queueStatus == "completed"
-        else -> queueStatus == "completed" || queueStatus == "failed"
+        "print_stopped" -> queueStatus in BambuQueueStatus.RAN_AND_ENDED
+        else -> queueStatus in BambuQueueStatus.RAN_AND_ENDED
       }
 }

@@ -290,10 +290,53 @@ class BambuddyWebhookHandlerTest {
     val parsed = payloadCaptor.firstValue
     assertEquals("Filament runout", parsed.reason)
     assertEquals("1h 5m", parsed.duration)
-    assertEquals(12.5, parsed.filamentGrams)
-    assertEquals(87.0, parsed.progress)
+    assertEquals("12.5", parsed.filamentGrams)
     assertEquals("https://example.test/photo.jpg", parsed.finishPhotoUrl)
     assertEquals("Print failed on Printer 1", parsed.title)
+      Unit
+  }
+
+  @Test
+  fun `a real Bambuddy payload with Unknown placeholders is accepted`() = runBlocking {
+    val w = watch(7)
+    whenever(correlationService.correlatePrintEvent(any()))
+        .thenReturn(CorrelationResult(CorrelationMode.FIRED, 1, listOf(w)))
+    whenever(watchService.fireWatch(any(), any(), any(), any())).thenReturn(true)
+    val body =
+        """{"title":"Print complete","message":"Calibration Cube finished",""" +
+            """"timestamp":"2026-10-24T13:05:00.123456","source":"Bambuddy",""" +
+            """"event":"print_complete","printer":"Test Printer 1","filename":"Calibration Cube",""" +
+            """"duration":"Unknown","filament_grams":"Unknown","reason":"Unknown"}"""
+
+    assertEquals(HttpStatusCode.OK, handler.handle("Bearer test-secret", body))
+
+    val payloadCaptor = argumentCaptor<BambuddyWebhookPayload>()
+    verify(watchService).fireWatch(eq(w), eq("print_complete"), payloadCaptor.capture(), any())
+    val parsed = payloadCaptor.firstValue
+    assertEquals(null, parsed.durationText())
+    assertEquals(null, parsed.filamentGramsText())
+    assertEquals(null, parsed.reasonText())
+      Unit
+  }
+
+  @Test
+  fun `a real Bambuddy payload with string filament grams is formatted`() = runBlocking {
+    val w = watch(7)
+    whenever(correlationService.correlatePrintEvent(any()))
+        .thenReturn(CorrelationResult(CorrelationMode.FIRED, 1, listOf(w)))
+    whenever(watchService.fireWatch(any(), any(), any(), any())).thenReturn(true)
+    val body =
+        """{"title":"Print complete","message":"x","timestamp":"2026-10-24T13:05:00.123456",""" +
+            """"source":"Bambuddy","event":"print_complete","printer":"Test Printer 1",""" +
+            """"filename":"Calibration Cube","duration":"1h 5m","filament_grams":"12.3",""" +
+            """"progress":"Unknown"}"""
+
+    assertEquals(HttpStatusCode.OK, handler.handle("Bearer test-secret", body))
+
+    val payloadCaptor = argumentCaptor<BambuddyWebhookPayload>()
+    verify(watchService).fireWatch(eq(w), eq("print_complete"), payloadCaptor.capture(), any())
+    assertEquals("12.3 g", payloadCaptor.firstValue.filamentGramsText())
+    assertEquals("1h 5m", payloadCaptor.firstValue.durationText())
       Unit
   }
 

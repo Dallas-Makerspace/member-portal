@@ -225,6 +225,67 @@ class BambuCorrelationServiceTest {
   }
 
   @Test
+  fun `print_stopped fires with a cancelled queue row`() = runBlocking {
+    val w = watch(1)
+    stubLookup(listOf(row(10, "cancelled")), listOf(w))
+
+    val result = service.correlatePrintEvent(payload(event = "print_stopped"))
+
+    assertEquals(CorrelationMode.FIRED, result.mode)
+    assertEquals(listOf(w), result.watches)
+  }
+
+  @Test
+  fun `an own-job watch on a skipped row never fires from a print event`() = runBlocking {
+    stubLookup(listOf(row(10, "skipped")), listOf(watch(1)))
+
+    val result = service.correlatePrintEvent(payload(event = "print_stopped"))
+
+    assertTrue(result.watches.isEmpty())
+  }
+
+  @Test
+  fun `an available watch fires when its blocking row ended in any way`() = runBlocking {
+    for (status in listOf("completed", "failed", "cancelled", "skipped")) {
+      val w = watch(1, scope = WatchScope.PRINTER_AVAILABLE)
+      stubLookup(listOf(row(10, status)), listOf(w))
+      val result = service.correlatePrintEvent(payload(event = "print_complete"))
+      assertEquals(CorrelationMode.FIRED, result.mode, status)
+      assertEquals(listOf(w), result.watches, status)
+    }
+  }
+
+  @Test
+  fun `webhook names with spaces match queue names with underscores and extensions`() =
+      runBlocking {
+        // BamBuddy sends subtask_name with "_" turned into " "; the queue keeps the original.
+        val w = watch(1, filename = "Cable_Clip_v2")
+        stubLookup(listOf(row(10, "completed", archiveName = "Cable_Clip_v2")), listOf(w))
+        val result = service.correlatePrintEvent(payload(filename = "Cable Clip v2"))
+        assertEquals(CorrelationMode.FIRED, result.mode)
+
+        // Vanished row: the stored (queue-side) name still matches the webhook form.
+        stubLookup(emptyList(), listOf(w))
+        assertEquals(
+            CorrelationMode.FILENAME_ONLY,
+            service.correlatePrintEvent(payload(filename = "cable clip V2.gcode.3mf")).mode)
+      }
+
+  @Test
+  fun `unverified fallback matches across the underscore and extension forms`() = runBlocking {
+    val w = watch(1, filename = "Cable_Clip_v2.gcode.3mf")
+    runBlocking {
+      whenever(apiClient.getPrinters()).thenReturn(listOf(BambuPrinter(id = 1, name = "Printer 1")))
+      whenever(apiClient.getQueue()).thenThrow(RuntimeException("timeout"))
+      whenever(watchRepository.findArmedByPrinter(1)).thenReturn(listOf(w))
+    }
+
+    val result = service.correlatePrintEvent(payload(filename = "Cable Clip v2"))
+
+    assertEquals(CorrelationMode.UNVERIFIED, result.mode)
+  }
+
+  @Test
   fun `a state mismatch on one watch does not suppress another watch's filename-only fire`() =
       runBlocking {
         // Watch 1's row is still printing (state mismatch); watch 2's row vanished and it is
@@ -277,6 +338,10 @@ class BambuCorrelationServiceTest {
     assertTrue(service.isTerminalConsistent("failed", "print_failed"))
     assertTrue(service.isTerminalConsistent("failed", "print_stopped"))
     assertTrue(service.isTerminalConsistent("completed", "print_stopped"))
+    assertTrue(service.isTerminalConsistent("cancelled", "print_stopped"))
+    assertTrue(!service.isTerminalConsistent("cancelled", "print_complete"))
+    assertTrue(!service.isTerminalConsistent("cancelled", "print_failed"))
+    assertTrue(!service.isTerminalConsistent("skipped", "print_stopped"))
     assertTrue(!service.isTerminalConsistent("printing", "print_stopped"))
   }
 }

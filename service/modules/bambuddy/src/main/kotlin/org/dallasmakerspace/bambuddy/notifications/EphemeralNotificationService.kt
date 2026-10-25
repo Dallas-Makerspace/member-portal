@@ -438,8 +438,8 @@ constructor(
                       printerName = watch.printerName,
                       jobName = watch.jobName ?: "",
                       completedAtText = formatCentralTime(occurredAt),
-                      durationText = payload?.duration,
-                      filamentGramsText = payload?.filamentGrams?.let { "$it g" },
+                      durationText = payload?.durationText(),
+                      filamentGramsText = payload?.filamentGramsText(),
                       statusPageUrl = bambuStatusUrl(),
                   )),
               dedupeKey)
@@ -452,7 +452,7 @@ constructor(
                       printerName = watch.printerName,
                       jobName = watch.jobName ?: "",
                       eventLabel = if (event == "print_stopped") "was stopped" else "failed",
-                      reason = payload?.reason,
+                      reason = payload?.reasonText(),
                       occurredAtText = formatCentralTime(occurredAt),
                       statusPageUrl = bambuStatusUrl(),
                   )),
@@ -514,7 +514,8 @@ constructor(
         state == "OFFLINE" -> expireForReal(watch, "Printer offline at expiry check")
         state in PRINTING_STATES &&
             watch.filename != null &&
-            status.currentPrint == watch.filename -> overdue(watch, emptyList(), status, null)
+            sameJobName(status.currentPrint, watch.filename) ->
+            overdue(watch, emptyList(), status, null)
         else ->
             expireForReal(
                 watch, "Queue unavailable at expiry check and the watched job is not confirmed printing")
@@ -525,8 +526,18 @@ constructor(
     val state = bambuEffectiveState(status)
 
     // The watched/blocking job ended while its webhook was lost: fire the real notice.
-    if (row != null && (row.status == "completed" || row.status == "failed")) {
-      val inferred = if (row.status == "completed") "print_complete" else "print_failed"
+    if (row != null && row.status in BambuQueueStatus.ENDED) {
+      if (row.status == "skipped" && watch.scope == WatchScope.OWN_JOB) {
+        // The job never ran: nothing finished, so no finished notice - just check-yourself.
+        return expireForReal(watch, "Watched job was skipped and never ran")
+      }
+      val inferred =
+          when (row.status) {
+            "completed" -> "print_complete"
+            "cancelled" -> "print_stopped"
+            "skipped" -> "print_complete" // printer-available: the event only picks the template
+            else -> "print_failed"
+          }
       return fireAtExpiry(watch, inferred, queue)
     }
 
@@ -550,7 +561,7 @@ constructor(
         (row != null && (row.status == "printing" || row.status == "pending")) ||
             (state in PRINTING_STATES &&
                 watch.filename != null &&
-                status?.currentPrint == watch.filename)
+                sameJobName(status?.currentPrint, watch.filename))
     if (stillPrinting) {
       return overdue(watch, queue, status, row)
     }

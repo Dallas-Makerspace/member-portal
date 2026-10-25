@@ -455,8 +455,7 @@ class EphemeralNotificationServiceTest {
                 filename = "Job.3mf",
                 reason = "Filament runout",
                 duration = "1h 5m",
-                filamentGrams = 12.5,
-                progress = 87.0)
+                filamentGrams = "12.5")
         assertTrue(service.fireWatch(failedWatch, "print_failed", failedPayload, LocalDateTime.now(utc)))
         assertTrue(createdRequests[0].payload!!.contains("Filament runout"), createdRequests[0].payload)
 
@@ -468,6 +467,72 @@ class EphemeralNotificationServiceTest {
         val finishedRequestPayload = createdRequests[1].payload!!
         assertTrue(finishedRequestPayload.contains("1h 5m"), finishedRequestPayload)
         assertTrue(finishedRequestPayload.contains("12.5 g"), finishedRequestPayload)
+      }
+
+  @Test
+  fun `Unknown placeholders from Bambuddy never reach the notice payloads`() = runBlocking {
+    val watch = storedWatch()
+    val payload =
+        org.dallasmakerspace.bambuddy.notifications.webhook.BambuddyWebhookPayload(
+            event = "print_complete",
+            printer = "Printer 1",
+            filename = "Job.3mf",
+            duration = "Unknown",
+            filamentGrams = "unknown",
+            reason = " ")
+
+    assertTrue(service.fireWatch(watch, "print_complete", payload, LocalDateTime.now(utc)))
+
+    val text = createdRequests.single().payload!!
+    assertFalse(text.contains("Unknown", ignoreCase = true), text)
+    assertFalse(text.contains(" g\""), text)
+  }
+
+  @Test
+  fun `expiry infers print_stopped from a cancelled row`() = runBlocking {
+    val watch = storedWatch()
+    stubApi(queue = listOf(queueItem(status = "cancelled")), status = printingStatus())
+
+    assertEquals(ExpiryOutcome.FIRED, service.processExpiredWatch(watch))
+
+    assertEquals("bambu-print-action-required", createdRequests.single().templateName)
+    assertTrue(createdRequests.single().payload!!.contains("was stopped"))
+  }
+
+  @Test
+  fun `expiry on a skipped own-job row expires with check-yourself and no finished notice`() =
+      runBlocking {
+        val watch = storedWatch()
+        stubApi(queue = listOf(queueItem(status = "skipped")), status = printingStatus())
+
+        assertEquals(ExpiryOutcome.EXPIRED, service.processExpiredWatch(watch))
+
+        assertEquals(WatchStatus.EXPIRED, repository.getById(watch.id)?.status)
+        assertEquals("bambu-watch-expired", createdRequests.single().templateName)
+      }
+
+  @Test
+  fun `available watch expiry fires for any ended blocking row`() = runBlocking {
+    for (status in listOf("completed", "failed", "cancelled", "skipped")) {
+      createdRequests.clear()
+      val watch = storedWatch(scope = WatchScope.PRINTER_AVAILABLE, member = "asmith")
+      stubApi(queue = listOf(queueItem(status = status)), status = printingStatus())
+
+      assertEquals(ExpiryOutcome.FIRED, service.processExpiredWatch(watch), status)
+      assertEquals(BambuPrinterAvailableTopic, createdRequests.single().topic, status)
+    }
+  }
+
+  @Test
+  fun `a watch is still seen printing when the queue name has underscores and the printer name does not`() =
+      runBlocking {
+        val watch = storedWatch(queueId = null, filename = "Cable_Clip_v2")
+        // Queue unreadable, so only the printer's current_print can confirm the job.
+        whenever(apiClient.getQueue()).thenThrow(RuntimeException("queue endpoint down"))
+        whenever(apiClient.getPrinterStatus(any()))
+            .thenReturn(printingStatus(remaining = 30, currentPrint = "cable clip v2.gcode.3mf"))
+
+        assertEquals(ExpiryOutcome.OVERDUE_REARMED, service.processExpiredWatch(watch))
       }
 
   @Test
