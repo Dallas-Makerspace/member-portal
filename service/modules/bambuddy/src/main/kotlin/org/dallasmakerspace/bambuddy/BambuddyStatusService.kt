@@ -23,6 +23,7 @@ private val PRINTING_STATES = BAMBU_PRINTING_STATES
 // used. Lumping FINISH into "needs attention" was actively misleading (see the linked discussion).
 private val NEEDS_ATTENTION_STATES = setOf("FAILED")
 private val FINISHED_STATES = setOf("FINISH")
+private val FAILED_QUEUE_STATUSES = setOf("failed", "cancelled")
 
 @Serializable
 data class BambuStatusSummaryDTO(
@@ -171,11 +172,12 @@ constructor(
       // stays in the queue as status="failed" with position=1, so selecting by position returns
       // the *oldest* failure (potentially months old) and credits the wrong member on every load.
       // Only consult them when the printer is actually FAILED, and take the newest by completedAt
-      // - the same reasoning as `previous` below.
+      // - the same reasoning as `previous` below. A stopped print also leaves the printer FAILED,
+      // but its queue row is "cancelled".
       val failedPrint =
           if (state == "FAILED") {
             printerQueue
-                .filter { it.status == "failed" && it.completedAt != null }
+                .filter { it.status in FAILED_QUEUE_STATUSES && it.completedAt != null }
                 .maxByOrNull { it.completedAt!! }
           } else {
             null

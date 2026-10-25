@@ -239,6 +239,38 @@ class BambuddyStatusServiceTest {
   }
 
   @Test
+  fun `a FAILED printer credits a newer stopped print over an older failure`() = runBlocking {
+    whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
+    stubStatus(1, "FAILED")
+    whenever(bambuddyApiClient.getQueue())
+        .thenReturn(
+            listOf(
+                BambuQueueItem(
+                    id = 1,
+                    printerId = 1,
+                    status = "failed",
+                    archiveName = "Older.3mf",
+                    position = 1,
+                    createdByUsername = "jdoe",
+                    completedAt = "2026-08-29T18:34:30Z",
+                ),
+                BambuQueueItem(
+                    id = 2,
+                    printerId = 1,
+                    status = "cancelled",
+                    archiveName = "Stopped.3mf",
+                    position = 1,
+                    createdByUsername = "asmith",
+                    completedAt = "2026-09-26T04:13:51Z",
+                ),
+            ))
+
+    val details = service.getPrinterDetails()
+
+    assertEquals("asmith", details[0].printedByUsername)
+  }
+
+  @Test
   fun `an idle printer with past failures credits nobody as its current print`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "IDLE")
