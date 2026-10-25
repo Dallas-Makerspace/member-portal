@@ -206,7 +206,9 @@ through a `dallas.ms` short link.
   category for threads created on a chair's behalf). A committee missing from the map can only use an
   existing thread.
 - **Who:** `CommitteeMessageService` (`:service`, `committees/`) checks the chair on every request:
-  membership of the committee's `chairGroupName` in AD, direct only, failing closed. The UI's
+  membership of the committee's `chairGroupName` in AD, direct only, failing closed. Members of the
+  Infrastructure group may also message any committee's followers
+  (`MemberService.isUserInInfraGroup`). The UI's
   chair-only form is a convenience; `POST /committees/{slug}/message` (a dedicated UI handler, not
   `/backend-api`) takes the acting member from the session, refuses a missing or foreign `Origin`, and
   forwards only the message fields.

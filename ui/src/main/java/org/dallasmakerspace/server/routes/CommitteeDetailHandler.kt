@@ -13,6 +13,7 @@ import org.dallasmakerspace.models.DMSGroup
 import org.dallasmakerspace.models.TopicKeys
 import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
+import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.committees.CommitteePageSectionProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
@@ -153,11 +154,12 @@ constructor(
     val chairGroupsMap = chairGroups.associateBy { getSlugFromName(it.name) }
     val chairpersons = getChairMembersFromCache(committee, chairGroupsMap)
 
-    // Only a chair is offered the message form. This just avoids a service call for everyone else;
-    // the service re-checks chair status and the feature flag on every request.
+    // Only a chair (or Infrastructure) is offered the message form. This just avoids a service call
+    // for everyone else; the service re-checks who may send and the feature flag on every request.
     val messageEligibility =
         if (currentUsername != null &&
-            chairpersons.any { (it["username"] as? String).equals(currentUsername, true) }) {
+            (authz.can(Permission.MANAGE_CONFIG.name) ||
+                chairpersons.any { (it["username"] as? String).equals(currentUsername, true) })) {
           memberService.getCommitteeMessageEligibility(
               committee.id, currentUsername, session.sessionId)
         } else {

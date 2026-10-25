@@ -17,6 +17,7 @@ import org.dallasmakerspace.discourse.DiscourseApiException
 import org.dallasmakerspace.discourse.DiscourseTopicNotFoundException
 import org.dallasmakerspace.discourse.DiscourseUserNotFoundException
 import org.dallasmakerspace.discourse.IDiscourseApiClient
+import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.ProfileResolver
 import org.dallasmakerspace.members.db.ProfileTable
@@ -88,8 +89,9 @@ internal val LIMITS = SendLimits(perDay = 2, perWeek = 3)
 
 /**
  * A committee chair's short message to the committee's followers, pointing at a Talk thread
- * through a portal short link. The chair is checked here (never trusted from the UI), must have a
- * linked Talk account, and is held to [LIMITS] per committee.
+ * through a portal short link. Infrastructure group members may also message any committee's
+ * followers. The sender is checked here (never trusted from the UI), must have a linked Talk
+ * account, and is held to [LIMITS] per committee.
  */
 @Singleton
 class CommitteeMessageService
@@ -103,6 +105,7 @@ constructor(
     private val followers: CommitteeSubscriptionsRepository,
     private val messages: CommitteeMessagesRepository,
     private val notificationService: NotificationService,
+    private val memberService: MemberService,
     loggerFactory: LoggerFactory,
 ) {
   private val log = loggerFactory.create(javaClass)
@@ -139,9 +142,10 @@ constructor(
       throw CommitteeMessageException(
           CommitteeMessageError.NOT_ENABLED, "Committee messages aren't available to you yet")
     }
-    if (!isChair(actor, committee)) {
+    if (!isChairOrInfra(actor, committee)) {
       throw CommitteeMessageException(
-          CommitteeMessageError.NOT_CHAIR, "Only a chair of ${committee.name} can send messages")
+          CommitteeMessageError.NOT_CHAIR,
+          "Only a chair of ${committee.name} or the Infrastructure team can send messages")
     }
 
     val text = validateMessage(request.message)
@@ -237,7 +241,14 @@ constructor(
       committee.groupPrefixes.isNotEmpty() &&
           featureFlagService.isEnabledForUsername(
               ConfigRegistry.COMMITTEE_BROADCAST_ENABLED, actor) &&
-          isChair(actor, committee)
+          isChairOrInfra(actor, committee)
+
+  private suspend fun isChairOrInfra(actor: String, committee: Committee): Boolean =
+      isChair(actor, committee) || isInfra(actor)
+
+  /** Fails closed (the member service already does). */
+  private suspend fun isInfra(actor: String): Boolean =
+      withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(actor) }
 
   /** Fails closed: any directory error means "not a chair". */
   @Suppress("TooGenericExceptionCaught")

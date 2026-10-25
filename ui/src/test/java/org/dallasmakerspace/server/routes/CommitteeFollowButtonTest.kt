@@ -66,11 +66,11 @@ class CommitteeFollowButtonTest {
                   hint = "Get notified when this committee adds a class",
                   subscribedHint = "You'll be notified when this committee adds a class"))
 
-  private fun userInfoProvider(): UserInfoProvider {
+  private fun userInfoProvider(groups: List<String> = emptyList()): UserInfoProvider {
     val provider = mock<UserInfoProvider>()
     runBlocking {
       whenever(provider.getUserInfo("tok-mia"))
-          .thenReturn(mapOf("preferred_username" to "mia", "groups" to listOf<String>()))
+          .thenReturn(mapOf("preferred_username" to "mia", "groups" to groups))
     }
     return provider
   }
@@ -106,7 +106,12 @@ class CommitteeFollowButtonTest {
     return service
   }
 
-  private fun committeePage(service: MemberService, slug: String, block: suspend (String) -> Unit) {
+  private fun committeePage(
+      service: MemberService,
+      slug: String,
+      groups: List<String> = emptyList(),
+      block: suspend (String) -> Unit,
+  ) {
     testApplication {
       application {
         install(Sessions) { cookie<UserSession>("user_session") }
@@ -120,7 +125,7 @@ class CommitteeFollowButtonTest {
         }
         routing {
           val handler =
-              CommitteeDetailHandler(LoggerFactory(), userInfoProvider(), service, emptySet())
+              CommitteeDetailHandler(LoggerFactory(), userInfoProvider(groups), service, emptySet())
           get("/committees/{committee_slug}") { asUser(handler) }
         }
       }
@@ -275,6 +280,14 @@ class CommitteeFollowButtonTest {
     committeePage(service, laser.slug) { html ->
       assertFalse("Start a new Talk thread for me" in html)
       assertTrue("Use a Talk thread that already exists" in html)
+    }
+  }
+
+  @Test
+  fun `an Infrastructure member gets the form on a committee they do not chair`() {
+    val service = service(status(false), chairs = listOf("zed"), eligibility = eligibility())
+    committeePage(service, laser.slug, groups = listOf("/Infrastructure")) { html ->
+      assertTrue("id=\"committeeMessageForm\"" in html, html)
     }
   }
 

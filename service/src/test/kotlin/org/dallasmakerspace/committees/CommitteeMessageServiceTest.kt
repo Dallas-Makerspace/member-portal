@@ -22,6 +22,7 @@ import org.dallasmakerspace.discourse.DiscourseUserNotFoundException
 import org.dallasmakerspace.discourse.DiscourseUserProfile
 import org.dallasmakerspace.discourse.IDiscourseApiClient
 import org.dallasmakerspace.members.db.ProfileTable
+import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.RedirectType
 import org.dallasmakerspace.models.ShortLink
@@ -80,6 +81,7 @@ class CommitteeMessageServiceTest {
   private val followers = mock<CommitteeSubscriptionsRepository>()
   private val messages = mock<CommitteeMessagesRepository>()
   private val notifications = mock<NotificationService>()
+  private val members = mock<MemberService>()
   private lateinit var service: CommitteeMessageService
 
   @Before
@@ -89,7 +91,7 @@ class CommitteeMessageServiceTest {
     service =
         CommitteeMessageService(
             ad, flags, config, discourse, shortLinks, followers, messages, notifications,
-            loggerFactory)
+            members, loggerFactory)
 
     whenever(flags.isEnabledForUsername(eq(ConfigRegistry.COMMITTEE_BROADCAST_ENABLED), any()))
         .thenReturn(true)
@@ -211,6 +213,18 @@ class CommitteeMessageServiceTest {
   }
 
   @Test
+  fun `an Infrastructure member can message any committee's followers`() = runBlocking {
+    asChair("chairperson", "Some Other Group")
+    whenever(members.isUserInInfraGroup("chairperson")).thenReturn(true)
+    whenever(messages.recentSends(eq(laser.id), any())).thenReturn(emptyList())
+
+    val result = service.send("chairperson", laser.id, existingThread())
+
+    assertEquals(2, result.recipients)
+    assertTrue(service.eligibility("chairperson", laser.id).canMessage)
+  }
+
+  @Test
   fun `a directory failure means not a chair`() {
     whenever(ad.getMemberByUsername("chairperson")).thenThrow(RuntimeException("AD down"))
 
@@ -220,8 +234,9 @@ class CommitteeMessageServiceTest {
   }
 
   @Test
-  fun `the feature flag gates sending`() {
+  fun `the feature flag gates sending, even for Infrastructure`() {
     runBlocking {
+      whenever(members.isUserInInfraGroup("chairperson")).thenReturn(true)
       whenever(flags.isEnabledForUsername(eq(ConfigRegistry.COMMITTEE_BROADCAST_ENABLED), any()))
           .thenReturn(false)
     }
