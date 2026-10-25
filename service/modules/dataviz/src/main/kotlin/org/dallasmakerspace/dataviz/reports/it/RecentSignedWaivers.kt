@@ -43,10 +43,10 @@ constructor(
     val startTime = System.currentTimeMillis()
     val requestedDays = params["days"]?.firstOrNull()?.toLongOrNull() ?: DEFAULT_DAYS
     val reportDays = if (requestedDays in ALLOWED_DAYS) requestedDays else DEFAULT_DAYS
-    val toDate = LocalDate.now()
-    val fromDate = toDate.minusDays(reportDays)
-
     val local = localReads.useLocal(params["source"]?.firstOrNull())
+    // The local mirror counts Chicago days; the API path keeps the server's date.
+    val toDate = if (local) LocalDate.now(ZoneId.of("America/Chicago")) else LocalDate.now()
+    val fromDate = toDate.minusDays(reportDays)
     val waivers =
         if (local) localReads.summaries(fromDate, toDate)
         else smartwaiverClient.getWaiverDetails(fromDate, toDate)

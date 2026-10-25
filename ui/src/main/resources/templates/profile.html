@@ -936,7 +936,7 @@
                 const data = await resp.json();
                 const waivers = data.waivers || [];
                 if (waivers.length === 0) {
-                    container.innerHTML = '<span class="text-muted small">No Smartwaiver waivers found for this member\'s email.</span>';
+                    container.innerHTML = '<span class="text-muted small">No waivers found for this member.</span>';
                     return;
                 }
 

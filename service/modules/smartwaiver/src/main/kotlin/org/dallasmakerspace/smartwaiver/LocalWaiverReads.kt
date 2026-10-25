@@ -1,6 +1,8 @@
 package org.dallasmakerspace.smartwaiver
 
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Base64
 import javax.inject.Inject
 import javax.inject.Named
@@ -20,6 +22,10 @@ import org.dallasmakerspace.storage.StorageNamespace
 
 const val MAX_LOCAL_WAIVERS_FOR_PHOTOS = 15
 
+private val UTC_ZONE = ZoneId.of("UTC")
+private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
+private val DATE_TEXT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
 /**
  * Reads SmartWaiver data from the local mirror instead of the live API. Callers ask [useLocal]
  * first: it follows `smartwaiver.local-reads.enabled`, and a request can force a side with
@@ -37,6 +43,19 @@ constructor(
   private val log = loggerFactory.create(javaClass)
   private val store = NamespacedObjectStore(objectStore, StorageNamespace.SMARTWAIVER)
 
+  private suspend fun waiversInChicagoDays(from: LocalDate, to: LocalDate): List<LocalWaiver> =
+      repository.waiversBetween(
+          from.atStartOfDay(CHICAGO_ZONE).withZoneSameInstant(UTC_ZONE).toLocalDateTime(),
+          to.plusDays(1).atStartOfDay(CHICAGO_ZONE).withZoneSameInstant(UTC_ZONE).toLocalDateTime(),
+      )
+
+  /** A stored UTC time as Chicago time in the same text format; unreadable text is left alone. */
+  private fun chicagoText(utcText: String): String =
+      parseApiDateTime(utcText)
+          ?.atZone(UTC_ZONE)
+          ?.withZoneSameInstant(CHICAGO_ZONE)
+          ?.format(DATE_TEXT) ?: utcText
+
   suspend fun useLocal(source: String? = null): Boolean =
       when (source?.lowercase()) {
         "local" -> true
@@ -44,15 +63,20 @@ constructor(
         else -> configOverrideService.get(ConfigRegistry.SMARTWAIVER_LOCAL_READS_ENABLED)
       }
 
-  /** Signing dates for the weekly counts; rows with an unreadable date are skipped. */
+  /**
+   * Signing times (Chicago) for the weekly counts, for the Chicago days [from] through [to]; rows
+   * with an unreadable date are skipped.
+   */
   suspend fun signingData(from: LocalDate, to: LocalDate): List<WaiverSigningData> =
-      repository.waiversBetween(from, to).mapNotNull {
-        val date = parseApiDateTime(it.createdOn) ?: return@mapNotNull null
+      waiversInChicagoDays(from, to).mapNotNull {
+        val utc = parseApiDateTime(it.createdOn) ?: return@mapNotNull null
+        val date = utc.atZone(UTC_ZONE).withZoneSameInstant(CHICAGO_ZONE).toLocalDateTime()
         WaiverSigningData(date = date, dayOfWeek = date.dayOfWeek.value, waiverId = it.waiverId)
       }
 
+  /** Summaries keep `createdOn` in UTC, as the API returns it; the report converts for display. */
   suspend fun summaries(from: LocalDate, to: LocalDate): List<SmartwaiverSummary> =
-      repository.waiversBetween(from, to).map {
+      waiversInChicagoDays(from, to).map {
         SmartwaiverSummary(
             waiverId = it.waiverId,
             templateId = it.templateId.orEmpty(),
@@ -94,7 +118,7 @@ constructor(
                   waiverId = waiver.waiverId,
                   firstName = waiver.firstName,
                   lastName = waiver.lastName,
-                  dateCompleted = waiver.createdOn,
+                  dateCompleted = chicagoText(waiver.createdOn),
                   photos = photos,
                   emailMatches = waiver.email?.equals(memberEmail, ignoreCase = true) == true,
               )
