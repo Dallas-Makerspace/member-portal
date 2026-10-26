@@ -27,7 +27,7 @@ constructor(private val autoLinkService: DiscourseAutoLinkService) : WebhookHand
 
   override fun getName() = "discourse-user"
 
-  @Suppress("TooGenericExceptionCaught")
+  @Suppress("TooGenericExceptionCaught", "ReturnCount")
   override suspend fun handleWebhook(body: String): WebhookResult {
     val envelope =
         try {

@@ -79,6 +79,9 @@ A Discourse admin creates this at `talk.dallasmakerspace.org/admin/api/web_hooks
 Use the webhook's "Ping" and recent-deliveries view to confirm 200 responses. Discourse disables a
 webhook that keeps failing, so the handler returns 200 for everything it deliberately ignores.
 
+User events (auto-link by email) use a separate webhook, because this one's category filter would drop them; see
+[`../discourse-auto-link/README.md`](../discourse-auto-link/README.md).
+
 ## Adding a topic
 
 1. Add an `object MyTopic : NotificationTopic` with a stable `key`. Set

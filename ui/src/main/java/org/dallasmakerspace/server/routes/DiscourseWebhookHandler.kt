@@ -35,7 +35,7 @@ constructor(
   private val serviceUrl = appConfig.requireStringProperty("app.member-service.url")
   private val client = HttpClient(DmsHttpEngine)
 
-  @Suppress("TooGenericExceptionCaught")
+  @Suppress("TooGenericExceptionCaught", "ReturnCount")
   override suspend fun handle(call: ApplicationCall) {
     if (!WebhookHmac.isSecretUsable(secret, appConfig.isDevelopmentMode())) {
       log.warn("Rejected Discourse webhook: ENV_DISCOURSE_WEBHOOK_SECRET is not set")
