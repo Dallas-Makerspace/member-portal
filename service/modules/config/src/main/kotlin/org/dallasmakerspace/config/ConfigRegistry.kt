@@ -188,6 +188,28 @@ object ConfigRegistry {
           type = ConfigValueType.IntType,
       )
 
+  val NOTIFICATIONS_MONTHLY_EMAIL_CAP =
+      ConfigKey(
+          key = "notifications.monthly-email-cap",
+          description =
+              "Safety limit on notification emails sent per month across all members; once it " +
+                  "is reached, further emails that month are not sent (0 = unlimited)",
+          category = "Notifications",
+          defaultValue = 30_000,
+          type = ConfigValueType.IntType,
+      )
+
+  val NOTIFICATIONS_MONTHLY_SMS_CAP =
+      ConfigKey(
+          key = "notifications.monthly-sms-cap",
+          description =
+              "Safety limit on notification texts sent per month across all members; once it is " +
+                  "reached, further texts that month are not sent (0 = unlimited)",
+          category = "Notifications",
+          defaultValue = 500,
+          type = ConfigValueType.IntType,
+      )
+
   val NOTIFICATIONS_SMS_ENABLED =
       ConfigKey(
           key = "notifications.sms-enabled",
@@ -345,6 +367,8 @@ object ConfigRegistry {
           WAIVER_REPORT_ALLOWED_USERNAMES,
           NOTIFICATIONS_ENABLED,
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,
+          NOTIFICATIONS_MONTHLY_EMAIL_CAP,
+          NOTIFICATIONS_MONTHLY_SMS_CAP,
           NOTIFICATIONS_SMS_ENABLED,
           COMMITTEE_BROADCAST_ENABLED,
           COMMITTEE_TALK_CATEGORIES,

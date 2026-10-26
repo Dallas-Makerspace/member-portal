@@ -161,6 +161,19 @@ class NotificationsRepositoryTest {
   }
 
   @Test
+  fun `countMessagesSentSince counts every member's messages on one channel, digests once`() =
+      runBlocking {
+        listOf("txn-a" to "jdoe", "txn-a" to "jdoe", "txn-b" to "asmith").forEach { (txn, member) ->
+          repository.markSent(insert(member = member, aggregation = Aggregation.DAILY), txn, now)
+        }
+        repository.markSent(insert(channel = Channel.SMS), "SM-1", now)
+
+        assertEquals(2, repository.countMessagesSentSince(Channel.EMAIL, now.minusHours(1)))
+        assertEquals(1, repository.countMessagesSentSince(Channel.SMS, now.minusHours(1)))
+        assertEquals(0, repository.countMessagesSentSince(Channel.EMAIL, now.plusHours(1)))
+      }
+
+  @Test
   fun `countImmediateEmailsSince ignores texts`() = runBlocking {
     repository.markSent(insert(channel = Channel.SMS), "SM-1", now)
 

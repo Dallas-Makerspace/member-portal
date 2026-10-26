@@ -334,6 +334,24 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
    * Immediate emails (not rows) sent to a member since [since] (UTC): a combined burst counts once,
    * since the rows it contained share one provider id.
    */
+  /**
+   * Messages sent on [channel] since [since], all members: a combined email or digest counts
+   * once. Rows created over [MAX_SEND_DELAY_DAYS] before [since] are ignored so the created_at
+   * index bounds the scan.
+   */
+  suspend fun countMessagesSentSince(channel: Channel, since: LocalDateTime): Int =
+      suspendTransaction {
+        NotificationsTable.slice(NotificationsTable.idColumn, NotificationsTable.providerId)
+            .select {
+              (NotificationsTable.createdAt greaterEq since.minusDays(MAX_SEND_DELAY_DAYS)) and
+                  (NotificationsTable.channel eq channel.name) and
+                  (NotificationsTable.sentAt greaterEq since)
+            }
+            .map { it[NotificationsTable.providerId] ?: "row-${it[NotificationsTable.idColumn].value}" }
+            .distinct()
+            .size
+      }
+
   suspend fun countImmediateEmailsSince(memberUsername: String, since: LocalDateTime): Int =
       suspendTransaction {
         val resolvedProfileId =
@@ -580,5 +598,8 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
 
   private companion object {
     const val STALE_SENDING_ERROR = "Recovered after a send was interrupted; retrying"
+
+    /** Longest plausible gap between creating a row and sending it (digests, retries, pauses). */
+    const val MAX_SEND_DELAY_DAYS = 62L
   }
 }

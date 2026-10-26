@@ -21,10 +21,31 @@ loops in the service deliver them.
    - **Daily cap** (`notifications.per-member-immediate-daily-cap`, default 15) is a safety valve.
      It counts emails, so a combined email counts once. The email that reaches the cap tells the
      member and links to preferences; anything after that goes to the next daily digest.
+   - **Monthly caps** (`notifications.monthly-email-cap`, default 30,000, and
+     `notifications.monthly-sms-cap`, default 500; 0 = unlimited) are a site-wide guardrail
+     against a runaway producer; see "Monthly caps" below.
 3. **`DigestProcessor`** (every 60s) handles digests. It picks *members* whose digest window has
    arrived, claims all of that member's due rows, and sends **one** message per channel. A
    transient failure keeps the rows `IN_DIGEST` with backoff, so the retry is still a single
    digest and never individual emails.
+
+### Monthly caps
+
+`MonthlySendCap` limits messages per channel per Central calendar month across all members. A
+combined email or a digest counts once, the same unit the provider bills.
+
+- **Where:** checked right before every provider call in `NotificationWorker` and
+  `DigestProcessor`. A send that fails gives its slot back.
+- **Over the cap:** the rows are dead-lettered with `Monthly <channel> limit reached; not sent`,
+  not deferred, so a runaway backlog can't flood out when the month rolls over. The first refusal
+  each month logs an ERROR. Members see "Not delivered"; admins see the reason. To recover, raise
+  the cap in site config and requeue the rows by hand if they still matter.
+- **Counting:** `countMessagesSentSince` reads the month's sent rows (only rows created in the
+  last 62 days, so the `created_at` index bounds the scan). The count is reloaded at most every
+  10 minutes while sending, so other instances' sends are picked up, and kept in memory in
+  between. Two instances can overshoot by a few messages; that's fine for a guardrail.
+- **Choosing values:** set them well above normal volume. Hitting a cap should mean something is
+  wrong, not that it's a busy month.
 
 ### Event image and description
 
@@ -328,8 +349,9 @@ email preferences only, so this is the groundwork for a later feature.
   subject as the whole message for short channels.
 - **Errors:** 429 and 5xx are retried; other 4xx are permanent, and the reason keeps Twilio's error
   code (for example 21610 when the member replied STOP). The provider id is the message SID.
-- **Daily cap:** counts emails only, so texts don't use up the email allowance. Texts have no cap
-  of their own yet.
+- **Caps:** the per-member daily cap counts emails only, so texts don't use up the email
+  allowance. Texts are limited site-wide by `notifications.monthly-sms-cap` (see "Monthly caps")
+  but have no per-member cap yet.
 - **Calendar** already sends event texts with the same provider (`TWILIO_ACCTSID` /
   `TWILIO_AUTHTOKEN` / `TWILIO_PHONENUM` in its env). The portal can use the same account, but US
   A2P 10DLC rules need a registered messaging service for application texts.

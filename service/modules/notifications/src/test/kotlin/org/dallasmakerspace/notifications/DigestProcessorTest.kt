@@ -81,6 +81,7 @@ class DigestProcessorTest {
     runBlocking {
       whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
           .thenReturn(FeatureFlagValue(enabled = true))
+      givenMonthlyEmailCap(0)
       whenever(mockRepository.claim(any(), any())).thenReturn(true)
     }
 
@@ -90,8 +91,30 @@ class DigestProcessorTest {
             NotifierRegistry(mapOf(Channel.EMAIL to mockNotifier)),
             TemplateRegistry(setOf(SystemTestTemplate())),
             mockConfigOverride,
+            MonthlySendCap(mockRepository, mockConfigOverride, mockLoggerFactory),
             AppConfig(),
             mockLoggerFactory)
+  }
+
+  private suspend fun givenMonthlyEmailCap(cap: Int, sentThisMonth: Int = 0) {
+    whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_MONTHLY_EMAIL_CAP), eq(false)))
+        .thenReturn(cap)
+    whenever(mockRepository.countMessagesSentSince(eq(Channel.EMAIL), any()))
+        .thenReturn(sentThisMonth)
+  }
+
+  @Test
+  fun `the monthly cap dead-letters a digest without calling the provider`() = runBlocking {
+    givenMonthlyEmailCap(cap = 100, sentThisMonth = 100)
+    givenDue(notification(id = 1L), notification(id = 2L))
+
+    val summary = processor.processDigests()
+
+    assertTrue(summary.contains("dead-letter=2"))
+    verify(mockRepository).markDeadLetter(1L, MonthlySendCap.reason(Channel.EMAIL))
+    verify(mockRepository).markDeadLetter(2L, MonthlySendCap.reason(Channel.EMAIL))
+    verify(mockNotifier, never()).send(any(), any())
+    Unit
   }
 
   private suspend fun givenDue(vararg rows: Notification) {

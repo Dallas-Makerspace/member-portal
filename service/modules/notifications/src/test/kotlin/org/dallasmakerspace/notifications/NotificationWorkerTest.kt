@@ -82,6 +82,7 @@ class NotificationWorkerTest {
     runBlocking {
       whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_ENABLED), eq(false)))
           .thenReturn(FeatureFlagValue(enabled = true))
+      givenMonthlyEmailCap(0)
       whenever(
               mockConfigOverride.get(
                   eq(ConfigRegistry.NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP), eq(false)))
@@ -97,8 +98,16 @@ class NotificationWorkerTest {
             NotifierRegistry(mapOf(Channel.EMAIL to mockNotifier)),
             TemplateRegistry(setOf(SystemTestTemplate(), EventAnnouncementTemplate())),
             mockConfigOverride,
+            MonthlySendCap(mockRepository, mockConfigOverride, mockLoggerFactory),
             AppConfig(),
             mockLoggerFactory)
+  }
+
+  private suspend fun givenMonthlyEmailCap(cap: Int, sentThisMonth: Int = 0) {
+    whenever(mockConfigOverride.get(eq(ConfigRegistry.NOTIFICATIONS_MONTHLY_EMAIL_CAP), eq(false)))
+        .thenReturn(cap)
+    whenever(mockRepository.countMessagesSentSince(eq(Channel.EMAIL), any()))
+        .thenReturn(sentThisMonth)
   }
 
   private suspend fun givenBurst(vararg rows: Notification) {
@@ -190,6 +199,37 @@ class NotificationWorkerTest {
     assertTrue(summary.contains("claimed-elsewhere=1"))
     assertEquals("Test 1", sentMessage().subject)
     verify(mockRepository, never()).markSent(eq(2L), anyOrNull(), any())
+    Unit
+  }
+
+  @Test
+  fun `the monthly cap dead-letters the burst without calling the provider`() = runBlocking {
+    givenMonthlyEmailCap(cap = 100, sentThisMonth = 100)
+    givenBurst(notification(id = 1L), notification(id = 2L))
+
+    val summary = worker.processPending()
+
+    assertTrue(summary.contains("monthly-cap=2"))
+    verify(mockRepository).markDeadLetter(1L, MonthlySendCap.reason(Channel.EMAIL))
+    verify(mockRepository).markDeadLetter(2L, MonthlySendCap.reason(Channel.EMAIL))
+    verify(mockNotifier, never()).send(any(), any())
+    Unit
+  }
+
+  @Test
+  fun `a failed send gives its monthly reservation back`() = runBlocking {
+    givenMonthlyEmailCap(cap = 1)
+    whenever(mockNotifier.send(any(), any()))
+        .thenReturn(SendResult.TransientFailure("busy"))
+        .thenReturn(SendResult.Success("txn-1"))
+
+    givenBurst(notification(id = 1L))
+    worker.processPending()
+    givenBurst(notification(id = 2L))
+    worker.processPending()
+
+    verify(mockRepository).markSent(eq(2L), eq("txn-1"), any())
+    verify(mockRepository, never()).markDeadLetter(any(), eq(MonthlySendCap.reason(Channel.EMAIL)))
     Unit
   }
 

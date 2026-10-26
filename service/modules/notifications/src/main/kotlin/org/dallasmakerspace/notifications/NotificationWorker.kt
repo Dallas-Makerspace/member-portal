@@ -26,6 +26,7 @@ import org.dallasmakerspace.notifications.templates.notificationPreferencesUrl
  * recovers rows left in SENDING by a process that died mid-send.
  */
 @Singleton
+@Suppress("LongParameterList")
 class NotificationWorker
 @Inject
 constructor(
@@ -33,6 +34,7 @@ constructor(
     private val notifierRegistry: NotifierRegistry,
     private val templateRegistry: TemplateRegistry,
     private val configOverrideService: ConfigOverrideService,
+    private val monthlySendCap: MonthlySendCap,
     private val appConfig: AppConfig,
     loggerFactory: LoggerFactory,
 ) {
@@ -153,12 +155,17 @@ constructor(
       message: OutgoingMessage,
       now: LocalDateTime,
   ): Map<String, Int> {
+    if (!monthlySendCap.tryAcquire(notifier.channel, now)) {
+      rows.forEach { repository.markDeadLetter(it.id, MonthlySendCap.reason(notifier.channel)) }
+      return mapOf(MONTHLY_CAP to rows.size)
+    }
     val result =
         try {
           notifier.send(memberUsername, message)
         } catch (e: Exception) {
           SendResult.TransientFailure("Unexpected error: ${e.message}")
         }
+    if (result !is SendResult.Success) monthlySendCap.release(notifier.channel)
     return when (result) {
       is SendResult.Success -> {
         rows.forEach { repository.markSent(it.id, result.providerId, now) }
@@ -227,6 +234,8 @@ constructor(
     private const val DEAD_LETTER = "dead-letter"
     private const val DEFERRED = "deferred-to-digest"
     private const val CLAIMED_ELSEWHERE = "claimed-elsewhere"
-    private val OUTCOMES = listOf(SENT, TRANSIENT, DEAD_LETTER, DEFERRED, CLAIMED_ELSEWHERE)
+    private const val MONTHLY_CAP = "monthly-cap"
+    private val OUTCOMES =
+        listOf(SENT, TRANSIENT, DEAD_LETTER, DEFERRED, CLAIMED_ELSEWHERE, MONTHLY_CAP)
   }
 }

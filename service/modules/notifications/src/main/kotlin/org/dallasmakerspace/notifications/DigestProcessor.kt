@@ -8,6 +8,7 @@ import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.notifications.channels.Notifier
 import org.dallasmakerspace.notifications.channels.NotifierRegistry
 import org.dallasmakerspace.notifications.channels.OutgoingMessage
 import org.dallasmakerspace.notifications.channels.SendResult
@@ -23,6 +24,7 @@ import org.dallasmakerspace.notifications.templates.TemplateRegistry
  * taken. Transient failures keep rows IN_DIGEST with backoff, so a retry is still one digest.
  */
 @Singleton
+@Suppress("LongParameterList")
 class DigestProcessor
 @Inject
 constructor(
@@ -30,6 +32,7 @@ constructor(
     private val notifierRegistry: NotifierRegistry,
     private val templateRegistry: TemplateRegistry,
     private val configOverrideService: ConfigOverrideService,
+    private val monthlySendCap: MonthlySendCap,
     private val appConfig: AppConfig,
     loggerFactory: LoggerFactory,
 ) {
@@ -104,13 +107,25 @@ constructor(
         outcome.deadLetter += rows.size
       } else {
         val claimed = rows.filter { repository.claim(it.id, listOf(NotificationStatus.IN_DIGEST)) }
-        if (claimed.isNotEmpty()) {
-          val result = attemptSend(memberUsername, claimed) { notifier.send(memberUsername, it) }
-          outcome += classify(claimed, result, now)
-        }
+        if (claimed.isNotEmpty()) outcome += deliverClaimed(memberUsername, notifier, claimed, now)
       }
     }
     return outcome
+  }
+
+  private suspend fun deliverClaimed(
+      memberUsername: String,
+      notifier: Notifier,
+      claimed: List<Notification>,
+      now: LocalDateTime,
+  ): Outcome {
+    if (!monthlySendCap.tryAcquire(notifier.channel, now)) {
+      claimed.forEach { repository.markDeadLetter(it.id, MonthlySendCap.reason(notifier.channel)) }
+      return Outcome(deadLetter = claimed.size)
+    }
+    val result = attemptSend(memberUsername, claimed) { notifier.send(memberUsername, it) }
+    if (result !is SendResult.Success) monthlySendCap.release(notifier.channel)
+    return classify(claimed, result, now)
   }
 
   @Suppress("TooGenericExceptionCaught") // Catch-all: any provider/network error is retryable.

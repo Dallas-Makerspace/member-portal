@@ -55,4 +55,16 @@ class DigestScheduleTest {
         LocalDateTime.of(2026, 8, 11, 5, 0),
         DigestSchedule.startOfCentralDay(LocalDateTime.of(2026, 8, 12, 3, 0)))
   }
+
+  @Test
+  fun `startOfCentralMonth uses the Central calendar month`() {
+    // 03:00 UTC on Sep 1 is still Aug 31 in Central (CDT, UTC-5).
+    assertEquals(
+        LocalDateTime.of(2026, 8, 1, 5, 0),
+        DigestSchedule.startOfCentralMonth(LocalDateTime.of(2026, 9, 1, 3, 0)))
+    // December is CST (UTC-6).
+    assertEquals(
+        LocalDateTime.of(2026, 12, 1, 6, 0),
+        DigestSchedule.startOfCentralMonth(LocalDateTime.of(2026, 12, 20, 12, 0)))
+  }
 }

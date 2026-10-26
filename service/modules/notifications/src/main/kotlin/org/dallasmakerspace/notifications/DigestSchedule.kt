@@ -48,4 +48,15 @@ object DigestSchedule {
           .atStartOfDay(CENTRAL)
           .withZoneSameInstant(UTC)
           .toLocalDateTime()
+
+  /** Start of the current Central-Time calendar month, in UTC (for monthly caps). */
+  fun startOfCentralMonth(nowUtc: LocalDateTime): LocalDateTime =
+      nowUtc
+          .atZone(UTC)
+          .withZoneSameInstant(CENTRAL)
+          .toLocalDate()
+          .withDayOfMonth(1)
+          .atStartOfDay(CENTRAL)
+          .withZoneSameInstant(UTC)
+          .toLocalDateTime()
 }
