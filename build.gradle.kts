@@ -101,6 +101,18 @@ allprojects {
     version = "0.0.1"
 }
 
+// Koog pulls kotlinx-datetime 0.7, which drops kotlinx.datetime.Instant/Clock that our code still
+// uses; the compat build keeps both APIs.
+configure(subprojects.filter { it.path == ":service" || it.path.startsWith(":service:") }) {
+  configurations.configureEach {
+    resolutionStrategy.eachDependency {
+      if (requested.group == "org.jetbrains.kotlinx" && requested.name.startsWith("kotlinx-datetime")) {
+        useVersion("0.7.1-0.6.x-compat")
+      }
+    }
+  }
+}
+
 // Loads KEY=VALUE pairs from a gitignored .env file (never committed).
 fun loadDotEnv(envFile: File): Map<String, String> {
     if (!envFile.exists()) return emptyMap()

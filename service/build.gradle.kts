@@ -31,6 +31,7 @@ repositories {
 dependencies {
   implementation(project(":common-models"))
   implementation(project(":service:core"))
+  implementation(project(":service:agent"))
   implementation(project(":service:askai"))
   implementation(project(":service:dataviz"))
   implementation(project(":service:notifications"))

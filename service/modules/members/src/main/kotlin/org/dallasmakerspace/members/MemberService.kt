@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toDeprecatedInstant
 import kotlinx.datetime.toKotlinLocalDate
 import org.dallasmakerspace.activedirectory.GroupNotFoundException
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
@@ -425,12 +426,13 @@ constructor(
   }
 
   /** Calculates the memberSince date from a LocalDate. */
+  @OptIn(kotlin.time.ExperimentalTime::class)
   private fun calculateMemberSince(localDate: LocalDate?): Instant? {
     if (localDate == null) {
       return null
     }
     // Convert LocalDate to Instant at the start of the day in UTC
-    return localDate.atStartOfDayIn(kotlinx.datetime.TimeZone.UTC)
+    return localDate.atStartOfDayIn(kotlinx.datetime.TimeZone.UTC).toDeprecatedInstant()
   }
 
   suspend fun updateMember(username: String, memberFromApi: DMSMember) {
