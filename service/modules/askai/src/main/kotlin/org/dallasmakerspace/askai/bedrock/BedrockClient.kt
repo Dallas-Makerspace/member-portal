@@ -1,5 +1,6 @@
 package org.dallasmakerspace.askai.bedrock
 
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -122,12 +123,13 @@ constructor(
     return LlmResult(result = text, usage = usage, modelName = modelId)
   }
 
-  @Suppress("TooGenericExceptionCaught")
+  @Suppress("TooGenericExceptionCaught", "LongMethod")
   override suspend fun generateAnswerStream(
       question: String,
       searchResults: List<SearchResult>,
       onToken: suspend (String) -> Unit,
-  ) {
+  ): TokenUsage? {
+    val usage = AtomicReference<TokenUsage?>(null)
     val messages = buildAnswerMessages(question, searchResults)
     val systemBlocks =
         messages
@@ -171,6 +173,16 @@ constructor(
                                     else null
                                 if (!text.isNullOrEmpty()) tokenChannel.trySend(text)
                               }
+                              .onMetadata { event ->
+                                event.usage()?.let {
+                                  usage.set(
+                                      TokenUsage(
+                                          promptTokens = it.inputTokens(),
+                                          completionTokens = it.outputTokens(),
+                                          totalTokens = it.inputTokens() + it.outputTokens(),
+                                      ))
+                                }
+                              }
                               .build())
                       .build())
               .await()
@@ -186,6 +198,7 @@ constructor(
         onToken(token)
       }
     }
+    return usage.get()
   }
 }
 

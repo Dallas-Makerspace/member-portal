@@ -58,12 +58,12 @@ interface IOpenRouterClient {
    */
   suspend fun generateHypotheticalAnswer(question: String): LlmResult<String>
 
-  /** Stream an answer token-by-token using the provided callback. */
+  /** Stream an answer token-by-token using the provided callback; returns usage when reported. */
   suspend fun generateAnswerStream(
       question: String,
       searchResults: List<SearchResult>,
       onToken: suspend (String) -> Unit,
-  )
+  ): TokenUsage?
 
   /**
    * Estimate the cost in USD for a given number of input and output tokens. Each implementation

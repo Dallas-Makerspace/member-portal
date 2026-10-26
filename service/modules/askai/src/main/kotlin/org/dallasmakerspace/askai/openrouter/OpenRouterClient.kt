@@ -132,7 +132,8 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
       question: String,
       searchResults: List<SearchResult>,
       onToken: suspend (String) -> Unit,
-  ) {
+  ): TokenUsage? {
+    var usage: TokenUsage? = null
     val messages = buildAnswerMessages(question, searchResults)
     val request = OpenRouterChatRequest(model = model, messages = messages, stream = true)
     val requestBody = json.encodeToString(OpenRouterChatRequest.serializer(), request)
@@ -160,11 +161,15 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) :
                   ?.content
                   ?.takeIf { it.isNotEmpty() }
                   ?.let { onToken(it) }
+              chunk.usage?.let {
+                usage = TokenUsage(it.promptTokens, it.completionTokens, it.totalTokens)
+              }
             } catch (e: Exception) {
               log.debug("Skipped malformed stream chunk: ${e.message}")
             }
           }
         }
+    return usage
   }
 }
 

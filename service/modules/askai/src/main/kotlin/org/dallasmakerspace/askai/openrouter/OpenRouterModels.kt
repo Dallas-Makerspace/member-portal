@@ -18,6 +18,7 @@ data class OpenRouterChatRequest(
 @Serializable
 data class OpenRouterStreamChunk(
     val choices: List<StreamChoice> = emptyList(),
+    val usage: Usage? = null,
 )
 
 @Serializable

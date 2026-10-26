@@ -8,6 +8,7 @@ import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.models.AskAiCacheEntry
 import org.dallasmakerspace.models.ClassificationResult
 import org.dallasmakerspace.models.SearchResult
+import org.dallasmakerspace.models.TokenUsage
 
 /**
  * Base class for LLM clients. Provides shared prompt-building logic for [classify] and
@@ -77,9 +78,10 @@ abstract class AbstractLlmClient(loggerFactory: LoggerFactory) : IOpenRouterClie
       question: String,
       searchResults: List<SearchResult>,
       onToken: suspend (String) -> Unit,
-  ) {
+  ): TokenUsage? {
     val result = generateAnswer(question, searchResults)
     onToken(result.result)
+    return result.usage
   }
 
   protected fun buildAnswerMessages(

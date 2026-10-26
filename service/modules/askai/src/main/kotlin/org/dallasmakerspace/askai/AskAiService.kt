@@ -110,7 +110,7 @@ constructor(
       forceRefresh: Boolean = false,
   ): AskAiResponse {
     val metrics = RequestMetrics()
-    log.info("Processing question (requestId=${metrics.requestId}): $question")
+    log.info("Processing question (requestId=${metrics.requestId}, length=${question.length})")
 
     requireNotNull(username) { "Username is required to ask a question" }
 
@@ -211,7 +211,7 @@ constructor(
         if (cachedEntry != null) {
           metrics.cacheHit = true
           metrics.cacheType = "semantic"
-          metrics.totalCost = calculateEstimatedCost(classificationLlmResult.usage, null)
+          metrics.totalCost = calculateEstimatedCost(classificationLlmResult.usage)
           metrics.responseTimeMs = Duration.between(metrics.startTime, Instant.now()).toMillis()
           log.info(
               "LLM found semantic cache match (id=${cachedEntry.id}, requestId=${metrics.requestId}, cost=\$${String.format("%.4f", metrics.totalCost)}, responseTime=${metrics.responseTimeMs}ms)")
@@ -232,13 +232,14 @@ constructor(
     }
 
     // Step 3: Execute search queries across all sources
-    val hypotheticalAnswer =
+    val hypotheticalLlmResult =
         try {
-          openRouterClient.generateHypotheticalAnswer(maskedQuestion).result
+          openRouterClient.generateHypotheticalAnswer(maskedQuestion)
         } catch (e: Exception) {
           log.debug("HyDE generation failed (non-fatal): ${e.message}")
           null
         }
+    val hypotheticalAnswer = hypotheticalLlmResult?.result
 
     val searchQueries =
         classificationResult.searchQueries
@@ -290,7 +291,8 @@ constructor(
 
     // If no search results found, return canned response directing user to Talk forum
     if (extractableResults.isEmpty() && additionalResources.isEmpty()) {
-      metrics.totalCost = calculateEstimatedCost(classificationLlmResult.usage, null)
+      metrics.totalCost =
+          calculateEstimatedCost(classificationLlmResult.usage, hypotheticalLlmResult?.usage)
       metrics.responseTimeMs = Duration.between(metrics.startTime, Instant.now()).toMillis()
       log.info(
           "No search results found, returning canned response (requestId=${metrics.requestId}, searchQueries=$searchQueries, cost=\$${String.format("%.4f", metrics.totalCost)}, responseTime=${metrics.responseTimeMs}ms)")
@@ -367,7 +369,9 @@ constructor(
         additionalResources.map { SourceLink(it.title, it.url, it.source) }
 
     // Build metadata with search queries, token usage, and cost estimate
-    val estimatedCost = calculateEstimatedCost(classificationLlmResult.usage, answerLlmResult.usage)
+    val estimatedCost =
+        calculateEstimatedCost(
+            classificationLlmResult.usage, hypotheticalLlmResult?.usage, answerLlmResult.usage)
     val sourceBreakdown = rankedResults.groupingBy { it.source }.eachCount()
     log.debug("Source breakdown: $sourceBreakdown")
 
@@ -407,7 +411,7 @@ constructor(
           "Cached answer for question (slug=$slug, cacheId=$cacheId, profileId=$profileId, refresh=$forceRefresh)")
 
       try {
-        val vector = embeddingClient.embed(question)
+        val vector = embeddingClient.embed(maskedQuestion)
         if (vector != null) {
           cacheRepository.saveEmbedding(cached.id, vector)
         }
@@ -451,7 +455,7 @@ constructor(
       onToken: suspend (String) -> Unit,
   ): AskAiStreamResult {
     val metrics = RequestMetrics()
-    log.info("Stream: processing question (requestId=${metrics.requestId}): $question")
+    log.info("Stream: processing question (requestId=${metrics.requestId}, length=${question.length})")
 
     val profileId =
         try {
@@ -551,13 +555,14 @@ constructor(
     }
 
     // HyDE: generate hypothetical answer as extra search query
-    val hypotheticalAnswer =
+    val hypotheticalLlmResult =
         try {
-          openRouterClient.generateHypotheticalAnswer(maskedQuestion).result
+          openRouterClient.generateHypotheticalAnswer(maskedQuestion)
         } catch (e: Exception) {
           log.debug("HyDE generation failed (non-fatal): ${e.message}")
           null
         }
+    val hypotheticalAnswer = hypotheticalLlmResult?.result
 
     val searchQueries =
         classificationResult.searchQueries
@@ -616,17 +621,20 @@ constructor(
         }
 
     val answerBuilder = StringBuilder()
-    openRouterClient.generateAnswerStream(maskedQuestion, maskedSearchResults) { token ->
-      answerBuilder.append(token)
-      onToken(token)
-    }
+    val answerUsage =
+        openRouterClient.generateAnswerStream(maskedQuestion, maskedSearchResults) { token ->
+          answerBuilder.append(token)
+          onToken(token)
+        }
 
     val answer = answerBuilder.toString()
     // For fresh streaming answers the text is already sent, so keep sources in the original
     // relevance-ranked order — the LLM cited [1],[2],[3] in that order, so they already match.
     val orderedSources = extractableResults.map { SourceLink(it.title, it.url, it.source) }
 
-    val estimatedCost = calculateEstimatedCost(classificationLlmResult.usage, null)
+    val estimatedCost =
+        calculateEstimatedCost(
+            classificationLlmResult.usage, hypotheticalLlmResult?.usage, answerUsage)
     metrics.totalCost = estimatedCost
     metrics.responseTimeMs = Duration.between(metrics.startTime, Instant.now()).toMillis()
 
@@ -635,7 +643,7 @@ constructor(
             searchQueries = searchQueries,
             sourceBreakdown = rankedResults.groupingBy { it.source }.eachCount(),
             classificationTokens = classificationLlmResult.usage,
-            answerTokens = null,
+            answerTokens = answerUsage,
             estimatedCostUsd = estimatedCost,
             modelName = classificationLlmResult.modelName,
         )
@@ -659,7 +667,7 @@ constructor(
           "Stream: cached answer (slug=${cached.slug}, cacheId=${cached.id}, refresh=$forceRefresh)")
 
       try {
-        val vector = embeddingClient.embed(question)
+        val vector = embeddingClient.embed(maskedQuestion)
         if (vector != null) cacheRepository.saveEmbedding(cached.id, vector)
       } catch (e: Exception) {
         log.warn("Failed to save embedding for cache entry ${cached.id} (non-fatal)", e)
@@ -735,13 +743,9 @@ constructor(
     )
   }
 
-  private fun calculateEstimatedCost(
-      classificationUsage: TokenUsage?,
-      answerUsage: TokenUsage?,
-  ): Double {
-    val inputTokens = (classificationUsage?.promptTokens ?: 0) + (answerUsage?.promptTokens ?: 0)
-    val outputTokens =
-        (classificationUsage?.completionTokens ?: 0) + (answerUsage?.completionTokens ?: 0)
+  private fun calculateEstimatedCost(vararg usages: TokenUsage?): Double {
+    val inputTokens = usages.sumOf { it?.promptTokens ?: 0 }
+    val outputTokens = usages.sumOf { it?.completionTokens ?: 0 }
     return openRouterClient.estimateCost(inputTokens, outputTokens)
   }
 

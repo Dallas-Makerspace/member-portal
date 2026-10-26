@@ -114,13 +114,14 @@ ${searchResults.take(3).mapIndexed { idx, it -> "- According to «${idx + 1}», 
       question: String,
       searchResults: List<SearchResult>,
       onToken: suspend (String) -> Unit,
-  ) {
+  ): TokenUsage? {
     log.info("[MOCK] Streaming answer for: $question")
     val answer = "This is a **mock streaming response** for: $question"
     answer.split(" ").forEach { word ->
       onToken("$word ")
       delay(50)
     }
+    return TokenUsage(promptTokens = 500, completionTokens = 200, totalTokens = 700)
   }
 
   override fun estimateCost(inputTokens: Int, outputTokens: Int): Double = 0.0
