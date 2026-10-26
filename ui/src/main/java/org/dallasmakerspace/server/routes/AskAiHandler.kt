@@ -15,6 +15,8 @@ import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
+import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.plugins.getCachedFeatureFlag
 
 /** Handler for the Ask DMS AI page. Renders the question form and handles AI responses. */
 class AskAiHandler
@@ -23,6 +25,7 @@ constructor(
     loggerFactory: LoggerFactory,
     userInfoProvider: UserInfoProvider,
     private val memberService: MemberService,
+    private val memberServiceClient: MemberServiceClient,
     private val appConfig: AppConfig,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
   private val log = loggerFactory.create(javaClass)
@@ -117,6 +120,20 @@ constructor(
 
   private suspend fun handleMainPage(call: ApplicationCall) {
     log.info("Ask AI page requested by ${userInfo["preferred_username"]}")
+
+    val username = userInfo["preferred_username"] as? String
+    if (call.request.httpMethod.value == "GET" &&
+        getCachedFeatureFlag(memberServiceClient, AGENT_CHAT_FLAG, username, session.sessionId)) {
+      call.respond(
+          ThymeleafContent(
+              "agent-chat",
+              userInfo +
+                  mapOf(
+                      "profile_url" to "./profile/@$username",
+                      "botKey" to "ask-ai",
+                      "botTitle" to "Ask AI")))
+      return
+    }
 
     val jsonMap: MutableMap<String, Any> = userInfo.toMutableMap()
     jsonMap["profile_url"] = "./profile/@${jsonMap["preferred_username"]}"
@@ -250,5 +267,6 @@ constructor(
 
   companion object {
     private val SLUG_PATTERN = Regex("/ask-ai/q/([^/]+)")
+    const val AGENT_CHAT_FLAG = "agent-chat.enabled"
   }
 }

@@ -40,6 +40,7 @@ object RouteFactory {
         .replace("/groups/[^/]+/self$".toRegex(), "/groups/{group_slug}/self")
         .replace("/groups/[^/]+$".toRegex(), "/groups/{group_slug}")
         .replace("/reports.*".toRegex(), "/reports/{path...}")
+        .replace("/api/agent/.*".toRegex(), "/api/agent/{path...}")
         .replace("/backend-api/.*".toRegex(), "/backend-api/{path...}")
         .replace("/cameras-api/.*".toRegex(), "/cameras-api/{path...}")
         .replace("/scanner-api/status/[^/]+".toRegex(), "/scanner-api/status/{username}")
@@ -142,6 +143,7 @@ object RouteFactory {
     SCANNER_STATUS_API("/scanner-api/status/{username}"),
     NOTIFICATIONS("/profile/@{preferred_username}/notifications"),
     WORKFLOWS_API("/api/workflows/{path...}"),
+    AGENT_API("/api/agent/{path...}"),
     WORKFLOWS_ADMIN("/admin/workflows"),
     WORKFLOW_RUN("/workflows/runs/{runId}"),
     WORKFLOW_DEMO("/workflows/demo"),

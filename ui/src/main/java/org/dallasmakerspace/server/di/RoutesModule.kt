@@ -68,6 +68,8 @@ import org.dallasmakerspace.server.routes.SparkPostWebhookHandler
 import org.dallasmakerspace.server.routes.MembersToFollowHandler
 import org.dallasmakerspace.server.routes.SuggestedEventsHandler
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
+import org.dallasmakerspace.server.agent.AgentApiHandler
+import org.dallasmakerspace.server.agent.AgentServiceClient
 import org.dallasmakerspace.server.workflows.WorkflowApiHandler
 import org.dallasmakerspace.server.workflows.WorkflowPagesHandler
 import org.dallasmakerspace.server.workflows.WorkflowServiceClient
@@ -427,8 +429,19 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
+      memberServiceClient: MemberServiceClient,
       appConfig: AppConfig
-  ): IRouteHandler = AskAiHandler(loggerFactory, userInfoProvider, memberService, appConfig)
+  ): IRouteHandler =
+      AskAiHandler(loggerFactory, userInfoProvider, memberService, memberServiceClient, appConfig)
+
+  @IntoMap
+  @Provides
+  @StringKey("/api/agent/{path...}")
+  fun providesAgentApiHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      agentServiceClient: AgentServiceClient,
+  ): IRouteHandler = AgentApiHandler(loggerFactory, userInfoProvider, agentServiceClient)
 
   @IntoMap
   @Provides

@@ -211,6 +211,9 @@ fun Application.configureRouting() {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
       get(RouteFactory.Paths.NOTIFICATIONS.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+      route(RouteFactory.Paths.AGENT_API.path) {
+        handle { RouteFactory.getHandler(RouteFactory.Paths.AGENT_API.path)?.handleBase(call) }
+      }
       route(RouteFactory.Paths.WORKFLOWS_API.path) {
         handle { RouteFactory.getHandler(RouteFactory.Paths.WORKFLOWS_API.path)?.handleBase(call) }
       }

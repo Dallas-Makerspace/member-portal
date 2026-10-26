@@ -79,7 +79,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Workflow API and SSE streams: bypass the worker entirely (an infinite stream can't be cached)
-  if (url.pathname.startsWith('/api/workflows/')) {
+  if (url.pathname.startsWith('/api/workflows/') || url.pathname.startsWith('/api/agent/')) {
     return;
   }
 
