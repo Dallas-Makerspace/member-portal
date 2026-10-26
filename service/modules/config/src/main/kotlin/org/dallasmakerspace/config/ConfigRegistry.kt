@@ -294,6 +294,25 @@ object ConfigRegistry {
           type = ConfigValueType.BooleanType,
       )
 
+  val DISCOURSE_AUTO_LINK_ENABLED =
+      ConfigKey(
+          key = "discourse.auto-link.enabled",
+          description =
+              "Link members' Talk accounts automatically when the email matches; turn off to stop",
+          category = "Talk",
+          defaultValue = true,
+          type = ConfigValueType.BooleanType,
+      )
+
+  val DISCOURSE_AUTO_LINK_NIGHTLY_CAP =
+      ConfigKey(
+          key = "discourse.auto-link.nightly-cap",
+          description = "Most Talk accounts the nightly job links per run (0 = pause)",
+          category = "Talk",
+          defaultValue = 20,
+          type = ConfigValueType.IntType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -321,5 +340,7 @@ object ConfigRegistry {
           GROUPS_ARCHIVE_ENABLED,
           SMARTWAIVER_MIRROR_ENABLED,
           SMARTWAIVER_LOCAL_READS_ENABLED,
+          DISCOURSE_AUTO_LINK_ENABLED,
+          DISCOURSE_AUTO_LINK_NIGHTLY_CAP,
       )
 }
