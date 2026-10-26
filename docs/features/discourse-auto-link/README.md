@@ -50,7 +50,7 @@ steps: [`PENDING.md`](PENDING.md).
 | `discourse.auto-link.nightly-cap` | Int | 20 | Max links per nightly run; 0 pauses; clamped to 200. |
 
 Since the switch defaults on, nothing changes until the Talk webhook is created or Jenkins calls the cron with
-`dryRun=false`.
+`dryRun=false`. Link straight to the keys with `/admin/config?filter=discourse.auto-link`.
 
 ## Nightly algorithm
 

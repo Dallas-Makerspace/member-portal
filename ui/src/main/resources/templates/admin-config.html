@@ -421,6 +421,22 @@
         filterText.addEventListener('input', applyFilter);
         statusSelect.addEventListener('change', applyFilter);
 
+        // ?filter=<text> pre-fills the search; the address bar follows what is typed, so it is a link.
+        var initialFilter = new URLSearchParams(window.location.search).get('filter');
+        if (initialFilter) {
+            filterText.value = initialFilter;
+            applyFilter();
+        }
+        filterText.addEventListener('input', function () {
+            var url = new URL(window.location.href);
+            if (filterText.value) {
+                url.searchParams.set('filter', filterText.value);
+            } else {
+                url.searchParams.delete('filter');
+            }
+            history.replaceState(null, '', url);
+        });
+
         // ---- FeatureFlagType helpers ----
         function parseFeatureFlag(raw) {
             var flag = { enabled: false, enabledUsernames: [], enabledGroupNames: [] };

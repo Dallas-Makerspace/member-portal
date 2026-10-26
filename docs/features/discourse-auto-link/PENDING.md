@@ -20,8 +20,10 @@ Last updated: 2026-10-25. Design and runbook: [`README.md`](README.md).
 3. After the service and UI are deployed, create the new Talk user-events webhook (README, "Webhook setup") and Ping it.
 4. Run the cron once as a dry run and review the list: `GET /cron/discourse-auto-link` (no `dryRun`). Check the
    counts and the `would link:` lines look sane.
-5. Add the Jenkins nightly job: `GET <service>/cron/discourse-auto-link?dryRun=false` with an `EXECUTE_CRON` API
-   client, off-peak, `curl --max-time 900` (a run takes roughly 2-4 minutes).
+5. ~~Add the Jenkins nightly job.~~ Done 2026-10-25: `nightly-talk-auto-link` on the Jenkins host (docker-h0),
+   02:00 daily, reuses the `member-profile-service-api-key` credential and the `jenkins-member-refresh` client.
+   "Build with Parameters" has `DRY_RUN` for a preview. The job file lives in
+   `/root/jenkins/jenkins_home/jobs/nightly-talk-auto-link/` (not in git; Jenkins was restarted to load it).
 6. Tell the Talk admins to expect about 100-200 "check email" staff-log rows a night.
 
 Because the kill switch defaults on, steps 3 and 5 are what actually start linking. To stop at any time, turn
