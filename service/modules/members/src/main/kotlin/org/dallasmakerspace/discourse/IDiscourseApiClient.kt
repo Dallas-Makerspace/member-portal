@@ -10,6 +10,12 @@ interface IDiscourseApiClient {
 
   suspend fun getUserProfile(username: String): DiscourseUserProfile
 
+  /** Talk accounts whose primary email is [email] (exact match); needs an admin API key. */
+  suspend fun findUsersByEmail(email: String): List<DiscourseAdminUser>
+
+  /** One 100-user page (1-based, oldest first) of Talk accounts with their emails. */
+  suspend fun listUsersPage(page: Int): List<DiscourseAdminUser>
+
   /**
    * Create a new post/topic in Discourse.
    *

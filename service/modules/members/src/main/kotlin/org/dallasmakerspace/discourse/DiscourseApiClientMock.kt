@@ -44,6 +44,12 @@ class DiscourseApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
                 trustLevel = 1))
   }
 
+  override suspend fun findUsersByEmail(email: String): List<DiscourseAdminUser> =
+      MOCK_ADMIN_USERS.filter { it.email == email }
+
+  override suspend fun listUsersPage(page: Int): List<DiscourseAdminUser> =
+      if (page == 1) MOCK_ADMIN_USERS else emptyList()
+
   override suspend fun createPost(
       title: String,
       raw: String,
@@ -116,5 +122,12 @@ class DiscourseApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
   ): DiscourseUserActionsResponse {
     log.info("Mocked fetching user actions for $username (filter=$filter, offset=$offset)")
     return DiscourseUserActionsResponse()
+  }
+
+  companion object {
+    val MOCK_ADMIN_USERS =
+        listOf(
+            DiscourseAdminUser(
+                id = 103, username = "talk-user3", email = "user3@example.invalid", active = true))
   }
 }

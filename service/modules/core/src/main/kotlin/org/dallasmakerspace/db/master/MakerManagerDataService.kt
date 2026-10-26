@@ -48,4 +48,11 @@ constructor(private val makerManagerDataRepository: MakerManagerDataRepository) 
   override suspend fun getAllUsers(): List<MakerManagerUserInfo> {
     return makerManagerDataRepository.getAllUsers()
   }
+
+  override suspend fun findActiveUsersByEmail(
+      normalizedEmail: String
+  ): List<MakerManagerEmailMatch> = makerManagerDataRepository.findActiveUsersByEmail(normalizedEmail)
+
+  override suspend fun getActiveUsersWithEmail(): List<MakerManagerEmailMatch> =
+      makerManagerDataRepository.getActiveUsersWithEmail()
 }

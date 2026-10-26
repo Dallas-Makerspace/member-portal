@@ -17,6 +17,7 @@ import org.dallasmakerspace.core.DmsHttpEngine
 import org.dallasmakerspace.core.LoggerFactory
 
 private const val DISCOURSE_BASE_URL = "https://talk.dallasmakerspace.org"
+private const val DEFAULT_RETRY_AFTER_SECONDS = 60L
 
 @Singleton
 class DiscourseApiClient
@@ -110,6 +111,52 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
       throw DiscourseApiException("Failed to fetch user profile for $username", e)
     } catch (e: kotlinx.serialization.SerializationException) {
       throw DiscourseApiException("Failed to parse user profile response for $username", e)
+    }
+  }
+
+  // No Logging plugin: these URLs and bodies carry member emails.
+  private fun getAdminClient() =
+      HttpClient(DmsHttpEngine) {
+        install(HttpTimeout) {
+          requestTimeoutMillis = 30_000
+          connectTimeoutMillis = 5_000
+          socketTimeoutMillis = 30_000
+        }
+      }
+
+  override suspend fun findUsersByEmail(email: String): List<DiscourseAdminUser> =
+      fetchAdminUsers(mapOf("email" to email))
+
+  override suspend fun listUsersPage(page: Int): List<DiscourseAdminUser> =
+      fetchAdminUsers(
+          mapOf("show_emails" to "true", "order" to "created", "asc" to "true", "page" to "$page"))
+
+  // Errors never carry the URL, body or cause: all of them can contain an email.
+  private suspend fun fetchAdminUsers(params: Map<String, String>): List<DiscourseAdminUser> {
+    val apiKey = appConfig.requireStringProperty("app.discourse.apiKey")
+    try {
+      val response =
+          getAdminClient().use {
+            it.request("$DISCOURSE_BASE_URL/admin/users/list.json") {
+              method = HttpMethod.Get
+              header("Api-Key", apiKey)
+              header("Api-Username", "system")
+              params.forEach { (name, value) -> parameter(name, value) }
+            }
+          }
+      return when (response.status) {
+        HttpStatusCode.OK -> parseAdminUsers(response.bodyAsText())
+        HttpStatusCode.TooManyRequests ->
+            throw DiscourseRateLimitException(
+                response.headers["Retry-After"]?.toLongOrNull() ?: DEFAULT_RETRY_AFTER_SECONDS)
+        else -> throw DiscourseApiException("Talk admin user lookup failed: ${response.status.value}")
+      }
+    } catch (e: DiscourseApiException) {
+      throw e
+    } catch (e: IOException) {
+      throw DiscourseApiException("Talk admin user lookup failed: ${e.javaClass.simpleName}")
+    } catch (e: kotlinx.serialization.SerializationException) {
+      throw DiscourseApiException("Talk admin user lookup returned an unreadable response")
     }
   }
 

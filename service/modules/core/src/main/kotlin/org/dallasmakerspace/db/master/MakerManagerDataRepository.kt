@@ -1,11 +1,13 @@
 package org.dallasmakerspace.db.master
 
 import java.sql.ResultSet
+import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import org.dallasmakerspace.core.DBMasterConnection
 import org.jetbrains.exposed.sql.Transaction
+import org.jetbrains.exposed.sql.VarCharColumnType
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 
 // Data class to represent a user in MakerManager
@@ -32,8 +34,55 @@ data class MakerManagerUserInfo(
     val isPrimaryAccount: Boolean,
 )
 
+/** An active MakerManager user and the email on file; [toString] leaves the email out. */
+data class MakerManagerEmailMatch(
+    val makerManagerId: Int,
+    val username: String,
+    val email: String,
+    val created: LocalDateTime?,
+) {
+  override fun toString() = "MakerManagerEmailMatch(id=$makerManagerId, username=$username)"
+}
+
 @Singleton
 class MakerManagerDataRepository @Inject constructor() {
+  /** Active users whose trimmed, lowercased email equals [normalizedEmail]. */
+  suspend fun findActiveUsersByEmail(normalizedEmail: String): List<MakerManagerEmailMatch> =
+      suspendTransaction {
+        val matches = mutableListOf<MakerManagerEmailMatch>()
+        this.exec(
+            "SELECT id, username, email, created FROM `dms-makermanager`.users " +
+                "WHERE ad_active = 1 AND LOWER(TRIM(email)) = ?",
+            args = listOf(VarCharColumnType() to normalizedEmail)) { resultSet: ResultSet ->
+              while (resultSet.next()) matches.add(resultSet.toEmailMatch())
+              matches
+            }
+        matches
+      }
+
+  /** Every active user with an email, oldest account first. */
+  suspend fun getActiveUsersWithEmail(): List<MakerManagerEmailMatch> = suspendTransaction {
+    val users = mutableListOf<MakerManagerEmailMatch>()
+    this.exec(
+        """
+        SELECT id, username, email, created FROM `dms-makermanager`.users
+        WHERE ad_active = 1 AND email IS NOT NULL AND TRIM(email) <> ''
+        ORDER BY created IS NULL, created ASC, id ASC
+      """
+            .trimIndent()) { resultSet: ResultSet ->
+          while (resultSet.next()) users.add(resultSet.toEmailMatch())
+          users
+        }
+    users
+  }
+
+  private fun ResultSet.toEmailMatch() =
+      MakerManagerEmailMatch(
+          makerManagerId = getInt("id"),
+          username = getString("username"),
+          email = getString("email"),
+          created = getTimestamp("created")?.toLocalDateTime())
+
   /**
    * Get related accounts for a list of usernames. This includes the account(s) being queried and
    * any related accounts like the primary account or addon accounts.

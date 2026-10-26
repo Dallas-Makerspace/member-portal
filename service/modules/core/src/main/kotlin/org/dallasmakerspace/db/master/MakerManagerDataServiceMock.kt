@@ -1,5 +1,6 @@
 package org.dallasmakerspace.db.master
 
+import java.time.LocalDateTime
 import javax.inject.Inject
 import org.dallasmakerspace.models.Account
 import org.dallasmakerspace.models.AccountInfo
@@ -21,7 +22,18 @@ class MakerManagerDataServiceMock @Inject constructor() : IMakerManagerDataServi
 
   override suspend fun getAllUsers(): List<MakerManagerUserInfo> = MOCK_USERS
 
+  override suspend fun findActiveUsersByEmail(
+      normalizedEmail: String
+  ): List<MakerManagerEmailMatch> = MOCK_EMAIL_MATCHES.filter { it.email == normalizedEmail }
+
+  override suspend fun getActiveUsersWithEmail(): List<MakerManagerEmailMatch> =
+      MOCK_EMAIL_MATCHES
+
   companion object {
+    val MOCK_EMAIL_MATCHES =
+        listOf(
+            MakerManagerEmailMatch(3, "user3", "user3@example.invalid", LocalDateTime.of(2020, 1, 1, 0, 0)))
+
     val MOCK_USERS =
         listOf(
             MakerManagerUserInfo(
