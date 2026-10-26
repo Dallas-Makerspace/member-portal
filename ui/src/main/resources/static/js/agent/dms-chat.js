@@ -64,8 +64,15 @@ class DmsChat extends LitElement {
         this._retries = 0;
     }
 
+    _fit() {
+        const top = this.getBoundingClientRect().top + window.scrollY;
+        this.style.setProperty('--chat-top', Math.round(top) + 'px');
+    }
+
     async connectedCallback() {
         super.connectedCallback();
+        this._fit();
+        window.addEventListener('resize', () => this._fit());
         window.addEventListener('popstate', () => this._openFromUrl());
         const bots = await api('GET', '/bots');
         const me = bots.ok && (bots.data || []).find(b => b.key === this.bot);
@@ -131,7 +138,7 @@ class DmsChat extends LitElement {
         if (pushUrl) this._setUrl(id);
         this._drawer = false;
         if (res.data.activeTurn && res.data.isOwner) this._startStream(id);
-        this._scrollDown();
+        this._showLatestQuestion();
     }
 
     _apply(detail) {
@@ -245,7 +252,19 @@ class DmsChat extends LitElement {
         if (res.ok) this._apply(res.data);
         else this._running = false;
         this._loadHistory();
-        this._scrollDown();
+        this._showLatestQuestion();
+    }
+
+    /** After an answer, put the latest question at the top so it stays in view with its answer. */
+    _showLatestQuestion() {
+        this.updateComplete.then(() => requestAnimationFrame(() => {
+            const box = this.querySelector('.chat-scroll');
+            const questions = this.querySelectorAll('.chat-row.user');
+            const last = questions[questions.length - 1];
+            if (!box || !last) return;
+            const offset = last.getBoundingClientRect().top - box.getBoundingClientRect().top;
+            box.scrollTop += offset - 16;
+        }));
     }
 
     _closeStream() {
@@ -312,7 +331,7 @@ class DmsChat extends LitElement {
         const groups = [];
         for (const c of list) {
             const days = Math.round((today - startOfDay(new Date(c.lastMessageAt))) / 86400000);
-            const label = days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 8 ? 'Last 7 days' : 'Older';
+            const label = days <= 0 ? 'Today' : days <= 7 ? 'Previous 7 days' : days <= 30 ? 'Previous 30 days' : 'Older';
             let group = groups.find(g => g.label === label);
             if (!group) groups.push(group = {label, items: []});
             group.items.push(c);
@@ -329,7 +348,9 @@ class DmsChat extends LitElement {
     }
 
     _history() {
-        const list = this._scope === 'mine' ? this._mine : this._public;
+        const all = this._scope === 'mine' ? this._mine : this._public;
+        const needle = (this._search || '').trim().toLowerCase();
+        const list = needle ? all.filter(c => c.title.toLowerCase().includes(needle)) : all;
         return html`
             <div class="chat-side">
                 <div class="chat-drawer-head d-md-none">
@@ -340,15 +361,19 @@ class DmsChat extends LitElement {
                 </div>
                 <button class="btn btn-primary w-100 mb-3 chat-new" @click=${() => { this._reset(); this._drawer = false; }}>
                     <span class="material-symbols-outlined" aria-hidden="true">add</span> New chat</button>
+                <label class="chat-search">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <input type="search" placeholder="Search chats" aria-label="Search chats" .value=${this._search || ''}
+                           @input=${e => { this._search = e.target.value; this.requestUpdate(); }}>
+                </label>
                 <div class="chat-tabs" role="tablist" aria-label="Which chats">
                     <button role="tab" aria-selected=${this._scope === 'mine'} class=${this._scope === 'mine' ? 'active' : ''}
                             @click=${() => { this._scope = 'mine'; }}>My chats</button>
                     <button role="tab" aria-selected=${this._scope === 'public'} class=${this._scope === 'public' ? 'active' : ''}
                             @click=${() => { this._scope = 'public'; }}>From members</button>
                 </div>
-                ${this._scope === 'public' ? html`<p class="chat-note small mt-2 mb-0">Questions other members asked, with their answers.</p>` : ''}
-                ${list.length === 0 ? html`<p class="text-muted small mt-3 px-1">${this._scope === 'mine'
-                    ? 'No chats yet. Ask a question to get started.' : 'No shared chats yet.'}</p>` : ''}
+                ${list.length === 0 ? html`<p class="text-muted small mt-3 px-1">${needle
+                    ? 'No matches.' : this._scope === 'mine' ? 'No chats yet.' : 'Nothing shared yet.'}</p>` : ''}
                 ${this._groupHistory(list).map(g => html`
                     <div class="chat-group-label">${g.label}</div>
                     <ul class="list-unstyled chat-history">
@@ -373,18 +398,21 @@ class DmsChat extends LitElement {
             <div class="chat-head ${c ? '' : 'bare'}">
                 <button class="btn btn-outline-secondary d-md-none chat-chats-btn" @click=${() => { this._drawer = !this._drawer; }}
                         aria-expanded=${this._drawer} aria-label="Chat list" title="Chat list">
-                    <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">forum</span>
                     <span class="chat-chats-label">Chats</span></button>
                 ${c ? html`<h1 class="chat-title" title=${c.title}>${c.title}</h1>
-                    <span class="chat-privacy ${isPrivate ? 'private' : ''}" role="status"
+                    <span class="chat-privacy ${isPrivate ? 'private' : ''}"
                           aria-label=${isPrivate ? 'Only you can see this chat' : 'Visible to all members'}
                           title=${isPrivate ? (c.privateReason || 'Only you can see this chat') : 'Any member allowed to use this assistant can read this chat'}>
                         <span class="material-symbols-outlined" aria-hidden="true">${isPrivate ? 'lock' : 'groups'}</span>
-                        <span class="chat-privacy-long">${isPrivate ? 'Only you can see this' : 'Visible to all members'}</span>
+                        <span class="chat-privacy-long">${isPrivate ? 'Private' : 'Visible to all members'}</span>
                         <span class="chat-privacy-short">${isPrivate ? 'Private' : 'Shared'}</span></span>`
                     : ''}
                 <span class="flex-grow-1"></span>
                 ${this._notice ? html`<span class="small text-success" role="status">${this._notice}</span>` : ''}
+                ${c ? html`<button class="btn chat-newmini d-md-none" aria-label="New chat" title="New chat"
+                        @click=${() => { this._reset(); }}>
+                    <span class="material-symbols-outlined" aria-hidden="true">edit_square</span></button>` : ''}
                 ${c?.isOwner ? html`
                     <div class="dropdown">
                         <button class="btn btn-outline-secondary chat-menu-btn" data-bs-toggle="dropdown"
@@ -402,31 +430,26 @@ class DmsChat extends LitElement {
     _composer(large) {
         return html`
             <form class="chat-composer ${large ? 'large' : ''}" @submit=${e => { e.preventDefault(); this._send(this._draft); }}>
-                <textarea rows=${large ? 2 : 1} maxlength=${MAX_CHARS} .value=${this._draft}
+                <textarea rows="1" maxlength=${MAX_CHARS} .value=${this._draft}
                           placeholder="Ask a question about the space…" aria-label="Your question"
                           @input=${this._input} @keydown=${this._keydown}></textarea>
                 ${this._running
-                    ? html`<button type="button" class="btn btn-outline-secondary chat-send" @click=${this._stop}>
-                        <span class="material-symbols-outlined" aria-hidden="true">stop</span> Stop</button>`
-                    : html`<button type="submit" class="btn btn-primary chat-send" ?disabled=${!this._draft.trim()}>
-                        Send <span class="material-symbols-outlined" aria-hidden="true">send</span></button>`}
+                    ? html`<button type="button" class="chat-send stop" aria-label="Stop answering" title="Stop" @click=${this._stop}>
+                        <span class="material-symbols-outlined" aria-hidden="true">stop</span></button>`
+                    : html`<button type="submit" class="chat-send" aria-label="Send" title="Send" ?disabled=${!this._draft.trim()}>
+                        <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span></button>`}
             </form>
-            <div class="chat-disclaimer">
-                <span class="material-symbols-outlined" aria-hidden="true">${this._conversation?.visibility === 'PRIVATE' ? 'lock' : 'groups'}</span>
-                <span>${this._conversation?.visibility === 'PRIVATE'
-                    ? html`<strong>Only you can see this chat.</strong>`
-                    : html`<strong>Visible to other members.</strong> Chats with personal details become private.`}
-                    AI can make mistakes - check important details on
-                    <a href="https://source.dallasmakerspace.org" target="_blank" rel="noopener noreferrer">Source</a>.</span>
-            </div>`;
+            ${large ? html`<div class="chat-disclaimer">
+                <span class="material-symbols-outlined" aria-hidden="true">groups</span>
+                <span>Chats are visible to other members unless they include personal details.</span>
+            </div>` : ''}`;
     }
 
     _empty() {
         return html`
             <div class="chat-empty">
                 <h1>${this.botTitle || 'Assistant'}</h1>
-                <p class="text-muted">Ask about Dallas Makerspace: policies, tools, classes and how things work.
-                    Answers come from Source, Talk, the calendar and DMS Learn.</p>
+                <p>Ask about policies, tools, classes and how things work.</p>
                 ${this._composer(true)}
                 <div class="chat-starters">
                     ${this._starters.map(s => html`<button type="button" @click=${() => this._send(s)}>${s}</button>`)}
@@ -442,19 +465,23 @@ class DmsChat extends LitElement {
                 <aside class="chat-aside ${this._drawer ? 'open' : ''}">${this._history()}</aside>
                 <section class="chat-main">
                     ${this._header()}
-                    <div class="chat-scroll" aria-live="polite" aria-busy=${this._running}>
+                    <div class="chat-scroll" aria-busy=${this._running}>
+                        <div class="chat-thread">
                         ${this._loading ? html`<div class="text-muted p-3">Loading…</div>` : ''}
                         ${empty ? this._empty() : ''}
                         ${this._messages.map(m => html`
                             <dms-chat-message .message=${m} ?canRate=${!!m.id && m.role === 'assistant'}
                                               @rate=${this._rate}></dms-chat-message>`)}
                         ${this._live ? html`<dms-chat-message .message=${this._live} streaming></dms-chat-message>` : ''}
+                        </div>
                     </div>
+                    <div class="chat-foot">
                     ${this._busy ? html`<div class="alert alert-warning py-1 mb-2">Lots of questions right now - yours is queued.</div>` : ''}
                     ${this._error ? html`<div class="alert alert-danger py-1 mb-2" role="alert">${this._error}</div>` : ''}
                     ${readOnly ? html`<div class="chat-note p-2">You are reading another member's chat.
                         <a href="#" @click=${e => { e.preventDefault(); this._reset(); }}>Start your own</a></div>`
                         : (empty ? '' : this._composer(false))}
+                    </div>
                 </section>
             </div>`;
     }

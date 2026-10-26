@@ -26,7 +26,8 @@ import org.junit.Test
 class AgentRuntimeTest {
   private class FakeTool(
       override val touchesPersonalInfo: Boolean = false,
-      private val output: String = "Laser class is on Tuesdays.",
+      private val output: String =
+          "Title: Laser class\nLink: https://wiki.example.org/laser\nExcerpt: Tuesdays.",
   ) : AgentTool {
     var calls = 0
     override val descriptor =
@@ -62,7 +63,7 @@ class AgentRuntimeTest {
     assertEquals(
         listOf(AgentRoles.USER, AgentRoles.ASSISTANT, AgentRoles.TOOL, AgentRoles.ASSISTANT),
         state.messages.map { it.second.role })
-    assertTrue(state.messages.last().second.displayText!!.contains("Laser class is on Tuesdays"))
+    assertTrue(state.messages.last().second.displayText!!.contains("[Laser class](https://wiki.example.org/laser)"))
     assertEquals("search_wiki", state.toolCalls.single().toolName)
     assertEquals(1, state.toolCalls.single().messageIndex)
     assertEquals(1, state.sources.size)

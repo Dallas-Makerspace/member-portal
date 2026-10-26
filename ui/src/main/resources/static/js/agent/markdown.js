@@ -23,18 +23,13 @@ export function renderMarkdown(text) {
     });
 }
 
-export function toolLabel(tool, argsJson) {
-    let query = '';
-    try {
-        query = (JSON.parse(argsJson || '{}').query || '').toString().slice(0, 60);
-    } catch (e) { /* partial args while streaming */ }
-    const quoted = query ? ' for “' + query + '”' : '';
+export function toolLabel(tool) {
     switch (tool) {
-        case 'search_source': return 'Searched Source' + quoted;
-        case 'read_source_page': return 'Read a Source page';
-        case 'search_talk': return 'Searched Talk' + quoted;
-        case 'search_calendar': return 'Checked the calendar' + quoted;
-        case 'search_online_courses': return 'Searched DMS Learn' + quoted;
+        case 'search_source': return 'Searched the wiki';
+        case 'read_source_page': return 'Read a wiki page';
+        case 'search_talk': return 'Searched the forum';
+        case 'search_calendar': return 'Checked the calendar';
+        case 'search_online_courses': return 'Searched classes';
         default: return 'Used ' + tool.replace(/_/g, ' ');
     }
 }

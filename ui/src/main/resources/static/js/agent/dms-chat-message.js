@@ -64,17 +64,27 @@ class DmsChatMessage extends LitElement {
             </div>`;
     }
 
+    _host(url) {
+        try {
+            return new URL(url).hostname.replace(/^www\./, '');
+        } catch (e) {
+            return '';
+        }
+    }
+
     _references(sources) {
         if (!sources || !sources.length) return '';
         return html`
             <div class="chat-refs">
-                <div class="chat-refs-label">References</div>
+                <div class="chat-refs-label">Sources</div>
                 <div class="chat-refs-list">
                     ${sources.map(s => html`
                         <a class="chat-ref" href=${s.url} target="_blank" rel="noopener noreferrer" title=${s.title}>
                             <span class="material-symbols-outlined" aria-hidden="true">${SOURCE_ICONS[s.source] || 'link'}</span>
-                            <span class="chat-ref-title">${s.title}</span>
-                            <span class="chat-ref-source">${s.source}</span>
+                            <span class="chat-ref-text">
+                                <span class="chat-ref-title">${s.title}</span>
+                                <span class="chat-ref-source">${this._host(s.url) || s.source}</span>
+                            </span>
                         </a>`)}
                 </div>
             </div>`;
@@ -86,14 +96,16 @@ class DmsChatMessage extends LitElement {
             <div class="chat-actions">
                 ${this.canRate && m.id ? html`
                     <button class="btn btn-link ${rated === true ? 'active' : ''}" aria-pressed=${rated === true}
-                            title="Helpful" aria-label="Helpful" @click=${() => this._rate(true)}>
-                        <span class="material-symbols-outlined" aria-hidden="true">thumb_up</span></button>
+                            title="Helpful" @click=${() => this._rate(true)}>
+                        <span class="material-symbols-outlined" aria-hidden="true">thumb_up</span>
+                        <span class="chat-action-label">Helpful</span></button>
                     <button class="btn btn-link ${rated === false ? 'active' : ''}" aria-pressed=${rated === false}
-                            title="Not helpful" aria-label="Not helpful" @click=${() => this._rate(false)}>
-                        <span class="material-symbols-outlined" aria-hidden="true">thumb_down</span></button>` : ''}
-                <button class="btn btn-link" title="Copy answer" aria-label="Copy answer" @click=${this._copy}>
-                    <span class="material-symbols-outlined" aria-hidden="true">${this._copied ? 'check' : 'content_copy'}</span></button>
-                ${this._copied ? html`<span class="small chat-note" role="status">Copied</span>` : ''}
+                            title="Not helpful" @click=${() => this._rate(false)}>
+                        <span class="material-symbols-outlined" aria-hidden="true">thumb_down</span>
+                        <span class="chat-action-label">Not helpful</span></button>` : ''}
+                <button class="btn btn-link" title="Copy answer" @click=${this._copy}>
+                    <span class="material-symbols-outlined" aria-hidden="true">${this._copied ? 'check' : 'content_copy'}</span>
+                    <span class="chat-action-label">${this._copied ? 'Copied' : 'Copy'}</span></button>
             </div>`;
     }
 
@@ -106,7 +118,7 @@ class DmsChatMessage extends LitElement {
         return html`
             <div class="chat-row assistant">
                 <span class="chat-ai-mark" aria-hidden="true">AI</span>
-                <div class="chat-answer">
+                <div class="chat-answer" aria-live=${this.streaming ? 'polite' : 'off'}>
                     ${this._activity(m.toolCalls)}
                     ${m.text
                         ? html`<div class="chat-markdown">${unsafeHTML(this._html || '')}</div>`

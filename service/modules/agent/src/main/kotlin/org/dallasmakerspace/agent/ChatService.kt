@@ -102,7 +102,7 @@ constructor(
             id = UUID.randomUUID().toString(),
             botKey = botKey,
             ownerUsername = username,
-            title = titleFrom(piiMasker.mask(text)),
+            title = if (reason == PII_REASON) PRIVATE_TITLE else titleFrom(text),
             visibility = if (reason == null) AgentVisibility.PUBLIC else AgentVisibility.PRIVATE,
             privateReason = reason,
             totalCostUsd = 0.0,
@@ -331,6 +331,7 @@ constructor(
     private const val TITLE_CHARS = 120
     private const val RETENTION_YEARS = 2L
     const val PII_REASON = "The question contained personal details"
+    const val PRIVATE_TITLE = "Private question"
     const val BUSY_MESSAGE = "The assistant is busy right now. Please try again in a minute."
     const val ERROR_MESSAGE = "Something went wrong while answering. Please try again."
     const val STOPPED_MESSAGE = "(Stopped before answering.)"

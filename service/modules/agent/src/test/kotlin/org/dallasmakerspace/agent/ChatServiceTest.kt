@@ -196,6 +196,7 @@ class ChatServiceTest {
     assertEquals("assistant", answer.role)
     assertTrue(answer.text.endsWith(ChatService.STOPPED_SUFFIX), answer.text)
     assertEquals(TurnOutcome.Started(started.conversationId, 2), service.sendMessage(started.conversationId, "jdoe", "Shorter please"))
+    assertTrue(service.cancel(started.conversationId, "jdoe"))
     service.awaitTurn(started.conversationId)
   }
 }

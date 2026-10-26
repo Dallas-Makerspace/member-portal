@@ -42,12 +42,32 @@ class MockChatModelClient(private val wordDelayMillis: Long = WORD_DELAY_MILLIS)
     }
     val answer =
         if (toolResult.isNullOrEmpty()) "This is a mock answer to: $question"
-        else "Here is what I found «1»: ${toolResult.first().output.take(MAX_QUOTE_CHARS)}"
-    answer.split(" ").forEach { word ->
-      emit(StreamFrame.TextDelta("$word "))
+        else mockAnswer(toolResult.first().output)
+    CHUNK.findAll(answer).forEach { chunk ->
+      emit(StreamFrame.TextDelta(chunk.value))
       delay(wordDelayMillis)
     }
     emit(end("end_turn"))
+  }
+
+  /** A realistic answer (prose, numbered steps, markdown links) built from the tool's pages. */
+  private fun mockAnswer(toolOutput: String): String {
+    val pages =
+        PAGE.findAll(toolOutput).map { it.groupValues[1].trim() to it.groupValues[2].trim() }.toList()
+    val first = pages.firstOrNull()
+    val link = first?.let { "[${it.first}](${it.second})" } ?: "the wiki"
+    val second = pages.getOrNull(1)?.let { "[${it.first}](${it.second})" }
+    return """
+        |Here is how it works at Dallas Makerspace. You need to be a keyed member, and each tool has its own training before you can use it unsupervised.
+        |
+        |1. Read the safety and authorization page on Source: $link.
+        |2. Take the in-person class for the tool. Classes are on the calendar, so check the next date and sign up.
+        |3. Complete the check-out with an instructor. Your badge is authorized for the tool once they record it.
+        |
+        |If you get stuck, ask the committee chair for that area${if (second != null) ". More background is in $second." else "."}
+        """
+        .trimMargin()
+        .trim()
   }
 
   private fun end(reason: String) =
@@ -57,9 +77,10 @@ class MockChatModelClient(private val wordDelayMillis: Long = WORD_DELAY_MILLIS)
               KoogClock.System, inputTokensCount = MOCK_INPUT, outputTokensCount = MOCK_OUTPUT))
 
   companion object {
+    private val CHUNK = Regex("""\S+\s*""")
+    private val PAGE = Regex("""Title: ([^\n]*)\nLink: (\S+)""")
     private const val WORD_DELAY_MILLIS = 30L
     private const val MAX_ARG_CHARS = 200
-    private const val MAX_QUOTE_CHARS = 300
     private const val MOCK_INPUT = 500
     private const val MOCK_OUTPUT = 50
   }
