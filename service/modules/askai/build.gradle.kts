@@ -1,5 +1,6 @@
 dependencies {
   implementation(project(":service:core"))
+  implementation(project(":service:agent"))
   implementation(project(":service:calendar"))
   implementation(project(":service:config"))
   implementation(project(":service:members"))

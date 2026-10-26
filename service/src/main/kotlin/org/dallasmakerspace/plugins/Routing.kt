@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.dallasmakerspace.agent.routing.agentRoutes
 import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
@@ -29,6 +30,7 @@ import org.dallasmakerspace.bambuddy.notifications.configuredBambuddyWebhookSecr
 import org.dallasmakerspace.bambuddy.routing.bambuWatchRoutes
 import org.dallasmakerspace.bambuddy.routing.bambuddyRoutes
 import org.dallasmakerspace.bambuddy.routing.bambuddyWebhookRoute
+import org.dallasmakerspace.committees.committeeMessageRoutes
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.routing.configRoutes
@@ -40,17 +42,15 @@ import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.cron.AdReplicationHealthCronJob
 import org.dallasmakerspace.cron.AdReplicationHealthCronJobParams
+import org.dallasmakerspace.cron.DiscourseAutoLinkCronJobParams
 import org.dallasmakerspace.cron.DoorSwipesCronJob
 import org.dallasmakerspace.cron.DoorSwipesCronJobParams
-import org.dallasmakerspace.cron.DiscourseAutoLinkCronJobParams
 import org.dallasmakerspace.cron.GroupGuidBackfillJobParams
 import org.dallasmakerspace.cron.MemberRefreshCronJob
 import org.dallasmakerspace.cron.MemberRefreshCronJobParams
 import org.dallasmakerspace.cron.ShowAndTellCronJob
 import org.dallasmakerspace.cron.ShowAndTellCronJobParams
 import org.dallasmakerspace.cron.SmartWaiverProcessQueueJob
-import org.dallasmakerspace.smartwaiver.SmartWaiverBackfill
-import org.dallasmakerspace.smartwaiver.SmartWaiverReconciler
 import org.dallasmakerspace.dataviz.DataVizRouter
 import org.dallasmakerspace.di.AppComponentHolder
 import org.dallasmakerspace.discourse.FeaturedProjectsService
@@ -69,7 +69,6 @@ import org.dallasmakerspace.models.AskAiRequest
 import org.dallasmakerspace.models.AskAiStreamResult
 import org.dallasmakerspace.models.NamespaceOwnerType
 import org.dallasmakerspace.moodle.routing.moodleRoutes
-import org.dallasmakerspace.committees.committeeMessageRoutes
 import org.dallasmakerspace.notifications.routing.committeeFollowersRoutes
 import org.dallasmakerspace.notifications.routing.notificationRoutes
 import org.dallasmakerspace.notifications.routing.profileSubscriptionRoutes
@@ -81,6 +80,8 @@ import org.dallasmakerspace.routing.Members
 import org.dallasmakerspace.routing.ShortLinksResource
 import org.dallasmakerspace.shortlinks.RedirectResult
 import org.dallasmakerspace.shortlinks.ShortLinksService
+import org.dallasmakerspace.smartwaiver.SmartWaiverBackfill
+import org.dallasmakerspace.smartwaiver.SmartWaiverReconciler
 import org.dallasmakerspace.webhook.WebhookRouter
 import org.dallasmakerspace.workflows.groupLockMessage
 import org.dallasmakerspace.workflows.routing.workflowRoutes
@@ -1355,6 +1356,11 @@ fun Application.configureRouting() {
 
     /** Runtime feature-flag checks (e.g. is the follow feature on for a given member) * */
     featureFlagRoutes(featureFlagService)
+
+    /** AI assistant chats (multi-turn, tool-using) * */
+    val chatService = AppComponentHolder.instance.getChatService()
+    chatService.startDailyCleanup()
+    agentRoutes(chatService)
 
     // BamBuddy's outbound notification webhooks: a dedicated route, NOT the generic webhook
     // router below — BamBuddy authenticates with an Authorization bearer secret (which the

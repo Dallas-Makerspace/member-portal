@@ -1,4 +1,4 @@
-package org.dallasmakerspace.askai
+package org.dallasmakerspace.agent
 
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

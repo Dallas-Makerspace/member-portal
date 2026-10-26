@@ -3,6 +3,8 @@ package org.dallasmakerspace.di
 import dagger.Component
 import io.ktor.server.application.*
 import javax.inject.Singleton
+import org.dallasmakerspace.agent.ChatService
+import org.dallasmakerspace.agent.di.AgentModule
 import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.askai.di.AskAiModule
 import org.dallasmakerspace.bambuddy.BambuddyStatusService
@@ -10,6 +12,7 @@ import org.dallasmakerspace.bambuddy.notifications.BambuNotificationScheduler
 import org.dallasmakerspace.bambuddy.notifications.EphemeralNotificationService
 import org.dallasmakerspace.bambuddy.notifications.webhook.BambuddyWebhookHandler
 import org.dallasmakerspace.calendar.CalendarService
+import org.dallasmakerspace.committees.CommitteeMessageService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.config.di.ConfigModule
@@ -26,6 +29,7 @@ import org.dallasmakerspace.dataviz.DataVizRouter
 import org.dallasmakerspace.dataviz.di.DataVizModule
 import org.dallasmakerspace.discourse.FeaturedProjectsService
 import org.dallasmakerspace.doorcontroller.DoorControllerService
+import org.dallasmakerspace.keyvalue.di.KeyValueModule
 import org.dallasmakerspace.members.ActivityLogService
 import org.dallasmakerspace.members.GroupService
 import org.dallasmakerspace.members.GroupSettingsService
@@ -35,14 +39,12 @@ import org.dallasmakerspace.members.MemberSettingsService
 import org.dallasmakerspace.members.ProfilePhotoService
 import org.dallasmakerspace.moodle.MoodleCatalogService
 import org.dallasmakerspace.moodle.MoodleMemberCoursesService
-import org.dallasmakerspace.committees.CommitteeMessageService
 import org.dallasmakerspace.notifications.CommitteeFollowersService
 import org.dallasmakerspace.notifications.DigestProcessor
 import org.dallasmakerspace.notifications.FollowSuggestionService
 import org.dallasmakerspace.notifications.NotificationService
 import org.dallasmakerspace.notifications.NotificationWorker
 import org.dallasmakerspace.notifications.ProfileSubscriptionService
-import org.dallasmakerspace.keyvalue.di.KeyValueModule
 import org.dallasmakerspace.notifications.di.NotificationsModule
 import org.dallasmakerspace.notifications.subscriptions.TopicSubscriptionService
 import org.dallasmakerspace.remoteaccess.RemoteAccessService
@@ -67,6 +69,7 @@ import org.dallasmakerspace.workflows.groups.references.GroupReferenceChecker
         [
             AppModule::class,
             ActiveDirectoryModule::class,
+            AgentModule::class,
             AskAiModule::class,
             CalendarModule::class,
             ConfigModule::class,
@@ -138,6 +141,8 @@ interface AppComponent {
   fun getShortLinksService(): ShortLinksService
 
   fun getAskAiService(): AskAiService
+
+  fun getChatService(): ChatService
 
   fun getFeaturedProjectsService(): FeaturedProjectsService
 

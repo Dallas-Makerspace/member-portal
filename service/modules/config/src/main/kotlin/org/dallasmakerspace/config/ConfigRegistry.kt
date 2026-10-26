@@ -349,6 +349,35 @@ object ConfigRegistry {
           type = ConfigValueType.IntType,
       )
 
+  val AGENT_MODEL_DEFAULT =
+      ConfigKey(
+          key = "agent.model.default",
+          description = "AI model the assistants use by default (Bedrock model id)",
+          category = "AI Assistant",
+          defaultValue = "us.anthropic.claude-haiku-5-5",
+          type = ConfigValueType.StringType,
+      )
+
+  val AGENT_MONTHLY_SPEND_CAP_USD =
+      ConfigKey(
+          key = "agent.monthly-spend-cap-usd",
+          description =
+              "Most the AI assistants may spend per month, in dollars; once reached they stop " +
+                  "answering until next month (0 = unlimited)",
+          category = "AI Assistant",
+          defaultValue = 20,
+          type = ConfigValueType.IntType,
+      )
+
+  val AGENT_USER_DAILY_TURN_CAP =
+      ConfigKey(
+          key = "agent.user-daily-turn-cap",
+          description = "Most AI assistant questions one member can ask per day (0 = unlimited)",
+          category = "AI Assistant",
+          defaultValue = 30,
+          type = ConfigValueType.IntType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -381,5 +410,8 @@ object ConfigRegistry {
           SMARTWAIVER_LOCAL_READS_ENABLED,
           DISCOURSE_AUTO_LINK_ENABLED,
           DISCOURSE_AUTO_LINK_NIGHTLY_CAP,
+          AGENT_MODEL_DEFAULT,
+          AGENT_MONTHLY_SPEND_CAP_USD,
+          AGENT_USER_DAILY_TURN_CAP,
       )
 }

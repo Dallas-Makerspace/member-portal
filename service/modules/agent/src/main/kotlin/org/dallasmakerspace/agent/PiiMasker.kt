@@ -1,4 +1,4 @@
-package org.dallasmakerspace.askai
+package org.dallasmakerspace.agent
 
 import javax.inject.Inject
 import javax.inject.Singleton

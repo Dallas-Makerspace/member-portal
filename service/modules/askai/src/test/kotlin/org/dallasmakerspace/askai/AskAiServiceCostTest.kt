@@ -2,6 +2,7 @@ package org.dallasmakerspace.askai
 
 import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
+import org.dallasmakerspace.agent.PiiMasker
 import org.dallasmakerspace.askai.bedrock.IEmbeddingClient
 import org.dallasmakerspace.askai.db.AskAiCacheRepository
 import org.dallasmakerspace.askai.openrouter.ChatMessage
