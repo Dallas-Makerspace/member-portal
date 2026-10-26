@@ -14,7 +14,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <!-- Markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"
+            integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"
+            integrity="sha384-JEyTNhjM6R1ElGoJns4U2Ln4ofPcqzSsynQkmEc/KGy6336qAZl70tDLufbkla+3"
+            crossorigin="anonymous"></script>
     <style>
         .ask-ai-container {
             max-width: 800px;
@@ -578,17 +583,47 @@
         submitBtn.disabled = false;
     }
 
+    // Sanitized markdown with «N» references turned into clickable spans
+    function renderAnswerHtml(markdown) {
+        return DOMPurify.sanitize(marked.parse(markdown)).replace(/«(\d+)»/g, function(match, num) {
+            return '<span class="source-ref" title="Jump to source ' + num + '" onclick="scrollToSource(' + num + ')">[' + num + ']</span>';
+        });
+    }
+
+    function safeUrl(url) {
+        try {
+            const parsed = new URL(url, window.location.origin);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '#';
+        } catch (e) {
+            return '#';
+        }
+    }
+
+    function buildSourceLink(s, i) {
+        const link = document.createElement('a');
+        link.href = safeUrl(s.url);
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.id = 'source-' + (i + 1);
+        link.className = 'list-group-item list-group-item-action source-link';
+        const number = document.createElement('span');
+        number.className = 'source-number';
+        number.textContent = String(i + 1);
+        const badge = document.createElement('span');
+        badge.className = 'badge source-badge ' + (s.source === 'wiki' ? 'bg-success' : 'bg-info');
+        badge.textContent = s.source;
+        const title = document.createElement('span');
+        title.className = 'source-title';
+        title.textContent = s.title;
+        link.append(number, badge, title);
+        return link;
+    }
+
     // Render markdown content and update URL
     document.addEventListener('DOMContentLoaded', function() {
         const answerContent = document.getElementById('answerContent');
         if (answerContent && answerContent.dataset.markdown) {
-            // Parse markdown
-            let html = marked.parse(answerContent.dataset.markdown);
-            // Convert «N» references to clickable spans
-            html = html.replace(/«(\d+)»/g, function(match, num) {
-                return '<span class="source-ref" title="Jump to source ' + num + '" onclick="scrollToSource(' + num + ')">[' + num + ']</span>';
-            });
-            answerContent.innerHTML = html;
+            answerContent.innerHTML = renderAnswerHtml(answerContent.dataset.markdown);
         }
 
         // Update browser URL to shareable slug URL (without reload)
@@ -664,24 +699,19 @@
 
                 evtSource.onmessage = function(event) {
                     fullAnswer += event.data.replace(/\\n/g, '\n');
-                    streamContent.innerHTML = marked.parse(fullAnswer).replace(/«(\d+)»/g, function(match, num) {
-                        return '<span class="source-ref" title="Jump to source ' + num + '" onclick="scrollToSource(' + num + ')">[' + num + ']</span>';
-                    });
+                    streamContent.innerHTML = renderAnswerHtml(fullAnswer);
                 };
 
                 evtSource.addEventListener('sources', function(event) {
                     try {
                         const sources = JSON.parse(event.data);
                         if (sources.length > 0) {
-                            const items = sources.map(function(s, i) {
-                                const badgeClass = s.source === 'wiki' ? 'bg-success' : 'bg-info';
-                                return '<a href="' + s.url + '" target="_blank" id="source-' + (i + 1) + '" class="list-group-item list-group-item-action source-link">' +
-                                    '<span class="source-number">' + (i + 1) + '</span>' +
-                                    '<span class="badge source-badge ' + badgeClass + '">' + s.source + '</span>' +
-                                    '<span class="source-title">' + s.title + '</span>' +
-                                    '</a>';
-                            }).join('');
-                            streamSources.innerHTML = '<h4>Sources</h4><div class="list-group">' + items + '</div>';
+                            const heading = document.createElement('h4');
+                            heading.textContent = 'Sources';
+                            const list = document.createElement('div');
+                            list.className = 'list-group';
+                            sources.forEach(function(s, i) { list.appendChild(buildSourceLink(s, i)); });
+                            streamSources.replaceChildren(heading, list);
                             streamSources.style.display = '';
                         }
                     } catch (err) { /* ignore */ }
@@ -699,7 +729,10 @@
                     const currentUsername = document.getElementById('currentUsername')?.value;
                     if (currentUsername) {
                         const askedByEl = document.getElementById('stream-asked-by');
-                        askedByEl.innerHTML = 'Asked by <dms-member-card username="' + currentUsername + '" state="inline"></dms-member-card>';
+                        const card = document.createElement('dms-member-card');
+                        card.setAttribute('username', currentUsername);
+                        card.setAttribute('state', 'inline');
+                        askedByEl.replaceChildren('Asked by ', card);
                         document.getElementById('stream-answer-header-right').style.display = '';
                     }
 
