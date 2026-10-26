@@ -7,6 +7,11 @@ import javax.crypto.spec.SecretKeySpec
 /** HMAC-SHA256 signing shared by the public webhook relays that verify a signature header. */
 internal object WebhookHmac {
   private const val SIGNATURE_PREFIX = "sha256="
+  const val PLACEHOLDER_SECRET = "change-me-in-production"
+
+  /** A blank or placeholder secret is only acceptable while developing locally. */
+  fun isSecretUsable(secret: String, developmentMode: Boolean): Boolean =
+      secret.isNotBlank() && (secret != PLACEHOLDER_SECRET || developmentMode)
 
   /** Hex HMAC-SHA256 of [body] keyed with [secret]. */
   fun sign(secret: String, body: String): String {

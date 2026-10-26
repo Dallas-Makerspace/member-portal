@@ -1,10 +1,21 @@
 package org.dallasmakerspace.server.routes
 
 import com.google.gson.JsonParser
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import org.dallasmakerspace.server.common.AppConfig
+import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 class DiscourseWebhookHandlerTest {
 
@@ -40,6 +51,63 @@ class DiscourseWebhookHandlerTest {
     assertFalse(DiscourseWebhookHandler.isValidSignature(secret, body, "sha256=$good".dropLast(1) + "0"))
     assertFalse(DiscourseWebhookHandler.isValidSignature("other", body, "sha256=$good"))
     assertFalse(DiscourseWebhookHandler.isValidSignature(secret, body + " ", "sha256=$good"))
+  }
+
+  @Test
+  fun userEventsGoToTheAutoLinkHandlerAndEverythingElseToThePostHandler() {
+    assertEquals("discourse-user", DiscourseWebhookHandler.serviceHandlerFor("user"))
+    assertEquals("discourse-user", DiscourseWebhookHandler.serviceHandlerFor("User"))
+    assertEquals("discourse-post", DiscourseWebhookHandler.serviceHandlerFor("post"))
+    assertEquals("discourse-post", DiscourseWebhookHandler.serviceHandlerFor("ping"))
+    assertEquals("discourse-post", DiscourseWebhookHandler.serviceHandlerFor("topic"))
+    assertEquals("discourse-post", DiscourseWebhookHandler.serviceHandlerFor(null))
+  }
+
+  private fun handler(secretValue: String, development: Boolean = false): DiscourseWebhookHandler {
+    val config = mock<AppConfig>()
+    whenever(config.requireStringProperty("app.discourse.webhook-secret")).thenReturn(secretValue)
+    whenever(config.requireStringProperty("app.member-service.url")).thenReturn("http://127.0.0.1:1")
+    whenever(config.isDevelopmentMode()).thenReturn(development)
+    return DiscourseWebhookHandler(LoggerFactory(), config)
+  }
+
+  private fun relay(
+      handler: DiscourseWebhookHandler,
+      block: suspend (io.ktor.client.HttpClient) -> Unit
+  ) = testApplication {
+    application { routing { post("/webhook/discourse") { handler.handle(call) } } }
+    block(client)
+  }
+
+  @Test
+  fun thePlaceholderSecretRefusesEvenAValidlySignedRequest() {
+    val placeholder = WebhookHmac.PLACEHOLDER_SECRET
+    val payload = body
+    relay(handler(placeholder)) { client ->
+      val response =
+          client.post("/webhook/discourse") {
+            header(DiscourseWebhookHandler.SIGNATURE_HEADER, "sha256=" + WebhookHmac.sign(placeholder, payload))
+            header(DiscourseWebhookHandler.EVENT_HEADER, "post_created")
+            setBody(payload)
+          }
+      assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+  }
+
+  @Test
+  fun aValidSignatureWithARealSecretReachesTheForwardStep() {
+    // The service URL points nowhere, so reaching the forward step proves the checks passed.
+    val payload = body
+    relay(handler(secret)) { client ->
+      val response =
+          client.post("/webhook/discourse") {
+            header(DiscourseWebhookHandler.SIGNATURE_HEADER, "sha256=" + WebhookHmac.sign(secret, payload))
+            header(DiscourseWebhookHandler.EVENT_HEADER, "user_confirmed_email")
+            header(DiscourseWebhookHandler.EVENT_TYPE_HEADER, "user")
+            setBody(payload)
+          }
+      assertEquals(HttpStatusCode.InternalServerError, response.status)
+    }
   }
 
   @Test

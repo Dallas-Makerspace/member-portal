@@ -66,11 +66,10 @@ constructor(
 
   companion object {
     const val SIGNATURE_HEADER = "X-Addad-Signature"
-    internal const val PLACEHOLDER_SECRET = "change-me-in-production"
+    internal const val PLACEHOLDER_SECRET = WebhookHmac.PLACEHOLDER_SECRET
 
-    /** A blank or placeholder secret is only acceptable while developing locally. */
     internal fun isSecretUsable(secret: String, developmentMode: Boolean): Boolean =
-        secret.isNotBlank() && (secret != PLACEHOLDER_SECRET || developmentMode)
+        WebhookHmac.isSecretUsable(secret, developmentMode)
 
     /** The `event` field of the plugin's JSON body, or "unknown" if it isn't there. */
     internal fun eventOf(body: String): String =
