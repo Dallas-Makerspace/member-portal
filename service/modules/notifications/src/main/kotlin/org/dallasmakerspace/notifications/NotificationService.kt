@@ -59,7 +59,7 @@ constructor(
             memberUsername = memberUsername,
             topic = topic,
             channel = channel,
-            enabled = preference?.enabled ?: true,
+            enabled = preference?.enabled ?: channel.defaultEnabled,
             aggregationOverride = preference?.aggregation,
             effectiveAggregation = effectiveAggregation(channel, preference?.aggregation),
             digestSupported = notifierRegistry.supportsDigest(channel),
@@ -263,7 +263,7 @@ constructor(
     val suppression = repository.getSuppression(request.memberUsername)
     val preference =
         repository.getPreference(request.memberUsername, request.topic, request.channel)
-    val enabled = preference?.enabled != false
+    val enabled = preference?.enabled ?: request.channel.defaultEnabled
     val aggregation = effectiveAggregation(request.channel, preference?.aggregation)
 
     // Guardrail (architect review): the override silently defeating a member's explicit

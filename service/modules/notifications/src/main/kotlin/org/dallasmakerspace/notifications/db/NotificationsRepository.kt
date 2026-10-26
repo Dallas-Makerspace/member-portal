@@ -341,6 +341,7 @@ constructor(loggerFactory: LoggerFactory, private val templateRegistry: Template
         NotificationsTable.slice(NotificationsTable.idColumn, NotificationsTable.providerId)
             .select {
               (NotificationsTable.profileId eq resolvedProfileId) and
+                  (NotificationsTable.channel eq Channel.EMAIL.name) and
                   (NotificationsTable.aggregation eq Aggregation.IMMEDIATE.name) and
                   (NotificationsTable.status eq NotificationStatus.SENT.name) and
                   (NotificationsTable.sentAt greaterEq since)

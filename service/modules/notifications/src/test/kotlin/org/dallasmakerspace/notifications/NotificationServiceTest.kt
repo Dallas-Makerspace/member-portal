@@ -222,9 +222,35 @@ class NotificationServiceTest {
   }
 
   @Test
+  fun `create should skip sms until the member opts in for the topic`() = runBlocking {
+    service = newService(mapOf(Channel.SMS to NoDigestNotifier(Channel.SMS)))
+    whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.SMS)).thenReturn(null)
+    whenever(mockRepository.getPreferences("jdoe")).thenReturn(emptyList())
+
+    val result = service.create(createRequest().copy(channel = Channel.SMS))
+
+    assertEquals(NotificationStatus.SKIPPED, result.status)
+    assertEquals(false, service.getPreferences("jdoe").single { it.topic == SystemTopic }.enabled)
+  }
+
+  @Test
+  fun `create should queue sms once the member opts in`() = runBlocking {
+    service = newService(mapOf(Channel.SMS to NoDigestNotifier(Channel.SMS)))
+    whenever(mockRepository.getByDedupeKey(any())).thenReturn(null)
+    whenever(mockRepository.getPreference("jdoe", SystemTopic, Channel.SMS))
+        .thenReturn(NotificationPreference("jdoe", SystemTopic, Channel.SMS, true, null))
+
+    val result = service.create(createRequest().copy(channel = Channel.SMS))
+
+    assertEquals(NotificationStatus.QUEUED, result.status)
+    assertEquals(Aggregation.IMMEDIATE, result.aggregation, "sms can't batch, so its daily default falls back")
+  }
+
+  @Test
   fun `create should reject a channel with no notifier`() = runBlocking {
     assertFailsWith<IllegalArgumentException> {
-      service.create(createRequest().copy(channel = Channel.SMS))
+      service.create(createRequest().copy(channel = Channel.DISCORD))
     }
     verify(mockRepository, never()).create(any())
     Unit

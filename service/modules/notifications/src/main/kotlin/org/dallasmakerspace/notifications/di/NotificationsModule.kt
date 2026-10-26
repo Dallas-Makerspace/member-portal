@@ -9,6 +9,7 @@ import io.ktor.client.HttpClient
 import javax.inject.Named
 import javax.inject.Singleton
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
+import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.models.TopicKeys
@@ -17,6 +18,7 @@ import org.dallasmakerspace.notifications.channels.ChannelKey
 import org.dallasmakerspace.notifications.channels.EmailNotifier
 import org.dallasmakerspace.notifications.channels.MockNotifier
 import org.dallasmakerspace.notifications.channels.Notifier
+import org.dallasmakerspace.notifications.channels.SmsNotifier
 import org.dallasmakerspace.notifications.subscriptions.FollowCommitteeSubscriptionHandler
 import org.dallasmakerspace.notifications.subscriptions.FollowMemberSubscriptionHandler
 import org.dallasmakerspace.notifications.subscriptions.TopicSubscriptionHandler
@@ -101,6 +103,25 @@ object NotificationsModule {
         EmailNotifier(appConfig, loggerFactory, sparkPostClient, activeDirectoryService)
       }
 
+  /** SMS notifier: mocked in development, Twilio otherwise. */
+  @Provides
+  @Singleton
+  @IntoMap
+  @ChannelKey(Channel.SMS)
+  fun provideSmsNotifier(
+      appConfig: AppConfig,
+      loggerFactory: LoggerFactory,
+      @Named("twilio") twilioClient: HttpClient,
+      activeDirectoryService: IActiveDirectoryService,
+      configOverrideService: ConfigOverrideService,
+  ): Notifier =
+      if (useMockServices(appConfig)) {
+        MockNotifier(loggerFactory, Channel.SMS, supportsDigest = false)
+      } else {
+        SmsNotifier(
+            appConfig, loggerFactory, twilioClient, activeDirectoryService, configOverrideService)
+      }
+
   /** "Follow a member" button handler, keyed by its topic. */
   @Provides
   @Singleton
@@ -123,6 +144,11 @@ object NotificationsModule {
   @Singleton
   @Named("sparkpost")
   fun provideSparkPostClient(): HttpClient = EmailNotifier.createClient()
+
+  @Provides
+  @Singleton
+  @Named("twilio")
+  fun provideTwilioClient(): HttpClient = SmsNotifier.createClient()
 
   private fun useMockServices(appConfig: AppConfig) =
       appConfig.requireBooleanProperty("ktor.development") &&

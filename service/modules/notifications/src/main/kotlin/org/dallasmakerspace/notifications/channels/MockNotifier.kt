@@ -8,10 +8,9 @@ import org.dallasmakerspace.notifications.Channel
 class MockNotifier(
     loggerFactory: LoggerFactory,
     override val channel: Channel = Channel.EMAIL,
+    override val supportsDigest: Boolean = true,
 ) : Notifier {
   private val log = loggerFactory.create(javaClass)
-
-  override val supportsDigest: Boolean = true
 
   override suspend fun send(memberUsername: String, message: OutgoingMessage): SendResult {
     log.info("MOCK send $channel to $memberUsername: ${message.subject}")

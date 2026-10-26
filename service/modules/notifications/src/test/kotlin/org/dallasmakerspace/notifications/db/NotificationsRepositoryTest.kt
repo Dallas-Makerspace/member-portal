@@ -67,12 +67,14 @@ class NotificationsRepositoryTest {
     }
   }
 
+  @Suppress("LongParameterList")
   private fun insert(
       member: String = "jdoe",
       status: NotificationStatus = NotificationStatus.QUEUED,
       aggregation: Aggregation = Aggregation.IMMEDIATE,
       dueAt: LocalDateTime? = null,
       providerId: String? = null,
+      channel: Channel = Channel.EMAIL,
   ): Long = runBlocking {
     repository
         .create(
@@ -80,7 +82,7 @@ class NotificationsRepositoryTest {
                 id = 0,
                 memberUsername = member,
                 topic = SystemTopic,
-                channel = Channel.EMAIL,
+                channel = channel,
                 aggregation = aggregation,
                 templateName = "system-test",
                 payload = null,
@@ -156,6 +158,13 @@ class NotificationsRepositoryTest {
 
     assertEquals(2, repository.countImmediateEmailsSince("jdoe", now.minusHours(1)))
     assertEquals(0, repository.countImmediateEmailsSince("jdoe", now.plusHours(1)))
+  }
+
+  @Test
+  fun `countImmediateEmailsSince ignores texts`() = runBlocking {
+    repository.markSent(insert(channel = Channel.SMS), "SM-1", now)
+
+    assertEquals(0, repository.countImmediateEmailsSince("jdoe", now.minusHours(1)))
   }
 
   @Test

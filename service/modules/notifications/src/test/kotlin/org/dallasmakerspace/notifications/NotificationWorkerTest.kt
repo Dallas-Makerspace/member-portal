@@ -195,7 +195,7 @@ class NotificationWorkerTest {
 
   @Test
   fun `rows for a channel with no notifier are dead-lettered`() = runBlocking {
-    givenBurst(notification(id = 1L, channel = Channel.SMS))
+    givenBurst(notification(id = 1L, channel = Channel.DISCORD))
 
     worker.processPending()
 

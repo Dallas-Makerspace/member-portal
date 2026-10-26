@@ -16,4 +16,8 @@ enum class Channel(val displayName: String) {
           DISCORD,
           DISCOURSE -> Aggregation.DAILY
         }
+
+  /** Whether a topic is on for this channel before the member sets a preference (SMS is opt-in). */
+  val defaultEnabled: Boolean
+    get() = this != SMS
 }

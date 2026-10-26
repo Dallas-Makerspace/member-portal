@@ -302,7 +302,42 @@ Implement `Notifier`, which resolves its own recipient from the username and set
 `supportsDigest` if the channel can batch. Contribute it with
 `@Provides @Singleton @IntoMap @ChannelKey(Channel.X)` in `NotificationsModule`. A channel without
 a notifier is rejected at create time and hidden from preferences, and digest preferences fall back
-to immediate delivery on channels that can't batch.
+to immediate delivery on channels that can't batch. `Channel.defaultEnabled` says whether a topic is
+on before the member sets a preference.
+
+## SMS (plumbing only)
+
+`SmsNotifier` sends texts through Twilio's Messages API. Nothing produces SMS yet and the UI shows
+email preferences only, so this is the groundwork for a later feature.
+
+- **Wiring:** contributed as `Channel.SMS` in `NotificationsModule`; `MockNotifier` in mock mode.
+  SMS can't batch (`supportsDigest = false`), so its daily default falls back to immediate.
+- **Gates, all required to send:**
+  - a producer creates the row with `channel = SMS` (no producer does today);
+  - the member turned the topic on for SMS. SMS is opt-in (`defaultEnabled = false`), unlike email;
+  - `notifications.sms-enabled` (pilot default) is on for the member, checked at send time with
+    the AD groups from the same lookup as the phone number;
+  - Twilio is configured (`app.notifications.twilio`, env `TWILIO_ACCOUNT_SID`,
+    `TWILIO_AUTH_TOKEN`, and `TWILIO_MESSAGING_SERVICE_SID` or `TWILIO_FROM_NUMBER`). A messaging
+    service is used instead of the from number when both are set.
+  - A row that fails a gate at send time is dead-lettered with the reason.
+- **Recipient:** AD `telephoneNumber`, normalized to E.164 with libphonenumber. Only valid +1
+  (US/Canada) numbers are texted; there is no check that it is a mobile number, so Twilio's
+  "not a mobile number" error (21614) dead-letters the row.
+- **Body:** `Dallas Makerspace: <subject>`, capped at 300 characters. Templates already treat the
+  subject as the whole message for short channels.
+- **Errors:** 429 and 5xx are retried; other 4xx are permanent, and the reason keeps Twilio's error
+  code (for example 21610 when the member replied STOP). The provider id is the message SID.
+- **Daily cap:** counts emails only, so texts don't use up the email allowance. Texts have no cap
+  of their own yet.
+- **Calendar** already sends event texts with the same provider (`TWILIO_ACCTSID` /
+  `TWILIO_AUTHTOKEN` / `TWILIO_PHONENUM` in its env). The portal can use the same account, but US
+  A2P 10DLC rules need a registered messaging service for application texts.
+
+**Not built yet:** the opt-in UI and a consent record, a status-callback webhook (delivery and
+failure receipts, with `X-Twilio-Signature` verification), STOP/START handling beyond Twilio's own
+opt-out, and a per-member text cap. Bounce suppression (`recordBounce`) is per member, not per
+channel, so don't reuse it for SMS failures, or it will also stop email.
 
 ## Security
 

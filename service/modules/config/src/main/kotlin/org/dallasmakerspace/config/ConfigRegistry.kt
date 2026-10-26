@@ -188,6 +188,20 @@ object ConfigRegistry {
           type = ConfigValueType.IntType,
       )
 
+  val NOTIFICATIONS_SMS_ENABLED =
+      ConfigKey(
+          key = "notifications.sms-enabled",
+          description =
+              "Allows text message notifications; can be piloted for specific usernames or AD " +
+                  "groups before a full rollout",
+          category = "Notifications",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val COMMITTEE_FOLLOW_ENABLED =
       ConfigKey(
           key = "notifications.committee-follow-enabled",
@@ -331,6 +345,7 @@ object ConfigRegistry {
           WAIVER_REPORT_ALLOWED_USERNAMES,
           NOTIFICATIONS_ENABLED,
           NOTIFICATIONS_PER_MEMBER_IMMEDIATE_DAILY_CAP,
+          NOTIFICATIONS_SMS_ENABLED,
           COMMITTEE_BROADCAST_ENABLED,
           COMMITTEE_TALK_CATEGORIES,
           FOLLOW_FEATURE_ENABLED,
