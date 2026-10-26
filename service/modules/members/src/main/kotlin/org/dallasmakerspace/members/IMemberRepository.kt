@@ -27,6 +27,15 @@ interface IMemberRepository {
       discourseUsernames: List<String>
   ): Map<String, DMSMember>
 
+  /**
+   * Sets only the member's Talk username (and clears the stored avatar) if they have none. False
+   * when they already have one or another profile holds [discourseUsername].
+   */
+  suspend fun claimDiscourseUsernameIfUnlinked(username: String, discourseUsername: String): Boolean
+
+  /** Undoes [claimDiscourseUsernameIfUnlinked]; only clears if the value is still [discourseUsername]. */
+  suspend fun releaseDiscourseUsername(username: String, discourseUsername: String): Boolean
+
   suspend fun getMembersByDiscordUserIds(discordUserIds: List<String>): Map<String, DMSMember>
 
   /**

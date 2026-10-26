@@ -5,6 +5,7 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil
 import com.google.i18n.phonenumbers.Phonenumber
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -506,6 +507,50 @@ constructor(
         subjectUsername = memberFromApi.username,
         event = ActivityLogEvent.LINK_DISCOURSE,
     )
+  }
+
+  /**
+   * Links [discourseUsername] to [username] without the full [updateMember] side effects. Never
+   * overwrites an existing link, never takes a Talk account held by any other profile, and leaves
+   * the Discord fields alone. [trigger] ("cron" or "webhook") is recorded in the activity log.
+   */
+  suspend fun autoLinkDiscourse(
+      username: String,
+      discourseUsername: String,
+      trigger: String
+  ): AutoLinkOutcome {
+    val adMember = withContext(Dispatchers.IO) { activeDirectoryService.getMemberByUsername(username) }
+    if (!adMember.enabled) return AutoLinkOutcome.NOT_ENABLED_IN_AD
+
+    val current = memberRepository.getMemberOrInsert(username, adMember.enabled).discourseUsername
+    if (current != null) {
+      return if (current.equals(discourseUsername, ignoreCase = true)) {
+        AutoLinkOutcome.ALREADY_LINKED
+      } else {
+        AutoLinkOutcome.MEMBER_HAS_OTHER_LINK
+      }
+    }
+    if (memberRepository.getMembersByDiscourseUsernames(listOf(discourseUsername)).isNotEmpty()) {
+      return AutoLinkOutcome.TALK_ACCOUNT_TAKEN
+    }
+    if (!memberRepository.claimDiscourseUsernameIfUnlinked(username, discourseUsername)) {
+      return AutoLinkOutcome.LOST_RACE
+    }
+
+    try {
+      discourseService.addUserToDmsMembersV2Group(listOf(discourseUsername))
+      activityLogService.insertActivityLogEntry(
+          actorUsername = username,
+          subjectUsername = username,
+          event = ActivityLogEvent.LINK_DISCOURSE,
+          attributes = """{"auto":true,"trigger":"$trigger"}""")
+    } catch (e: Exception) {
+      withContext(NonCancellable) {
+        memberRepository.releaseDiscourseUsername(username, discourseUsername)
+      }
+      throw e
+    }
+    return AutoLinkOutcome.LINKED
   }
 
   private suspend fun unlinkDiscourse(dbMember: DMSMember) {

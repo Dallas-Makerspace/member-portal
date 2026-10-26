@@ -10,7 +10,11 @@ import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.ProfileTable
 import org.dallasmakerspace.members.db.daoToProfileModel
 import org.dallasmakerspace.models.DMSMember
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.update
+
+private const val INTEGRITY_VIOLATION_SQL_STATE = "23"
 
 /**
  * Manages member data. Fetches and updates member data. Contains validation and orchestration logic
@@ -216,6 +220,36 @@ class MemberRepository @Inject constructor(loggerFactory: LoggerFactory) : IMemb
           .filter { it.discourseUsername != null }
           .associateBy { it.discourseUsername!! }
     }
+  }
+
+  override suspend fun claimDiscourseUsernameIfUnlinked(
+      username: String,
+      discourseUsername: String
+  ): Boolean =
+      try {
+        suspendTransaction {
+          ProfileTable.update(
+              { (ProfileTable.username eq username) and ProfileTable.discourseUsername.isNull() }) {
+                it[ProfileTable.discourseUsername] = discourseUsername
+                it[discourseAvatarUrl] = null
+              } == 1
+        }
+      } catch (e: ExposedSQLException) {
+        if (e.sqlState?.startsWith(INTEGRITY_VIOLATION_SQL_STATE) == true) false else throw e
+      }
+
+  override suspend fun releaseDiscourseUsername(
+      username: String,
+      discourseUsername: String
+  ): Boolean = suspendTransaction {
+    ProfileTable.update(
+        {
+          (ProfileTable.username eq username) and
+              (ProfileTable.discourseUsername eq discourseUsername)
+        }) {
+          it[ProfileTable.discourseUsername] = null
+          it[discourseAvatarUrl] = null
+        } == 1
   }
 
   override suspend fun getMembersByDiscordUserIds(

@@ -54,6 +54,29 @@ class MemberRepositoryMock @Inject constructor() : IMemberRepository {
           .filter { it.discourseUsername in discourseUsernames }
           .associateBy { it.discourseUsername!! }
 
+  override suspend fun claimDiscourseUsernameIfUnlinked(
+      username: String,
+      discourseUsername: String
+  ): Boolean {
+    val member = store[username] ?: return false
+    if (member.discourseUsername != null) return false
+    if (store.values.any { it.discourseUsername.equals(discourseUsername, ignoreCase = true) }) {
+      return false
+    }
+    store[username] = member.copy(discourseUsername = discourseUsername, discourseAvatarUrl = null)
+    return true
+  }
+
+  override suspend fun releaseDiscourseUsername(
+      username: String,
+      discourseUsername: String
+  ): Boolean {
+    val member = store[username] ?: return false
+    if (member.discourseUsername != discourseUsername) return false
+    store[username] = member.copy(discourseUsername = null, discourseAvatarUrl = null)
+    return true
+  }
+
   override suspend fun getMembersByDiscordUserIds(
       discordUserIds: List<String>
   ): Map<String, DMSMember> =
