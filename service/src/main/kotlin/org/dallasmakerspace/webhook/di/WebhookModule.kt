@@ -13,6 +13,7 @@ import org.dallasmakerspace.webhook.WebhookHandler
 import org.dallasmakerspace.webhook.handlers.ActivityLogWebhook
 import org.dallasmakerspace.webhook.handlers.CalendarEventWebhook
 import org.dallasmakerspace.webhook.handlers.DiscoursePostWebhook
+import org.dallasmakerspace.webhook.handlers.DiscourseUserWebhook
 import org.dallasmakerspace.webhook.handlers.GroupHistoryWebhook
 import org.dallasmakerspace.webhook.handlers.MoodleCourseWebhook
 import org.dallasmakerspace.webhook.handlers.NotificationWebhook
@@ -57,6 +58,7 @@ class WebhookModule {
       calendarEventWebhook: CalendarEventWebhook,
       discoursePostWebhook: DiscoursePostWebhook,
       moodleCourseWebhook: MoodleCourseWebhook,
+      discourseUserWebhook: DiscourseUserWebhook,
   ): Set<WebhookHandler> {
     return setOf(
         groupHistoryWebhook,
@@ -66,6 +68,7 @@ class WebhookModule {
         sparkPostWebhook,
         calendarEventWebhook,
         discoursePostWebhook,
-        moodleCourseWebhook)
+        moodleCourseWebhook,
+        discourseUserWebhook)
   }
 }

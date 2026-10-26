@@ -131,6 +131,8 @@ interface AppComponent {
 
   fun getGroupGuidBackfillJob(): org.dallasmakerspace.cron.GroupGuidBackfillJob
 
+  fun getDiscourseAutoLinkCronJob(): org.dallasmakerspace.cron.DiscourseAutoLinkCronJob
+
   fun getCalendarService(): CalendarService
 
   fun getShortLinksService(): ShortLinksService

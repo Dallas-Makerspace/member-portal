@@ -42,6 +42,7 @@ import org.dallasmakerspace.cron.AdReplicationHealthCronJob
 import org.dallasmakerspace.cron.AdReplicationHealthCronJobParams
 import org.dallasmakerspace.cron.DoorSwipesCronJob
 import org.dallasmakerspace.cron.DoorSwipesCronJobParams
+import org.dallasmakerspace.cron.DiscourseAutoLinkCronJobParams
 import org.dallasmakerspace.cron.GroupGuidBackfillJobParams
 import org.dallasmakerspace.cron.MemberRefreshCronJob
 import org.dallasmakerspace.cron.MemberRefreshCronJobParams
@@ -228,6 +229,9 @@ fun Application.configureRouting() {
       AppComponentHolder.instance.getSmartWaiverProcessQueueJob()
     }
     val groupGuidBackfillJob by lazy { AppComponentHolder.instance.getGroupGuidBackfillJob() }
+    val discourseAutoLinkCronJob by lazy {
+      AppComponentHolder.instance.getDiscourseAutoLinkCronJob()
+    }
     val dataVizRouter: DataVizRouter by lazy { AppComponentHolder.instance.getDataVizRouter() }
     val webhookRouter: WebhookRouter by lazy { AppComponentHolder.instance.getWebhookRouter() }
     val shortLinksService: ShortLinksService by lazy {
@@ -868,6 +872,13 @@ fun Application.configureRouting() {
               if (batchSize != null) GroupGuidBackfillJobParams(dryRun, batchSize)
               else GroupGuidBackfillJobParams(dryRun)
           call.respondText(groupGuidBackfillJob.run(params), ContentType.Text.Plain)
+        }
+
+        // Dry run unless dryRun=false is passed exactly; a typo must not trigger writes.
+        get("/cron/discourse-auto-link") {
+          val dryRun = !"false".equals(call.request.queryParameters["dryRun"], ignoreCase = true)
+          val params = DiscourseAutoLinkCronJobParams(dryRun)
+          call.respondText(discourseAutoLinkCronJob.run(params), ContentType.Text.Plain)
         }
 
         get("/cron/process-smartwaiver-queue") {
