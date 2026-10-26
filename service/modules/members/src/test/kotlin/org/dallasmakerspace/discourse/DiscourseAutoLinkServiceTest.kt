@@ -282,6 +282,22 @@ class DiscourseAutoLinkServiceTest {
   }
 
   @Test
+  fun `an account repeated across pages is not mistaken for a duplicate email`() = runBlocking<Unit> {
+    whenever(makerManager.getActiveUsersWithEmail()).thenReturn(listOf(mm(1, "jdoe")))
+    whenever(directory.getMembersByUsernameList(any())).thenReturn(mapOf("jdoe" to adUser("jdoe")))
+    val repeated = talkUser(500, "talk-jdoe")
+    val fill = (1..99).map { DiscourseAdminUser(it, "other-$it", "other$it@example.invalid", true) }
+    whenever(talk.listUsersPage(1)).thenReturn(fill + repeated)
+    whenever(talk.listUsersPage(2)).thenReturn(listOf(repeated))
+    whenever(members.autoLinkDiscourse("jdoe", "talk-jdoe", "cron")).thenReturn(AutoLinkOutcome.LINKED)
+
+    val report = service.runNightly(dryRun = false)
+
+    verify(members).autoLinkDiscourse("jdoe", "talk-jdoe", "cron")
+    assertFalse(report.contains("duplicate-talk-email"))
+  }
+
+  @Test
   fun `full pages are followed until a short page`() = runBlocking<Unit> {
     whenever(makerManager.getActiveUsersWithEmail()).thenReturn(listOf(mm(1, "jdoe")))
     whenever(directory.getMembersByUsernameList(any())).thenReturn(mapOf("jdoe" to adUser("jdoe")))

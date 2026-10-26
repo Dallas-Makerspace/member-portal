@@ -172,12 +172,12 @@ constructor(
 
   /** Reads every Talk page once, keeping only accounts whose email is in [wantedEmails]. */
   private suspend fun scanTalk(wantedEmails: Set<String>): TalkScan {
-    val kept = mutableListOf<DiscourseAdminUser>()
+    val kept = linkedMapOf<Int, DiscourseAdminUser>()
     for (page in 1..MAX_TALK_PAGES) {
       val users =
           fetchPage(page) ?: return TalkScan(emptyList(), page - 1, false, "page $page failed")
-      kept.addAll(users.filter { normalizeEmail(it.email) in wantedEmails })
-      if (users.size < TALK_PAGE_SIZE) return TalkScan(kept, page, true)
+      users.filter { normalizeEmail(it.email) in wantedEmails }.forEach { kept[it.id] = it }
+      if (users.size < TALK_PAGE_SIZE) return TalkScan(kept.values.toList(), page, true)
       pause(PACE_MS)
     }
     return TalkScan(emptyList(), MAX_TALK_PAGES, false, "more than $MAX_TALK_PAGES pages")

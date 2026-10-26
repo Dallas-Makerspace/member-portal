@@ -129,7 +129,7 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : ID
 
   override suspend fun listUsersPage(page: Int): List<DiscourseAdminUser> =
       fetchAdminUsers(
-          mapOf("show_emails" to "true", "order" to "created", "asc" to "true", "page" to "$page"))
+          mapOf("show_emails" to "true", "order" to "username", "asc" to "true", "page" to "$page"))
 
   // Errors never carry the URL, body or cause: all of them can contain an email.
   private suspend fun fetchAdminUsers(params: Map<String, String>): List<DiscourseAdminUser> {

@@ -13,7 +13,7 @@ interface IDiscourseApiClient {
   /** Talk accounts whose primary email is [email] (exact match); needs an admin API key. */
   suspend fun findUsersByEmail(email: String): List<DiscourseAdminUser>
 
-  /** One 100-user page (1-based, oldest first) of Talk accounts with their emails. */
+  /** One 100-user page (1-based, by username, which pages stably) of Talk accounts with emails. */
   suspend fun listUsersPage(page: Int): List<DiscourseAdminUser>
 
   /**

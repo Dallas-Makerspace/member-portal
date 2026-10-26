@@ -56,7 +56,9 @@ Since the switch defaults on, nothing changes until the Talk webhook is created 
 
 1. One bulk MakerManager read (active users with email, oldest first) and the profiles that already have a link.
 2. Drop shared emails and members already linked; if nothing is left, make no Talk calls.
-3. Page through Talk once (`/admin/users/list.json?show_emails=true&order=created&asc=true&page=N`, 100 per page,
+3. Page through Talk once (`/admin/users/list.json?show_emails=true&order=username&asc=true&page=N`, 100 per page,
+   ordered by username because `order=created` pages unstably - verified 2026-10-26: 7,762 rows but 5,941 distinct
+   accounts - while username gives every account exactly once; repeated ids are also dropped,
    paced 1.1 s apart, 429 waits honoured, 3 attempts per page), keeping only accounts whose email is a candidate.
    If any page fails or the scan passes 400 pages, the run ends **INCOMPLETE with no changes**.
 4. Match, check AD (batches of 100), take the first `cap` in oldest-first order.
