@@ -349,6 +349,20 @@ object ConfigRegistry {
           type = ConfigValueType.IntType,
       )
 
+  val AGENT_CHAT_ENABLED =
+      ConfigKey(
+          key = "agent-chat.enabled",
+          description =
+              "Replaces Ask AI with the new chat assistant that can follow up on questions; can " +
+                  "be piloted for specific usernames or AD groups before a full rollout",
+          category = "AI Assistant",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val AGENT_MODEL_DEFAULT =
       ConfigKey(
           key = "agent.model.default",
@@ -410,6 +424,7 @@ object ConfigRegistry {
           SMARTWAIVER_LOCAL_READS_ENABLED,
           DISCOURSE_AUTO_LINK_ENABLED,
           DISCOURSE_AUTO_LINK_NIGHTLY_CAP,
+          AGENT_CHAT_ENABLED,
           AGENT_MODEL_DEFAULT,
           AGENT_MONTHLY_SPEND_CAP_USD,
           AGENT_USER_DAILY_TURN_CAP,

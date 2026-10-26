@@ -3,7 +3,9 @@ package org.dallasmakerspace.askai.di
 import dagger.Module
 import dagger.Provides
 import dagger.multibindings.ElementsIntoSet
+import dagger.multibindings.IntoSet
 import javax.inject.Singleton
+import org.dallasmakerspace.agent.BotDefinition
 import org.dallasmakerspace.askai.AskAiConfig
 import org.dallasmakerspace.askai.bedrock.BedrockClient
 import org.dallasmakerspace.askai.bedrock.BedrockEmbeddingClient
@@ -20,6 +22,13 @@ import org.dallasmakerspace.askai.search.ConfluenceSearchSource
 import org.dallasmakerspace.askai.search.DiscourseSearchSource
 import org.dallasmakerspace.askai.search.MoodleCourseSearchSource
 import org.dallasmakerspace.askai.search.SearchSource
+import org.dallasmakerspace.askai.tools.AskAiBotPrompt
+import org.dallasmakerspace.askai.tools.ReadSourcePageTool
+import org.dallasmakerspace.askai.tools.SearchCalendarTool
+import org.dallasmakerspace.askai.tools.SearchOnlineCoursesTool
+import org.dallasmakerspace.askai.tools.SearchSourceWikiTool
+import org.dallasmakerspace.askai.tools.SearchTalkTool
+import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.core.LoggerFactory
 
@@ -96,7 +105,29 @@ class AskAiModule {
         discourseSearchSource, confluenceSearchSource, calendarSearchSource, moodleCourseSearchSource)
   }
 
+  @Provides
+  @IntoSet
+  fun provideAskAiBot(
+      searchSource: SearchSourceWikiTool,
+      readSourcePage: ReadSourcePageTool,
+      searchTalk: SearchTalkTool,
+      searchCalendar: SearchCalendarTool,
+      searchOnlineCourses: SearchOnlineCoursesTool,
+  ): BotDefinition =
+      BotDefinition(
+          key = ASK_AI_BOT_KEY,
+          displayName = "Ask AI",
+          systemPrompt = AskAiBotPrompt.TEXT,
+          tools = listOf(searchSource, readSourcePage, searchTalk, searchCalendar, searchOnlineCourses),
+          featureFlag = ConfigRegistry.AGENT_CHAT_ENABLED,
+          starterPrompts = AskAiBotPrompt.STARTER_PROMPTS,
+      )
+
   private fun useMockServices(appConfig: AppConfig) =
       appConfig.requireBooleanProperty("ktor.development") &&
           appConfig.requireBooleanProperty("app.use-mock-services")
+
+  companion object {
+    const val ASK_AI_BOT_KEY = "ask-ai"
+  }
 }

@@ -102,7 +102,7 @@ constructor(
             id = UUID.randomUUID().toString(),
             botKey = botKey,
             ownerUsername = username,
-            title = titleFrom(text),
+            title = titleFrom(piiMasker.mask(text)),
             visibility = if (reason == null) AgentVisibility.PUBLIC else AgentVisibility.PRIVATE,
             privateReason = reason,
             totalCostUsd = 0.0,

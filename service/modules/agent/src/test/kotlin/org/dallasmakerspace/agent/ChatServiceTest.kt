@@ -4,6 +4,7 @@ import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolParameterDescriptor
 import ai.koog.agents.core.tools.ToolParameterType
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -154,7 +155,9 @@ class ChatServiceTest {
             service.startConversation("ask-ai", "jdoe", "My email is jdoe@example.com, can you help?"))
     service.awaitTurn(started.conversationId)
 
-    assertEquals(ChatService.PII_REASON, service.detail(started.conversationId, "jdoe")!!.privateReason)
+    val detail = service.detail(started.conversationId, "jdoe")!!
+    assertEquals(ChatService.PII_REASON, detail.privateReason)
+    assertFalse(detail.conversation.title.contains("jdoe@example.com"))
   }
 
   @Test
