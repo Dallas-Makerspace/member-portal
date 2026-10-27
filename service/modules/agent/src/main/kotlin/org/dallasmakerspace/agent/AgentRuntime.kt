@@ -220,6 +220,7 @@ class AgentRuntime(private val modelClient: ChatModelClient) {
             durationMs = (System.currentTimeMillis() - started).toInt(),
         )
     sink.emit("tool-end", null, call.name, null, !result.isError, result.sources.ifEmpty { null })
+    result.artifactChange?.let { sink.emit("artifact", it, null, null, null, null) }
     return MessagePart.Tool.Result(call.id, call.name, "<data>\n$output\n</data>", result.isError)
   }
 

@@ -29,4 +29,6 @@ data class ToolResult(
     val output: String,
     val sources: List<AgentSourceLink> = emptyList(),
     val isError: Boolean = false,
+    /** JSON `{id, version, kind, title}` when the tool saved an artifact; sent to the browser. */
+    val artifactChange: String? = null,
 )
