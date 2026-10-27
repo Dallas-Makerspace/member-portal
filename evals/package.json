@@ -1,0 +1,13 @@
+{
+  "name": "dms-agent-evals",
+  "private": true,
+  "description": "Manual evals for the AI assistants (promptfoo)",
+  "scripts": {
+    "eval": "promptfoo eval -c promptfooconfig.yaml --no-cache",
+    "view": "promptfoo view"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.700.0",
+    "promptfoo": "0.125.1"
+  }
+}

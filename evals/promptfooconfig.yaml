@@ -1,0 +1,24 @@
+# Evals for the AI assistants. Manual only: needs a service running with AGENT_EVAL_ENABLED=true
+# against real backends (see README.md). Spends real money on Bedrock.
+description: Ask AI
+
+prompts:
+  - '{{question}}'
+
+providers:
+  - id: file://providers/dms-agent.js
+    label: haiku-5.5
+    config: {bot: ask-ai, model: us.anthropic.claude-haiku-5-5}
+  - id: file://providers/dms-agent.js
+    label: sonnet-5.5
+    config: {bot: ask-ai, model: us.anthropic.claude-sonnet-5-5}
+  - id: file://providers/dms-agent.js
+    label: sol-6.1
+    config: {bot: ask-ai, model: us.openai.gpt-6.1-sol}
+
+defaultTest:
+  options:
+    # Judge for the llm-rubric checks.
+    provider: bedrock:converse:us.anthropic.claude-haiku-5-5
+
+tests: file://tests.js

@@ -24,7 +24,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.agent.ActiveTurn
+import org.dallasmakerspace.agent.AgentEvalService
 import org.dallasmakerspace.agent.ChatService
+import org.dallasmakerspace.agent.EvalOutcome
 import org.dallasmakerspace.agent.TurnOutcome
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
@@ -32,6 +34,7 @@ import org.dallasmakerspace.auth.authorize
 import org.dallasmakerspace.core.api.ApiResponse
 import org.dallasmakerspace.core.api.Status
 import org.dallasmakerspace.models.agent.AgentCreateConversationRequest
+import org.dallasmakerspace.models.agent.AgentEvalRequest
 import org.dallasmakerspace.models.agent.AgentFeedbackRequest
 import org.dallasmakerspace.models.agent.AgentSendMessageRequest
 import org.dallasmakerspace.models.agent.AgentStreamEvent
@@ -48,7 +51,7 @@ private val streamJson = Json { explicitNulls = false }
  * route re-checks that member's access.
  */
 @Suppress("LongMethod", "CyclomaticComplexMethod")
-fun Route.agentRoutes(chatService: ChatService) {
+fun Route.agentRoutes(chatService: ChatService, evalService: AgentEvalService) {
   authenticate(ApiKeyAuthProvider.X_API_KEY) {
     authorize(Permission.USE_ASKAI) {
       route("/agent") {
@@ -116,6 +119,17 @@ fun Route.agentRoutes(chatService: ChatService) {
               chatService.feedback(
                   call.parameters["id"]!!, username, request.messageId, request.helpful)
           if (saved) ok(true) else call.error(HttpStatusCode.NotFound, "Message not found")
+        }
+
+        post("/{bot}/eval-turn") {
+          call.username() ?: return@post
+          val request = call.receive<AgentEvalRequest>()
+          when (val outcome = evalService.run(call.parameters["bot"]!!, request.messages, request.model)) {
+            is EvalOutcome.Done -> ok(outcome.response)
+            EvalOutcome.Disabled -> call.error(HttpStatusCode.NotFound, "Not found")
+            EvalOutcome.UnknownBot -> call.error(HttpStatusCode.NotFound, "Assistant not found")
+            is EvalOutcome.BadRequest -> call.error(HttpStatusCode.BadRequest, outcome.message)
+          }
         }
 
         delete("/conversations/{id}") {

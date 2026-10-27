@@ -61,6 +61,16 @@ Tools: `search_source` and `read_source_page` (Source, the Confluence wiki), `se
 (DMS Learn). `/ask-ai` shows the chat when the flag is on for the member and the old page
 otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
 
+## Evals
+
+`evals/` (promptfoo, run by hand, not in CI) asks each bot real questions through
+`POST /agent/{bot}/eval-turn` and checks tool use, answers, cost and speed. The endpoint exists only
+when the service starts with `AGENT_EVAL_ENABLED=true` (an env var, not a config flag, because dev
+and prod share a database), saves nothing, and accepts `model` to compare Haiku 5.5, Sonnet 5.5 and
+GPT-6.1 Sol. See `evals/README.md` for how to run it and the latest model comparison.
+
+Explicit prompt-cache points are sent only to Anthropic models; Sol rejects them.
+
 ## Local testing
 
 `:service:agent` tests use H2 and a scripted model (`MockChatModelClient`, also used when

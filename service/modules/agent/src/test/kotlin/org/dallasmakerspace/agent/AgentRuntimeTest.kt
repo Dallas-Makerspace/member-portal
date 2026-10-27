@@ -114,6 +114,16 @@ class AgentRuntimeTest {
   }
 
   @Test
+  fun `only Anthropic models get cache points`() {
+    val meta = RequestMetaInfo.create(KoogClock.System)
+    val messages = listOf(Message.User("question", meta))
+
+    assertTrue(AgentRuntime.supportsCachePoints("us.anthropic.claude-haiku-5-5"))
+    assertTrue(!AgentRuntime.supportsCachePoints("us.openai.gpt-6.1-sol"))
+    assertNull((AgentRuntime.withCacheOnLast(messages, null)[0] as Message.User).parts.single().cacheControl)
+  }
+
+  @Test
   fun `long histories drop old tool output and then old turns`() {
     val meta = RequestMetaInfo.create(KoogClock.System)
     val big = "x".repeat(130_000)

@@ -84,3 +84,37 @@ data class AgentStreamEvent(
     val messageId: Long? = null,
     val costUsd: Double? = null,
 )
+
+/** Eval run: [messages] are asked in order in one throwaway chat; [model] overrides the default. */
+@Serializable
+data class AgentEvalRequest(val messages: List<String>, val model: String? = null)
+
+@Serializable
+data class AgentEvalToolCall(
+    val name: String,
+    val args: String,
+    val ok: Boolean,
+    val durationMs: Int,
+)
+
+@Serializable
+data class AgentEvalTurn(
+    val question: String,
+    val answer: String,
+    val toolCalls: List<AgentEvalToolCall>,
+    val sources: List<AgentSourceLink>,
+    val inputTokens: Int,
+    val cacheReadTokens: Int,
+    val outputTokens: Int,
+    val costUsd: Double,
+    val latencyMs: Long,
+    val gaveUp: Boolean,
+)
+
+@Serializable
+data class AgentEvalResponse(
+    val model: String,
+    val turns: List<AgentEvalTurn>,
+    val totalCostUsd: Double,
+    val totalLatencyMs: Long,
+)

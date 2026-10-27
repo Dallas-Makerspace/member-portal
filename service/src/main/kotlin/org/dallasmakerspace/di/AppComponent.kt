@@ -3,6 +3,7 @@ package org.dallasmakerspace.di
 import dagger.Component
 import io.ktor.server.application.*
 import javax.inject.Singleton
+import org.dallasmakerspace.agent.AgentEvalService
 import org.dallasmakerspace.agent.ChatService
 import org.dallasmakerspace.agent.di.AgentModule
 import org.dallasmakerspace.askai.AskAiService
@@ -143,6 +144,8 @@ interface AppComponent {
   fun getAskAiService(): AskAiService
 
   fun getChatService(): ChatService
+
+  fun getAgentEvalService(): AgentEvalService
 
   fun getFeaturedProjectsService(): FeaturedProjectsService
 
