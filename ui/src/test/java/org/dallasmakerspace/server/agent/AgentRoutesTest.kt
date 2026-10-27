@@ -23,6 +23,16 @@ class AgentRoutesTest {
   }
 
   @Test
+  fun `artifact paths map onto service routes`() {
+    assertEquals("/agent/conversations/$id/artifacts", AgentRoutes.servicePath("GET", "/api/agent/conversations/$id/artifacts"))
+    assertEquals("/agent/artifacts/$id", AgentRoutes.servicePath("GET", "/api/agent/artifacts/$id"))
+    assertEquals("/agent/artifacts/$id", AgentRoutes.servicePath("PUT", "/api/agent/artifacts/$id"))
+    assertEquals("/agent/artifacts/$id/export", AgentRoutes.servicePath("GET", "/api/agent/artifacts/$id/export"))
+    assertNull(AgentRoutes.servicePath("DELETE", "/api/agent/artifacts/$id"))
+    assertNull(AgentRoutes.servicePath("POST", "/api/agent/artifacts/$id/export"))
+  }
+
+  @Test
   fun `anything else is refused`() {
     assertNull(AgentRoutes.servicePath("GET", "/api/agent/conversations/../bots"))
     assertNull(AgentRoutes.servicePath("GET", "/api/agent/conversations/$id/messages"))

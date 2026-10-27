@@ -14,6 +14,7 @@ import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeStringUtf8
@@ -25,7 +26,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import org.dallasmakerspace.agent.ActiveTurn
 import org.dallasmakerspace.agent.AgentEvalService
+import org.dallasmakerspace.agent.ArtifactService
 import org.dallasmakerspace.agent.ChatService
+import org.dallasmakerspace.agent.SaveOutcome
 import org.dallasmakerspace.agent.EvalOutcome
 import org.dallasmakerspace.agent.TurnOutcome
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
@@ -33,6 +36,8 @@ import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.authorize
 import org.dallasmakerspace.core.api.ApiResponse
 import org.dallasmakerspace.core.api.Status
+import org.dallasmakerspace.models.agent.AgentArtifactExport
+import org.dallasmakerspace.models.agent.AgentArtifactSaveRequest
 import org.dallasmakerspace.models.agent.AgentCreateConversationRequest
 import org.dallasmakerspace.models.agent.AgentEvalRequest
 import org.dallasmakerspace.models.agent.AgentFeedbackRequest
@@ -51,7 +56,11 @@ private val streamJson = Json { explicitNulls = false }
  * route re-checks that member's access.
  */
 @Suppress("LongMethod", "CyclomaticComplexMethod")
-fun Route.agentRoutes(chatService: ChatService, evalService: AgentEvalService) {
+fun Route.agentRoutes(
+    chatService: ChatService,
+    evalService: AgentEvalService,
+    artifactService: ArtifactService,
+) {
   authenticate(ApiKeyAuthProvider.X_API_KEY) {
     authorize(Permission.USE_ASKAI) {
       route("/agent") {
@@ -129,6 +138,44 @@ fun Route.agentRoutes(chatService: ChatService, evalService: AgentEvalService) {
             EvalOutcome.Disabled -> call.error(HttpStatusCode.NotFound, "Not found")
             EvalOutcome.UnknownBot -> call.error(HttpStatusCode.NotFound, "Assistant not found")
             is EvalOutcome.BadRequest -> call.error(HttpStatusCode.BadRequest, outcome.message)
+          }
+        }
+
+        get("/conversations/{id}/artifacts") {
+          val username = call.username() ?: return@get
+          val list = artifactService.list(call.parameters["id"]!!, username)
+          if (list == null) call.error(HttpStatusCode.NotFound, "Conversation not found") else ok(list)
+        }
+
+        get("/artifacts/{id}") {
+          val username = call.username() ?: return@get
+          val version = call.request.queryParameters["version"]?.toIntOrNull()
+          val detail = artifactService.detail(call.parameters["id"]!!, username, version)
+          if (detail == null) call.error(HttpStatusCode.NotFound, "Document not found") else ok(detail)
+        }
+
+        put("/artifacts/{id}") {
+          val username = call.username() ?: return@put
+          val request = call.receive<AgentArtifactSaveRequest>()
+          when (val outcome = artifactService.save(call.parameters["id"]!!, username, request.content, request.basedOn)) {
+            is SaveOutcome.Saved -> ok(outcome.version)
+            is SaveOutcome.Invalid -> call.error(HttpStatusCode.BadRequest, outcome.message)
+            SaveOutcome.Stale ->
+                call.error(HttpStatusCode.Conflict, "The document changed. Reload it and try again.")
+            SaveOutcome.Forbidden -> call.error(HttpStatusCode.Forbidden, "Only the chat's owner can edit")
+            SaveOutcome.NotFound -> call.error(HttpStatusCode.NotFound, "Document not found")
+          }
+        }
+
+        get("/artifacts/{id}/export") {
+          val username = call.username() ?: return@get
+          val format = call.request.queryParameters["format"].orEmpty()
+          val version = call.request.queryParameters["version"]?.toIntOrNull()
+          val file = artifactService.export(call.parameters["id"]!!, username, format, version)
+          if (file == null) {
+            call.error(HttpStatusCode.NotFound, "Nothing to export")
+          } else {
+            ok(AgentArtifactExport(file.fileName, file.contentType, file.body))
           }
         }
 

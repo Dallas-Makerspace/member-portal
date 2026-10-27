@@ -1361,7 +1361,10 @@ fun Application.configureRouting() {
     val chatService = AppComponentHolder.instance.getChatService()
     chatService.startDailyCleanup()
     AppComponentHolder.instance.getRepoMirrorService().startBackgroundSync()
-    agentRoutes(chatService, AppComponentHolder.instance.getAgentEvalService())
+    agentRoutes(
+        chatService,
+        AppComponentHolder.instance.getAgentEvalService(),
+        AppComponentHolder.instance.getArtifactService())
 
     // BamBuddy's outbound notification webhooks: a dedicated route, NOT the generic webhook
     // router below — BamBuddy authenticates with an Authorization bearer secret (which the

@@ -68,7 +68,7 @@ constructor(
   ) {
     val query = AgentRoutes.allowedQuery(call.request.queryParameters.entries().associate { it.key to it.value.first() })
     val body =
-        if (method == HttpMethod.Post) {
+        if (method == HttpMethod.Post || method == HttpMethod.Put) {
           if (!call.request.contentType().match(ContentType.Application.Json)) {
             call.respondJson(
                 HttpStatusCode.UnsupportedMediaType, """{"message":"Content-Type must be application/json"}""")
@@ -131,7 +131,7 @@ constructor(
   }
 
   companion object {
-    private const val MAX_BODY_CHARS = 20_000
+    private const val MAX_BODY_CHARS = 120_000
     private val LAST_EVENT_ID = Regex("""\d{1,6}:\d{1,9}""")
   }
 }
@@ -151,6 +151,10 @@ internal object AgentRoutes {
           "DELETE" to Regex("""$PREFIX/conversations/($ID)"""),
           "POST" to Regex("""$PREFIX/conversations/($ID)/(messages|cancel|feedback)"""),
           "GET" to Regex("""$PREFIX/conversations/($ID)/stream"""),
+          "GET" to Regex("""$PREFIX/conversations/($ID)/artifacts"""),
+          "GET" to Regex("""$PREFIX/artifacts/($ID)"""),
+          "PUT" to Regex("""$PREFIX/artifacts/($ID)"""),
+          "GET" to Regex("""$PREFIX/artifacts/($ID)/export"""),
       )
 
   fun servicePath(method: String, path: String): String? =
@@ -158,7 +162,7 @@ internal object AgentRoutes {
         "/agent" + path.removePrefix(PREFIX)
       } else null
 
-  private val QUERY_KEYS = setOf("scope", "limit")
+  private val QUERY_KEYS = setOf("scope", "limit", "version", "format")
 
   fun allowedQuery(query: Map<String, String>): Map<String, String> =
       query.filterKeys { it in QUERY_KEYS }.filterValues { it.length <= 16 }

@@ -122,3 +122,32 @@ data class AgentEvalResponse(
     val totalCostUsd: Double,
     val totalLatencyMs: Long,
 )
+
+@Serializable
+data class AgentArtifactSummary(
+    val id: String,
+    val kind: String,
+    val title: String,
+    val currentVersion: Int,
+    val updatedAt: String,
+)
+
+@Serializable
+data class AgentArtifactVersionInfo(val version: Int, val author: String, val createdAt: String)
+
+/** One version of an artifact, with the list of all versions and the export formats on offer. */
+@Serializable
+data class AgentArtifactDetail(
+    val artifact: AgentArtifactSummary,
+    val version: Int,
+    val content: String,
+    val versions: List<AgentArtifactVersionInfo>,
+    val exportFormats: List<String>,
+    val canEdit: Boolean,
+)
+
+/** [basedOn] is the version the member was looking at; a newer one makes the save fail. */
+@Serializable data class AgentArtifactSaveRequest(val content: String, val basedOn: Int)
+
+/** A rendered export; the browser turns it into a download. */
+@Serializable data class AgentArtifactExport(val fileName: String, val contentType: String, val body: String)
