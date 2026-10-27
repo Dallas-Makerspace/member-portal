@@ -1,0 +1,22 @@
+# Evals for the IT assistant. Needs the service running with AGENT_EVAL_ENABLED=true, real
+# backends and the repositories cloned (see README.md). Its log questions read real logs.
+description: IT assistant
+
+prompts:
+  - '{{question}}'
+
+providers:
+  - id: file://providers/dms-agent.js
+    label: haiku-5.5
+    config: {bot: it-assistant, model: us.anthropic.claude-haiku-5-5}
+  - id: file://providers/dms-agent.js
+    label: sol-6.1
+    config: {bot: it-assistant, model: us.openai.gpt-6.1-sol}
+
+defaultTest:
+  options:
+    provider: bedrock:converse:us.anthropic.claude-haiku-5-5
+
+tests:
+  - path: file://tests.js
+    config: {bot: it-assistant}

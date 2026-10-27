@@ -54,3 +54,16 @@ Haiku and Sol tie. Haiku's misses are flaky (tool-call budget, one rubric); Sol'
 calls the calendar with an empty query, and states an uncited fact on opening hours). No case is
 one a stronger model passes and Haiku consistently fails, so Haiku stays the default and an
 escalation tool is not worth building yet. Re-run when the prompt, tools or models change.
+
+## IT assistant (2026-10-27, 21 cases)
+
+`promptfooconfig.it.yaml`, cases in `it-assistant/cases.js`. The service downloads the public
+repositories itself on start (a minute or two), and log questions read the real logs, so run it
+against a local service as above:
+
+```bash
+npx promptfoo eval -c promptfooconfig.it.yaml --filter-providers haiku --no-cache -j 3 -o output/it.json
+```
+
+Haiku 5.5 passed 58 of 63 (3 runs, $0.03 per run); Sol passed 33 of 42 at ten times the cost, and
+mostly "failed" because the judge only sees the answer, not the tool calls. Haiku stays the model.

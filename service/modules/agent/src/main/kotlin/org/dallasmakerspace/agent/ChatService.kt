@@ -81,7 +81,10 @@ constructor(
     val groups = access.groupsOf(username)
     return botsByKey.values
         .filter { access.canUse(it, username, groups) }
-        .map { AgentBotInfo(it.key, it.displayName, it.starterPrompts) }
+        .map {
+          AgentBotInfo(
+              it.key, it.displayName, it.starterPrompts, it.intro, it.placeholder, it.startsPrivate)
+        }
   }
 
   suspend fun startConversation(botKey: String, username: String, text: String): TurnOutcome {

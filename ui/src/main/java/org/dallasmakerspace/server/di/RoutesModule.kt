@@ -19,6 +19,7 @@ import org.dallasmakerspace.server.remoteaccess.RemoteAccessHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessRefreshHandler
 import org.dallasmakerspace.server.routes.ActionTrackingHandler
 import org.dallasmakerspace.server.routes.AskAiHandler
+import org.dallasmakerspace.server.routes.ItAssistantHandler
 import org.dallasmakerspace.server.routes.AvatarHandler
 import org.dallasmakerspace.server.routes.BackendApiHandler
 import org.dallasmakerspace.server.routes.CabinetsHandler
@@ -69,6 +70,7 @@ import org.dallasmakerspace.server.routes.MembersToFollowHandler
 import org.dallasmakerspace.server.routes.SuggestedEventsHandler
 import org.dallasmakerspace.server.voterregistration.VoterRegistrationManager
 import org.dallasmakerspace.server.agent.AgentApiHandler
+import org.dallasmakerspace.server.agent.AgentBotAccess
 import org.dallasmakerspace.server.agent.AgentServiceClient
 import org.dallasmakerspace.server.workflows.WorkflowApiHandler
 import org.dallasmakerspace.server.workflows.WorkflowPagesHandler
@@ -433,6 +435,15 @@ class RoutesModule {
       appConfig: AppConfig
   ): IRouteHandler =
       AskAiHandler(loggerFactory, userInfoProvider, memberService, memberServiceClient, appConfig)
+
+  @IntoMap
+  @Provides
+  @StringKey("/it-assistant")
+  fun providesItAssistantHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      agentBotAccess: AgentBotAccess,
+  ): IRouteHandler = ItAssistantHandler(loggerFactory, userInfoProvider, agentBotAccess)
 
   @IntoMap
   @Provides

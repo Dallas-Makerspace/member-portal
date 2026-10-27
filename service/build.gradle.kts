@@ -33,6 +33,7 @@ dependencies {
   implementation(project(":service:core"))
   implementation(project(":service:agent"))
   implementation(project(":service:askai"))
+  implementation(project(":service:itbot"))
   implementation(project(":service:dataviz"))
   implementation(project(":service:notifications"))
   implementation(project(":service:keyvalue"))

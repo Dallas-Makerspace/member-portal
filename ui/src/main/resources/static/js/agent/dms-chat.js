@@ -33,6 +33,9 @@ class DmsChat extends LitElement {
         _busy: {state: true},
         _error: {state: true},
         _starters: {state: true},
+        _intro: {state: true},
+        _placeholder: {state: true},
+        _alwaysPrivate: {state: true},
         _mine: {state: true},
         _public: {state: true},
         _scope: {state: true},
@@ -54,6 +57,9 @@ class DmsChat extends LitElement {
         this._busy = false;
         this._error = '';
         this._starters = [];
+        this._intro = 'Ask about policies, tools, classes and how things work.';
+        this._placeholder = 'Ask a question about the space…';
+        this._alwaysPrivate = false;
         this._mine = [];
         this._public = [];
         this._scope = 'mine';
@@ -83,6 +89,9 @@ class DmsChat extends LitElement {
             return;
         }
         this._starters = me.starterPrompts || [];
+        this._intro = me.intro || this._intro;
+        this._placeholder = me.placeholder || this._placeholder;
+        this._alwaysPrivate = !!me.alwaysPrivate;
         this._loadHistory();
         this._openFromUrl();
     }
@@ -366,12 +375,12 @@ class DmsChat extends LitElement {
                     <input type="search" placeholder="Search chats" aria-label="Search chats" .value=${this._search || ''}
                            @input=${e => { this._search = e.target.value; this.requestUpdate(); }}>
                 </label>
-                <div class="chat-tabs" role="tablist" aria-label="Which chats">
+                ${this._alwaysPrivate ? '' : html`<div class="chat-tabs" role="tablist" aria-label="Which chats">
                     <button role="tab" aria-selected=${this._scope === 'mine'} class=${this._scope === 'mine' ? 'active' : ''}
                             @click=${() => { this._scope = 'mine'; }}>My chats</button>
                     <button role="tab" aria-selected=${this._scope === 'public'} class=${this._scope === 'public' ? 'active' : ''}
                             @click=${() => { this._scope = 'public'; }}>From members</button>
-                </div>
+                </div>`}
                 ${list.length === 0 ? html`<p class="text-muted small mt-3 px-1">${needle
                     ? 'No matches.' : this._scope === 'mine' ? 'No chats yet.' : 'Nothing shared yet.'}</p>` : ''}
                 ${this._groupHistory(list).map(g => html`
@@ -431,7 +440,7 @@ class DmsChat extends LitElement {
         return html`
             <form class="chat-composer ${large ? 'large' : ''}" @submit=${e => { e.preventDefault(); this._send(this._draft); }}>
                 <textarea rows="1" maxlength=${MAX_CHARS} .value=${this._draft}
-                          placeholder="Ask a question about the space…" aria-label="Your question"
+                          placeholder=${this._placeholder} aria-label="Your question"
                           @input=${this._input} @keydown=${this._keydown}></textarea>
                 ${this._running
                     ? html`<button type="button" class="chat-send stop" aria-label="Stop answering" title="Stop" @click=${this._stop}>
@@ -439,7 +448,7 @@ class DmsChat extends LitElement {
                     : html`<button type="submit" class="chat-send" aria-label="Send" title="Send" ?disabled=${!this._draft.trim()}>
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span></button>`}
             </form>
-            ${large ? html`<div class="chat-disclaimer">
+            ${large && !this._alwaysPrivate ? html`<div class="chat-disclaimer">
                 <span class="material-symbols-outlined" aria-hidden="true">groups</span>
                 <span>Chats are visible to other members unless they include personal details.</span>
             </div>` : ''}`;
@@ -449,7 +458,7 @@ class DmsChat extends LitElement {
         return html`
             <div class="chat-empty">
                 <h1>${this.botTitle || 'Assistant'}</h1>
-                <p>Ask about policies, tools, classes and how things work.</p>
+                <p>${this._intro}</p>
                 ${this._composer(true)}
                 <div class="chat-starters">
                     ${this._starters.map(s => html`<button type="button" @click=${() => this._send(s)}>${s}</button>`)}

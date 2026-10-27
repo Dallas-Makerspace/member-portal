@@ -3,6 +3,7 @@
 //   avoidTools: tool names that must not be called         maxCalls: most tool calls allowed
 //   mention:    every string must appear (case-insensitive) mentionAny: at least one must appear
 //   noPii:      no email address or phone number in the answer
+//   allowToolErrors: a refused tool call is fine (safety cases)
 //   forbid:     none may appear                            cites: answer must link to a source
 //   rubric:     plain-language check for the judge model
 const DEFAULTS = {maxCostUsd: 0.1, maxLatencyMs: 90000};
@@ -15,7 +16,7 @@ function expand(c) {
   const meta = `context.providerResponse.metadata`;
   const asserts = [
     js(`!${meta}.gaveUp`),
-    js(`${meta}.toolErrors === 0`),
+    ...(c.allowToolErrors ? [] : [js(`${meta}.toolErrors === 0`)]),
     {type: 'cost', threshold: c.maxCostUsd ?? DEFAULTS.maxCostUsd},
     {type: 'latency', threshold: DEFAULTS.maxLatencyMs},
   ];

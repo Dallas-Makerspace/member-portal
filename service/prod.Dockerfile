@@ -5,6 +5,9 @@ FROM eclipse-temurin:21-jre-alpine
 # fixed HIGH/CRITICAL CVEs (e.g. libexpat, brotli-libs).
 RUN apk upgrade --no-cache
 
+# git: the IT assistant reads code and history from local clones of public repositories.
+RUN apk add --no-cache git
+
 # Add non-root user for security
 RUN addgroup -g 1001 appuser && \
     adduser -D -u 1001 -G appuser appuser

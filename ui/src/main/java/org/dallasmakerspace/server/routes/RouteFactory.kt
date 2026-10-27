@@ -126,6 +126,7 @@ object RouteFactory {
     ATTENTION("/api/attention"),
     SIGN_OUT("/sign-out"),
     ASK_AI("/ask-ai"),
+    IT_ASSISTANT("/it-assistant"),
     MANIFEST("/manifest.json"),
     OFFLINE("/offline"),
     CONFIG_ADMIN("/admin/config"),

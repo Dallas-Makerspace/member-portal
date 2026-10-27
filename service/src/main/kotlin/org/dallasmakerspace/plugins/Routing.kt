@@ -1360,6 +1360,7 @@ fun Application.configureRouting() {
     /** AI assistant chats (multi-turn, tool-using) * */
     val chatService = AppComponentHolder.instance.getChatService()
     chatService.startDailyCleanup()
+    AppComponentHolder.instance.getRepoMirrorService().startBackgroundSync()
     agentRoutes(chatService, AppComponentHolder.instance.getAgentEvalService())
 
     // BamBuddy's outbound notification webhooks: a dedicated route, NOT the generic webhook

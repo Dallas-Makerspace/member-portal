@@ -8,6 +8,10 @@ data class AgentBotInfo(
     val key: String,
     val displayName: String,
     val starterPrompts: List<String> = emptyList(),
+    val intro: String = "",
+    val placeholder: String = "",
+    /** True when every chat is private, so the page has nothing shared to show. */
+    val alwaysPrivate: Boolean = false,
 )
 
 @Serializable

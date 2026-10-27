@@ -2,7 +2,7 @@ import {LitElement, html} from 'https://esm.sh/lit@3.3.0';
 import {unsafeHTML} from 'https://esm.sh/lit@3.3.0/directives/unsafe-html.js';
 import {renderMarkdown, toolLabel} from './markdown.js';
 
-const SOURCE_ICONS = {Source: 'description', Talk: 'forum', Calendar: 'event', 'DMS Learn': 'school'};
+const SOURCE_ICONS = {Source: 'description', Talk: 'forum', Calendar: 'event', 'DMS Learn': 'school', Code: 'code'};
 
 /**
  * One chat message. Properties: message {id, role, text, toolCalls, sources, feedback},

@@ -33,16 +33,21 @@ import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.plugins.UserSession
+import org.dallasmakerspace.server.agent.AgentBotAccess
 import org.dallasmakerspace.server.plugins.configureCommonModel
 import org.dallasmakerspace.server.routes.GroupsHandler
 import org.dallasmakerspace.server.routes.IRouteHandler
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver
 
 class GroupPageLaunchTest {
+  private val noBotAccess =
+      mock<AgentBotAccess> { onBlocking { canUse(any(), anyOrNull(), anyOrNull()) } doReturn false }
+
   private fun installThymeleaf(app: io.ktor.server.application.Application) {
     app.install(Thymeleaf) {
       setTemplateResolver(
@@ -243,7 +248,7 @@ class GroupPageLaunchTest {
       application {
         install(Sessions) { cookie<UserSession>("user_session") }
         installThymeleaf(this)
-        configureCommonModel(client)
+        configureCommonModel(client, noBotAccess)
         routing { get("/groups/{group_slug}") { asUser(handler, suffix) } }
       }
       block()

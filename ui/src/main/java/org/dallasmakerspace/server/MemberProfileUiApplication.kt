@@ -21,6 +21,7 @@ fun main() {
   val appComponent = AppComponentHolder.instance
   val appConfig = appComponent.getAppConfig()
   val memberServiceClient = appComponent.getMemberServiceClient()
+  val agentBotAccess = appComponent.getAgentBotAccess()
   PostHogConfig.initialize(appConfig)
   val portStr = appConfig.requireStringProperty("ktor.deployment.port")
 
@@ -31,7 +32,7 @@ fun main() {
   val server =
       embeddedServer(Netty, port = portStr.toInt(), host = "0.0.0.0") {
         configureHealth()
-        configureCommonModel(memberServiceClient)
+        configureCommonModel(memberServiceClient, agentBotAccess)
         configureTemplating()
         configureHttp()
         configureSessions()

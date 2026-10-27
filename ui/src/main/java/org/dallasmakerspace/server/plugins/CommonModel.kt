@@ -7,7 +7,9 @@ import io.ktor.server.thymeleaf.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import org.dallasmakerspace.server.agent.AgentBotAccess
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.routes.ItAssistantHandler
 import org.dallasmakerspace.server.routes.AuthenticatedHandler
 import org.dallasmakerspace.server.routes.NotificationsInboxHandler
 import org.dallasmakerspace.server.routes.ProfileFollowsHandler
@@ -40,7 +42,10 @@ internal suspend fun getCachedFeatureFlag(
   return value
 }
 
-fun Application.configureCommonModel(memberServiceClient: MemberServiceClient) {
+fun Application.configureCommonModel(
+    memberServiceClient: MemberServiceClient,
+    agentBotAccess: AgentBotAccess,
+) {
   sendPipeline.intercept(ApplicationSendPipeline.Before) {
     val body = subject
     if (body !is ThymeleafContent) return@intercept
@@ -64,6 +69,7 @@ fun Application.configureCommonModel(memberServiceClient: MemberServiceClient) {
           }
           .mapValues { it.value.await() }
     }
+    val itAssistantEnabled = agentBotAccess.canUse(ItAssistantHandler.BOT_KEY, userId, sessionId)
     val remoteAccessEnabled = flags.getValue(REMOTE_ACCESS_FLAG)
     cmLog.info("CommonModel: remoteAccessEnabled=$remoteAccessEnabled")
     val accountMenuEnabled = flags.getValue(ACCOUNT_MENU_FLAG)
@@ -83,6 +89,7 @@ fun Application.configureCommonModel(memberServiceClient: MemberServiceClient) {
                 mapOf(
                     "isInfraUser" to isInfraUser,
                     "remoteAccessEnabled" to remoteAccessEnabled,
+                    "itAssistantEnabled" to itAssistantEnabled,
                     "current_username" to currentUsername,
                     "current_display_name" to displayName,
                     "current_first_name" to firstName,

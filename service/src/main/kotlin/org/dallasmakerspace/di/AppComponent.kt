@@ -8,6 +8,8 @@ import org.dallasmakerspace.agent.ChatService
 import org.dallasmakerspace.agent.di.AgentModule
 import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.askai.di.AskAiModule
+import org.dallasmakerspace.itbot.RepoMirrorService
+import org.dallasmakerspace.itbot.di.ItBotModule
 import org.dallasmakerspace.bambuddy.BambuddyStatusService
 import org.dallasmakerspace.bambuddy.notifications.BambuNotificationScheduler
 import org.dallasmakerspace.bambuddy.notifications.EphemeralNotificationService
@@ -72,6 +74,7 @@ import org.dallasmakerspace.workflows.groups.references.GroupReferenceChecker
             ActiveDirectoryModule::class,
             AgentModule::class,
             AskAiModule::class,
+            ItBotModule::class,
             CalendarModule::class,
             ConfigModule::class,
             DiscourseModule::class,
@@ -146,6 +149,8 @@ interface AppComponent {
   fun getChatService(): ChatService
 
   fun getAgentEvalService(): AgentEvalService
+
+  fun getRepoMirrorService(): RepoMirrorService
 
   fun getFeaturedProjectsService(): FeaturedProjectsService
 

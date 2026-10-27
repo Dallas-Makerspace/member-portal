@@ -30,6 +30,14 @@ export function toolLabel(tool) {
         case 'search_talk': return 'Searched the forum';
         case 'search_calendar': return 'Checked the calendar';
         case 'search_online_courses': return 'Searched classes';
+        case 'search_code': return 'Searched the code';
+        case 'list_files': return 'Browsed files';
+        case 'read_file': return 'Read a file';
+        case 'git_log': return 'Checked history';
+        case 'git_show': return 'Read a commit';
+        case 'git_blame': return 'Checked who changed it';
+        case 'query_logs': return 'Searched the logs';
+        case 'sync_repos': return 'Refreshed the code';
         default: return 'Used ' + tool.replace(/_/g, ' ');
     }
 }

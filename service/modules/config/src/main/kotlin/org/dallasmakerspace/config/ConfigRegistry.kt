@@ -392,6 +392,46 @@ object ConfigRegistry {
           type = ConfigValueType.IntType,
       )
 
+  val AGENT_IT_BOT_ENABLED =
+      ConfigKey(
+          key = "it-assistant.enabled",
+          description =
+              "Shows the IT assistant (code and log questions) to its audience; can be piloted " +
+                  "for specific usernames or AD groups before a full rollout",
+          category = "AI Assistant",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
+  val AGENT_IT_BOT_AD_GROUP =
+      ConfigKey(
+          key = "agent.it-bot.ad-group",
+          description = "AD group whose members can use the IT assistant",
+          category = "AI Assistant",
+          defaultValue = "Infrastructure",
+          type = ConfigValueType.StringType,
+      )
+
+  val AGENT_IT_BOT_REPOS =
+      ConfigKey(
+          key = "agent.it-bot.repos",
+          description =
+              "Public GitHub repositories the IT assistant can read, one per line as name=https URL",
+          category = "AI Assistant",
+          defaultValue =
+              listOf(
+                      "member-portal=https://github.com/Dallas-Makerspace/member-portal.git",
+                      "calendar=https://github.com/Dallas-Makerspace/calendar.git",
+                      "makermanager=https://github.com/Dallas-Makerspace/makermanager.git",
+                      "moodle-addad=https://github.com/Dallas-Makerspace/moodle-addad.git",
+                  )
+                  .joinToString("\n"),
+          type = ConfigValueType.StringType,
+      )
+
   val ALL: List<ConfigKey<*>> =
       listOf(
           VOTING_ELECTIONS_URL,
@@ -428,5 +468,8 @@ object ConfigRegistry {
           AGENT_MODEL_DEFAULT,
           AGENT_MONTHLY_SPEND_CAP_USD,
           AGENT_USER_DAILY_TURN_CAP,
+          AGENT_IT_BOT_ENABLED,
+          AGENT_IT_BOT_AD_GROUP,
+          AGENT_IT_BOT_REPOS,
       )
 }

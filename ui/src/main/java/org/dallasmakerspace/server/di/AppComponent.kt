@@ -6,6 +6,7 @@ import javax.inject.Singleton
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.logging.LoggerFactory
+import org.dallasmakerspace.server.agent.AgentBotAccess
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
 
 @Singleton
@@ -27,4 +28,6 @@ interface AppComponent {
   fun getUserInfoProvider(): UserInfoProvider
 
   fun getMemberServiceClient(): MemberServiceClient
+
+  fun getAgentBotAccess(): AgentBotAccess
 }

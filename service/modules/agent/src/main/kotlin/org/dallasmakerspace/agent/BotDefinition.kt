@@ -26,10 +26,15 @@ data class BotDefinition(
     val startsPrivate: Boolean = false,
     val maxToolCallsPerTurn: Int = DEFAULT_MAX_TOOL_CALLS,
     val starterPrompts: List<String> = emptyList(),
+    /** One line under the title on an empty chat. */
+    val intro: String = DEFAULT_INTRO,
+    val placeholder: String = DEFAULT_PLACEHOLDER,
     /** Extra model request fields, e.g. a reasoning effort; null uses the model's default. */
     val modelRequestFields: Map<String, JsonElement>? = null,
 ) {
   companion object {
     const val DEFAULT_MAX_TOOL_CALLS = 8
+    const val DEFAULT_INTRO = "Ask about policies, tools, classes and how things work."
+    const val DEFAULT_PLACEHOLDER = "Ask a question about the space…"
   }
 }
