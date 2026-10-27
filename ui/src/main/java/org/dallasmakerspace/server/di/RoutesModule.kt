@@ -19,7 +19,7 @@ import org.dallasmakerspace.server.remoteaccess.RemoteAccessHandler
 import org.dallasmakerspace.server.remoteaccess.RemoteAccessRefreshHandler
 import org.dallasmakerspace.server.routes.ActionTrackingHandler
 import org.dallasmakerspace.server.routes.AskAiHandler
-import org.dallasmakerspace.server.routes.ItAssistantHandler
+import org.dallasmakerspace.server.routes.BotPageHandler
 import org.dallasmakerspace.server.routes.AvatarHandler
 import org.dallasmakerspace.server.routes.BackendApiHandler
 import org.dallasmakerspace.server.routes.CabinetsHandler
@@ -443,7 +443,24 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
       agentBotAccess: AgentBotAccess,
-  ): IRouteHandler = ItAssistantHandler(loggerFactory, userInfoProvider, agentBotAccess)
+  ): IRouteHandler =
+      BotPageHandler(
+          loggerFactory, userInfoProvider, agentBotAccess, BotPageHandler.IT_BOT_KEY, "IT Assistant")
+
+  @IntoMap
+  @Provides
+  @StringKey("/course-assistant")
+  fun providesCourseAssistantHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      agentBotAccess: AgentBotAccess,
+  ): IRouteHandler =
+      BotPageHandler(
+          loggerFactory,
+          userInfoProvider,
+          agentBotAccess,
+          BotPageHandler.COURSE_BOT_KEY,
+          "Course Assistant")
 
   @IntoMap
   @Provides

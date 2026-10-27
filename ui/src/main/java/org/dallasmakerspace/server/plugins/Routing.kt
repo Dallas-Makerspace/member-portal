@@ -163,6 +163,7 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.ATTENTION.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.ASK_AI.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.IT_ASSISTANT.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+      get(RouteFactory.Paths.COURSE_ASSISTANT.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       post(RouteFactory.Paths.ASK_AI.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get("/ask-ai/stream") {
         RouteFactory.getHandler(RouteFactory.Paths.ASK_AI.path)?.handleBase(call)

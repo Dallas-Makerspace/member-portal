@@ -406,6 +406,20 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val AGENT_COURSE_BOT_ENABLED =
+      ConfigKey(
+          key = "course-assistant.enabled",
+          description =
+              "Shows the course assistant to online course editors; can be piloted for specific " +
+                  "usernames or AD groups before a full rollout",
+          category = "AI Assistant",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val AGENT_IT_BOT_AD_GROUP =
       ConfigKey(
           key = "agent.it-bot.ad-group",
@@ -469,6 +483,7 @@ object ConfigRegistry {
           AGENT_MONTHLY_SPEND_CAP_USD,
           AGENT_USER_DAILY_TURN_CAP,
           AGENT_IT_BOT_ENABLED,
+          AGENT_COURSE_BOT_ENABLED,
           AGENT_IT_BOT_AD_GROUP,
           AGENT_IT_BOT_REPOS,
       )

@@ -9,6 +9,7 @@ import org.dallasmakerspace.agent.ChatService
 import org.dallasmakerspace.agent.di.AgentModule
 import org.dallasmakerspace.askai.AskAiService
 import org.dallasmakerspace.askai.di.AskAiModule
+import org.dallasmakerspace.coursebot.di.CourseBotModule
 import org.dallasmakerspace.itbot.RepoMirrorService
 import org.dallasmakerspace.itbot.di.ItBotModule
 import org.dallasmakerspace.bambuddy.BambuddyStatusService
@@ -76,6 +77,7 @@ import org.dallasmakerspace.workflows.groups.references.GroupReferenceChecker
             AgentModule::class,
             AskAiModule::class,
             ItBotModule::class,
+            CourseBotModule::class,
             CalendarModule::class,
             ConfigModule::class,
             DiscourseModule::class,
