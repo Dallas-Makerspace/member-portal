@@ -113,7 +113,7 @@ class AgentRuntime(private val modelClient: ChatModelClient) {
       state.costUsd += cost
       val parts = buildList {
         if (text.isNotBlank()) add(MessagePart.Text(text.toString()))
-        calls.forEach { add(MessagePart.Tool.Call(it.id, it.name, it.content)) }
+        calls.forEach { add(MessagePart.Tool.Call(it.id, it.name, argsOf(it))) }
       }
       addAssistant(
           state,
@@ -184,7 +184,7 @@ class AgentRuntime(private val modelClient: ChatModelClient) {
       assistantIndex: Int,
       sink: AgentEventSink,
   ): MessagePart.Tool.Result {
-    val preview = call.content.take(ARGS_PREVIEW_CHARS)
+    val preview = argsOf(call).take(ARGS_PREVIEW_CHARS)
     sink.emit("tool-start", null, call.name, preview, null, null)
     val started = System.currentTimeMillis()
     val result =
@@ -210,7 +210,7 @@ class AgentRuntime(private val modelClient: ChatModelClient) {
         NewToolCall(
             messageIndex = assistantIndex,
             toolName = call.name,
-            args = call.content,
+            args = argsOf(call),
             resultPreview = output.take(RESULT_PREVIEW_CHARS),
             sourcesJson =
                 if (result.sources.isEmpty()) null
@@ -223,6 +223,9 @@ class AgentRuntime(private val modelClient: ChatModelClient) {
     result.artifactChange?.let { sink.emit("artifact", it, null, null, null, null) }
     return MessagePart.Tool.Result(call.id, call.name, "<data>\n$output\n</data>", result.isError)
   }
+
+  /** A tool with no arguments may arrive with an empty string; the model API needs a JSON object. */
+  private fun argsOf(call: StreamFrame.ToolCallComplete): String = call.content.ifBlank { "{}" }
 
   companion object {
     private val CACHE = BedrockCacheControl.Default

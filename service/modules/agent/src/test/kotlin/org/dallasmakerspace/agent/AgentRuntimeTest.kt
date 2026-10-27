@@ -13,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
@@ -69,6 +70,31 @@ class AgentRuntimeTest {
     assertEquals(1, state.sources.size)
     assertNull(state.privateReason)
     assertTrue(events.containsAll(listOf("tool-start", "tool-end", "delta")))
+  }
+
+  @Test
+  fun `a tool call with empty arguments still runs and the turn finishes`() = runBlocking<Unit> {
+    val tool = FakeTool()
+    var calls = 0
+    val model =
+        ChatModelClient { _, _, _ ->
+          flow {
+            if (calls++ == 0) {
+              emit(StreamFrame.ToolCallComplete("c1", "search_wiki", ""))
+              emit(StreamFrame.End("tool_use", ResponseMetaInfo.create(KoogClock.System)))
+            } else {
+              emit(StreamFrame.TextDelta("Done."))
+              emit(StreamFrame.End("end_turn", ResponseMetaInfo.create(KoogClock.System)))
+            }
+          }
+        }
+    val state = TurnState(1, "List things")
+
+    AgentRuntime(model).runTurn(bot(tool), "model", context, emptyList(), state, sink)
+
+    assertEquals(1, tool.calls)
+    assertEquals("{}", state.toolCalls.single().args)
+    assertEquals("Done.", state.messages.last().second.displayText)
   }
 
   @Test

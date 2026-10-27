@@ -8,6 +8,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
+import org.dallasmakerspace.agent.db.ArtifactRepository
 import org.dallasmakerspace.agent.db.ConversationRepository
 import org.dallasmakerspace.config.ConfigKey
 import org.dallasmakerspace.config.ConfigOverrideService
@@ -57,7 +58,9 @@ class AgentEvalServiceTest {
         spendCap,
         mock<AppConfig> {
           on { getStringProperty("app.agent-eval-enabled", "false") } doReturn enabled.toString()
-        })
+        },
+        ConversationRepository(),
+        ArtifactRepository())
   }
 
   @Test

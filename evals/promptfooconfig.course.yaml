@@ -1,0 +1,22 @@
+# Evals for the course assistant. Needs the service running with AGENT_EVAL_ENABLED=true and real
+# backends, and the agent_artifact tables migrated (the run writes, then deletes, a throwaway chat).
+description: Course assistant
+
+prompts:
+  - '{{question}}'
+
+providers:
+  - id: file://providers/dms-agent.js
+    label: haiku-5.5
+    config: {bot: course-assistant, model: us.anthropic.claude-haiku-5-5}
+  - id: file://providers/dms-agent.js
+    label: sol-6.1
+    config: {bot: course-assistant, model: us.openai.gpt-6.1-sol}
+
+defaultTest:
+  options:
+    provider: bedrock:converse:us.anthropic.claude-haiku-5-5
+
+tests:
+  - path: file://tests.js
+    config: {bot: course-assistant}

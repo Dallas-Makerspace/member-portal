@@ -7,12 +7,16 @@ import javax.inject.Singleton
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import org.dallasmakerspace.agent.db.AgentRoles
+import org.dallasmakerspace.agent.db.ArtifactRepository
+import org.dallasmakerspace.agent.db.ConversationRepository
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.AppConfig
+import org.dallasmakerspace.models.agent.AgentEvalArtifact
 import org.dallasmakerspace.models.agent.AgentEvalResponse
 import org.dallasmakerspace.models.agent.AgentEvalToolCall
 import org.dallasmakerspace.models.agent.AgentEvalTurn
+import org.dallasmakerspace.models.agent.AgentVisibility
 
 sealed interface EvalOutcome {
   data class Done(val response: AgentEvalResponse) : EvalOutcome
@@ -38,6 +42,8 @@ constructor(
     private val configOverrideService: ConfigOverrideService,
     private val spendCap: AgentSpendCap,
     appConfig: AppConfig,
+    private val conversations: ConversationRepository,
+    private val artifactRepository: ArtifactRepository,
 ) {
   private val enabled = appConfig.getStringProperty("app.agent-eval-enabled", "false") == "true"
   private val botsByKey = bots.associateBy { it.key }
@@ -54,25 +60,45 @@ constructor(
       return EvalOutcome.BadRequest("Model must be one of ${ALLOWED_MODELS.joinToString()}")
     }
     val modelId = model ?: configOverrideService.get(ConfigRegistry.AGENT_MODEL_DEFAULT)
-    val context = ToolContext(EVAL_USERNAME, "eval-${UUID.randomUUID()}", bot.key)
+    val conversationId = UUID.randomUUID().toString()
+    val context = ToolContext(EVAL_USERNAME, conversationId, bot.key)
+    // Artifact tools need a conversation row; it is deleted (with its documents) after the run.
+    val usesArtifacts = bot.tools.any { it.descriptor.name == "create_artifact" }
+    if (usesArtifacts) {
+      conversations.create(conversationId, bot.key, EVAL_USERNAME, "Eval run", AgentVisibility.PRIVATE, "Eval run")
+    }
     val noEvents = AgentEventSink { _, _, _, _, _, _ -> }
     val started = System.currentTimeMillis()
+    var documents = emptyList<AgentEvalArtifact>()
     val turns =
-        concurrency.withPermit {
-          val history = mutableListOf<Message>()
-          messages.mapIndexed { i, question ->
-            val state = TurnState(i + 1, question.trim())
-            val turnStarted = System.currentTimeMillis()
-            runtime.runTurn(bot, modelId, context, history.toList(), state, noEvents)
-            history += state.messages.map { it.first }
-            toTurn(question.trim(), state, System.currentTimeMillis() - turnStarted)
+        try {
+          concurrency.withPermit {
+            val history = mutableListOf<Message>()
+            messages
+                .mapIndexed { i, question ->
+                  val state = TurnState(i + 1, question.trim())
+                  val turnStarted = System.currentTimeMillis()
+                  runtime.runTurn(bot, modelId, context, history.toList(), state, noEvents)
+                  history += state.messages.map { it.first }
+                  toTurn(question.trim(), state, System.currentTimeMillis() - turnStarted)
+                }
+                .also { if (usesArtifacts) documents = collectDocuments(conversationId) }
           }
+        } finally {
+          if (usesArtifacts) conversations.delete(conversationId)
         }
     val cost = turns.sumOf { it.costUsd }
     spendCap.record(cost)
     return EvalOutcome.Done(
-        AgentEvalResponse(modelId, turns, cost, System.currentTimeMillis() - started))
+        AgentEvalResponse(modelId, turns, cost, System.currentTimeMillis() - started, documents))
   }
+
+  private suspend fun collectDocuments(conversationId: String): List<AgentEvalArtifact> =
+      artifactRepository.listFor(conversationId).mapNotNull { a ->
+        artifactRepository.version(a.id, a.currentVersion)?.let {
+          AgentEvalArtifact(a.kind, a.title, a.currentVersion, it.content)
+        }
+      }
 
   private fun toTurn(question: String, state: TurnState, latencyMs: Long): AgentEvalTurn {
     val rows = state.messages.map { it.second }

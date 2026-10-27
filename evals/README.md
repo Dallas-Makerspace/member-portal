@@ -67,3 +67,15 @@ npx promptfoo eval -c promptfooconfig.it.yaml --filter-providers haiku --no-cach
 
 Haiku 5.5 passed 58 of 63 (3 runs, $0.03 per run); Sol passed 33 of 42 at ten times the cost, and
 mostly "failed" because the judge only sees the answer, not the tool calls. Haiku stays the model.
+
+## Course assistant (2026-10-27, 13 cases)
+
+`promptfooconfig.course.yaml`, cases in `course-assistant/cases.js`. The eval run creates a
+throwaway chat row so the document tools work, then deletes it (and its documents). Extra checks:
+`makes` (kind of document created), `questions` (minimum quiz size), `revised` (a document reached
+version 2), `noDocuments`.
+
+Haiku 5.5 passed 35 of 39 (3 runs, $0.02 per run); Sol passed 29 of 39 at six times the cost: it
+often asks a clarifying question instead of building, and did not save a second version when asked
+to revise. Haiku stays the model.
+

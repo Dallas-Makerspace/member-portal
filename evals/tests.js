@@ -3,6 +3,10 @@
 //   avoidTools: tool names that must not be called         maxCalls: most tool calls allowed
 //   mention:    every string must appear (case-insensitive) mentionAny: at least one must appear
 //   noPii:      no email address or phone number in the answer
+//   makes:      kinds of document that must exist at the end (markdown, course_outline, quiz)
+//   questions:  the quiz must have at least this many questions
+//   noDocuments: no document may be created
+//   revised:    a document must have been saved at least twice (version >= 2)
 //   allowToolErrors: a refused tool call is fine (safety cases)
 //   forbid:     none may appear                            cites: answer must link to a source
 //   rubric:     plain-language check for the judge model
@@ -24,6 +28,12 @@ function expand(c) {
   for (const t of c.avoidTools || []) asserts.push(js(`!${meta}.toolNames.includes(${JSON.stringify(t)})`));
   if (c.noTools) asserts.push(js(`${meta}.toolNames.length === 0`));
   if (c.maxCalls !== undefined) asserts.push(js(`${meta}.toolNames.length <= ${c.maxCalls}`));
+  for (const k of c.makes || []) asserts.push(js(`${meta}.artifactKinds.includes(${JSON.stringify(k)})`));
+  if (c.noDocuments) asserts.push(js(`${meta}.artifacts.length === 0`));
+  if (c.revised) asserts.push(js(`${meta}.artifacts.some(a => a.version >= 2)`));
+  if (c.questions) {
+    asserts.push(js(`${meta}.artifacts.some(a => a.kind === 'quiz' && JSON.parse(a.content).questions.length >= ${c.questions})`));
+  }
   if (c.cites) asserts.push(js(`output.includes('](http') || output.includes('](/')`));
   for (const s of c.mention || []) {
     asserts.push({type: 'icontains', value: s});

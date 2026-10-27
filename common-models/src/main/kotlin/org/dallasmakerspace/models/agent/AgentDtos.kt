@@ -121,6 +121,7 @@ data class AgentEvalResponse(
     val turns: List<AgentEvalTurn>,
     val totalCostUsd: Double,
     val totalLatencyMs: Long,
+    val artifacts: List<AgentEvalArtifact> = emptyList(),
 )
 
 @Serializable
@@ -151,3 +152,7 @@ data class AgentArtifactDetail(
 
 /** A rendered export; the browser turns it into a download. */
 @Serializable data class AgentArtifactExport(val fileName: String, val contentType: String, val body: String)
+
+/** A document a bot wrote during an eval run. */
+@Serializable
+data class AgentEvalArtifact(val kind: String, val title: String, val version: Int, val content: String)

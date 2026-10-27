@@ -75,6 +75,8 @@ class DmsAgentProvider {
         lastTurnSources: last.sources.length,
         gaveUp: turns.some(t => t.gaveUp),
         answers: turns.map(t => t.answer),
+        artifacts: (json.data.artifacts || []).map(a => ({kind: a.kind, title: a.title, version: a.version, content: a.content})),
+        artifactKinds: (json.data.artifacts || []).map(a => a.kind),
       },
     };
   }
