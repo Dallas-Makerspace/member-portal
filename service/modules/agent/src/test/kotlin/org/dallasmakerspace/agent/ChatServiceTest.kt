@@ -14,10 +14,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
+import org.dallasmakerspace.agent.db.AgentArtifactTable
+import org.dallasmakerspace.agent.db.AgentArtifactVersionTable
 import org.dallasmakerspace.agent.db.AgentConversationTable
 import org.dallasmakerspace.agent.db.AgentFeedbackTable
 import org.dallasmakerspace.agent.db.AgentMessageTable
 import org.dallasmakerspace.agent.db.AgentToolCallTable
+import org.dallasmakerspace.agent.db.ArtifactRepository
 import org.dallasmakerspace.agent.db.ConversationRepository
 import org.dallasmakerspace.config.ConfigKey
 import org.dallasmakerspace.config.ConfigOverrideService
@@ -53,7 +56,8 @@ class ChatServiceTest {
       DBMemberPortalConnection.db = db
       transaction(db) {
         SchemaUtils.create(
-            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable)
+            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable,
+            AgentArtifactTable, AgentArtifactVersionTable)
       }
     }
   }
@@ -99,12 +103,15 @@ class ChatServiceTest {
         config,
         PiiMasker(loggerFactory),
         TurnStreams(),
-        loggerFactory)
+        loggerFactory,
+        ArtifactRepository())
   }
 
   @Before
   fun setUp() {
     transaction(DBMemberPortalConnection.db) {
+      AgentArtifactVersionTable.deleteAll()
+      AgentArtifactTable.deleteAll()
       AgentFeedbackTable.deleteAll()
       AgentToolCallTable.deleteAll()
       AgentMessageTable.deleteAll()
@@ -198,5 +205,37 @@ class ChatServiceTest {
     assertEquals(TurnOutcome.Started(started.conversationId, 2), service.sendMessage(started.conversationId, "jdoe", "Shorter please"))
     assertTrue(service.cancel(started.conversationId, "jdoe"))
     service.awaitTurn(started.conversationId)
+  }
+
+  @Test
+  fun `the model is told when the member edited a document since its last reply`() = runBlocking<Unit> {
+    val service = service()
+    val started = assertIs<TurnOutcome.Started>(service.startConversation("ask-ai", "jdoe", "Make a quiz"))
+    service.awaitTurn(started.conversationId)
+    val artifacts = ArtifactRepository()
+    val doc = artifacts.create(started.conversationId, "markdown", "Notes", "v1", "assistant")
+    artifacts.addVersion(doc.id, "member edit", "jdoe", now = ChatService.now().plusSeconds(5))
+
+    assertIs<TurnOutcome.Started>(service.sendMessage(started.conversationId, "jdoe", "Add a section"))
+    service.awaitTurn(started.conversationId)
+
+    val sent = repository.messages(started.conversationId).filter { it.role == "user" }.map { it.content }
+    assertTrue(sent.last().contains("Note from the app"), sent.last())
+    assertTrue(sent.last().contains(doc.id))
+    assertFalse(sent.first().contains("Note from the app"))
+    assertEquals("Add a section", repository.messages(started.conversationId).filter { it.role == "user" }.last().displayText)
+  }
+
+  @Test
+  fun `the owner can rename a chat but not to a title with personal details`() = runBlocking<Unit> {
+    val service = service()
+    val started = assertIs<TurnOutcome.Started>(service.startConversation("ask-ai", "jdoe", "When is the class?"))
+    service.awaitTurn(started.conversationId)
+
+    assertIs<RenameOutcome.Renamed>(service.rename(started.conversationId, "jdoe", "  Laser   class dates "))
+    assertEquals("Laser class dates", repository.get(started.conversationId)!!.title)
+    assertIs<RenameOutcome.Invalid>(service.rename(started.conversationId, "jdoe", "Mail me at jdoe@example.org"))
+    assertIs<RenameOutcome.Invalid>(service.rename(started.conversationId, "jdoe", "   "))
+    assertIs<RenameOutcome.NotFound>(service.rename(started.conversationId, "asmith", "Mine now"))
   }
 }

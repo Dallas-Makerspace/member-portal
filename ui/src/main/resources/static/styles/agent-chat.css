@@ -226,3 +226,25 @@ dms-chat .material-symbols-outlined { font-variation-settings: 'FILL' 0; display
   .chat-docs-label { display: none; }
   .btn.chat-docs-btn { margin-right: 0; width: 2.75rem; justify-content: center; padding: 0; }
 }
+.chat-latest { position: absolute; left: 50%; bottom: 5.5rem; transform: translateX(-50%); z-index: 2; display: inline-flex; align-items: center; gap: .25rem; border-radius: 999px; background: #fff; border: 1px solid var(--chat-input-line); box-shadow: 0 2px 8px rgba(0, 0, 0, .12); font-size: .85rem; padding: .3rem .8rem; }
+.chat-main { position: relative; }
+.artifact-modes { display: flex; gap: .35rem; margin-bottom: .75rem; }
+.artifact-form { display: flex; flex-direction: column; gap: .6rem; }
+.artifact-card { border: 1px solid var(--chat-line); border-radius: 10px; padding: .75rem; display: flex; flex-direction: column; gap: .5rem; }
+.artifact-card-head { display: flex; align-items: center; gap: .4rem; }
+.artifact-type { width: auto; max-width: 11rem; }
+.artifact-row { display: flex; align-items: flex-start; gap: .4rem; }
+.artifact-row-main { flex: 1 1 auto; display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.artifact-row > .form-control, .artifact-row > .form-check-input { flex: 1 1 auto; }
+.artifact-row > .form-check-input { flex: 0 0 auto; margin-top: .55rem; }
+.artifact-inline { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.artifact-minutes { width: 5rem; flex: 0 0 auto; }
+.btn.artifact-icon { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 0; color: #495057; }
+.btn.artifact-icon:hover:not(:disabled) { background: var(--chat-wash); }
+.btn.artifact-icon .material-symbols-outlined { font-size: 18px; }
+.artifact-diff { font-size: .82rem; white-space: pre-wrap; background: #fff; margin: 0; }
+.artifact-diff .diff-add { background: #e6f4ea; }
+.artifact-diff .diff-del { background: #fdecea; color: #842029; }
+.artifact-diff .diff-mark { display: inline-block; width: 1.2em; color: #6c757d; user-select: none; }
+
+.artifact-diff .diff-gap { color: #6c757d; padding-left: 1.2em; }

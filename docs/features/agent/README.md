@@ -76,6 +76,10 @@ otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
   Every save is a new version; a stale save is refused. The chat owner can edit in the Documents
   panel; quizzes export to Moodle GIFT and Moodle XML (question bank import), the rest to Markdown.
   Tables: `service/docs/sql/agent-artifacts-migration.sql`.
+- The Documents panel edits outlines and quizzes with forms (or raw JSON), shows what changed between
+  versions, and the model is told when the member edited a document since its last reply.
+  Saving rejects blank options, answers and titles. Chat owners can rename chats; titles can't
+  contain personal details. A streaming answer stops following the bottom once the member scrolls up.
 - Each bot's page and header link show only for members the service allows
   (`GET /agent/bots`: flag plus audience).
 

@@ -13,6 +13,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
@@ -28,6 +29,7 @@ import org.dallasmakerspace.agent.ActiveTurn
 import org.dallasmakerspace.agent.AgentEvalService
 import org.dallasmakerspace.agent.ArtifactService
 import org.dallasmakerspace.agent.ChatService
+import org.dallasmakerspace.agent.RenameOutcome
 import org.dallasmakerspace.agent.SaveOutcome
 import org.dallasmakerspace.agent.EvalOutcome
 import org.dallasmakerspace.agent.TurnOutcome
@@ -41,6 +43,7 @@ import org.dallasmakerspace.models.agent.AgentArtifactSaveRequest
 import org.dallasmakerspace.models.agent.AgentCreateConversationRequest
 import org.dallasmakerspace.models.agent.AgentEvalRequest
 import org.dallasmakerspace.models.agent.AgentFeedbackRequest
+import org.dallasmakerspace.models.agent.AgentRenameRequest
 import org.dallasmakerspace.models.agent.AgentSendMessageRequest
 import org.dallasmakerspace.models.agent.AgentStreamEvent
 import org.dallasmakerspace.models.agent.AgentTurnStarted
@@ -119,6 +122,16 @@ fun Route.agentRoutes(
           val username = call.username() ?: return@post
           if (chatService.cancel(call.parameters["id"]!!, username)) ok(true)
           else call.error(HttpStatusCode.NotFound, "Conversation not found")
+        }
+
+        patch("/conversations/{id}") {
+          val username = call.username() ?: return@patch
+          val request = call.receive<AgentRenameRequest>()
+          when (val outcome = chatService.rename(call.parameters["id"]!!, username, request.title)) {
+            RenameOutcome.Renamed -> ok(true)
+            RenameOutcome.NotFound -> call.error(HttpStatusCode.NotFound, "Conversation not found")
+            is RenameOutcome.Invalid -> call.error(HttpStatusCode.BadRequest, outcome.message)
+          }
         }
 
         post("/conversations/{id}/feedback") {

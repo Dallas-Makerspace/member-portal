@@ -22,7 +22,7 @@ import org.dallasmakerspace.agent.db.TokenCounts
 import org.dallasmakerspace.models.agent.AgentSourceLink
 
 /** Everything one turn produced, filled in as it runs so a cancelled turn can still be saved. */
-class TurnState(val turnSeq: Int, userText: String) {
+class TurnState(val turnSeq: Int, userText: String, modelNote: String? = null) {
   val messages = mutableListOf<Pair<Message, NewMessage>>()
   val toolCalls = mutableListOf<NewToolCall>()
   val sources = mutableListOf<AgentSourceLink>()
@@ -31,7 +31,8 @@ class TurnState(val turnSeq: Int, userText: String) {
   var costUsd = 0.0
 
   init {
-    val user = Message.User(userText, RequestMetaInfo.create(KoogClock.System))
+    val modelText = if (modelNote == null) userText else userText + "\n\n" + modelNote
+    val user = Message.User(modelText, RequestMetaInfo.create(KoogClock.System))
     messages += user to NewMessage(turnSeq, AgentRoles.USER, encode(user), userText)
   }
 

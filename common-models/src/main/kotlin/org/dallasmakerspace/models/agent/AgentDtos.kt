@@ -156,3 +156,5 @@ data class AgentArtifactDetail(
 /** A document a bot wrote during an eval run. */
 @Serializable
 data class AgentEvalArtifact(val kind: String, val title: String, val version: Int, val content: String)
+
+@Serializable data class AgentRenameRequest(val title: String)

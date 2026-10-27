@@ -227,6 +227,14 @@ class ConversationRepository @Inject constructor() {
     }
   }
 
+  suspend fun rename(conversationId: String, title: String) {
+    suspendTransaction {
+      AgentConversationTable.update({ AgentConversationTable.id eq conversationId }) {
+        it[AgentConversationTable.title] = title.take(TITLE_LENGTH)
+      }
+    }
+  }
+
   suspend fun delete(conversationId: String) {
     suspendTransaction {
       AgentConversationTable.deleteWhere { AgentConversationTable.id eq conversationId }

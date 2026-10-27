@@ -33,6 +33,7 @@ class DmsChat extends LitElement {
         _active: {state: true},
         _panel: {state: true},
         _refresh: {state: true},
+        _atBottom: {state: true},
     };
 
     createRenderRoot() {
@@ -61,6 +62,7 @@ class DmsChat extends LitElement {
         this._active = null;
         this._panel = false;
         this._refresh = 0;
+        this._atBottom = true;
         this._source = null;
         this._retries = 0;
     }
@@ -193,8 +195,9 @@ class DmsChat extends LitElement {
             this._conversation = {id, title: text, visibility: 'PUBLIC', isOwner: true};
             this._setUrl(id);
         }
+        this._atBottom = true;
         this._startStream(id);
-        this._scrollDown();
+        this._scrollDown(true);
     }
 
     _startStream(id) {
@@ -331,11 +334,33 @@ class DmsChat extends LitElement {
         setTimeout(() => { this._notice = ''; this.requestUpdate(); }, 2000);
     }
 
-    _scrollDown() {
+    /** Follows a streaming answer, unless the member scrolled up to read; [force] always goes down. */
+    _scrollDown(force = false) {
+        if (!force && !this._atBottom) return;
         this.updateComplete.then(() => {
             const box = this.querySelector('.chat-scroll');
             if (box) box.scrollTop = box.scrollHeight;
         });
+    }
+
+    _onScroll(ev) {
+        const box = ev.target;
+        this._atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    }
+
+    async _rename() {
+        const current = this._conversation.title;
+        const title = prompt('Rename this chat', current);
+        if (title === null) return;
+        const clean = title.trim().replace(/\s+/g, ' ');
+        if (!clean || clean === current) return;
+        const res = await api('PATCH', `/conversations/${this._conversation.id}`, {title: clean});
+        if (res.ok) {
+            this._conversation = {...this._conversation, title: clean};
+            this._loadHistory();
+        } else {
+            this._error = res.message || 'Could not rename the chat.';
+        }
     }
 
     _keydown(ev) {
@@ -449,6 +474,7 @@ class DmsChat extends LitElement {
                                 aria-expanded="false" aria-label="Chat actions" title="Chat actions">
                             <span class="material-symbols-outlined" aria-hidden="true">more_vert</span></button>
                         <ul class="dropdown-menu dropdown-menu-end">
+                            <li><button class="dropdown-item" @click=${this._rename}>Rename…</button></li>
                             ${!isPrivate ? html`<li><button class="dropdown-item" @click=${this._share}>Copy link to this chat</button></li>` : ''}
                             ${!isPrivate ? html`<li><hr class="dropdown-divider"></li>` : ''}
                             <li><button class="dropdown-item chat-delete" @click=${this._delete}>Delete chat…</button></li>
@@ -495,7 +521,7 @@ class DmsChat extends LitElement {
                 <aside class="chat-aside ${this._drawer ? 'open' : ''}">${this._history()}</aside>
                 <section class="chat-main">
                     ${this._header()}
-                    <div class="chat-scroll" aria-busy=${this._running}>
+                    <div class="chat-scroll" aria-busy=${this._running} @scroll=${this._onScroll}>
                         <div class="chat-thread">
                         ${this._loading ? html`<div class="text-muted p-3">Loading…</div>` : ''}
                         ${empty ? this._empty() : ''}
@@ -505,6 +531,8 @@ class DmsChat extends LitElement {
                         ${this._live ? html`<dms-chat-message .message=${this._live} streaming></dms-chat-message>` : ''}
                         </div>
                     </div>
+                    ${!this._atBottom && this._running ? html`<button class="btn chat-latest" @click=${() => this._scrollDown(true)}>
+                        <span class="material-symbols-outlined" aria-hidden="true">arrow_downward</span> Latest</button>` : ''}
                     <div class="chat-foot">
                     ${this._busy ? html`<div class="alert alert-warning py-1 mb-2">Lots of questions right now - yours is queued.</div>` : ''}
                     ${this._error ? html`<div class="alert alert-danger py-1 mb-2" role="alert">${this._error}</div>` : ''}

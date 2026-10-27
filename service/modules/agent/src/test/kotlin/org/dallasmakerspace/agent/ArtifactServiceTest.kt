@@ -80,7 +80,8 @@ class ArtifactServiceTest {
             config,
             PiiMasker(loggerFactory),
             TurnStreams(),
-            loggerFactory)
+            loggerFactory,
+            artifacts)
     ArtifactService(chat, artifacts)
   }
 

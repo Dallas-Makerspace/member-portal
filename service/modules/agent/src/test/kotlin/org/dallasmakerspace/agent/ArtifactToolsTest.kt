@@ -106,7 +106,14 @@ class ArtifactToolsTest {
                 "content" to """{"title":"C","sections":[{"title":"S","activities":[{"title":"A","type":"nap"}]}]}"""),
             context)
 
-    listOf(badKind, badJson, noCorrect, badActivity).forEach {
+    val blankOption =
+        create.run(
+            args("kind" to "quiz", "title" to "T",
+                "content" to """{"title":"Q","questions":[{"type":"multiple_choice","text":"?","options":[{"text":"a","correct":true},{"text":" "}]}]}"""),
+            context)
+    assertTrue(blankOption.output.contains("empty option"), blankOption.output)
+
+    listOf(badKind, badJson, noCorrect, badActivity, blankOption).forEach {
       assertTrue(it.isError)
       assertNull(it.artifactChange)
     }

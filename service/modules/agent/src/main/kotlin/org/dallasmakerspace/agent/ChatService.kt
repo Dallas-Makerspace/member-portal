@@ -23,6 +23,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.ListSerializer
 import org.dallasmakerspace.agent.db.AgentRoles
+import org.dallasmakerspace.agent.db.ArtifactRepository
 import org.dallasmakerspace.agent.db.ConversationRepository
 import org.dallasmakerspace.agent.db.ConversationRow
 import org.dallasmakerspace.agent.db.MessageRow
@@ -39,6 +40,14 @@ import org.dallasmakerspace.models.agent.AgentSourceLink
 import org.dallasmakerspace.models.agent.AgentStreamEvent
 import org.dallasmakerspace.models.agent.AgentToolCallSummary
 import org.dallasmakerspace.models.agent.AgentVisibility
+
+sealed interface RenameOutcome {
+  data object Renamed : RenameOutcome
+
+  data object NotFound : RenameOutcome
+
+  data class Invalid(val message: String) : RenameOutcome
+}
 
 /** Outcome of asking a question; routes map these to HTTP statuses. */
 sealed interface TurnOutcome {
@@ -68,6 +77,7 @@ constructor(
     private val piiMasker: PiiMasker,
     private val turnStreams: TurnStreams,
     loggerFactory: LoggerFactory,
+    private val artifacts: ArtifactRepository,
 ) {
   private val log = loggerFactory.create(javaClass)
   private val botsByKey = bots.associateBy { it.key }
@@ -146,7 +156,7 @@ constructor(
     val turnSeq = (history.maxOfOrNull { it.turnSeq } ?: 0) + 1
     val turn = turnStreams.start(conversation.id, turnSeq) ?: return TurnOutcome.AlreadyRunning
     val modelId = configOverrideService.get(ConfigRegistry.AGENT_MODEL_DEFAULT)
-    val state = TurnState(turnSeq, text)
+    val state = TurnState(turnSeq, text, editNote(conversation.id, history))
     val sink = AgentEventSink { type, delta, tool, args, ok, sources ->
       turn.publish(
           AgentStreamEvent(
@@ -192,6 +202,16 @@ constructor(
           }
         }
     return TurnOutcome.Started(conversation.id, turnSeq)
+  }
+
+  /** Tells the model about documents the member changed since its last reply. */
+  private suspend fun editNote(conversationId: String, history: List<MessageRow>): String? {
+    val since = history.lastOrNull()?.createdAt ?: return null
+    val edited = artifacts.editedByMembersSince(conversationId, since)
+    if (edited.isEmpty()) return null
+    val list = edited.joinToString { "\"${it.title}\" (id ${it.id}, now version ${it.currentVersion})" }
+    return "[Note from the app: the member edited $list since your last reply. " +
+        "Read it again before changing it; keep their edits.]"
   }
 
   @Suppress("TooGenericExceptionCaught")
@@ -288,6 +308,19 @@ constructor(
     return true
   }
 
+  /** Why the title can't be used, or null once it is saved. NotFound when it is not the owner's. */
+  suspend fun rename(conversationId: String, username: String, title: String): RenameOutcome {
+    val conversation = repository.get(conversationId) ?: return RenameOutcome.NotFound
+    if (conversation.ownerUsername != username) return RenameOutcome.NotFound
+    val clean = title.trim().replace(Regex("""\s+"""), " ")
+    if (clean.isEmpty() || clean.length > MAX_TITLE_CHARS) {
+      return RenameOutcome.Invalid("Use 1 to $MAX_TITLE_CHARS characters.")
+    }
+    if (piiMasker.containsPii(clean)) return RenameOutcome.Invalid("Titles can't include personal details.")
+    repository.rename(conversationId, clean)
+    return RenameOutcome.Renamed
+  }
+
   suspend fun delete(conversationId: String, username: String): Boolean {
     val conversation = repository.get(conversationId) ?: return false
     if (conversation.ownerUsername != username) return false
@@ -332,6 +365,7 @@ constructor(
     const val MAX_CONCURRENT_TURNS = 5
     private const val QUEUE_TIMEOUT_MILLIS = 60_000L
     private const val TITLE_CHARS = 120
+    private const val MAX_TITLE_CHARS = 120
     private const val RETENTION_YEARS = 2L
     const val PII_REASON = "The question contained personal details"
     const val PRIVATE_TITLE = "Private question"

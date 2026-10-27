@@ -2,6 +2,8 @@ import {LitElement, html} from 'https://esm.sh/lit@3.3.0';
 import {unsafeHTML} from 'https://esm.sh/lit@3.3.0/directives/unsafe-html.js';
 import {renderMarkdown} from './markdown.js';
 import {api} from './api.js';
+import {lineDiff, readable, withContext} from './artifact-diff.js';
+import {outlineForm, quizForm} from './artifact-forms.js';
 
 const KIND_ICONS = {markdown: 'article', course_outline: 'account_tree', quiz: 'quiz'};
 const FORMAT_LABELS = {md: 'Markdown', gift: 'Moodle GIFT', xml: 'Moodle XML'};
@@ -20,6 +22,8 @@ class DmsArtifactPanel extends LitElement {
         _draft: {state: true},
         _error: {state: true},
         _saving: {state: true},
+        _form: {state: true},
+        _diff: {state: true},
     };
 
     createRenderRoot() {
@@ -34,11 +38,16 @@ class DmsArtifactPanel extends LitElement {
         this._draft = '';
         this._error = '';
         this._saving = false;
+        this._form = null;
+        this._diff = null;
     }
 
     willUpdate(changed) {
         if (changed.has('active') || changed.has('refresh')) {
-            if (changed.has('active')) this._editing = false;
+            if (changed.has('active')) {
+                this._editing = false;
+                this._diff = null;
+            }
             this._load();
         }
     }
@@ -65,13 +74,55 @@ class DmsArtifactPanel extends LitElement {
     _edit() {
         this._draft = this._detail.content;
         this._error = '';
+        this._diff = null;
+        this._form = null;
+        if (this._detail.artifact.kind !== 'markdown') {
+            try {
+                this._form = JSON.parse(this._draft);
+            } catch (e) { /* edit as text */ }
+        }
         this._editing = true;
+    }
+
+    /** Keeps the text in step with the form; [redraw] false while typing so inputs keep focus. */
+    _changed(redraw = true) {
+        this._draft = JSON.stringify(this._form, null, 2);
+        if (redraw) this.requestUpdate();
+    }
+
+    _toText() {
+        if (this._form) this._draft = JSON.stringify(this._form, null, 2);
+        this._form = null;
+    }
+
+    _toForm() {
+        try {
+            this._form = JSON.parse(this._draft);
+            this._error = '';
+        } catch (e) {
+            this._error = 'That text is not valid JSON yet, so the form cannot open it.';
+        }
+    }
+
+    async _toggleDiff() {
+        if (this._diff) {
+            this._diff = null;
+            return;
+        }
+        const d = this._detail;
+        const before = await api('GET', `/artifacts/${encodeURIComponent(this.active)}?version=${d.version - 1}`);
+        if (!before.ok) {
+            this._error = before.message || 'Could not load the earlier version.';
+            return;
+        }
+        const kind = d.artifact.kind;
+        this._diff = lineDiff(readable(kind, before.data.content), readable(kind, d.content));
     }
 
     async _save() {
         this._saving = true;
         const res = await api('PUT', `/artifacts/${encodeURIComponent(this.active)}`,
-            {content: this._draft, basedOn: this._detail.version});
+            {content: this._form ? JSON.stringify(this._form) : this._draft, basedOn: this._detail.version});
         this._saving = false;
         if (res.ok) {
             this._editing = false;
@@ -99,6 +150,13 @@ class DmsArtifactPanel extends LitElement {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    _diffView() {
+        const changed = this._diff.filter(l => l.kind !== 'same').length;
+        if (!changed) return html`<p class="text-muted">No differences from the previous version.</p>`;
+        const mark = k => (k === 'add' ? '+' : k === 'del' ? '-' : ' ');
+        return html`<pre class="artifact-diff" aria-label="Changes from the previous version">${withContext(this._diff).map(l => html`<div class="diff-${l.kind}"><span class="diff-mark" aria-hidden="true">${mark(l.kind)}</span>${l.text}</div>`)}</pre>`;
     }
 
     _body(kind, content) {
@@ -163,6 +221,8 @@ class DmsArtifactPanel extends LitElement {
                                 ${v.version === d.artifact.currentVersion ? '(latest)' : ''}</option>`)}
                     </select>
                     <span class="flex-grow-1"></span>
+                    ${d.version > 1 && !this._editing ? html`<button class="btn btn-sm btn-outline-secondary" aria-pressed=${!!this._diff}
+                            @click=${this._toggleDiff}>Changes</button>` : ''}
                     ${d.canEdit && d.version === d.artifact.currentVersion && !this._editing
                         ? html`<button class="btn btn-sm btn-outline-secondary" @click=${this._edit}>Edit</button>` : ''}
                     ${d.exportFormats.map(f => html`
@@ -172,14 +232,20 @@ class DmsArtifactPanel extends LitElement {
                 ${this._error ? html`<div class="alert alert-danger py-1 m-2" role="alert">${this._error}</div>` : ''}
                 <div class="artifact-body">
                     ${this._editing ? html`
-                        <textarea class="artifact-editor" .value=${this._draft} spellcheck="false"
-                                  @input=${e => { this._draft = e.target.value; }}></textarea>
+                        ${d.artifact.kind !== 'markdown' ? html`<div class="artifact-modes">
+                            <button class="btn btn-sm ${this._form ? 'btn-primary' : 'btn-outline-secondary'}" @click=${this._toForm}>Form</button>
+                            <button class="btn btn-sm ${this._form ? 'btn-outline-secondary' : 'btn-primary'}" @click=${this._toText}>JSON</button>
+                        </div>` : ''}
+                        ${this._form
+                            ? (d.artifact.kind === 'quiz' ? quizForm(this._form, r => this._changed(r)) : outlineForm(this._form, r => this._changed(r)))
+                            : html`<textarea class="artifact-editor" .value=${this._draft} spellcheck="false"
+                                  @input=${e => { this._draft = e.target.value; }}></textarea>`}
                         <div class="artifact-actions">
                             <button class="btn btn-primary btn-sm" ?disabled=${this._saving} @click=${this._save}>
                                 ${this._saving ? 'Saving…' : 'Save'}</button>
                             <button class="btn btn-outline-secondary btn-sm" @click=${() => { this._editing = false; this._error = ''; }}>Cancel</button>
                         </div>`
-                        : this._body(d.artifact.kind, d.content)}
+                        : (this._diff ? this._diffView() : this._body(d.artifact.kind, d.content))}
                 </div>`
                 : html`<div class="p-3 text-muted">${this._error || 'Loading…'}</div>`}`;
     }

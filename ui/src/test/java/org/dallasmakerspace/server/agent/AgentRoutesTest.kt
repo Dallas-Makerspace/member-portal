@@ -28,6 +28,7 @@ class AgentRoutesTest {
     assertEquals("/agent/artifacts/$id", AgentRoutes.servicePath("GET", "/api/agent/artifacts/$id"))
     assertEquals("/agent/artifacts/$id", AgentRoutes.servicePath("PUT", "/api/agent/artifacts/$id"))
     assertEquals("/agent/artifacts/$id/export", AgentRoutes.servicePath("GET", "/api/agent/artifacts/$id/export"))
+    assertEquals("/agent/conversations/$id", AgentRoutes.servicePath("PATCH", "/api/agent/conversations/$id"))
     assertNull(AgentRoutes.servicePath("DELETE", "/api/agent/artifacts/$id"))
     assertNull(AgentRoutes.servicePath("POST", "/api/agent/artifacts/$id/export"))
   }

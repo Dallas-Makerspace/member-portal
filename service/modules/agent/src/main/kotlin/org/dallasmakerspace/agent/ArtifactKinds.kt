@@ -74,7 +74,9 @@ object ArtifactKinds {
   private fun outlineProblem(outline: CourseOutline): String? {
     if (outline.sections.isEmpty()) return "A course outline needs at least one section."
     outline.sections.forEachIndexed { s, section ->
+      if (section.title.isBlank()) return "Section ${s + 1} has no title."
       section.activities.forEachIndexed { a, activity ->
+        if (activity.title.isBlank()) return "Section ${s + 1}, activity ${a + 1} has no title."
         if (activity.type !in ACTIVITY_TYPES) {
           return "Section ${s + 1}, activity ${a + 1}: type must be one of ${ACTIVITY_TYPES.joinToString()}."
         }
@@ -89,6 +91,9 @@ object ArtifactKinds {
       val n = i + 1
       if (q.type !in QUESTION_TYPES) return "Question $n: type must be one of ${QUESTION_TYPES.joinToString()}."
       if (q.text.isBlank()) return "Question $n has no text."
+      if (q.options.any { it.text.isBlank() }) return "Question $n has an empty option."
+      if (q.answers.any { it.isBlank() }) return "Question $n has an empty accepted answer."
+      if (q.pairs.any { it.item.isBlank() || it.match.isBlank() }) return "Question $n has an empty pair."
       when (q.type) {
         "multiple_choice" -> {
           if (q.options.size < 2) return "Question $n needs at least two options."

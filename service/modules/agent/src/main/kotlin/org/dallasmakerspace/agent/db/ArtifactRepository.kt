@@ -79,6 +79,12 @@ class ArtifactRepository @Inject constructor() {
     next
   }
 
+  /** Artifacts whose latest version was saved by a member (not the assistant) after [since]. */
+  suspend fun editedByMembersSince(conversationId: String, since: LocalDateTime): List<ArtifactRow> =
+      listFor(conversationId).filter { artifact ->
+        version(artifact.id, artifact.currentVersion)?.let { it.author != ASSISTANT && it.createdAt > since } == true
+      }
+
   suspend fun get(id: String): ArtifactRow? = suspendTransaction {
     AgentArtifactTable.select { AgentArtifactTable.id eq id }.singleOrNull()?.toArtifact()
   }
@@ -141,5 +147,6 @@ class ArtifactRepository @Inject constructor() {
   private companion object {
     const val TITLE_LENGTH = 200
     const val AUTHOR_LENGTH = 64
+    const val ASSISTANT = "assistant"
   }
 }

@@ -68,7 +68,7 @@ constructor(
   ) {
     val query = AgentRoutes.allowedQuery(call.request.queryParameters.entries().associate { it.key to it.value.first() })
     val body =
-        if (method == HttpMethod.Post || method == HttpMethod.Put) {
+        if (method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch) {
           if (!call.request.contentType().match(ContentType.Application.Json)) {
             call.respondJson(
                 HttpStatusCode.UnsupportedMediaType, """{"message":"Content-Type must be application/json"}""")
@@ -149,6 +149,7 @@ internal object AgentRoutes {
           "POST" to Regex("""$PREFIX/($BOT)/conversations"""),
           "GET" to Regex("""$PREFIX/conversations/($ID)"""),
           "DELETE" to Regex("""$PREFIX/conversations/($ID)"""),
+          "PATCH" to Regex("""$PREFIX/conversations/($ID)"""),
           "POST" to Regex("""$PREFIX/conversations/($ID)/(messages|cancel|feedback)"""),
           "GET" to Regex("""$PREFIX/conversations/($ID)/stream"""),
           "GET" to Regex("""$PREFIX/conversations/($ID)/artifacts"""),
