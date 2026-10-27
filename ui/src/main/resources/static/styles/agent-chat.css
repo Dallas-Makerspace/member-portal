@@ -253,7 +253,8 @@ dms-chat .material-symbols-outlined { font-variation-settings: 'FILL' 0; display
 .chat-send.spinner .material-symbols-outlined { animation: chat-spin 1s linear infinite; }
 .chat-activity { margin-bottom: .85rem; font-size: .85rem; color: var(--chat-muted); }
 .chat-activity.live { display: flex; align-items: center; gap: .4rem; min-height: 1.75rem; }
-.chat-activity .material-symbols-outlined { font-size: 17px; flex: 0 0 auto; }
+.chat-activity { line-height: 1.25; }
+.chat-activity .material-symbols-outlined { font-size: 16px; flex: 0 0 auto; }
 .chat-activity .spin { animation: chat-spin 1s linear infinite; }
 .chat-activity-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-activity-hint { color: #8a939c; }
@@ -270,3 +271,4 @@ dms-chat .material-symbols-outlined { font-variation-settings: 'FILL' 0; display
   .chat-send .ring { animation: none; border-color: var(--chat-accent); opacity: .5; }
   .chat-send.spinner .material-symbols-outlined, .chat-activity .spin { animation: none; }
 }
+.chat-activity-list .material-symbols-outlined, .chat-activity.live .material-symbols-outlined { position: relative; top: 1px; }

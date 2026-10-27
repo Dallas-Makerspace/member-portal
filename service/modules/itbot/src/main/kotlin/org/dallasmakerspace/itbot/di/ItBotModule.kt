@@ -7,6 +7,7 @@ import javax.inject.Provider
 import javax.inject.Singleton
 import org.dallasmakerspace.agent.BotAudience
 import org.dallasmakerspace.agent.BotDefinition
+import org.dallasmakerspace.askai.tools.ReadTalkTopicTool
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.AppConfig
 import org.dallasmakerspace.itbot.ElasticLogSearch
@@ -48,12 +49,13 @@ class ItBotModule {
       gitBlame: GitBlameTool,
       queryLogs: QueryLogsTool,
       syncRepos: SyncReposTool,
+      readTalkTopic: ReadTalkTopicTool,
   ): BotDefinition =
       BotDefinition(
           key = IT_BOT_KEY,
           displayName = "IT Assistant",
           systemPrompt = ItBotPrompt.TEXT,
-          tools = listOf(searchCode, listFiles, readFile, gitLog, gitShow, gitBlame, queryLogs, syncRepos),
+          tools = listOf(searchCode, listFiles, readFile, gitLog, gitShow, gitBlame, queryLogs, syncRepos, readTalkTopic),
           featureFlag = ConfigRegistry.AGENT_IT_BOT_ENABLED,
           audience = BotAudience.AdGroup(ConfigRegistry.AGENT_IT_BOT_AD_GROUP),
           startsPrivate = true,

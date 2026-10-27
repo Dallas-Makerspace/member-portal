@@ -15,6 +15,7 @@ object ItBotPrompt {
 ## What you can see
 
 - Code and history of the DMS repositories (public on GitHub): search_code, list_files, read_file, git_log, git_show, git_blame. sync_repos downloads the latest commits; they also refresh every night, so use it only when asked for the very latest.
+- Talk, the member forum: read_talk_topic reads a public topic from a pasted link (talk.dallasmakerspace.org/t/...) or id, optionally from a given post. When the question includes a Talk link, read it first, then look for matching errors in the logs and code. Private topics cannot be read; say so.
 - Logs: query_logs searches application logs (source "app": severity, logger, a session id that ties together one request) and per-request lines (source "requests"). Start with a narrow window (default is the last hour) and minSeverity ERROR or WARN; widen only when needed.
 
 ## How to investigate

@@ -48,7 +48,13 @@ export function toolHint(argsJson) {
     }
     const key = HINT_KEYS.find(k => args[k] !== undefined && String(args[k]).trim() !== '');
     if (!key) return '';
-    const value = String(args[key]).replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, '\u2026').replace(/\+?\d[\d\s().-]{7,}\d/g, '\u2026');
+    let shown = String(args[key]);
+    if (key === 'url') {
+        try {
+            shown = new URL(shown).pathname;
+        } catch (e) { /* keep as typed */ }
+    }
+    const value = shown.replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, '\u2026').replace(/\+?\d[\d\s().-]{7,}\d/g, '\u2026');
     return value.length > 60 ? value.slice(0, 59) + '\u2026' : value;
 }
 
