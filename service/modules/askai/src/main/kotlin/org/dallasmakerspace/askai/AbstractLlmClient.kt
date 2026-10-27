@@ -125,7 +125,7 @@ abstract class AbstractLlmClient(loggerFactory: LoggerFactory) : IOpenRouterClie
 
 ## Task
 
-Generate 2–3 search queries that will find relevant information in the Dallas Makerspace wiki (Confluence) and forum (Talk). The queries will be used for full-text keyword search.
+Generate 2–3 search queries that will find relevant information in Source (the Dallas Makerspace Confluence documentation site) and forum (Talk). The queries will be used for full-text keyword search.
 
 ## Query Rules
 

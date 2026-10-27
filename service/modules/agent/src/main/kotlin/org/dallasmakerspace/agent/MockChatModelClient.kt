@@ -64,7 +64,7 @@ class MockChatModelClient(private val wordDelayMillis: Long = WORD_DELAY_MILLIS)
     val pages =
         PAGE.findAll(toolOutput).map { it.groupValues[1].trim() to it.groupValues[2].trim() }.toList()
     val first = pages.firstOrNull()
-    val link = first?.let { "[${it.first}](${it.second})" } ?: "the wiki"
+    val link = first?.let { "[${it.first}](${it.second})" } ?: "Source"
     val second = pages.getOrNull(1)?.let { "[${it.first}](${it.second})" }
     return """
         |Here is how it works at Dallas Makerspace. You need to be a keyed member, and each tool has its own training before you can use it unsupervised.

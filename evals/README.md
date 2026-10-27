@@ -39,7 +39,7 @@ The service URL and API key come from `EVAL_SERVICE_URL` (default `http://127.0.
 ## Cases
 
 `ask-ai/cases.js`, expanded by `tests.js`. Use generic questions and fake names only; checks
-should be about behaviour (searches, cites, doesn't invent, declines) rather than exact wiki
+should be about behaviour (searches, cites, doesn't invent, declines) rather than exact Source
 wording, which changes. Add a case whenever a real conversation goes wrong.
 
 ## Model comparison (2026-10-26, Ask AI, 48 cases)

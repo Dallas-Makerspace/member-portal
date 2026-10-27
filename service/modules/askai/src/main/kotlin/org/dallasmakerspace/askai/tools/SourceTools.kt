@@ -28,7 +28,7 @@ private fun JsonObject.string(name: String): String? = this[name]?.jsonPrimitive
 private fun absolute(baseUrl: String, path: String?): String? =
     path?.let { if (it.startsWith("http")) it else baseUrl + it }
 
-/** Searches Source, the Dallas Makerspace Confluence wiki. */
+/** Searches Source, the Dallas Makerspace documentation site (Confluence). */
 @Singleton
 class SearchSourceWikiTool
 @Inject
@@ -39,7 +39,7 @@ constructor(
   override val descriptor =
       ToolDescriptor(
           "search_source",
-          "Search Source, the official Dallas Makerspace wiki (source.dallasmakerspace.org): " +
+          "Search Source, the official Dallas Makerspace documentation site (source.dallasmakerspace.org): " +
               "policies, rules, procedures, onboarding, equipment and committee pages, and meeting " +
               "notes. Returns page titles, links, ids and excerpts.",
           listOf(
@@ -86,7 +86,7 @@ constructor(
   override val descriptor =
       ToolDescriptor(
           "read_source_page",
-          "Read the full text of one Source wiki page, using an id from search_source. Use it " +
+          "Read the full text of one Source page, using an id from search_source. Use it " +
               "when an excerpt is not enough to answer.",
           listOf(ToolParameterDescriptor("id", "Page id from search_source", ToolParameterType.String)))
 

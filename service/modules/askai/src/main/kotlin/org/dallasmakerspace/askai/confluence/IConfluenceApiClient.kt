@@ -1,7 +1,7 @@
 package org.dallasmakerspace.askai.confluence
 
 /**
- * Interface for the Confluence API client. Provides methods for searching Confluence wiki content.
+ * Interface for the Confluence API client. Provides methods for searching Source (Confluence) content.
  */
 interface IConfluenceApiClient {
 

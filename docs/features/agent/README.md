@@ -56,7 +56,7 @@ minutes and topped up by each finished turn.
 
 ## Ask AI bot
 
-Tools: `search_source` and `read_source_page` (Source, the Confluence wiki), `search_talk`,
+Tools: `search_source` and `read_source_page` (Source, the Confluence documentation site), `search_talk`,
 `search_calendar` (marks the chat private: organizer usernames), `search_online_courses`
 (DMS Learn). `/ask-ai` shows the chat when the flag is on for the member and the old page
 otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
@@ -69,7 +69,7 @@ otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
   `agent.it-bot.repos`. Clones live in the container's temp dir and sync on start and at 04:00
   Central. Page: `/it-assistant`.
 - **`course-assistant`** (`:service:coursebot`): helps members of any "<prefix> Online Course Editors"
-  group design course outlines, quizzes and lesson plans, with the wiki and DMS Learn catalog as
+  group design course outlines, quizzes and lesson plans, with Source and the DMS Learn catalog as
   research. Chats are always private. Page: `/course-assistant`.
 - **Artifacts** (any bot can opt in by adding the four artifact tools): documents the assistant
   writes beside the chat. Kinds are `markdown`, `course_outline` and `quiz` (JSON, checked on save).

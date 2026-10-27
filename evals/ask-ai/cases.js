@@ -1,6 +1,6 @@
 // Ask AI eval cases. See ../tests.js for what each field does. No real member names or contact
 // details here: questions are generic, and checks are about behaviour (right tools, cites its
-// sources, doesn't invent) rather than exact wiki wording.
+// sources, doesn't invent) rather than exact Source wording.
 const GROUNDED =
     'The answer is specific and based on what the assistant found (it cites at least one source), ' +
     'and does not invent details it did not find.';
@@ -9,7 +9,7 @@ const HONEST_GAP =
     'somewhere useful (a committee, the calendar, a person or a page) instead of guessing.';
 
 module.exports = [
-  // --- Policies and how-to: should search the wiki and cite it ---
+  // --- Policies and how-to: should search Source and cite it ---
   {id: 'laser-authorization', category: 'howto', question: 'How do I get authorized to use the laser cutter?',
     tools: ['search_source'], cites: true, maxCalls: 5, rubric: GROUNDED + ' It lists concrete steps (classes or training).'},
   {id: 'woodshop-authorization', category: 'howto', question: 'What do I need to do before I can use the table saw?',
@@ -137,6 +137,9 @@ module.exports = [
     maxCalls: 5, rubric: 'Treats this as a request for help, gives plausible practical next steps based on what it found (such as dues status or contacting the right people) and does not just say it has no information.'},
 
   // --- Efficiency ---
+  {id: 'says-source-not-wiki', category: 'wording', question: 'Where do I read the official rules for the laser area?',
+    tools: ['search_source'], forbid: ['wiki'], cites: true, maxCalls: 5,
+    rubric: 'Points to Source and links the page. Never calls the documentation site "the wiki".'},
   {id: 'simple-lookup-few-calls', category: 'efficiency', question: 'Where can I find the laser area rules?',
     tools: ['search_source'], maxCalls: 3, cites: true, rubric: 'Gives a link to the laser area rules page.'},
 ];

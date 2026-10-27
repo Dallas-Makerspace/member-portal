@@ -10,7 +10,7 @@ import org.dallasmakerspace.models.SearchResult
 interface SearchSource {
 
   /**
-   * Returns the display name of this search source (e.g., "Wiki", "Talk"). Used for identifying the
+   * Returns the display name of this search source (e.g., "Source", "Talk"). Used for identifying the
    * source of search results in the UI.
    */
   fun getName(): String
@@ -20,7 +20,7 @@ interface SearchSource {
    * priority (lower values) will have their results shown first.
    *
    * Default priority levels:
-   * - 1: Official documentation (Confluence wiki)
+   * - 1: Official documentation (Source, on Confluence)
    * - 2: Community discussions (Discourse)
    * - 3: Other sources
    */

@@ -60,8 +60,8 @@ export function toolHint(argsJson) {
 
 export function toolLabel(tool) {
     switch (tool) {
-        case 'search_source': return 'Searched the wiki';
-        case 'read_source_page': return 'Read a wiki page';
+        case 'search_source': return 'Searched Source';
+        case 'read_source_page': return 'Read a Source page';
         case 'search_talk': return 'Searched the forum';
         case 'read_talk_topic': return 'Read a forum topic';
         case 'search_calendar': return 'Checked the calendar';

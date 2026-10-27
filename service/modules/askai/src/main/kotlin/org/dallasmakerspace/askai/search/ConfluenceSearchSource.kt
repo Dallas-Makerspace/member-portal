@@ -12,7 +12,7 @@ import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.models.SearchResult
 
 /**
- * Search source implementation for Confluence wiki. Searches the DMS Confluence wiki for relevant
+ * Search source implementation for Source (Confluence). Searches the DMS Confluence site for relevant
  * pages and documentation.
  *
  * Runs two parallel queries: one for pages (extractable content) and one for attachments (PDFs).
