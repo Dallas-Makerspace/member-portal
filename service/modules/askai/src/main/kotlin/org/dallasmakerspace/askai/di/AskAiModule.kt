@@ -27,6 +27,7 @@ import org.dallasmakerspace.askai.tools.ReadSourcePageTool
 import org.dallasmakerspace.askai.tools.SearchCalendarTool
 import org.dallasmakerspace.askai.tools.SearchOnlineCoursesTool
 import org.dallasmakerspace.askai.tools.SearchSourceWikiTool
+import org.dallasmakerspace.askai.tools.ReadTalkTopicTool
 import org.dallasmakerspace.askai.tools.SearchTalkTool
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.AppConfig
@@ -111,6 +112,7 @@ class AskAiModule {
       searchSource: SearchSourceWikiTool,
       readSourcePage: ReadSourcePageTool,
       searchTalk: SearchTalkTool,
+      readTalkTopic: ReadTalkTopicTool,
       searchCalendar: SearchCalendarTool,
       searchOnlineCourses: SearchOnlineCoursesTool,
   ): BotDefinition =
@@ -118,7 +120,7 @@ class AskAiModule {
           key = ASK_AI_BOT_KEY,
           displayName = "Ask AI",
           systemPrompt = AskAiBotPrompt.TEXT,
-          tools = listOf(searchSource, readSourcePage, searchTalk, searchCalendar, searchOnlineCourses),
+          tools = listOf(searchSource, readSourcePage, searchTalk, readTalkTopic, searchCalendar, searchOnlineCourses),
           featureFlag = ConfigRegistry.AGENT_CHAT_ENABLED,
           starterPrompts = AskAiBotPrompt.STARTER_PROMPTS,
       )

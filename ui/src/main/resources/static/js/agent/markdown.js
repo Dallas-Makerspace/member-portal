@@ -28,6 +28,7 @@ export function toolLabel(tool) {
         case 'search_source': return 'Searched the wiki';
         case 'read_source_page': return 'Read a wiki page';
         case 'search_talk': return 'Searched the forum';
+        case 'read_talk_topic': return 'Read a forum topic';
         case 'search_calendar': return 'Checked the calendar';
         case 'search_online_courses': return 'Searched classes';
         case 'search_code': return 'Searched the code';
