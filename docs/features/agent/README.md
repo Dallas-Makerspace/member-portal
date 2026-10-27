@@ -61,6 +61,24 @@ Tools: `search_source` and `read_source_page` (Source, the Confluence wiki), `se
 (DMS Learn). `/ask-ai` shows the chat when the flag is on for the member and the old page
 otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
 
+## IT assistant and course assistant
+
+- **`it-assistant`** (`:service:itbot`): reads local clones of the public DMS repositories with `git`
+  (search, files, history, blame), the app and request logs (`query_logs`), and can refresh the
+  clones. Chats are always private. Audience: AD group `agent.it-bot.ad-group`; repos:
+  `agent.it-bot.repos`. Clones live in the container's temp dir and sync on start and at 04:00
+  Central. Page: `/it-assistant`.
+- **`course-assistant`** (`:service:coursebot`): helps members of any "<prefix> Online Course Editors"
+  group design course outlines, quizzes and lesson plans, with the wiki and DMS Learn catalog as
+  research. Chats are always private. Page: `/course-assistant`.
+- **Artifacts** (any bot can opt in by adding the four artifact tools): documents the assistant
+  writes beside the chat. Kinds are `markdown`, `course_outline` and `quiz` (JSON, checked on save).
+  Every save is a new version; a stale save is refused. The chat owner can edit in the Documents
+  panel; quizzes export to Moodle GIFT and Moodle XML (question bank import), the rest to Markdown.
+  Tables: `service/docs/sql/agent-artifacts-migration.sql`.
+- Each bot's page and header link show only for members the service allows
+  (`GET /agent/bots`: flag plus audience).
+
 ## Evals
 
 `evals/` (promptfoo, run by hand, not in CI) asks each bot real questions through

@@ -1,22 +1,9 @@
 import {LitElement, html} from 'https://esm.sh/lit@3.3.0';
 import './dms-chat-message.js';
+import './dms-artifact-panel.js';
+import {api, API} from './api.js';
 
-const API = '/api/agent';
 const MAX_CHARS = 4000;
-
-async function api(method, path, body) {
-    const res = await fetch(API + path, {
-        method,
-        credentials: 'same-origin',
-        headers: body ? {'Content-Type': 'application/json'} : {},
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    let json = null;
-    try {
-        json = await res.json();
-    } catch (e) { /* empty body */ }
-    return {ok: res.ok, status: res.status, json, data: json && json.data, message: json && json.message};
-}
 
 /**
  * Multi-turn assistant chat. Attributes: bot (bot key), bot-title.
@@ -42,6 +29,10 @@ class DmsChat extends LitElement {
         _draft: {state: true},
         _loading: {state: true},
         _drawer: {state: true},
+        _artifacts: {state: true},
+        _active: {state: true},
+        _panel: {state: true},
+        _refresh: {state: true},
     };
 
     createRenderRoot() {
@@ -66,6 +57,10 @@ class DmsChat extends LitElement {
         this._draft = '';
         this._loading = false;
         this._drawer = false;
+        this._artifacts = [];
+        this._active = null;
+        this._panel = false;
+        this._refresh = 0;
         this._source = null;
         this._retries = 0;
     }
@@ -129,6 +124,9 @@ class DmsChat extends LitElement {
         this._running = false;
         this._busy = false;
         this._error = '';
+        this._artifacts = [];
+        this._active = null;
+        this._panel = false;
         if (pushUrl) this._setUrl(null);
     }
 
@@ -148,6 +146,19 @@ class DmsChat extends LitElement {
         this._drawer = false;
         if (res.data.activeTurn && res.data.isOwner) this._startStream(id);
         this._showLatestQuestion();
+        this._loadArtifacts(false);
+    }
+
+    /** Fetches the chat's documents; [focus] opens the panel on [focus] when given. */
+    async _loadArtifacts(openPanel, focus) {
+        if (!this._conversation) return;
+        const res = await api('GET', `/conversations/${encodeURIComponent(this._conversation.id)}/artifacts`);
+        if (!res.ok) return;
+        this._artifacts = res.data || [];
+        if (focus && this._artifacts.some(a => a.id === focus)) this._active = focus;
+        else if (!this._artifacts.some(a => a.id === this._active)) this._active = this._artifacts.length ? this._artifacts[this._artifacts.length - 1].id : null;
+        if (openPanel && this._active) this._panel = true;
+        this._refresh++;
     }
 
     _apply(detail) {
@@ -225,6 +236,11 @@ class DmsChat extends LitElement {
             this._notice = 'This chat is now private';
             setTimeout(() => { this._notice = ''; this.requestUpdate(); }, 6000);
         });
+        on('artifact', e => {
+            let change = null;
+            try { change = JSON.parse(e.text); } catch (err) { return; }
+            this._loadArtifacts(true, change.id);
+        });
         on('busy', () => { this._busy = true; });
         on('error', e => { this._error = e.text || 'Something went wrong.'; });
         on('turn-end', () => this._finishTurn(id));
@@ -262,6 +278,7 @@ class DmsChat extends LitElement {
         else this._running = false;
         this._loadHistory();
         this._showLatestQuestion();
+        this._loadArtifacts(false);
     }
 
     /** After an answer, put the latest question at the top so it stays in view with its answer. */
@@ -419,6 +436,10 @@ class DmsChat extends LitElement {
                     : ''}
                 <span class="flex-grow-1"></span>
                 ${this._notice ? html`<span class="small text-success" role="status">${this._notice}</span>` : ''}
+                ${this._artifacts.length ? html`<button class="btn btn-outline-secondary chat-docs-btn" aria-pressed=${this._panel}
+                        @click=${() => { this._panel = !this._panel; }} title="Documents">
+                    <span class="material-symbols-outlined" aria-hidden="true">description</span>
+                    <span class="chat-docs-label">Documents (${this._artifacts.length})</span></button>` : ''}
                 ${c ? html`<button class="btn chat-newmini d-md-none" aria-label="New chat" title="New chat"
                         @click=${() => { this._reset(); }}>
                     <span class="material-symbols-outlined" aria-hidden="true">edit_square</span></button>` : ''}
@@ -470,7 +491,7 @@ class DmsChat extends LitElement {
         const readOnly = this._conversation && !this._conversation.isOwner;
         const empty = !this._loading && !this._conversation && !this._messages.length;
         return html`
-            <div class="chat-layout">
+            <div class="chat-layout ${this._panel && this._artifacts.length ? 'with-panel' : ''}">
                 <aside class="chat-aside ${this._drawer ? 'open' : ''}">${this._history()}</aside>
                 <section class="chat-main">
                     ${this._header()}
@@ -492,6 +513,12 @@ class DmsChat extends LitElement {
                         : (empty ? '' : this._composer(false))}
                     </div>
                 </section>
+                ${this._panel && this._artifacts.length ? html`<aside class="chat-panel">
+                    <dms-artifact-panel .items=${this._artifacts} .active=${this._active} .refresh=${this._refresh}
+                        @select=${e => { this._active = e.detail; }}
+                        @saved=${() => this._loadArtifacts(false)}
+                        @close=${() => { this._panel = false; }}></dms-artifact-panel>
+                </aside>` : ''}
             </div>`;
     }
 }

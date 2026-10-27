@@ -38,6 +38,11 @@ export function toolLabel(tool) {
         case 'git_blame': return 'Checked who changed it';
         case 'query_logs': return 'Searched the logs';
         case 'sync_repos': return 'Refreshed the code';
+        case 'create_artifact': return 'Created a document';
+        case 'update_artifact': return 'Updated a document';
+        case 'read_artifact': return 'Read a document';
+        case 'list_artifacts': return 'Listed documents';
+        case 'list_learn_courses': return 'Looked up courses';
         default: return 'Used ' + tool.replace(/_/g, ' ');
     }
 }

@@ -35,13 +35,22 @@ class MockChatModelClient(private val wordDelayMillis: Long = WORD_DELAY_MILLIS)
     val tool = tools.firstOrNull()
     if (toolResult.isNullOrEmpty() && tool != null) {
       val param = tool.requiredParameters.firstOrNull()?.name ?: "query"
-      val args = buildJsonObject { put(param, question.take(MAX_ARG_CHARS)) }
+      val args =
+          if (tool.name == "create_artifact") {
+            buildJsonObject {
+              put("kind", "quiz")
+              put("title", "Sample quiz")
+              put("content", SAMPLE_QUIZ)
+            }
+          } else buildJsonObject { put(param, question.take(MAX_ARG_CHARS)) }
       emit(StreamFrame.ToolCallComplete("mock-call-${prompt.messages.size}", tool.name, args.toString()))
       emit(end("tool_use"))
       return@flow
     }
+    val created = toolResult?.firstOrNull()?.output?.contains("Created quiz") == true
     val answer =
-        if (toolResult.isNullOrEmpty()) "This is a mock answer to: $question"
+        if (created) "I made a short quiz for you. Open it in the Documents panel to review, edit or export it."
+        else if (toolResult.isNullOrEmpty()) "This is a mock answer to: $question"
         else mockAnswer(toolResult.first().output)
     CHUNK.findAll(answer).forEach { chunk ->
       emit(StreamFrame.TextDelta(chunk.value))
@@ -81,6 +90,10 @@ class MockChatModelClient(private val wordDelayMillis: Long = WORD_DELAY_MILLIS)
     private val PAGE = Regex("""Title: ([^\n]*)\nLink: (\S+)""")
     private const val WORD_DELAY_MILLIS = 30L
     private const val MAX_ARG_CHARS = 200
+    private const val SAMPLE_QUIZ =
+        """{"title":"Soldering basics","questions":[""" +
+            """{"type":"multiple_choice","text":"Which tool melts solder?","options":[{"text":"Soldering iron","correct":true},{"text":"Hammer"},{"text":"Wire cutter"}]},""" +
+            """{"type":"true_false","text":"Flux helps solder flow.","options":[{"text":"True","correct":true},{"text":"False"}]}]}"""
     private const val MOCK_INPUT = 500
     private const val MOCK_OUTPUT = 50
   }
