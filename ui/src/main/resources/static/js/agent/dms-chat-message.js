@@ -1,6 +1,6 @@
 import {LitElement, html} from 'https://esm.sh/lit@3.3.0';
 import {unsafeHTML} from 'https://esm.sh/lit@3.3.0/directives/unsafe-html.js';
-import {renderMarkdown, toolLabel} from './markdown.js';
+import {renderMarkdown, toolIcon, toolHint, toolLabel} from './markdown.js';
 
 const SOURCE_ICONS = {Source: 'description', Talk: 'forum', Calendar: 'event', 'DMS Learn': 'school', Code: 'code'};
 
@@ -15,6 +15,7 @@ class DmsChatMessage extends LitElement {
         canRate: {type: Boolean},
         _html: {state: true},
         _copied: {state: true},
+        _open: {state: true},
     };
 
     createRenderRoot() {
@@ -25,6 +26,7 @@ class DmsChatMessage extends LitElement {
         super();
         this._frame = null;
         this._copied = false;
+        this._open = false;
     }
 
     willUpdate(changed) {
@@ -52,15 +54,40 @@ class DmsChatMessage extends LitElement {
         setTimeout(() => { this._copied = false; }, 1500);
     }
 
-    _activity(calls) {
+    /**
+     * While the assistant is still working: one line that follows the current call. Afterwards a
+     * collapsed "Used N tools" that opens into the full list.
+     */
+    _activity(calls, working) {
         if (!calls || !calls.length) return '';
+        if (working) {
+            const current = calls.slice().reverse().find(x => x.running) || calls[calls.length - 1];
+            const hint = toolHint(current.argsPreview);
+            return html`
+                <div class="chat-activity live" role="status">
+                    <span class="material-symbols-outlined ${current.running ? 'spin' : ''}" aria-hidden="true">${current.running ? 'progress_activity' : toolIcon(current.name)}</span>
+                    <span class="chat-activity-text">${toolLabel(current.name)}${hint ? html` <span class="chat-activity-hint">\u00b7 ${hint}</span>` : ''}</span>
+                </div>`;
+        }
+        const failed = calls.filter(x => x.ok === false).length;
+        const icons = [...new Set(calls.map(x => x.name))].slice(0, 5);
         return html`
-            <div class="chat-tools" aria-label="What the assistant looked up">
-                ${calls.map(c => html`
-                    <span class="chat-tool-chip ${c.ok === false ? 'failed' : ''} ${c.running ? 'running' : ''}">
-                        <span class="material-symbols-outlined" aria-hidden="true">${c.running ? 'progress_activity' : 'search'}</span>
-                        <span class="chat-tool-label">${toolLabel(c.name, c.argsPreview)}</span>
-                    </span>`)}
+            <div class="chat-activity">
+                <button type="button" class="chat-activity-toggle" aria-expanded=${this._open} @click=${() => { this._open = !this._open; }}>
+                    <span class="material-symbols-outlined chevron" aria-hidden="true">${this._open ? 'expand_more' : 'chevron_right'}</span>
+                    <span>Used ${calls.length} ${calls.length === 1 ? 'tool' : 'tools'}</span>
+                    <span class="chat-activity-icons" aria-hidden="true">${icons.map(n => html`<span class="material-symbols-outlined">${toolIcon(n)}</span>`)}</span>
+                    ${failed ? html`<span class="chat-activity-failed">\u00b7 ${failed} failed</span>` : ''}
+                </button>
+                ${this._open ? html`
+                    <ul class="chat-activity-list">
+                        ${calls.map(x => html`
+                            <li class=${x.ok === false ? 'failed' : ''}>
+                                <span class="material-symbols-outlined" aria-hidden="true">${toolIcon(x.name)}</span>
+                                <span class="chat-activity-text">${toolLabel(x.name)}${toolHint(x.argsPreview) ? html` <span class="chat-activity-hint">\u00b7 ${toolHint(x.argsPreview)}</span>` : ''}</span>
+                                ${x.ok === false ? html`<span class="chat-activity-failed">failed</span>` : ''}
+                            </li>`)}
+                    </ul>` : ''}
             </div>`;
     }
 
@@ -118,11 +145,12 @@ class DmsChatMessage extends LitElement {
         return html`
             <div class="chat-row assistant">
                 <span class="chat-ai-mark" aria-hidden="true">AI</span>
-                <div class="chat-answer" aria-live=${this.streaming ? 'polite' : 'off'}>
-                    ${this._activity(m.toolCalls)}
+                <div class="chat-answer">
+                    ${this._activity(m.toolCalls, this.streaming && !m.text)}
                     ${m.text
                         ? html`<div class="chat-markdown">${unsafeHTML(this._html || '')}</div>`
-                        : (this.streaming ? html`<span class="chat-thinking">Thinking…</span>` : '')}
+                        : (this.streaming && (m.stopping || !(m.toolCalls || []).length)
+                            ? html`<span class="chat-thinking">${m.stopping ? 'Stopping…' : 'Thinking…'}</span>` : '')}
                     ${!this.streaming ? this._references(m.sources) : ''}
                     ${!this.streaming && m.text ? this._actions(m) : ''}
                 </div>

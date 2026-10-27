@@ -23,6 +23,35 @@ export function renderMarkdown(text) {
     });
 }
 
+const TOOL_ICONS = {
+    search_source: 'manage_search', read_source_page: 'article', search_talk: 'forum', read_talk_topic: 'chat',
+    search_calendar: 'event', search_online_courses: 'school', search_code: 'code', list_files: 'folder_open',
+    read_file: 'draft', git_log: 'history', git_show: 'commit', git_blame: 'person_search',
+    query_logs: 'receipt_long', sync_repos: 'sync', create_artifact: 'note_add', update_artifact: 'edit_note',
+    read_artifact: 'description', list_artifacts: 'library_books', list_learn_courses: 'local_library',
+};
+
+/** A Material Symbols name that tells tools apart at a glance. */
+export function toolIcon(tool) {
+    return TOOL_ICONS[tool] || 'build';
+}
+
+const HINT_KEYS = ['query', 'pattern', 'text', 'path', 'url', 'title', 'topicId', 'id', 'repo'];
+
+/** The main argument of a call as a short phrase, with emails and phone numbers hidden. */
+export function toolHint(argsJson) {
+    let args;
+    try {
+        args = JSON.parse(argsJson || '{}');
+    } catch (e) {
+        return '';
+    }
+    const key = HINT_KEYS.find(k => args[k] !== undefined && String(args[k]).trim() !== '');
+    if (!key) return '';
+    const value = String(args[key]).replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, '\u2026').replace(/\+?\d[\d\s().-]{7,}\d/g, '\u2026');
+    return value.length > 60 ? value.slice(0, 59) + '\u2026' : value;
+}
+
 export function toolLabel(tool) {
     switch (tool) {
         case 'search_source': return 'Searched the wiki';

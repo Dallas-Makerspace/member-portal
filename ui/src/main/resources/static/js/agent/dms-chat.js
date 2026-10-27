@@ -34,6 +34,9 @@ class DmsChat extends LitElement {
         _panel: {state: true},
         _refresh: {state: true},
         _atBottom: {state: true},
+        _sending: {state: true},
+        _stopping: {state: true},
+        _srNote: {state: true},
     };
 
     createRenderRoot() {
@@ -63,6 +66,9 @@ class DmsChat extends LitElement {
         this._panel = false;
         this._refresh = 0;
         this._atBottom = true;
+        this._sending = false;
+        this._stopping = false;
+        this._srNote = '';
         this._source = null;
         this._retries = 0;
     }
@@ -129,6 +135,8 @@ class DmsChat extends LitElement {
         this._artifacts = [];
         this._active = null;
         this._panel = false;
+        this._sending = false;
+        this._stopping = false;
         if (pushUrl) this._setUrl(null);
     }
 
@@ -172,30 +180,43 @@ class DmsChat extends LitElement {
 
     async _send(text) {
         text = (text || '').trim();
-        if (!text || this._running) return;
+        if (!text || this._running || this._sending) return;
         if (text.length > MAX_CHARS) {
             this._error = `Please keep questions under ${MAX_CHARS} characters.`;
             return;
         }
         this._error = '';
+        this._srNote = '';
         const fresh = !this._conversation;
+        const typed = this._draft;
+        // Show the question and a reply row at once; the POST can take a second or more.
+        const bubble = {id: null, role: 'user', text};
+        this._sending = true;
+        this._draft = '';
+        this._messages = [...this._messages, bubble];
+        this._live = {id: null, role: 'assistant', text: '', toolCalls: [], sources: []};
+        this._atBottom = true;
+        this._scrollDown(true);
+        this.updateComplete.then(() => {
+            const box = this.querySelector('.chat-composer textarea');
+            if (box) box.style.height = 'auto';
+        });
         const res = fresh
             ? await api('POST', `/${this.bot}/conversations`, {firstMessage: text})
             : await api('POST', `/conversations/${this._conversation.id}/messages`, {text});
+        this._sending = false;
         if (!res.ok) {
+            this._messages = this._messages.filter(m => m !== bubble);
+            this._live = null;
+            this._draft = typed || text;
             this._error = res.message || 'Could not send your question.';
             return;
         }
-        this._draft = '';
         const id = res.data.conversationId;
-        this._messages = [...this._messages, {id: null, role: 'user', text}];
-        this._live = {id: null, role: 'assistant', text: '', toolCalls: [], sources: []};
-        this._running = true;
         if (fresh) {
             this._conversation = {id, title: text, visibility: 'PUBLIC', isOwner: true};
             this._setUrl(id);
         }
-        this._atBottom = true;
         this._startStream(id);
         this._scrollDown(true);
     }
@@ -276,9 +297,14 @@ class DmsChat extends LitElement {
         this._closeStream();
         this._retries = 0;
         this._busy = false;
+        this._stopping = false;
         const res = await api('GET', `/conversations/${encodeURIComponent(id)}`);
         if (res.ok) this._apply(res.data);
         else this._running = false;
+        this._srNote = 'Answer ready';
+        if (document.activeElement === document.body) {
+            this.updateComplete.then(() => this.querySelector('.chat-composer textarea')?.focus({preventScroll: true}));
+        }
         this._loadHistory();
         this._showLatestQuestion();
         this._loadArtifacts(false);
@@ -304,7 +330,14 @@ class DmsChat extends LitElement {
     }
 
     async _stop() {
-        if (this._conversation) await api('POST', `/conversations/${this._conversation.id}/cancel`);
+        if (!this._conversation || this._stopping) return;
+        this._stopping = true;
+        if (this._live) this._live = {...this._live, stopping: true};
+        const res = await api('POST', `/conversations/${this._conversation.id}/cancel`);
+        if (!res.ok) {
+            this._stopping = false;
+            if (this._live) this._live = {...this._live, stopping: false};
+        }
     }
 
     async _rate(ev) {
@@ -485,15 +518,22 @@ class DmsChat extends LitElement {
 
     _composer(large) {
         return html`
-            <form class="chat-composer ${large ? 'large' : ''}" @submit=${e => { e.preventDefault(); this._send(this._draft); }}>
+            <form class="chat-composer ${large ? 'large' : ''}" aria-busy=${this._sending || this._running} @submit=${e => { e.preventDefault(); this._send(this._draft); }}>
                 <textarea rows="1" maxlength=${MAX_CHARS} .value=${this._draft}
                           placeholder=${this._placeholder} aria-label="Your question"
                           @input=${this._input} @keydown=${this._keydown}></textarea>
-                ${this._running
-                    ? html`<button type="button" class="chat-send stop" aria-label="Stop answering" title="Stop" @click=${this._stop}>
-                        <span class="material-symbols-outlined" aria-hidden="true">stop</span></button>`
-                    : html`<button type="submit" class="chat-send" aria-label="Send" title="Send" ?disabled=${!this._draft.trim()}>
-                        <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span></button>`}
+                ${this._stopping
+                    ? html`<button type="button" class="chat-send pending spinner" disabled aria-label="Stopping" title="Stopping">
+                        <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span></button>`
+                    : this._sending
+                        ? html`<button type="button" class="chat-send stop pending" disabled aria-label="Sending" title="Sending">
+                            <span class="ring" aria-hidden="true"></span>
+                            <span class="material-symbols-outlined" aria-hidden="true">stop</span></button>`
+                        : this._running
+                            ? html`<button type="button" class="chat-send stop" aria-label="Stop answering" title="Stop" @click=${this._stop}>
+                                <span class="material-symbols-outlined" aria-hidden="true">stop</span></button>`
+                            : html`<button type="submit" class="chat-send" aria-label="Send" title="Send" ?disabled=${!this._draft.trim()}>
+                                <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span></button>`}
             </form>
             ${large && !this._alwaysPrivate ? html`<div class="chat-disclaimer">
                 <span class="material-symbols-outlined" aria-hidden="true">groups</span>
@@ -533,6 +573,7 @@ class DmsChat extends LitElement {
                     </div>
                     ${!this._atBottom && this._running ? html`<button class="btn chat-latest" @click=${() => this._scrollDown(true)}>
                         <span class="material-symbols-outlined" aria-hidden="true">arrow_downward</span> Latest</button>` : ''}
+                    <span class="visually-hidden" role="status">${this._running ? '' : this._srNote}</span>
                     <div class="chat-foot">
                     ${this._busy ? html`<div class="alert alert-warning py-1 mb-2">Lots of questions right now - yours is queued.</div>` : ''}
                     ${this._error ? html`<div class="alert alert-danger py-1 mb-2" role="alert">${this._error}</div>` : ''}
