@@ -126,15 +126,7 @@ class ArtifactRepository @Inject constructor() {
     }
   }
 
-  private fun ResultRow.toArtifact() =
-      ArtifactRow(
-          this[AgentArtifactTable.id].value,
-          this[AgentArtifactTable.conversationId].value,
-          this[AgentArtifactTable.kind],
-          this[AgentArtifactTable.title],
-          this[AgentArtifactTable.currentVersion],
-          this[AgentArtifactTable.createdAt],
-          this[AgentArtifactTable.updatedAt])
+  private fun ResultRow.toArtifact() = toArtifact(this)
 
   private fun ResultRow.toVersion() =
       ArtifactVersionRow(
@@ -144,9 +136,19 @@ class ArtifactRepository @Inject constructor() {
           this[AgentArtifactVersionTable.author],
           this[AgentArtifactVersionTable.createdAt])
 
-  private companion object {
-    const val TITLE_LENGTH = 200
-    const val AUTHOR_LENGTH = 64
-    const val ASSISTANT = "assistant"
+  companion object {
+    fun toArtifact(row: ResultRow) =
+        ArtifactRow(
+            row[AgentArtifactTable.id].value,
+            row[AgentArtifactTable.conversationId].value,
+            row[AgentArtifactTable.kind],
+            row[AgentArtifactTable.title],
+            row[AgentArtifactTable.currentVersion],
+            row[AgentArtifactTable.createdAt],
+            row[AgentArtifactTable.updatedAt])
+
+    private const val TITLE_LENGTH = 200
+    private const val AUTHOR_LENGTH = 64
+    private const val ASSISTANT = "assistant"
   }
 }

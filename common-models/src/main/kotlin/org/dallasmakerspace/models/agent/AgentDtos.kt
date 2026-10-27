@@ -61,6 +61,7 @@ data class AgentConversationDetail(
     val privateReason: String? = null,
     val activeTurn: Int? = null,
     val isOwner: Boolean = false,
+    val artifacts: List<AgentArtifactSummary> = emptyList(),
 )
 
 @Serializable data class AgentCreateConversationRequest(val firstMessage: String? = null)

@@ -272,3 +272,11 @@ dms-chat .material-symbols-outlined { font-variation-settings: 'FILL' 0; display
   .chat-send.spinner .material-symbols-outlined, .chat-activity .spin { animation: none; }
 }
 .chat-activity-list .material-symbols-outlined, .chat-activity.live .material-symbols-outlined { position: relative; top: 1px; }
+.chat-skeleton { display: flex; flex-direction: column; gap: .7rem; padding: 1.5rem 0; }
+.chat-skeleton span { display: block; height: .9rem; border-radius: 6px; background: linear-gradient(90deg, var(--chat-wash) 25%, #fff 50%, var(--chat-wash) 75%); background-size: 200% 100%; animation: chat-shimmer 1.2s linear infinite; }
+.chat-skeleton span:nth-child(1) { width: 45%; margin-left: auto; height: 2.4rem; border-radius: 1.2rem; }
+.chat-skeleton span:nth-child(2) { width: 92%; }
+.chat-skeleton span:nth-child(3) { width: 85%; }
+.chat-skeleton span:nth-child(4) { width: 60%; }
+@keyframes chat-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .chat-skeleton span { animation: none; } }

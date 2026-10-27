@@ -37,6 +37,7 @@ class DmsChat extends LitElement {
         _sending: {state: true},
         _stopping: {state: true},
         _srNote: {state: true},
+        _opening: {state: true},
     };
 
     createRenderRoot() {
@@ -69,6 +70,8 @@ class DmsChat extends LitElement {
         this._sending = false;
         this._stopping = false;
         this._srNote = '';
+        this._opening = null;
+        this._openToken = 0;
         this._source = null;
         this._retries = 0;
     }
@@ -125,6 +128,9 @@ class DmsChat extends LitElement {
     }
 
     _reset(pushUrl = true) {
+        this._openToken++;
+        this._opening = null;
+        this._loading = false;
         this._closeStream();
         this._conversation = null;
         this._messages = [];
@@ -140,35 +146,58 @@ class DmsChat extends LitElement {
         if (pushUrl) this._setUrl(null);
     }
 
+    /** Opens a chat: the click shows at once (selection, title, skeleton); the data fills in after. */
     async _open(id, pushUrl = true) {
+        const token = ++this._openToken;
         this._closeStream();
+        const known = [...this._mine, ...this._public].find(c => c.id === id);
+        this._opening = {id, title: known?.title || ''};
+        this._conversation = null;
+        this._messages = [];
+        this._live = null;
+        this._running = false;
+        this._sending = false;
+        this._stopping = false;
+        this._busy = false;
+        this._artifacts = [];
+        this._active = null;
+        this._panel = false;
         this._loading = true;
         this._error = '';
+        this._drawer = false;
+        if (pushUrl) this._setUrl(id);
         const res = await api('GET', `/conversations/${encodeURIComponent(id)}`);
+        if (token !== this._openToken) return; // another chat was clicked meanwhile
         this._loading = false;
+        this._opening = null;
         if (!res.ok) {
             this._reset(false);
+            history.replaceState({}, '', location.pathname);
             this._error = res.status === 404 ? 'That chat was not found, or it is private.' : (res.message || 'Could not load the chat.');
             return;
         }
         this._apply(res.data);
-        if (pushUrl) this._setUrl(id);
-        this._drawer = false;
         if (res.data.activeTurn && res.data.isOwner) this._startStream(id);
         this._showLatestQuestion();
-        this._loadArtifacts(false);
+    }
+
+    _setArtifacts(list, openPanel, focus) {
+        this._artifacts = list || [];
+        if (focus && this._artifacts.some(a => a.id === focus)) this._active = focus;
+        else if (!this._artifacts.some(a => a.id === this._active)) {
+            this._active = this._artifacts.length ? this._artifacts[this._artifacts.length - 1].id : null;
+        }
+        if (openPanel && this._active) this._panel = true;
+        this._refresh++;
     }
 
     /** Fetches the chat's documents; [focus] opens the panel on [focus] when given. */
     async _loadArtifacts(openPanel, focus) {
         if (!this._conversation) return;
-        const res = await api('GET', `/conversations/${encodeURIComponent(this._conversation.id)}/artifacts`);
-        if (!res.ok) return;
-        this._artifacts = res.data || [];
-        if (focus && this._artifacts.some(a => a.id === focus)) this._active = focus;
-        else if (!this._artifacts.some(a => a.id === this._active)) this._active = this._artifacts.length ? this._artifacts[this._artifacts.length - 1].id : null;
-        if (openPanel && this._active) this._panel = true;
-        this._refresh++;
+        const id = this._conversation.id;
+        const res = await api('GET', `/conversations/${encodeURIComponent(id)}/artifacts`);
+        if (!res.ok || this._conversation?.id !== id) return;
+        this._setArtifacts(res.data, openPanel, focus);
     }
 
     _apply(detail) {
@@ -176,6 +205,7 @@ class DmsChat extends LitElement {
         this._messages = detail.messages;
         this._live = null;
         this._running = !!detail.activeTurn;
+        if (detail.artifacts) this._setArtifacts(detail.artifacts, false);
     }
 
     async _send(text) {
@@ -307,7 +337,6 @@ class DmsChat extends LitElement {
         }
         this._loadHistory();
         this._showLatestQuestion();
-        this._loadArtifacts(false);
     }
 
     /** After an answer, put the latest question at the top so it stays in view with its answer. */
@@ -463,7 +492,7 @@ class DmsChat extends LitElement {
                     <ul class="list-unstyled chat-history">
                         ${g.items.map(c => html`
                             <li><a href=${'?c=' + c.id} title=${c.title}
-                                   class=${c.id === this._conversation?.id ? 'active' : ''}
+                                   class=${c.id === (this._opening?.id || this._conversation?.id) ? 'active' : ''}
                                    @click=${e => { e.preventDefault(); this._open(c.id); }}>
                                 <span class="chat-history-title">${c.title}</span>
                                 <span class="chat-history-meta">
@@ -478,12 +507,14 @@ class DmsChat extends LitElement {
     _header() {
         const c = this._conversation;
         const isPrivate = c?.visibility === 'PRIVATE';
+        const pending = !c && this._opening;
         return html`
-            <div class="chat-head ${c ? '' : 'bare'}">
+            <div class="chat-head ${c || pending ? '' : 'bare'}">
                 <button class="btn btn-outline-secondary d-md-none chat-chats-btn" @click=${() => { this._drawer = !this._drawer; }}
                         aria-expanded=${this._drawer} aria-label="Chat list" title="Chat list">
                     <span class="material-symbols-outlined" aria-hidden="true">forum</span>
                     <span class="chat-chats-label">Chats</span></button>
+                ${pending ? html`<h1 class="chat-title">${this._opening.title}</h1>` : ''}
                 ${c ? html`<h1 class="chat-title" title=${c.title}>${c.title}</h1>
                     <span class="chat-privacy ${isPrivate ? 'private' : ''}"
                           aria-label=${isPrivate ? 'Only you can see this chat' : 'Visible to all members'}
@@ -563,7 +594,7 @@ class DmsChat extends LitElement {
                     ${this._header()}
                     <div class="chat-scroll" aria-busy=${this._running} @scroll=${this._onScroll}>
                         <div class="chat-thread">
-                        ${this._loading ? html`<div class="text-muted p-3">Loading…</div>` : ''}
+                        ${this._loading ? html`<div class="chat-skeleton" aria-hidden="true"><span></span><span></span><span></span><span></span></div><span class="visually-hidden" role="status">Loading chat</span>` : ''}
                         ${empty ? this._empty() : ''}
                         ${this._messages.map(m => html`
                             <dms-chat-message .message=${m} ?canRate=${!!m.id && m.role === 'assistant'}

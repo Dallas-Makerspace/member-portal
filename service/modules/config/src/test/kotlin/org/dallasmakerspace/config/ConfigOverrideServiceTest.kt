@@ -38,6 +38,13 @@ class ConfigOverrideServiceTest {
   }
 
   @Test
+  fun `a key with no override is looked up once, then served from memory`() = runBlocking<Unit> {
+    repeat(3) { assertFalse(service.isFeatureEnabledFor(flagKey, "jdoe", emptyList())) }
+
+    org.mockito.kotlin.verify(repository, org.mockito.kotlin.times(1)).getCurrent(flagKey.key)
+  }
+
+  @Test
   fun `serialize and deserialize a FeatureFlagValue round-trips`() {
     val value = FeatureFlagValue(enabled = true, enabledUsernames = setOf("jdoe"))
     val raw = service.serialize(value, flagKey)

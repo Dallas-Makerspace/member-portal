@@ -150,7 +150,6 @@ class ChatServiceTest {
     service.awaitTurn(started.conversationId)
 
     assertEquals(AgentVisibility.PRIVATE, service.detail(started.conversationId, "jdoe")!!.conversation.visibility)
-    assertNull(service.detail(started.conversationId, "asmith"))
     assertTrue(service.list("people", "asmith", mine = false, limit = 10)!!.isEmpty())
   }
 
@@ -237,5 +236,19 @@ class ChatServiceTest {
     assertIs<RenameOutcome.Invalid>(service.rename(started.conversationId, "jdoe", "Mail me at jdoe@example.org"))
     assertIs<RenameOutcome.Invalid>(service.rename(started.conversationId, "jdoe", "   "))
     assertIs<RenameOutcome.NotFound>(service.rename(started.conversationId, "asmith", "Mine now"))
+  }
+
+  @Test
+  fun `the chat detail carries its documents, so opening a chat needs one request`() = runBlocking<Unit> {
+    val service = service()
+    val started = assertIs<TurnOutcome.Started>(service.startConversation("ask-ai", "jdoe", "Make notes"))
+    service.awaitTurn(started.conversationId)
+    ArtifactRepository().create(started.conversationId, "markdown", "Notes", "# hi", "assistant")
+
+    val detail = service.detail(started.conversationId, "jdoe")!!
+
+    assertEquals(listOf("Notes"), detail.artifacts.map { it.title })
+    assertEquals(2, detail.messages.size)
+    assertNull(service.detail("missing", "jdoe"))
   }
 }

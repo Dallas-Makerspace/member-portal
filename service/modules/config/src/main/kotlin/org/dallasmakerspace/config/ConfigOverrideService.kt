@@ -64,6 +64,9 @@ constructor(
       return deserialize(dao.configValue, configKey)
     }
 
+    // Remember "no override" too, or every check of a default-valued key costs a database trip.
+    cache[configKey.key] =
+        CachedEntry("", isReset = true, infraOnly = false, cachedAt = System.currentTimeMillis())
     return configKey.defaultValue
   }
 

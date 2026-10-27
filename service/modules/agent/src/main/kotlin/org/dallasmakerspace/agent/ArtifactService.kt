@@ -73,6 +73,9 @@ constructor(
     return artifact to (conversation.ownerUsername == username)
   }
 
-  private fun ArtifactRow.toSummary() =
-      AgentArtifactSummary(id, kind, title, currentVersion, updatedAt.atOffset(ZoneOffset.UTC).toString())
+  private fun ArtifactRow.toSummary() = toArtifactSummary(this)
 }
+
+fun toArtifactSummary(row: ArtifactRow) =
+    AgentArtifactSummary(
+        row.id, row.kind, row.title, row.currentVersion, row.updatedAt.atOffset(ZoneOffset.UTC).toString())

@@ -4,6 +4,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.models.agent.AgentVisibility
 import org.jetbrains.exposed.sql.Op
@@ -81,6 +84,15 @@ data class ToolCallRow(
     val ok: Boolean,
 )
 
+/** Everything the chat page shows, read in one database transaction. */
+data class ConversationBundle(
+    val conversation: ConversationRow,
+    val messages: List<MessageRow>,
+    val toolCalls: List<ToolCallRow>,
+    val feedback: Map<Long, Boolean>,
+    val artifacts: List<ArtifactRow>,
+)
+
 /** Storage for AI assistant chats. */
 @Singleton
 class ConversationRepository @Inject constructor() {
@@ -137,33 +149,47 @@ class ConversationRepository @Inject constructor() {
             .map { it.toConversation() }
       }
 
+  /**
+   * The conversation with its messages, tool calls, [username]'s feedback and documents, read
+   * concurrently so a chat page waits for one database round trip rather than five in a row.
+   * Null when the conversation doesn't exist.
+   */
+  suspend fun bundle(conversationId: String, username: String): ConversationBundle? =
+      coroutineScope {
+        val conversation = async { get(conversationId) }
+        val messages = async { messages(conversationId) }
+        val toolCalls = async { toolCalls(conversationId) }
+        val feedback = async { feedbackIn(conversationId, username) }
+        val artifacts = async { ArtifactRepository().listFor(conversationId) }
+        val found = conversation.await()
+        if (found == null) {
+          coroutineContext.cancelChildren()
+          null
+        } else {
+          ConversationBundle(found, messages.await(), toolCalls.await(), feedback.await(), artifacts.await())
+        }
+      }
+
+  private suspend fun feedbackIn(conversationId: String, username: String): Map<Long, Boolean> =
+      suspendTransaction {
+        AgentFeedbackTable.innerJoin(AgentMessageTable)
+            .select {
+              (AgentMessageTable.conversationId eq conversationId) and
+                  (AgentFeedbackTable.username eq username)
+            }
+            .associate { it[AgentFeedbackTable.messageId].value to it[AgentFeedbackTable.helpful] }
+      }
+
   suspend fun messages(conversationId: String): List<MessageRow> = suspendTransaction {
     AgentMessageTable.select { AgentMessageTable.conversationId eq conversationId }
         .orderBy(AgentMessageTable.id, SortOrder.ASC)
-        .map {
-          MessageRow(
-              id = it[AgentMessageTable.id].value,
-              turnSeq = it[AgentMessageTable.turnSeq],
-              role = it[AgentMessageTable.role],
-              content = it[AgentMessageTable.content],
-              displayText = it[AgentMessageTable.displayText],
-              createdAt = it[AgentMessageTable.createdAt],
-          )
-        }
+        .map { it.toMessage() }
   }
 
   suspend fun toolCalls(conversationId: String): List<ToolCallRow> = suspendTransaction {
     AgentToolCallTable.select { AgentToolCallTable.conversationId eq conversationId }
         .orderBy(AgentToolCallTable.id, SortOrder.ASC)
-        .map {
-          ToolCallRow(
-              messageId = it[AgentToolCallTable.messageId].value,
-              toolName = it[AgentToolCallTable.toolName],
-              args = it[AgentToolCallTable.args],
-              sourcesJson = it[AgentToolCallTable.sources],
-              ok = it[AgentToolCallTable.ok],
-          )
-        }
+        .map { it.toToolCall() }
   }
 
   /**
@@ -289,6 +315,25 @@ class ConversationRepository @Inject constructor() {
   suspend fun deleteInactiveSince(cutoff: LocalDateTime): Int = suspendTransaction {
     AgentConversationTable.deleteWhere { AgentConversationTable.lastMessageAt less cutoff }
   }
+
+  private fun ResultRow.toMessage() =
+      MessageRow(
+          id = this[AgentMessageTable.id].value,
+          turnSeq = this[AgentMessageTable.turnSeq],
+          role = this[AgentMessageTable.role],
+          content = this[AgentMessageTable.content],
+          displayText = this[AgentMessageTable.displayText],
+          createdAt = this[AgentMessageTable.createdAt],
+      )
+
+  private fun ResultRow.toToolCall() =
+      ToolCallRow(
+          messageId = this[AgentToolCallTable.messageId].value,
+          toolName = this[AgentToolCallTable.toolName],
+          args = this[AgentToolCallTable.args],
+          sourcesJson = this[AgentToolCallTable.sources],
+          ok = this[AgentToolCallTable.ok],
+      )
 
   private fun ResultRow.toConversation() =
       ConversationRow(

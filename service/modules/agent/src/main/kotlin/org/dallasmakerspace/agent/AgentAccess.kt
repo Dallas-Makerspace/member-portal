@@ -1,5 +1,6 @@
 package org.dallasmakerspace.agent
 
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -22,18 +23,33 @@ constructor(
 ) {
   private val log = loggerFactory.create(javaClass)
 
+  private data class CachedGroups(val groups: List<String>, val loadedAt: Long)
+
+  private val cache = ConcurrentHashMap<String, CachedGroups>()
+
+  /** AD groups of [username], remembered for [GROUP_TTL_MILLIS] so clicking around isn't slow. */
   @Suppress("TooGenericExceptionCaught")
-  suspend fun groupsOf(username: String): List<String> =
-      withContext(Dispatchers.IO) {
-        try {
-          activeDirectoryService.getMembersByUsernameList(listOf(username))[username]
-              ?.groups
-              ?.map { it.cn } ?: emptyList()
-        } catch (e: Exception) {
-          log.warn("Failed to resolve AD groups for $username", e)
-          emptyList()
-        }
+  suspend fun groupsOf(username: String): List<String> {
+    val cached = cache[username]
+    if (cached != null && System.currentTimeMillis() - cached.loadedAt < GROUP_TTL_MILLIS) return cached.groups
+    return withContext(Dispatchers.IO) {
+      try {
+        val groups =
+            activeDirectoryService.getMembersByUsernameList(listOf(username))[username]
+                ?.groups
+                ?.map { it.cn } ?: emptyList()
+        cache[username] = CachedGroups(groups, System.currentTimeMillis())
+        groups
+      } catch (e: Exception) {
+        log.warn("Failed to resolve AD groups for $username", e)
+        emptyList()
       }
+    }
+  }
+
+  private companion object {
+    const val GROUP_TTL_MILLIS = 60_000L
+  }
 
   suspend fun canUse(bot: BotDefinition, username: String, groups: List<String>): Boolean =
       configOverrideService.isFeatureEnabledFor(bot.featureFlag, username, groups) &&

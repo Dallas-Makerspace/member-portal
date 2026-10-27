@@ -267,20 +267,21 @@ constructor(
   fun activeTurn(conversationId: String): ActiveTurn? = turnStreams.get(conversationId)
 
   /** Null when the conversation doesn't exist or [username] may not see it. */
-  suspend fun viewable(conversationId: String, username: String): ConversationRow? {
-    val conversation = repository.get(conversationId) ?: return null
-    if (conversation.ownerUsername == username) return conversation
-    if (conversation.visibility != AgentVisibility.PUBLIC) return null
-    val bot = botsByKey[conversation.botKey] ?: return null
-    return conversation.takeIf { access.canUse(bot, username, access.groupsOf(username)) }
+  suspend fun viewable(conversationId: String, username: String): ConversationRow? =
+      repository.get(conversationId)?.takeIf { canView(it, username) }
+
+  private suspend fun canView(conversation: ConversationRow, username: String): Boolean {
+    if (conversation.ownerUsername == username) return true
+    if (conversation.visibility != AgentVisibility.PUBLIC) return false
+    val bot = botsByKey[conversation.botKey] ?: return false
+    return access.canUse(bot, username, access.groupsOf(username))
   }
 
   suspend fun detail(conversationId: String, username: String): AgentConversationDetail? {
-    val conversation = viewable(conversationId, username) ?: return null
-    val messages = repository.messages(conversationId)
-    val toolCalls = repository.toolCalls(conversationId)
-    val chat = toChatMessages(messages, toolCalls)
-    val feedback = repository.feedback(chat.filter { it.role == AgentRoles.ASSISTANT }.map { it.id }, username)
+    val bundle = repository.bundle(conversationId, username) ?: return null
+    val conversation = bundle.conversation.takeIf { canView(it, username) } ?: return null
+    val chat = toChatMessages(bundle.messages, bundle.toolCalls)
+    val feedback = bundle.feedback
     val running = turnStreams.get(conversationId)?.takeIf { turnStreams.isRunning(conversationId) }
     return AgentConversationDetail(
         conversation = conversation.toSummary(),
@@ -288,6 +289,7 @@ constructor(
         privateReason = conversation.privateReason,
         activeTurn = running?.turnSeq,
         isOwner = conversation.ownerUsername == username,
+        artifacts = bundle.artifacts.map(::toArtifactSummary),
     )
   }
 
