@@ -7,4 +7,5 @@ dependencies {
   implementation(project(":service:moodle"))
   implementation(project(":service:calendar"))
   implementation(project(":service:workflows-api"))
+  testImplementation("com.h2database:h2:2.2.220")
 }
