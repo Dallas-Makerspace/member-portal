@@ -119,6 +119,23 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
   }
 
   /** {@inheritDoc} */
+  override fun searchUsers(term: String, limit: Int): List<ADUserMatch> {
+    val text = term.trim()
+    if (text.isEmpty()) return emptyList()
+    return activeDirectoryClient
+        .searchUsers(text, limit.coerceIn(1, MAX_SEARCH_RESULTS))
+        .values
+        .mapNotNull { attrs ->
+          val username = attrs["sAMAccountName"]?.toString() ?: return@mapNotNull null
+          ADUserMatch(
+              sAMAccountName = username,
+              displayName = attrs["displayName"]?.toString(),
+              enabled = (attrs["userAccountControl"]?.toString()?.toIntOrNull() ?: 0) and 2 != 2,
+          )
+        }
+  }
+
+  /** {@inheritDoc} */
   override fun getGroup(groupname: String): ADGroup =
       toGroup(activeDirectoryClient.getGroup(groupname))
 

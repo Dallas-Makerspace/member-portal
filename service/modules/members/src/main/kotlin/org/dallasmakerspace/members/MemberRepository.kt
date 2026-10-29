@@ -11,10 +11,20 @@ import org.dallasmakerspace.members.db.ProfileTable
 import org.dallasmakerspace.members.db.daoToProfileModel
 import org.dallasmakerspace.models.DMSMember
 import org.jetbrains.exposed.exceptions.ExposedSQLException
+import org.jetbrains.exposed.sql.LikeEscapeOp
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.or
+import org.jetbrains.exposed.sql.stringParam
 import org.jetbrains.exposed.sql.update
 
 private const val INTEGRITY_VIOLATION_SQL_STATE = "23"
+
+private const val MAX_PROFILE_SEARCH = 50
+
+private const val LIKE_ESCAPE = '!'
+
+private fun escapeLike(text: String) =
+    text.replace("!", "!!").replace("%", "!%").replace("_", "!_")
 
 /**
  * Manages member data. Fetches and updates member data. Contains validation and orchestration logic
@@ -207,6 +217,19 @@ class MemberRepository @Inject constructor(loggerFactory: LoggerFactory) : IMemb
       ProfileDAO.find { ProfileTable.username inList usernames }
           .map { daoToProfileModel(it) }
           .associateBy { it.username }
+    }
+  }
+
+  override suspend fun searchProfiles(term: String, limit: Int): List<DMSMember> {
+    if (term.isBlank()) return emptyList()
+    val pattern = stringParam("%" + escapeLike(term.trim()) + "%")
+    return suspendTransaction {
+      ProfileDAO.find {
+            LikeEscapeOp(ProfileTable.username, pattern, true, LIKE_ESCAPE) or
+                LikeEscapeOp(ProfileTable.discourseUsername, pattern, true, LIKE_ESCAPE)
+          }
+          .limit(limit.coerceIn(1, MAX_PROFILE_SEARCH))
+          .map { daoToProfileModel(it) }
     }
   }
 

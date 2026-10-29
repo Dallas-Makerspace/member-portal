@@ -3,6 +3,13 @@ package org.dallasmakerspace.activedirectory
 interface IActiveDirectoryClient {
   fun getUsersByUsernameList(usernames: List<String>): Map<String, Map<String, Any?>>
 
+  /**
+   * Finds users whose username contains [term] or whose display name contains every word of
+   * [term] (case-insensitive), at most [limit]; only sAMAccountName, displayName and
+   * userAccountControl are returned. [term] is matched literally.
+   */
+  fun searchUsers(term: String, limit: Int): Map<String, Map<String, Any?>>
+
   fun getGroup(groupname: String): Map<String, Any?>
 
   fun getMultipleGroups(groupnames: List<String>): Map<String, Map<String, Any?>>

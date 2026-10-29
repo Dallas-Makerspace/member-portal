@@ -2,11 +2,13 @@ package org.dallasmakerspace.activedirectory
 
 import com.unboundid.asn1.ASN1OctetString
 import com.unboundid.ldap.sdk.Attribute
+import com.unboundid.ldap.sdk.DereferencePolicy
 import com.unboundid.ldap.sdk.Entry
 import com.unboundid.ldap.sdk.FailoverServerSet
 import com.unboundid.ldap.sdk.Filter
 import com.unboundid.ldap.sdk.LDAPConnectionPool
 import com.unboundid.ldap.sdk.LDAPException
+import com.unboundid.ldap.sdk.LDAPSearchException
 import com.unboundid.ldap.sdk.Modification
 import com.unboundid.ldap.sdk.ModificationType
 import com.unboundid.ldap.sdk.ResultCode
@@ -27,6 +29,10 @@ import org.dallasmakerspace.models.DirectoryOus
 private const val INITIAL_LDAP_CONNECTIONS = 3
 
 private const val MAX_LDAP_CONNECTIONS = 5
+
+private const val MAX_SEARCH_WORDS = 4
+
+private const val SEARCH_TIME_LIMIT_SECONDS = 10
 
 @Singleton
 class ActiveDirectoryClient
@@ -202,6 +208,48 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
           entry.attributes.associate {
             it.name to if (it.name == "memberOf") it.values else it.values?.firstOrNull()
           }
+    }
+  }
+
+  /** {@inheritDoc} */
+  override fun searchUsers(term: String, limit: Int): Map<String, Map<String, Any?>> {
+    // Filter objects carry the values as data, so no character in [term] can alter the filter.
+    val words = term.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(MAX_SEARCH_WORDS)
+    if (words.isEmpty()) return emptyMap()
+    val filter =
+        Filter.createANDFilter(
+            Filter.createEqualityFilter("objectCategory", "person"),
+            Filter.createORFilter(
+                Filter.createEqualityFilter("objectClass", "member"),
+                Filter.createEqualityFilter("objectClass", "user")),
+            Filter.createORFilter(
+                Filter.createSubstringFilter("sAMAccountName", null, arrayOf(term.trim()), null),
+                Filter.createANDFilter(
+                    words.map {
+                      Filter.createSubstringFilter("displayName", null, arrayOf(it), null)
+                    })))
+    val request =
+        SearchRequest(
+            "ou=Members,dc=dms,dc=local",
+            SearchScope.SUB,
+            DereferencePolicy.NEVER,
+            limit,
+            SEARCH_TIME_LIMIT_SECONDS,
+            false,
+            filter,
+            "sAMAccountName",
+            "displayName",
+            "userAccountControl")
+    val entries =
+        try {
+          ldapPool.search(request).searchEntries
+        } catch (e: LDAPSearchException) {
+          // The size limit stops the search early; the entries found so far are still valid.
+          if (e.resultCode == ResultCode.SIZE_LIMIT_EXCEEDED) e.searchEntries else throw e
+        }
+    return entries.associate { entry ->
+      entry.getAttributeValue("sAMAccountName") to
+          entry.attributes.associate { it.name to it.values?.firstOrNull() }
     }
   }
 

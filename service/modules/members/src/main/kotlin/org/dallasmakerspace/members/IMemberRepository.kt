@@ -23,6 +23,12 @@ interface IMemberRepository {
 
   suspend fun getMembersByUsernames(usernames: List<String>): Map<String, DMSMember>
 
+  /**
+   * Profiles whose username or Talk username contains [term] (case-insensitive, matched literally),
+   * at most [limit]. One query; no AD or MakerManager call.
+   */
+  suspend fun searchProfiles(term: String, limit: Int): List<DMSMember>
+
   suspend fun getMembersByDiscourseUsernames(
       discourseUsernames: List<String>
   ): Map<String, DMSMember>

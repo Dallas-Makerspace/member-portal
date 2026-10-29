@@ -21,6 +21,19 @@ class ActiveDirectoryServiceMock @Inject constructor() : IActiveDirectoryService
   override fun getMembersByBadgeNumberList(badgeNumberList: List<String>) = sampleMembersMap
 
   /** {@inheritDoc} */
+  override fun searchUsers(term: String, limit: Int): List<ADUserMatch> {
+    val words = term.lowercase().split(' ').filter { it.isNotEmpty() }
+    return sampleMembersMap.values
+        .filter { u ->
+          words.isNotEmpty() &&
+              (u.sAMAccountName.lowercase().contains(term.trim().lowercase()) ||
+                  words.all { u.displayName.orEmpty().lowercase().contains(it) })
+        }
+        .take(limit)
+        .map { ADUserMatch(it.sAMAccountName, it.displayName, it.enabled) }
+  }
+
+  /** {@inheritDoc} */
   override fun getGroup(groupname: String): ADGroup {
     val groupMembers =
         sampleMembersMap.values.filter { user ->

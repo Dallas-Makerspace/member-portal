@@ -47,6 +47,17 @@ class MemberRepositoryMock @Inject constructor() : IMemberRepository {
   override suspend fun getMembersByUsernames(usernames: List<String>): Map<String, DMSMember> =
       usernames.mapNotNull { store[it] }.associateBy { it.username }
 
+  override suspend fun searchProfiles(term: String, limit: Int): List<DMSMember> {
+    val needle = term.trim().lowercase()
+    if (needle.isEmpty()) return emptyList()
+    return store.values
+        .filter {
+          it.username.lowercase().contains(needle) ||
+              it.discourseUsername.orEmpty().lowercase().contains(needle)
+        }
+        .take(limit)
+  }
+
   override suspend fun getMembersByDiscourseUsernames(
       discourseUsernames: List<String>
   ): Map<String, DMSMember> =

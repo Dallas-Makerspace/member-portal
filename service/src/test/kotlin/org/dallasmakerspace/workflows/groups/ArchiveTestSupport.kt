@@ -3,6 +3,7 @@ package org.dallasmakerspace.workflows.groups
 import java.util.concurrent.CopyOnWriteArrayList
 import org.dallasmakerspace.activedirectory.ADGroup
 import org.dallasmakerspace.activedirectory.ADUser
+import org.dallasmakerspace.activedirectory.ADUserMatch
 import org.dallasmakerspace.activedirectory.AdGroupCreateResult
 import com.unboundid.ldap.sdk.LDAPException
 import com.unboundid.ldap.sdk.ResultCode
@@ -127,6 +128,8 @@ class FakeDirectory : IActiveDirectoryService {
           samAccountName = g.sam,
           groupType = g.groupType,
       )
+
+  override fun searchUsers(term: String, limit: Int): List<ADUserMatch> = emptyList()
 
   override fun getGroup(groupname: String): ADGroup {
     calls += "getGroup:$groupname"

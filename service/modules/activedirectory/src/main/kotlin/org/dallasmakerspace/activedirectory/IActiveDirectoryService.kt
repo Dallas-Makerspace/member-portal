@@ -1,5 +1,7 @@
 package org.dallasmakerspace.activedirectory
 
+const val MAX_SEARCH_RESULTS = 25
+
 interface IActiveDirectoryService {
 
   /**
@@ -33,6 +35,12 @@ interface IActiveDirectoryService {
    * @return The map of ADUser objects for the given badgeNumbers.
    */
   fun getMembersByBadgeNumberList(badgeNumberList: List<String>): Any
+
+  /**
+   * Finds users whose username contains [term] or whose display name contains every word of
+   * [term], at most [limit] (1..[MAX_SEARCH_RESULTS]). Blocking LDAP call: run it on Dispatchers.IO.
+   */
+  fun searchUsers(term: String, limit: Int): List<ADUserMatch>
 
   /** Gets the ADGroup object for the given groupname. */
   fun getGroup(groupname: String): ADGroup

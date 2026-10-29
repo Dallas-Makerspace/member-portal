@@ -4,6 +4,8 @@ class ActiveDirectoryClientMock : IActiveDirectoryClient {
   override fun getUsersByUsernameList(usernames: List<String>): Map<String, Map<String, Any?>> =
       emptyMap()
 
+  override fun searchUsers(term: String, limit: Int): Map<String, Map<String, Any?>> = emptyMap()
+
   override fun getGroup(groupname: String): Map<String, Any?> = emptyMap()
 
   override fun findGroupByGuid(objectGuid: String): GroupIdentity? = null
