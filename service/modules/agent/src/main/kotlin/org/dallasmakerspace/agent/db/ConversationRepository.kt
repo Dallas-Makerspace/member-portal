@@ -46,6 +46,10 @@ data class MessageRow(
     val content: String,
     val displayText: String?,
     val createdAt: LocalDateTime,
+    val model: String? = null,
+    val usage: TokenCounts = TokenCounts(),
+    val costUsd: Double = 0.0,
+    val durationMs: Int? = null,
 )
 
 data class NewMessage(
@@ -56,6 +60,7 @@ data class NewMessage(
     val model: String? = null,
     val usage: TokenCounts = TokenCounts(),
     val costUsd: Double = 0.0,
+    val durationMs: Int? = null,
 )
 
 data class TokenCounts(
@@ -82,6 +87,7 @@ data class ToolCallRow(
     val args: String,
     val sourcesJson: String?,
     val ok: Boolean,
+    val durationMs: Int = 0,
 )
 
 /** Everything the chat page shows, read in one database transaction. */
@@ -216,6 +222,7 @@ class ConversationRepository @Inject constructor() {
                 it[cacheWriteTokens] = message.usage.cacheWrite
                 it[outputTokens] = message.usage.output
                 it[costUsd] = message.costUsd
+                it[durationMs] = message.durationMs
                 it[createdAt] = now
               }
               .value
@@ -324,6 +331,15 @@ class ConversationRepository @Inject constructor() {
           content = this[AgentMessageTable.content],
           displayText = this[AgentMessageTable.displayText],
           createdAt = this[AgentMessageTable.createdAt],
+          model = this[AgentMessageTable.model],
+          usage =
+              TokenCounts(
+                  input = this[AgentMessageTable.inputTokens],
+                  cacheRead = this[AgentMessageTable.cacheReadTokens],
+                  cacheWrite = this[AgentMessageTable.cacheWriteTokens],
+                  output = this[AgentMessageTable.outputTokens]),
+          costUsd = this[AgentMessageTable.costUsd],
+          durationMs = this[AgentMessageTable.durationMs],
       )
 
   private fun ResultRow.toToolCall() =
@@ -333,6 +349,7 @@ class ConversationRepository @Inject constructor() {
           args = this[AgentToolCallTable.args],
           sourcesJson = this[AgentToolCallTable.sources],
           ok = this[AgentToolCallTable.ok],
+          durationMs = this[AgentToolCallTable.durationMs],
       )
 
   private fun ResultRow.toConversation() =

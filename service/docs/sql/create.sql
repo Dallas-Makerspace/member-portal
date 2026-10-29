@@ -634,7 +634,7 @@ CREATE TABLE `workflow_event` (
   CONSTRAINT `workflow_event_run_FK` FOREIGN KEY (`run_id`) REFERENCES `workflow_run` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Append-only run log and audit trail';
 /*!40101 SET character_set_client = @saved_cs_client */;
-
+
 -- AI assistant chats (agent-chat-migration.sql)
 CREATE TABLE `agent_conversation` (
   `id` char(36) NOT NULL COMMENT 'Random UUID; also the share id',
@@ -665,6 +665,7 @@ CREATE TABLE `agent_message` (
   `cache_write_tokens` int(11) NOT NULL DEFAULT 0,
   `output_tokens` int(11) NOT NULL DEFAULT 0,
   `cost_usd` double NOT NULL DEFAULT 0,
+  `duration_ms` int(11) DEFAULT NULL COMMENT 'Time the turn took; set on its final assistant message',
   `created_at` datetime NOT NULL COMMENT 'UTC',
   PRIMARY KEY (`id`),
   KEY `agent_message_conversation_IDX` (`conversation_id`,`id`),

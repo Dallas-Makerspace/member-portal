@@ -37,6 +37,7 @@ object AgentMessageTable : LongIdTable("agent_message") {
   val cacheWriteTokens = integer("cache_write_tokens").default(0)
   val outputTokens = integer("output_tokens").default(0)
   val costUsd = double("cost_usd").default(0.0)
+  val durationMs = integer("duration_ms").nullable()
   val createdAt = datetime("created_at")
 }
 

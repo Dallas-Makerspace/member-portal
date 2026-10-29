@@ -144,6 +144,20 @@ class ChatServiceTest {
   }
 
   @Test
+  fun `an answer carries its model, tokens, cost and time, and each tool call its time`() = runBlocking<Unit> {
+    val service = service()
+    val started = assertIs<TurnOutcome.Started>(service.startConversation("ask-ai", "jdoe", "When is the laser class?"))
+    service.awaitTurn(started.conversationId)
+
+    val answer = assertNotNull(service.detail(started.conversationId, "jdoe")).messages[1]
+    val meta = assertNotNull(answer.meta)
+    assertEquals("model", meta.model)
+    assertTrue(meta.inputTokens > 0 && meta.outputTokens > 0)
+    assertNotNull(meta.durationMs)
+    assertTrue(answer.toolCalls.single().durationMs >= 0)
+  }
+
+  @Test
   fun `a chat that used member data becomes private to its owner`() = runBlocking<Unit> {
     val service = service()
     val started = assertIs<TurnOutcome.Started>(service.startConversation("people", "jdoe", "Who teaches welding?"))

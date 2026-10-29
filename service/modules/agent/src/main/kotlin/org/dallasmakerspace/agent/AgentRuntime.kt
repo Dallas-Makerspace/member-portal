@@ -29,6 +29,7 @@ class TurnState(val turnSeq: Int, userText: String, modelNote: String? = null) {
   var privateReason: String? = null
   val partialText = StringBuilder()
   var costUsd = 0.0
+  val startedAtMillis = System.currentTimeMillis()
 
   init {
     val modelText = if (modelNote == null) userText else userText + "\n\n" + modelNote

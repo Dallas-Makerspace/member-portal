@@ -32,6 +32,7 @@ import org.dallasmakerspace.agent.db.ToolCallRow
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.models.agent.AgentAnswerMeta
 import org.dallasmakerspace.models.agent.AgentBotInfo
 import org.dallasmakerspace.models.agent.AgentChatMessage
 import org.dallasmakerspace.models.agent.AgentConversationDetail
@@ -223,7 +224,7 @@ constructor(
   ) {
     var answerId: Long? = null
     try {
-      val rows = completedRows(state, failure)
+      val rows = withDuration(completedRows(state, failure), state)
       val ids = repository.appendTurn(conversation.id, rows, state.toolCalls)
       answerId = ids.getOrNull(rows.indexOfLast { it.role == AgentRoles.ASSISTANT })
       spendCap.record(state.costUsd)
@@ -262,6 +263,14 @@ constructor(
       rows += NewMessage(state.turnSeq, AgentRoles.ASSISTANT, TurnState.encode(message), text)
     }
     return rows
+  }
+
+  /** Puts the turn's elapsed time on its final assistant message. */
+  private fun withDuration(rows: List<NewMessage>, state: TurnState): List<NewMessage> {
+    val last = rows.indexOfLast { it.role == AgentRoles.ASSISTANT }
+    if (last < 0) return rows
+    val elapsed = (System.currentTimeMillis() - state.startedAtMillis).toInt()
+    return rows.toMutableList().also { it[last] = it[last].copy(durationMs = elapsed) }
   }
 
   fun activeTurn(conversationId: String): ActiveTurn? = turnStreams.get(conversationId)
@@ -423,12 +432,26 @@ constructor(
                   role = AgentRoles.ASSISTANT,
                   text = answers.mapNotNull { it.displayText }.joinToString("\n\n"),
                   toolCalls =
-                      calls.map { AgentToolCallSummary(it.toolName, it.args.take(ARGS_CHARS), it.ok) },
+                      calls.map {
+                        AgentToolCallSummary(it.toolName, it.args.take(ARGS_CHARS), it.ok, it.durationMs)
+                      },
                   sources = sources,
-                  createdAt = last.createdAt.iso())
+                  createdAt = last.createdAt.iso(),
+                  meta = metaOf(answers))
             })
       }
     }
+
+    /** Model, tokens and cost summed over a turn's model calls; the time sits on the last one. */
+    private fun metaOf(answers: List<MessageRow>) =
+        AgentAnswerMeta(
+            model = answers.lastOrNull { it.model != null }?.model,
+            inputTokens = answers.sumOf { it.usage.input },
+            cacheReadTokens = answers.sumOf { it.usage.cacheRead },
+            cacheWriteTokens = answers.sumOf { it.usage.cacheWrite },
+            outputTokens = answers.sumOf { it.usage.output },
+            costUsd = answers.sumOf { it.costUsd },
+            durationMs = answers.lastOrNull()?.durationMs)
 
     private const val ARGS_CHARS = 200
   }

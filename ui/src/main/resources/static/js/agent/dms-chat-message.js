@@ -2,7 +2,27 @@ import {LitElement, html} from 'https://esm.sh/lit@3.3.0';
 import {unsafeHTML} from 'https://esm.sh/lit@3.3.0/directives/unsafe-html.js';
 import {renderMarkdown, toolIcon, toolHint, toolLabel} from './markdown.js';
 
-const SOURCE_ICONS = {Source: 'description', Talk: 'forum', Calendar: 'event', 'DMS Learn': 'school', Code: 'code'};
+function formatDuration(ms) {
+    if (ms >= 60000) return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+    return `${(ms / 1000).toFixed(1)} s`;
+}
+
+function formatCount(n) {
+    return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
+function formatCost(usd) {
+    return '$' + (usd < 0.1 ? usd.toFixed(4) : usd.toFixed(2));
+}
+
+/** "us.anthropic.claude-haiku-5-5" becomes "Haiku 5.5"; other ids lose only their region prefix. */
+function modelName(id) {
+    const claude = /claude-([a-z]+)-(\d+)-(\d+)/.exec(id);
+    if (claude) return `${claude[1][0].toUpperCase()}${claude[1].slice(1)} ${claude[2]}.${claude[3]}`;
+    return id.replace(/^[a-z]{2}\.(openai\.)?/, '');
+}
+
+const SOURCE_ICONS ={Source: 'description', Talk: 'forum', Calendar: 'event', 'DMS Learn': 'school', Code: 'code'};
 
 /**
  * One chat message. Properties: message {id, role, text, toolCalls, sources, feedback},
@@ -59,7 +79,9 @@ class DmsChatMessage extends LitElement {
      * collapsed "Used N tools" that opens into the full list.
      */
     _activity(calls, working) {
-        if (!calls || !calls.length) return '';
+        const meta = this.message?.meta;
+        if ((!calls || !calls.length) && (working || !meta)) return '';
+        calls = calls || [];
         if (working) {
             const current = calls.slice().reverse().find(x => x.running) || calls[calls.length - 1];
             const hint = toolHint(current.argsPreview);
@@ -75,20 +97,43 @@ class DmsChatMessage extends LitElement {
             <div class="chat-activity">
                 <button type="button" class="chat-activity-toggle" aria-expanded=${this._open} @click=${() => { this._open = !this._open; }}>
                     <span class="material-symbols-outlined chevron" aria-hidden="true">${this._open ? 'expand_more' : 'chevron_right'}</span>
-                    <span>Used ${calls.length} ${calls.length === 1 ? 'tool' : 'tools'}</span>
+                    <span>${calls.length ? `Used ${calls.length} ${calls.length === 1 ? 'tool' : 'tools'}` : 'Details'}</span>
                     <span class="chat-activity-icons" aria-hidden="true">${icons.map(n => html`<span class="material-symbols-outlined">${toolIcon(n)}</span>`)}</span>
                     ${failed ? html`<span class="chat-activity-failed">\u00b7 ${failed} failed</span>` : ''}
                 </button>
                 ${this._open ? html`
-                    <ul class="chat-activity-list">
-                        ${calls.map(x => html`
-                            <li class=${x.ok === false ? 'failed' : ''}>
-                                <span class="material-symbols-outlined" aria-hidden="true">${toolIcon(x.name)}</span>
-                                <span class="chat-activity-text">${toolLabel(x.name)}${toolHint(x.argsPreview) ? html` <span class="chat-activity-hint">\u00b7 ${toolHint(x.argsPreview)}</span>` : ''}</span>
-                                ${x.ok === false ? html`<span class="chat-activity-failed">failed</span>` : ''}
-                            </li>`)}
-                    </ul>` : ''}
+                    ${calls.length ? html`
+                        <ul class="chat-activity-list">
+                            ${calls.map(x => html`
+                                <li class=${x.ok === false ? 'failed' : ''}>
+                                    <span class="material-symbols-outlined" aria-hidden="true">${toolIcon(x.name)}</span>
+                                    <span class="chat-activity-text">${toolLabel(x.name)}${toolHint(x.argsPreview) ? html` <span class="chat-activity-hint">\u00b7 ${toolHint(x.argsPreview)}</span>` : ''}</span>
+                                    ${x.durationMs ? html`<span class="chat-activity-time">${formatDuration(x.durationMs)}</span>` : ''}
+                                    ${x.ok === false ? html`<span class="chat-activity-failed">failed</span>` : ''}
+                                </li>`)}
+                        </ul>` : ''}
+                    ${this._details(meta)}` : ''}
             </div>`;
+    }
+
+    /** How the answer was made: time, model, tokens, cost and where the sources came from. */
+    _details(meta) {
+        if (!meta) return '';
+        const total = meta.inputTokens + meta.cacheReadTokens + meta.cacheWriteTokens;
+        const cached = total ? Math.round(100 * meta.cacheReadTokens / total) : 0;
+        const bySource = {};
+        (this.message.sources || []).forEach(s => { bySource[s.source] = (bySource[s.source] || 0) + 1; });
+        const rows = [
+            meta.durationMs != null ? ['Response time', formatDuration(meta.durationMs)] : null,
+            meta.model ? ['Model', modelName(meta.model)] : null,
+            ['Tokens', `${formatCount(total)} in${cached ? ` (${cached}% cached)` : ''}, ${formatCount(meta.outputTokens)} out`],
+            ['Estimated cost', formatCost(meta.costUsd)],
+            Object.keys(bySource).length ? ['Sources', Object.entries(bySource).map(([k, v]) => `${k} ${v}`).join(', ')] : null,
+        ].filter(Boolean);
+        return html`
+            <dl class="chat-activity-meta">
+                ${rows.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}
+            </dl>`;
     }
 
     _host(url) {

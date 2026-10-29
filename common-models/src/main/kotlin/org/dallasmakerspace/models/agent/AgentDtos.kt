@@ -40,6 +40,19 @@ data class AgentToolCallSummary(
     val name: String,
     val argsPreview: String,
     val ok: Boolean = true,
+    val durationMs: Int = 0,
+)
+
+/** What one answer cost, summed over the model calls of its turn. [durationMs] is null for older answers. */
+@Serializable
+data class AgentAnswerMeta(
+    val model: String? = null,
+    val inputTokens: Int = 0,
+    val cacheReadTokens: Int = 0,
+    val cacheWriteTokens: Int = 0,
+    val outputTokens: Int = 0,
+    val costUsd: Double = 0.0,
+    val durationMs: Int? = null,
 )
 
 /** A user or assistant message as shown in the chat. Tool results are folded into [toolCalls]. */
@@ -52,6 +65,7 @@ data class AgentChatMessage(
     val sources: List<AgentSourceLink> = emptyList(),
     val createdAt: String,
     val feedback: Boolean? = null,
+    val meta: AgentAnswerMeta? = null,
 )
 
 @Serializable

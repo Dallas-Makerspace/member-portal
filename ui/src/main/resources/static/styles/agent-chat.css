@@ -280,3 +280,9 @@ dms-chat .material-symbols-outlined { font-variation-settings: 'FILL' 0; display
 .chat-skeleton span:nth-child(4) { width: 60%; }
 @keyframes chat-shimmer { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .chat-skeleton span { animation: none; } }
+.chat-activity-time { margin-left: auto; padding-left: .75rem; color: #8a939c; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chat-activity-meta { margin: .35rem 0 0; padding: 0 0 0 .5rem; border-left: 2px solid var(--chat-wash); }
+.chat-activity-meta div { display: flex; gap: .75rem; min-height: 1.5rem; align-items: baseline; }
+.chat-activity-meta dt { flex: 0 0 8.5rem; font-weight: 500; color: var(--chat-muted); }
+.chat-activity-meta dd { margin: 0; min-width: 0; color: var(--chat-ink); font-variant-numeric: tabular-nums; }
+@media (max-width: 399.98px) { .chat-activity-meta dt { flex-basis: 6.5rem; } }
