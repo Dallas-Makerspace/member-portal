@@ -32,6 +32,7 @@ dependencies {
   implementation(project(":common-models"))
   implementation(project(":service:core"))
   implementation(project(":service:agent"))
+  implementation(project(":service:agenttools"))
   implementation(project(":service:askai"))
   implementation(project(":service:itbot"))
   implementation(project(":service:coursebot"))

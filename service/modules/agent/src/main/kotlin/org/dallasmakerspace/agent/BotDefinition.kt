@@ -31,7 +31,17 @@ data class BotDefinition(
     val placeholder: String = DEFAULT_PLACEHOLDER,
     /** Extra model request fields, e.g. a reasoning effort; null uses the model's default. */
     val modelRequestFields: Map<String, JsonElement>? = null,
+    /** Whose member data the tools may reach; staff bots opt in to [MemberAccess.ANY_MEMBER]. */
+    val memberAccess: MemberAccess = MemberAccess.SELF_ONLY,
 ) {
+  init {
+    tools.forEach {
+      require(it.requiredMemberAccess <= memberAccess) {
+        "Bot $key has ${it.descriptor.name}, which needs ${it.requiredMemberAccess} member access"
+      }
+    }
+  }
+
   companion object {
     const val DEFAULT_MAX_TOOL_CALLS = 8
     const val DEFAULT_INTRO = "Ask about policies, tools, classes and how things work."

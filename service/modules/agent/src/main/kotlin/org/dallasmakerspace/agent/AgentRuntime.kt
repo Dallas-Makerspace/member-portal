@@ -67,17 +67,18 @@ class AgentRuntime(private val modelClient: ChatModelClient) {
   suspend fun runTurn(
       bot: BotDefinition,
       modelId: String,
-      context: ToolContext,
+      asker: ToolContext,
       history: List<Message>,
       state: TurnState,
       sink: AgentEventSink,
   ) {
+    val context = asker.copy(memberAccess = bot.memberAccess)
     val toolsByName = bot.tools.associateBy { it.descriptor.name }
     val cache = if (supportsCachePoints(modelId)) CACHE else null
     val descriptors =
         bot.tools.mapIndexed { i, tool ->
-          if (i == bot.tools.lastIndex) tool.descriptor.copy(cacheControl = cache)
-          else tool.descriptor
+          val descriptor = tool.descriptorFor(bot.memberAccess)
+          if (i == bot.tools.lastIndex) descriptor.copy(cacheControl = cache) else descriptor
         }
     val system =
         Message.System(
