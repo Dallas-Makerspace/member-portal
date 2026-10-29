@@ -51,9 +51,16 @@ constructor(
     const val GROUP_TTL_MILLIS = 60_000L
   }
 
-  suspend fun canUse(bot: BotDefinition, username: String, groups: List<String>): Boolean =
-      configOverrideService.isFeatureEnabledFor(bot.featureFlag, username, groups) &&
-          inAudience(bot.audience, groups)
+  /** Whether [username] may use [bot]; AD groups are looked up only when the flag or audience needs them. */
+  suspend fun canUse(bot: BotDefinition, username: String): Boolean {
+    val flag = configOverrideService.get(bot.featureFlag)
+    val listed = flag.enabled || username in flag.enabledUsernames
+    if (!listed && flag.enabledGroupNames.isEmpty()) return false
+    val needsGroups = (!listed) || bot.audience != BotAudience.AllMembers
+    val groups = if (needsGroups) groupsOf(username) else emptyList()
+    return configOverrideService.isFeatureEnabledFor(bot.featureFlag, username, groups) &&
+        inAudience(bot.audience, groups)
+  }
 
   private suspend fun inAudience(audience: BotAudience, groups: List<String>): Boolean =
       when (audience) {

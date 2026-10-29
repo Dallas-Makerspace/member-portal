@@ -20,6 +20,7 @@ import org.dallasmakerspace.agent.db.AgentConversationTable
 import org.dallasmakerspace.agent.db.AgentFeedbackTable
 import org.dallasmakerspace.agent.db.AgentMessageTable
 import org.dallasmakerspace.agent.db.AgentToolCallTable
+import org.dallasmakerspace.agent.db.AgentUsageTable
 import org.dallasmakerspace.agent.db.ArtifactRepository
 import org.dallasmakerspace.agent.db.ConversationRepository
 import org.dallasmakerspace.config.ConfigKey
@@ -56,7 +57,7 @@ class ChatServiceTest {
       DBMemberPortalConnection.db = db
       transaction(db) {
         SchemaUtils.create(
-            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable,
+            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable, AgentUsageTable,
             AgentArtifactTable, AgentArtifactVersionTable)
       }
     }
@@ -88,7 +89,7 @@ class ChatServiceTest {
     val access =
         mock<AgentAccess> {
           onBlocking { groupsOf(any()) } doReturn emptyList()
-          onBlocking { canUse(any(), any(), any()) } doReturn true
+          onBlocking { canUse(any(), any()) } doReturn true
         }
     val bots =
         setOf(
@@ -113,6 +114,7 @@ class ChatServiceTest {
       AgentArtifactVersionTable.deleteAll()
       AgentArtifactTable.deleteAll()
       AgentFeedbackTable.deleteAll()
+      AgentUsageTable.deleteAll()
       AgentToolCallTable.deleteAll()
       AgentMessageTable.deleteAll()
       AgentConversationTable.deleteAll()
@@ -199,6 +201,17 @@ class ChatServiceTest {
     assertEquals(
         TurnOutcome.Refused(AgentSpendCap.DAILY_CAP_MESSAGE),
         service.sendMessage(started.conversationId, "jdoe", "Again"))
+  }
+
+  @Test
+  fun `deleting a chat does not give back its question or its spend`() = runBlocking<Unit> {
+    val service = service(dailyCap = 1)
+    val started = assertIs<TurnOutcome.Started>(service.startConversation("ask-ai", "jdoe", "Hello"))
+    service.awaitTurn(started.conversationId)
+    assertTrue(service.delete(started.conversationId, "jdoe"))
+
+    assertEquals(TurnOutcome.Refused(AgentSpendCap.DAILY_CAP_MESSAGE), service.startConversation("ask-ai", "jdoe", "Again"))
+    assertTrue(repository.spentSince(ConversationRepository.nowUtc().minusDays(1)) > 0.0)
   }
 
   @Test

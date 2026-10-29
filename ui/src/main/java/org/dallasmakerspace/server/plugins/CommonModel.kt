@@ -56,21 +56,24 @@ fun Application.configureCommonModel(
     cmLog.info(
         "CommonModel: template=${body.template} isInfraUser=$isInfraUser sessionId=$sessionId")
     val userId = userSession?.userId
-    val flags = coroutineScope {
-      listOf(
-              REMOTE_ACCESS_FLAG,
-              ACCOUNT_MENU_FLAG,
-              ProfileFollowsHandler.FEATURE_FLAG_KEY,
-              NotificationsInboxHandler.FEATURE_FLAG_KEY,
-              WORKFLOWS_FEATURE_FLAG)
-          .distinct()
-          .associateWith { key ->
-            async { getCachedFeatureFlag(memberServiceClient, key, userId, sessionId) }
-          }
-          .mapValues { it.value.await() }
+    val (flags, agentBots) = coroutineScope {
+      val bots = async { agentBotAccess.botKeys(userId, sessionId) }
+      val flags =
+          listOf(
+                  REMOTE_ACCESS_FLAG,
+                  ACCOUNT_MENU_FLAG,
+                  ProfileFollowsHandler.FEATURE_FLAG_KEY,
+                  NotificationsInboxHandler.FEATURE_FLAG_KEY,
+                  WORKFLOWS_FEATURE_FLAG)
+              .distinct()
+              .associateWith { key ->
+                async { getCachedFeatureFlag(memberServiceClient, key, userId, sessionId) }
+              }
+              .mapValues { it.value.await() }
+      flags to bots.await()
     }
-    val itAssistantEnabled = agentBotAccess.canUse(BotPageHandler.IT_BOT_KEY, userId, sessionId)
-    val courseAssistantEnabled = agentBotAccess.canUse(BotPageHandler.COURSE_BOT_KEY, userId, sessionId)
+    val itAssistantEnabled = BotPageHandler.IT_BOT_KEY in agentBots
+    val courseAssistantEnabled = BotPageHandler.COURSE_BOT_KEY in agentBots
     val remoteAccessEnabled = flags.getValue(REMOTE_ACCESS_FLAG)
     cmLog.info("CommonModel: remoteAccessEnabled=$remoteAccessEnabled")
     val accountMenuEnabled = flags.getValue(ACCOUNT_MENU_FLAG)

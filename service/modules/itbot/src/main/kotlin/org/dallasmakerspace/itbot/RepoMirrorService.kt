@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.AppConfig
@@ -32,8 +34,9 @@ data class RepoSpec(val name: String, val url: String) {
 data class RepoStatus(val name: String, val cloned: Boolean, val syncedAt: Instant?, val head: String?)
 
 /**
- * Keeps read-only clones of the configured public repositories on local disk. Refreshed once a day
- * (04:00 Central) and on request; never with credentials, so only public repositories work.
+ * Keeps read-only clones of the configured public repositories on local disk. Downloaded on first
+ * use, refreshed once a day (04:00 Central) and on request; never with credentials, so only public
+ * repositories work.
  */
 @Singleton
 class RepoMirrorService
@@ -56,6 +59,7 @@ constructor(
   private val mutex = Mutex()
   private val syncedAt = ConcurrentHashMap<String, Instant>()
   private val started = AtomicBoolean(false)
+  private val firstSync = CompletableDeferred<Unit>()
 
   suspend fun repos(): List<RepoSpec> =
       if (mock) emptyList() else parseRepos(configOverrideService.get(ConfigRegistry.AGENT_IT_BOT_REPOS))
@@ -111,15 +115,30 @@ constructor(
         }
       }
 
-  /** Syncs now, then once a night, from a deadline timer (no polling). */
+  /** Starts syncing if it hasn't started, then waits for the first sync (at most [timeoutMillis]). */
+  suspend fun awaitReady(timeoutMillis: Long = FIRST_SYNC_WAIT_MILLIS) {
+    ensureStarted()
+    withTimeoutOrNull(timeoutMillis) { firstSync.await() }
+  }
+
+  /**
+   * On first use, syncs now and then once a night, from a deadline timer (no polling). Nothing is
+   * cloned until an IT assistant tool needs it.
+   */
   @Suppress("TooGenericExceptionCaught")
-  fun startBackgroundSync() {
-    if (mock || !started.compareAndSet(false, true)) return
+  fun ensureStarted() {
+    if (mock) {
+      firstSync.complete(Unit)
+      return
+    }
+    if (!started.compareAndSet(false, true)) return
     scope.launch {
       try {
         log.info("IT assistant repositories: ${syncAll().joinToString()}")
       } catch (e: Exception) {
         log.error("Initial repository sync failed", e)
+      } finally {
+        firstSync.complete(Unit)
       }
       while (true) {
         delay(millisUntilNextSync(Instant.now()))
@@ -134,6 +153,7 @@ constructor(
 
   companion object {
     private const val SYNC_SECONDS = 180L
+    private const val FIRST_SYNC_WAIT_MILLIS = 20_000L
     private const val LOG_CHARS = 300
     private const val SYNC_HOUR = 4
     private val GITHUB_URL = Regex("""https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+""")

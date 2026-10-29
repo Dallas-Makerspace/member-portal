@@ -12,6 +12,7 @@ import org.dallasmakerspace.agent.db.AgentConversationTable
 import org.dallasmakerspace.agent.db.AgentFeedbackTable
 import org.dallasmakerspace.agent.db.AgentMessageTable
 import org.dallasmakerspace.agent.db.AgentToolCallTable
+import org.dallasmakerspace.agent.db.AgentUsageTable
 import org.dallasmakerspace.agent.db.ArtifactRepository
 import org.dallasmakerspace.agent.db.ConversationRepository
 import org.dallasmakerspace.config.ConfigKey
@@ -46,7 +47,7 @@ class ArtifactServiceTest {
       DBMemberPortalConnection.db = db
       transaction(db) {
         SchemaUtils.create(
-            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable,
+            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable, AgentUsageTable,
             AgentArtifactTable, AgentArtifactVersionTable)
       }
     }
@@ -68,7 +69,7 @@ class ArtifactServiceTest {
     val access =
         mock<AgentAccess> {
           onBlocking { groupsOf(any()) } doReturn emptyList()
-          onBlocking { canUse(any(), any(), any()) } doReturn true
+          onBlocking { canUse(any(), any()) } doReturn true
         }
     val chat =
         ChatService(

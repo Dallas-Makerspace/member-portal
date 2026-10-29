@@ -88,19 +88,17 @@ constructor(
 
   fun bot(key: String): BotDefinition? = botsByKey[key]
 
-  suspend fun availableBots(username: String): List<AgentBotInfo> {
-    val groups = access.groupsOf(username)
-    return botsByKey.values
-        .filter { access.canUse(it, username, groups) }
-        .map {
-          AgentBotInfo(
-              it.key, it.displayName, it.starterPrompts, it.intro, it.placeholder, it.startsPrivate)
-        }
-  }
+  suspend fun availableBots(username: String): List<AgentBotInfo> =
+      botsByKey.values
+          .filter { access.canUse(it, username) }
+          .map {
+            AgentBotInfo(
+                it.key, it.displayName, it.starterPrompts, it.intro, it.placeholder, it.startsPrivate)
+          }
 
   suspend fun startConversation(botKey: String, username: String, text: String): TurnOutcome {
     val bot = botsByKey[botKey] ?: return TurnOutcome.NotFound
-    if (!access.canUse(bot, username, access.groupsOf(username))) return TurnOutcome.Forbidden
+    if (!access.canUse(bot, username)) return TurnOutcome.Forbidden
     spendCap.refusal(username, now())?.let {
       return TurnOutcome.Refused(it)
     }
@@ -137,7 +135,7 @@ constructor(
     val conversation = repository.get(conversationId) ?: return TurnOutcome.NotFound
     if (conversation.ownerUsername != username) return TurnOutcome.Forbidden
     val bot = botsByKey[conversation.botKey] ?: return TurnOutcome.NotFound
-    if (!access.canUse(bot, username, access.groupsOf(username))) return TurnOutcome.Forbidden
+    if (!access.canUse(bot, username)) return TurnOutcome.Forbidden
     if (turnStreams.isRunning(conversationId)) return TurnOutcome.AlreadyRunning
     spendCap.refusal(username, now())?.let {
       return TurnOutcome.Refused(it)
@@ -283,7 +281,7 @@ constructor(
     if (conversation.ownerUsername == username) return true
     if (conversation.visibility != AgentVisibility.PUBLIC) return false
     val bot = botsByKey[conversation.botKey] ?: return false
-    return access.canUse(bot, username, access.groupsOf(username))
+    return access.canUse(bot, username)
   }
 
   suspend fun detail(conversationId: String, username: String): AgentConversationDetail? {
@@ -305,7 +303,7 @@ constructor(
   suspend fun list(botKey: String, username: String, mine: Boolean, limit: Int):
       List<AgentConversationSummary>? {
     val bot = botsByKey[botKey] ?: return null
-    if (!access.canUse(bot, username, access.groupsOf(username))) return null
+    if (!access.canUse(bot, username)) return null
     val rows =
         if (mine) repository.listByOwner(botKey, username, limit)
         else repository.listPublic(botKey, limit)
@@ -352,7 +350,10 @@ constructor(
     return true
   }
 
-  suspend fun deleteExpired(): Int = repository.deleteInactiveSince(now().minusYears(RETENTION_YEARS))
+  suspend fun deleteExpired(): Int {
+    repository.deleteUsageBefore(now().minusMonths(USAGE_RETENTION_MONTHS))
+    return repository.deleteInactiveSince(now().minusYears(RETENTION_YEARS))
+  }
 
   /** Deletes chats past the retention period once a night (03:30 Central). */
   @Suppress("TooGenericExceptionCaught")
@@ -378,6 +379,7 @@ constructor(
     private const val TITLE_CHARS = 120
     private const val MAX_TITLE_CHARS = 120
     private const val RETENTION_YEARS = 2L
+    private const val USAGE_RETENTION_MONTHS = 13L
     const val PII_REASON = "The question contained personal details"
     const val PRIVATE_TITLE = "Private question"
     const val BUSY_MESSAGE = "The assistant is busy right now. Please try again in a minute."

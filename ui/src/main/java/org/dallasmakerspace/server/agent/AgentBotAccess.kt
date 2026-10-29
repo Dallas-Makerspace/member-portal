@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -19,26 +20,43 @@ class AgentBotAccess @Inject constructor(private val client: AgentServiceClient)
 
   private val cache = ConcurrentHashMap<String, Cached>()
 
+  suspend fun canUse(botKey: String, username: String?, sessionId: String?): Boolean =
+      botKey in botKeys(username, sessionId)
+
+  /**
+   * Every bot [username] may use, from one cached service call. A slow or failing service means
+   * "none" for a short while, so a hung service can't stall every page render.
+   */
   @Suppress("TooGenericExceptionCaught")
-  suspend fun canUse(botKey: String, username: String?, sessionId: String?): Boolean {
-    if (username == null) return false
+  suspend fun botKeys(username: String?, sessionId: String?): Set<String> {
+    if (username == null) return emptySet()
     val cached = cache[username]
-    if (cached != null && System.currentTimeMillis() < cached.expiresAt) return botKey in cached.bots
+    if (cached != null && System.currentTimeMillis() < cached.expiresAt) return cached.bots
+    var ok = false
     val bots =
         try {
-          val response = client.call(HttpMethod.Get, "/agent/bots", username, sessionId)
-          if (response.isSuccess) parseBotKeys(response.body) else emptySet()
+          val response =
+              withTimeoutOrNull(CALL_TIMEOUT_MS) {
+                client.call(HttpMethod.Get, "/agent/bots", username, sessionId)
+              }
+          if (response != null && response.isSuccess) {
+            ok = true
+            parseBotKeys(response.body)
+          } else emptySet()
         } catch (e: CancellationException) {
           throw e
         } catch (e: Exception) {
           emptySet()
         }
-    cache[username] = Cached(bots, System.currentTimeMillis() + TTL_MS)
-    return botKey in bots
+    val ttl = if (ok) TTL_MS else FAILURE_TTL_MS
+    cache[username] = Cached(bots, System.currentTimeMillis() + ttl)
+    return bots
   }
 
   companion object {
     private const val TTL_MS = 60_000L
+    private const val FAILURE_TTL_MS = 15_000L
+    private const val CALL_TIMEOUT_MS = 2_000L
 
     fun parseBotKeys(body: String): Set<String> =
         try {

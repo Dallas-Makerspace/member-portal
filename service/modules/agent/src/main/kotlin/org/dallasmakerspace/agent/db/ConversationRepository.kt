@@ -102,6 +102,7 @@ data class ConversationBundle(
 /** Storage for AI assistant chats. */
 @Singleton
 class ConversationRepository @Inject constructor() {
+  private val reads = BoundedReads(MAX_PARALLEL_READS)
 
   suspend fun create(
       id: String,
@@ -157,16 +158,17 @@ class ConversationRepository @Inject constructor() {
 
   /**
    * The conversation with its messages, tool calls, [username]'s feedback and documents, read
-   * concurrently so a chat page waits for one database round trip rather than five in a row.
+   * concurrently so a chat page waits for one database round trip rather than five in a row, but
+   * never more than [MAX_PARALLEL_READS] connections at a time across all open chats.
    * Null when the conversation doesn't exist.
    */
   suspend fun bundle(conversationId: String, username: String): ConversationBundle? =
       coroutineScope {
-        val conversation = async { get(conversationId) }
-        val messages = async { messages(conversationId) }
-        val toolCalls = async { toolCalls(conversationId) }
-        val feedback = async { feedbackIn(conversationId, username) }
-        val artifacts = async { ArtifactRepository().listFor(conversationId) }
+        val conversation = async { reads.run { get(conversationId) } }
+        val messages = async { reads.run { messages(conversationId) } }
+        val toolCalls = async { reads.run { toolCalls(conversationId) } }
+        val feedback = async { reads.run { feedbackIn(conversationId, username) } }
+        val artifacts = async { reads.run { ArtifactRepository().listFor(conversationId) } }
         val found = conversation.await()
         if (found == null) {
           coroutineContext.cancelChildren()
@@ -244,6 +246,16 @@ class ConversationRepository @Inject constructor() {
       it[lastMessageAt] = now
       it[totalCostUsd] = AgentConversationTable.totalCostUsd + turnCost
     }
+    val chat =
+        AgentConversationTable.slice(AgentConversationTable.ownerUsername, AgentConversationTable.botKey)
+            .select { AgentConversationTable.id eq conversationId }
+            .single()
+    AgentUsageTable.insert {
+      it[username] = chat[AgentConversationTable.ownerUsername]
+      it[botKey] = chat[AgentConversationTable.botKey]
+      it[costUsd] = turnCost
+      it[createdAt] = now
+    }
     ids
   }
 
@@ -300,20 +312,17 @@ class ConversationRepository @Inject constructor() {
           }
 
   suspend fun spentSince(since: LocalDateTime): Double = suspendTransaction {
-    val total = AgentMessageTable.costUsd.sum()
-    AgentMessageTable.slice(total)
-        .select { AgentMessageTable.createdAt greaterEq since }
+    val total = AgentUsageTable.costUsd.sum()
+    AgentUsageTable.slice(total)
+        .select { AgentUsageTable.createdAt greaterEq since }
         .singleOrNull()
         ?.get(total) ?: 0.0
   }
 
   /** Questions [username] asked since [since], across all assistants. */
   suspend fun userTurnsSince(username: String, since: LocalDateTime): Long = suspendTransaction {
-    AgentMessageTable.innerJoin(AgentConversationTable)
-        .select {
-          (AgentConversationTable.ownerUsername eq username) and
-              (AgentMessageTable.role eq AgentRoles.USER) and
-              (AgentMessageTable.createdAt greaterEq since)
+    AgentUsageTable.select {
+          (AgentUsageTable.username eq username) and (AgentUsageTable.createdAt greaterEq since)
         }
         .count()
   }
@@ -321,6 +330,11 @@ class ConversationRepository @Inject constructor() {
   /** Deletes conversations whose last message is older than [cutoff]; returns how many. */
   suspend fun deleteInactiveSince(cutoff: LocalDateTime): Int = suspendTransaction {
     AgentConversationTable.deleteWhere { AgentConversationTable.lastMessageAt less cutoff }
+  }
+
+  /** Deletes usage rows older than [cutoff]; they outlive chats so deleting a chat can't reset a cap. */
+  suspend fun deleteUsageBefore(cutoff: LocalDateTime): Int = suspendTransaction {
+    AgentUsageTable.deleteWhere { AgentUsageTable.createdAt less cutoff }
   }
 
   private fun ResultRow.toMessage() =
@@ -367,6 +381,7 @@ class ConversationRepository @Inject constructor() {
 
   companion object {
     const val TITLE_LENGTH = 200
+    const val MAX_PARALLEL_READS = 4
 
     fun nowUtc(): LocalDateTime = LocalDateTime.now(ZoneId.of("UTC"))
   }

@@ -4,12 +4,14 @@ import io.ktor.http.HttpMethod
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.server.workflows.ServiceResponse
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
@@ -46,6 +48,24 @@ class AgentBotAccessTest {
         ServiceResponse(500, "oops")
 
     assertFalse(AgentBotAccess(client).canUse("it-assistant", "asmith", "s"))
+  }
+
+  @Test
+  fun `a hung service gives up after the timeout and is not asked again right away`() = runBlocking<Unit> {
+    val client = mock<AgentServiceClient>()
+    org.mockito.kotlin.whenever(client.call(any(), any(), any(), anyOrNull(), any(), anyOrNull())) doSuspendableAnswer
+        {
+          delay(10_000)
+          ServiceResponse(200, body)
+        }
+    val access = AgentBotAccess(client)
+    val started = System.currentTimeMillis()
+
+    assertEquals(emptySet(), access.botKeys("jdoe", "s"))
+    assertEquals(emptySet(), access.botKeys("jdoe", "s"))
+
+    assertTrue(System.currentTimeMillis() - started < 5_000)
+    verify(client, times(1)).call(eq(HttpMethod.Get), any(), any(), anyOrNull(), any(), anyOrNull())
   }
 
   private fun <T> eq(value: T): T = org.mockito.kotlin.eq(value)

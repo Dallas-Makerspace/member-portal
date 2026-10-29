@@ -291,6 +291,7 @@ class SyncReposTool @Inject constructor(private val mirror: RepoMirrorService) :
       return ToolResult("Code was refreshed ${ago.toMinutes()} minutes ago; that is recent enough.")
     }
     lastSync = Instant.now()
+    mirror.awaitReady()
     val name = args.string("repo")?.trim()?.takeIf { it.isNotEmpty() }
     val results = if (name != null) listOf(mirror.sync(name)) else mirror.syncAll()
     return ToolResult(results.joinToString("\n"))

@@ -31,7 +31,7 @@ class ConversationRepositoryTest {
       DBMemberPortalConnection.db = db
       transaction(db) {
         SchemaUtils.create(
-            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable)
+            AgentConversationTable, AgentMessageTable, AgentToolCallTable, AgentFeedbackTable, AgentUsageTable)
       }
     }
   }
@@ -42,6 +42,7 @@ class ConversationRepositoryTest {
   fun setUp() {
     transaction(DBMemberPortalConnection.db) {
       AgentFeedbackTable.deleteAll()
+      AgentUsageTable.deleteAll()
       AgentToolCallTable.deleteAll()
       AgentMessageTable.deleteAll()
       AgentConversationTable.deleteAll()
@@ -112,6 +113,19 @@ class ConversationRepositoryTest {
     assertEquals(1.0, runBlocking { repository.spentSince(now.minusDays(1)) }, 1e-9)
     assertEquals(1L, runBlocking { repository.userTurnsSince("jdoe", now.minusDays(1)) })
     assertEquals(0L, runBlocking { repository.userTurnsSince("asmith", now.minusDays(1)) })
+  }
+
+  @Test
+  fun `usage outlives its chat and is purged by age`() {
+    create("c1")
+    turn("c1", at = now.minusMonths(14), cost = 1.0)
+    turn("c1", at = now, cost = 0.5)
+    runBlocking { repository.delete("c1") }
+
+    assertEquals(1.0, runBlocking { repository.spentSince(now.minusDays(1)) }, 1e-9)
+    assertEquals(1L, runBlocking { repository.userTurnsSince("jdoe", now.minusDays(1)) })
+    assertEquals(1, runBlocking { repository.deleteUsageBefore(now.minusMonths(13)) })
+    assertEquals(1.0, runBlocking { repository.spentSince(now.minusYears(2)) }, 1e-9)
   }
 
   @Test

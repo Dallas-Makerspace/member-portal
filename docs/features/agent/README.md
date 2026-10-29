@@ -42,8 +42,10 @@ to stay under about 240k characters (Haiku 5.5 prompts over 100k tokens cost 5x)
 | `agent.model.default` | `us.anthropic.claude-haiku-5-5` |
 | Bot flag `agent-chat.enabled` | pilot (mandarlimaye + "IT Early Access") |
 
-Spend is summed from `agent_message.cost_usd` (list prices in `ModelPricing`), cached for 10
-minutes and topped up by each finished turn.
+Spend and daily questions are counted from `agent_usage`, one row per finished turn (list prices in
+`ModelPricing`), cached for 10 minutes and topped up by each finished turn. The rows have no link to
+the chat, so deleting a chat doesn't reset a cap; the nightly job deletes them after 13 months
+(`service/docs/sql/agent-usage-migration.sql`).
 
 ## Adding a bot or a tool
 
@@ -84,7 +86,8 @@ otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
 - **`it-assistant`** (`:service:itbot`): reads local clones of the public DMS repositories with `git`
   (search, files, history, blame), the app and request logs (`query_logs`), and can refresh the
   clones. Chats are always private. Audience: AD group `agent.it-bot.ad-group`; repos:
-  `agent.it-bot.repos`. Clones live in the container's temp dir and sync on start and at 04:00
+  `agent.it-bot.repos`. Clones live in the container's temp dir; nothing is downloaded until an IT
+  tool first needs it (that call waits up to 20 s for the first download), then they sync at 04:00
   Central. Page: `/it-assistant`.
 - **`course-assistant`** (`:service:coursebot`): helps members of any "<prefix> Online Course Editors"
   group design course outlines, quizzes and lesson plans, with Source and the DMS Learn catalog as

@@ -701,6 +701,17 @@ CREATE TABLE `agent_feedback` (
   CONSTRAINT `agent_feedback_message_FK` FOREIGN KEY (`message_id`) REFERENCES `agent_message` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Thumbs up/down on AI assistant answers.';
 
+CREATE TABLE `agent_usage` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `username` varchar(64) NOT NULL COMMENT 'Who asked',
+  `bot_key` varchar(32) NOT NULL,
+  `cost_usd` double NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL COMMENT 'UTC',
+  PRIMARY KEY (`id`),
+  KEY `agent_usage_created_IDX` (`created_at`),
+  KEY `agent_usage_user_IDX` (`username`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='One row per AI assistant turn; outlives deleted chats.';
+
 CREATE TABLE `agent_artifact` (
   `id` char(36) NOT NULL COMMENT 'Random UUID',
   `conversation_id` char(36) NOT NULL,

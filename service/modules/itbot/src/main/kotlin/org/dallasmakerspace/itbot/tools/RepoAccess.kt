@@ -24,6 +24,7 @@ class RepoAccess @Inject constructor(private val mirror: RepoMirrorService) {
   suspend fun target(name: String?): Pair<RepoTarget?, String?> {
     val specs = mirror.repos()
     if (specs.isEmpty()) return null to "No repositories are configured."
+    mirror.awaitReady()
     val spec =
         specs.firstOrNull { it.name == name?.trim() }
             ?: return null to "Unknown repository. Available: ${specs.joinToString { it.name }}."
@@ -35,8 +36,11 @@ class RepoAccess @Inject constructor(private val mirror: RepoMirrorService) {
   }
 
   /** Every repository that is downloaded, for searches that span all of them. */
-  suspend fun all(): List<RepoTarget> =
-      mirror.repos().map { RepoTarget(it, mirror.dirOf(it)) }.filter { Files.isDirectory(it.dir.resolve(".git")) }
+  suspend fun all(): List<RepoTarget> {
+    val specs = mirror.repos()
+    if (specs.isNotEmpty()) mirror.awaitReady()
+    return specs.map { RepoTarget(it, mirror.dirOf(it)) }.filter { Files.isDirectory(it.dir.resolve(".git")) }
+  }
 
   companion object {
     private val SAFE_PATH = Regex("""[A-Za-z0-9_.@+ /-]{0,300}""")

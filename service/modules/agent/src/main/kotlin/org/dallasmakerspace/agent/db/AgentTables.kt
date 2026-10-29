@@ -65,6 +65,15 @@ object AgentFeedbackTable : Table("agent_feedback") {
   override val primaryKey = PrimaryKey(messageId, username)
 }
 
+/** One row per finished turn, kept after its chat is deleted so the spend and question caps hold. */
+@Suppress("MagicNumber")
+object AgentUsageTable : LongIdTable("agent_usage") {
+  val username = varchar("username", 64)
+  val botKey = varchar("bot_key", 32)
+  val costUsd = double("cost_usd").default(0.0)
+  val createdAt = datetime("created_at")
+}
+
 object AgentRoles {
   const val USER = "user"
   const val ASSISTANT = "assistant"
