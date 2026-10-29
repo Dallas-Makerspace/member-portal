@@ -6,6 +6,9 @@ import dagger.multibindings.ElementsIntoSet
 import dagger.multibindings.IntoSet
 import javax.inject.Singleton
 import org.dallasmakerspace.agent.BotDefinition
+import org.dallasmakerspace.agenttools.GetAuthorizationPathTool
+import org.dallasmakerspace.agenttools.GetCommitteesTool
+import org.dallasmakerspace.agenttools.GetUserAccessTool
 import org.dallasmakerspace.askai.AskAiConfig
 import org.dallasmakerspace.askai.bedrock.BedrockClient
 import org.dallasmakerspace.askai.bedrock.BedrockEmbeddingClient
@@ -115,12 +118,18 @@ class AskAiModule {
       readTalkTopic: ReadTalkTopicTool,
       searchCalendar: SearchCalendarTool,
       searchOnlineCourses: SearchOnlineCoursesTool,
+      getUserAccess: GetUserAccessTool,
+      getAuthorizationPath: GetAuthorizationPathTool,
+      getCommittees: GetCommitteesTool,
   ): BotDefinition =
       BotDefinition(
           key = ASK_AI_BOT_KEY,
           displayName = "Ask AI",
           systemPrompt = AskAiBotPrompt.TEXT,
-          tools = listOf(searchSource, readSourcePage, searchTalk, readTalkTopic, searchCalendar, searchOnlineCourses),
+          tools =
+              listOf(
+                  searchSource, readSourcePage, searchTalk, readTalkTopic, searchCalendar,
+                  searchOnlineCourses, getUserAccess, getAuthorizationPath, getCommittees),
           featureFlag = ConfigRegistry.AGENT_CHAT_ENABLED,
           starterPrompts = AskAiBotPrompt.STARTER_PROMPTS,
       )

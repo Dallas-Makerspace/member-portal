@@ -9,6 +9,7 @@ import org.dallasmakerspace.agent.CreateArtifactTool
 import org.dallasmakerspace.agent.ListArtifactsTool
 import org.dallasmakerspace.agent.ReadArtifactTool
 import org.dallasmakerspace.agent.UpdateArtifactTool
+import org.dallasmakerspace.agenttools.GetCommitteesTool
 import org.dallasmakerspace.askai.tools.ReadSourcePageTool
 import org.dallasmakerspace.askai.tools.ReadTalkTopicTool
 import org.dallasmakerspace.askai.tools.SearchOnlineCoursesTool
@@ -34,6 +35,7 @@ class CourseBotModule {
       searchSource: SearchSourceWikiTool,
       readSource: ReadSourcePageTool,
       readTalkTopic: ReadTalkTopicTool,
+      getCommittees: GetCommitteesTool,
   ): BotDefinition =
       BotDefinition(
           key = COURSE_BOT_KEY,
@@ -42,7 +44,7 @@ class CourseBotModule {
           tools =
               listOf(
                   createArtifact, updateArtifact, readArtifact, listArtifacts, listCourses,
-                  searchCourses, searchSource, readSource, readTalkTopic),
+                  searchCourses, searchSource, readSource, readTalkTopic, getCommittees),
           featureFlag = ConfigRegistry.AGENT_COURSE_BOT_ENABLED,
           audience = BotAudience.AdGroupSuffix(EDITORS_GROUP_SUFFIX),
           startsPrivate = true,

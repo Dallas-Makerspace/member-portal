@@ -7,6 +7,11 @@ import javax.inject.Provider
 import javax.inject.Singleton
 import org.dallasmakerspace.agent.BotAudience
 import org.dallasmakerspace.agent.BotDefinition
+import org.dallasmakerspace.agent.MemberAccess
+import org.dallasmakerspace.agenttools.GetAuditTrailTool
+import org.dallasmakerspace.agenttools.GetSiteConfigTool
+import org.dallasmakerspace.agenttools.GetUserAccessTool
+import org.dallasmakerspace.agenttools.SearchUserTool
 import org.dallasmakerspace.askai.tools.ReadTalkTopicTool
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.core.AppConfig
@@ -50,12 +55,20 @@ class ItBotModule {
       queryLogs: QueryLogsTool,
       syncRepos: SyncReposTool,
       readTalkTopic: ReadTalkTopicTool,
+      getUserAccess: GetUserAccessTool,
+      searchUser: SearchUserTool,
+      getSiteConfig: GetSiteConfigTool,
+      getAuditTrail: GetAuditTrailTool,
   ): BotDefinition =
       BotDefinition(
           key = IT_BOT_KEY,
           displayName = "IT Assistant",
           systemPrompt = ItBotPrompt.TEXT,
-          tools = listOf(searchCode, listFiles, readFile, gitLog, gitShow, gitBlame, queryLogs, syncRepos, readTalkTopic),
+          tools =
+              listOf(
+                  searchCode, listFiles, readFile, gitLog, gitShow, gitBlame, queryLogs, syncRepos,
+                  readTalkTopic, getUserAccess, searchUser, getSiteConfig, getAuditTrail),
+          memberAccess = MemberAccess.ANY_MEMBER,
           featureFlag = ConfigRegistry.AGENT_IT_BOT_ENABLED,
           audience = BotAudience.AdGroup(ConfigRegistry.AGENT_IT_BOT_AD_GROUP),
           startsPrivate = true,

@@ -54,11 +54,29 @@ minutes and topped up by each finished turn.
   to the pilot), audience, `startsPrivate`.
 - Add the bot's tool names to `toolLabel` in `static/js/agent/markdown.js` for friendly chips.
 
+## Member data access
+
+Each bot sets `memberAccess`: `SELF_ONLY` (default) or `ANY_MEMBER`. The runtime copies it onto every
+tool call (`ToolContext.memberAccess`), tools read the member only through `context.subjectFor(arg)`
+(the asker under `SELF_ONLY`; anyone under `ANY_MEMBER`), and a tool can drop its `username`
+parameter from what the model sees via `descriptorFor(access)`. A tool that only makes sense for
+staff sets `requiredMemberAccess = ANY_MEMBER`, and a bot with less access cannot be built with it.
+Staff bots are the IT assistant only. Shared tools live in `:service:agenttools`.
+
+| Tool | Bots | Notes |
+| --- | --- | --- |
+| `get_user_access` | Ask AI (own data only), IT | Account state, badge (last 4 for staff), AD groups, DMS Learn completions and the group each grants. Makes the chat private. |
+| `search_user` | IT | Name, username or Talk username, up to 10 matches (one AD search plus one profile query). |
+| `get_audit_trail` | IT | A member's group changes, activity log and workflow runs, or a group's history. Badges masked. |
+| `get_site_config` | IT | Flags and settings with the effective value; with a username, whether a flag is on for them. Secret and infra values show as hidden. |
+| `get_authorization_path` | Ask AI | Topic to AD group, DMS Learn course, upcoming classes and committee. No member data. |
+| `get_committees` | Ask AI, course | Static committee list: description, homepage, chair group, courses. |
+
 ## Ask AI bot
 
 Tools: `search_source` and `read_source_page` (Source, the Confluence documentation site), `search_talk`,
 `search_calendar` (marks the chat private: organizer usernames), `search_online_courses`
-(DMS Learn). `/ask-ai` shows the chat when the flag is on for the member and the old page
+(DMS Learn), plus `get_authorization_path`, `get_user_access` (the asker only) and `get_committees`. `/ask-ai` shows the chat when the flag is on for the member and the old page
 otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
 
 ## IT assistant and course assistant

@@ -29,6 +29,8 @@ const TOOL_ICONS = {
     read_file: 'draft', git_log: 'history', git_show: 'commit', git_blame: 'person_search',
     query_logs: 'receipt_long', sync_repos: 'sync', create_artifact: 'note_add', update_artifact: 'edit_note',
     read_artifact: 'description', list_artifacts: 'library_books', list_learn_courses: 'local_library',
+    get_user_access: 'badge', search_user: 'person_search', get_authorization_path: 'verified_user',
+    get_committees: 'groups', get_site_config: 'toggle_on', get_audit_trail: 'manage_history',
 };
 
 /** A Material Symbols name that tells tools apart at a glance. */
@@ -36,7 +38,7 @@ export function toolIcon(tool) {
     return TOOL_ICONS[tool] || 'build';
 }
 
-const HINT_KEYS = ['query', 'pattern', 'text', 'path', 'url', 'title', 'topicId', 'id', 'repo'];
+const HINT_KEYS = ['query', 'pattern', 'text', 'path', 'url', 'title', 'topicId', 'id', 'repo', 'topic', 'username', 'group', 'search', 'name'];
 
 /** The main argument of a call as a short phrase, with emails and phone numbers hidden. */
 export function toolHint(argsJson) {
@@ -79,6 +81,12 @@ export function toolLabel(tool) {
         case 'read_artifact': return 'Read a document';
         case 'list_artifacts': return 'Listed documents';
         case 'list_learn_courses': return 'Looked up courses';
+        case 'get_user_access': return 'Checked access';
+        case 'search_user': return 'Searched members';
+        case 'get_authorization_path': return 'Looked up how to get authorized';
+        case 'get_committees': return 'Looked up committees';
+        case 'get_site_config': return 'Checked site settings';
+        case 'get_audit_trail': return 'Checked change history';
         default: return 'Used ' + tool.replace(/_/g, ' ');
     }
 }
