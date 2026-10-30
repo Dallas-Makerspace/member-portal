@@ -46,7 +46,7 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver
 
 class GroupPageLaunchTest {
   private val noBotAccess =
-      mock<AgentBotAccess> { onBlocking { canUse(any(), anyOrNull(), anyOrNull()) } doReturn false }
+      mock<AgentBotAccess> { onBlocking { botKeys(anyOrNull(), anyOrNull()) } doReturn emptySet() }
 
   private fun installThymeleaf(app: io.ktor.server.application.Application) {
     app.install(Thymeleaf) {
