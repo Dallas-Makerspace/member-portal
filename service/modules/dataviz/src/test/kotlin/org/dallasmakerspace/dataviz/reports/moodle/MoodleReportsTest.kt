@@ -1,6 +1,7 @@
 package org.dallasmakerspace.dataviz.reports.moodle
 
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonObject
@@ -25,6 +26,9 @@ class MoodleReportsTest {
   private val statsService = mock<MoodleStatsService>()
   private val support = MoodleReportSupport(featureFlagService, catalogService, statsService)
 
+  // The reports use Central time and leave out the current month, so the test must too.
+  private val lastMonth = LocalDate.now(ZoneId.of("America/Chicago")).minusMonths(1)
+
   private val course =
       LearnCourse(
           id = 1,
@@ -46,7 +50,7 @@ class MoodleReportsTest {
         .thenReturn(false)
     whenever(statsService.isConfigured).thenReturn(true)
     whenever(statsService.getRecords())
-        .thenReturn(listOf(EnrolmentRecord("ex-1", 1, null, LocalDate.now().minusMonths(1))))
+        .thenReturn(listOf(EnrolmentRecord("ex-1", 1, null, lastMonth)))
     whenever(catalogService.getAllCourses()).thenReturn(listOf(course))
     Unit
   }
@@ -88,8 +92,8 @@ class MoodleReportsTest {
     whenever(statsService.getRecords())
         .thenReturn(
             listOf(
-                EnrolmentRecord("ex-2", 1, null, LocalDate.now().minusMonths(1)),
-                EnrolmentRecord("ex-2", 2, null, LocalDate.now().minusMonths(1))))
+                EnrolmentRecord("ex-2", 1, null, lastMonth),
+                EnrolmentRecord("ex-2", 2, null, lastMonth)))
 
     val response = MoodleCoursesReport(support).getData(params("jdoe"))
     val rows = response.data!!.map { it.values }
