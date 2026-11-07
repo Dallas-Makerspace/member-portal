@@ -41,3 +41,11 @@ object DoorEventsTable : Table("AccessControl.events") {
     uniqueIndex("uniqueindex", controllerId, slotNumber, dbindex, date)
   }
 }
+
+/** Exposed table definition for AccessControl.slots: each controller door's name. */
+@Suppress("MagicNumber")
+object DoorSlotsTable : Table("AccessControl.slots") {
+  val controllerId = integer("controllerId")
+  val slotNumber = integer("slotNumber")
+  val name = varchar("name", 255)
+}

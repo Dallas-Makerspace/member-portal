@@ -146,7 +146,7 @@ section (`AgentTool.promptSection`, added once to the system prompt), and every 
   not scored. The prompt section tells the model to say what was seen, never to name anyone as responsible,
   and not to trace one member's movements beyond the question.
 - **Data limits:** door readers record entries only (no exits, tailgating is invisible); tools without an
-  interlock are invisible. Door events are matched to controllers by serial number (the controller names stored
+  interlock are invisible. Doors are found by their names in `AccessControl.slots`, so no controller config is needed (the controller names stored
   in `AccessControl.controllers` predate the configured names). When the doors' controller has recorded nothing
   up to the end of the window, the tools say so (a "door log gap") instead of reporting an empty room. As of
   2026-11-07 door events from the 102 controllers and the special-doors controllers (incl. `Garage-In`) stop on

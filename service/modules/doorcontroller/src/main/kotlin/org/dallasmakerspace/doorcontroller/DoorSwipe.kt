@@ -10,6 +10,3 @@ data class DoorSwipe(
     val username: String?,
     val badgeTail: String,
 )
-
-/** A door as a controller serial number and door number, with its friendly [name]. */
-data class DoorPlace(val name: String, val serial: Long, val slot: Int)

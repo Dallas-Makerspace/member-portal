@@ -8,10 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.dataviz.reports.interlock.InterlockEventsService
-import org.dallasmakerspace.doorcontroller.DoorControllerConfig
 import org.dallasmakerspace.doorcontroller.DoorEventsRepository
-import org.dallasmakerspace.doorcontroller.DoorMapping
-import org.dallasmakerspace.doorcontroller.DoorPlace
 import org.dallasmakerspace.doorcontroller.DoorSwipe
 import org.dallasmakerspace.models.Tool
 
@@ -49,12 +46,7 @@ interface SessionSearch {
 }
 
 @Singleton
-class DoorSwipeSearch
-@Inject
-constructor(
-    private val repository: DoorEventsRepository,
-    private val config: DoorControllerConfig,
-) : SwipeSearch {
+class DoorSwipeSearch @Inject constructor(private val repository: DoorEventsRepository) : SwipeSearch {
   override suspend fun search(
       doors: Collection<String>,
       from: Instant,
@@ -62,18 +54,11 @@ constructor(
       usernames: Set<String>?,
       deniedOnly: Boolean,
       limit: Int,
-  ) = repository.searchSwipes(placesOf(doors), from, to, usernames, deniedOnly, limit)
+  ) = repository.searchSwipes(doors, from, to, usernames, deniedOnly, limit)
 
   override suspend fun latestEvent(doors: Collection<String>) =
-      repository.latestEventTime(placesOf(doors))
+      repository.latestEventTime(doors)
 
-  /** Doors that have a controller in the configuration, as serial number and door number. */
-  private fun placesOf(doors: Collection<String>): List<DoorPlace> =
-      DoorMapping.DOOR_NAMES.filterValues { it in doors }.mapNotNull { (key, name) ->
-        config.controllers.firstOrNull { it.name == key.substringBeforeLast('+') }?.let {
-          DoorPlace(name, it.serial, key.substringAfterLast('+').toInt())
-        }
-      }
 }
 
 /** Rebuilds sessions from the interlock logs, reading a little beyond the window so none are cut. */

@@ -14,7 +14,6 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
 import org.jetbrains.exposed.sql.max
-import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 
 /** Repository for managing door badge swipe events in the AccessControl.events table */
@@ -176,39 +175,31 @@ class DoorEventsRepository @Inject constructor() {
   }
 
   /**
-   * Swipes at [places] from [from] to [to], oldest first, at most [limit]. [usernames] keeps only
-   * those members' swipes. Controllers are matched by serial number, since the name stored with a
-   * controller predates the names in the configuration.
+   * Swipes at the named [doors] (`AccessControl.slots` names) from [from] to [to], oldest first, at
+   * most [limit]. [usernames] keeps only those members' swipes.
    */
   @Suppress("LongParameterList")
   suspend fun searchSwipes(
-      places: Collection<DoorPlace>,
+      doors: Collection<String>,
       from: Instant,
       to: Instant,
       usernames: Set<String>? = null,
       deniedOnly: Boolean = false,
       limit: Int = DEFAULT_SWIPE_LIMIT,
   ): List<DoorSwipe> {
-    if (places.isEmpty() || (usernames != null && usernames.isEmpty())) return emptyList()
+    if (doors.isEmpty() || (usernames != null && usernames.isEmpty())) return emptyList()
     usernames?.forEach { require(it.matches(USERNAME)) { "Invalid username" } }
     val start = LocalDateTime.ofInstant(from, ZoneOffset.UTC)
     val end = LocalDateTime.ofInstant(to, ZoneOffset.UTC)
-    val doorNames = places.associate { (it.serial to it.slot) to it.name }
 
     return suspendTransaction {
       val userIds = usernames?.let { userIdsOf(it) }
       if (userIds != null && userIds.isEmpty()) return@suspendTransaction emptyList()
-      val atDoor =
-          places
-              .map { (_, serial, slot) ->
-                (ControllersTable.sn eq serial) and (DoorEventsTable.slotNumber eq slot)
-              }
-              .reduce { a, b -> a or b }
       val rows =
-          DoorEventsTable.join(ControllersTable, JoinType.INNER, DoorEventsTable.controllerId, ControllersTable.id)
+          atDoors()
               .select {
                 var match =
-                    atDoor and (DoorEventsTable.date greaterEq start) and (DoorEventsTable.date lessEq end)
+                    (DoorSlotsTable.name inList doors) and (DoorEventsTable.date greaterEq start) and (DoorEventsTable.date lessEq end)
                 if (deniedOnly) match = match and (DoorEventsTable.granted eq 0)
                 if (userIds != null) match = match and (DoorEventsTable.userId inList userIds)
                 match
@@ -218,7 +209,7 @@ class DoorEventsRepository @Inject constructor() {
               .map {
                 RawSwipe(
                     it[DoorEventsTable.date],
-                    doorNames.getValue(it[ControllersTable.sn] to it[DoorEventsTable.slotNumber]),
+                    it[DoorSlotsTable.name],
                     it[DoorEventsTable.granted] == 1,
                     it[DoorEventsTable.userId],
                     it[DoorEventsTable.cardNumber])
@@ -235,19 +226,26 @@ class DoorEventsRepository @Inject constructor() {
     }
   }
 
-  /** The newest event of any door on the controllers of [places], or null if there is none. */
-  suspend fun latestEventTime(places: Collection<DoorPlace>): Instant? {
-    if (places.isEmpty()) return null
-    val serials = places.map { it.serial }.distinct()
+  /** The newest event of any door on the controllers of [doors], or null if there is none. */
+  suspend fun latestEventTime(doors: Collection<String>): Instant? {
+    if (doors.isEmpty()) return null
     return suspendTransaction {
-      DoorEventsTable.join(ControllersTable, JoinType.INNER, DoorEventsTable.controllerId, ControllersTable.id)
-          .slice(DoorEventsTable.date.max())
-          .select { ControllersTable.sn inList serials }
+      val controllers =
+          DoorSlotsTable.select { DoorSlotsTable.name inList doors }.map { it[DoorSlotsTable.controllerId] }
+      if (controllers.isEmpty()) return@suspendTransaction null
+      DoorEventsTable.slice(DoorEventsTable.date.max())
+          .select { DoorEventsTable.controllerId inList controllers }
           .firstOrNull()
           ?.get(DoorEventsTable.date.max())
           ?.toInstant(ZoneOffset.UTC)
     }
   }
+
+  private fun atDoors() =
+      DoorEventsTable.join(DoorSlotsTable, JoinType.INNER) {
+        (DoorEventsTable.controllerId eq DoorSlotsTable.controllerId) and
+            (DoorEventsTable.slotNumber eq DoorSlotsTable.slotNumber)
+      }
 
   private class RawSwipe(
       val date: LocalDateTime,
