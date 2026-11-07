@@ -13,10 +13,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
@@ -79,6 +81,7 @@ constructor(
     private val turnStreams: TurnStreams,
     loggerFactory: LoggerFactory,
     private val artifacts: ArtifactRepository,
+    private val titler: ChatTitler,
 ) {
   private val log = loggerFactory.create(javaClass)
   private val botsByKey = bots.associateBy { it.key }
@@ -156,6 +159,7 @@ constructor(
     val turn = turnStreams.start(conversation.id, turnSeq) ?: return TurnOutcome.AlreadyRunning
     val modelId = configOverrideService.get(ConfigRegistry.AGENT_MODEL_DEFAULT)
     val state = TurnState(turnSeq, text, editNote(conversation.id, history))
+    val titling = if (history.isEmpty()) launchTitle(conversation, text, modelId, turn) else null
     val sink = AgentEventSink { type, delta, tool, args, ok, sources ->
       turn.publish(
           AgentStreamEvent(
@@ -197,10 +201,42 @@ constructor(
             failure = ERROR_MESSAGE
           } finally {
             if (acquired) concurrency.release()
-            withContext(NonCancellable) { finishTurn(conversation, turn, state, failure) }
+            withContext(NonCancellable) {
+              state.titleCostUsd = awaitTitleCost(titling)
+              state.costUsd += state.titleCostUsd
+              finishTurn(conversation, turn, state, failure)
+            }
           }
         }
     return TurnOutcome.Started(conversation.id, turnSeq)
+  }
+
+  /**
+   * Writes a better title alongside the first answer, without holding it up. A question with personal
+   * details keeps its placeholder, and a title the member already changed is left alone.
+   */
+  private fun launchTitle(
+      conversation: ConversationRow,
+      text: String,
+      modelId: String,
+      turn: ActiveTurn,
+  ): Deferred<Double>? {
+    if (conversation.title == PRIVATE_TITLE) return null
+    return scope.async {
+      val suggested = titler.suggest(text, modelId) ?: return@async 0.0
+      if (repository.renameIfTitle(conversation.id, conversation.title, suggested.title)) {
+        turn.publish(AgentStreamEvent("title", turn.nextId(), text = suggested.title))
+      }
+      suggested.costUsd
+    }
+  }
+
+  /** The title call's cost for this turn; one that runs long is abandoned so the turn can end. */
+  private suspend fun awaitTitleCost(titling: Deferred<Double>?): Double {
+    if (titling == null) return 0.0
+    val cost = withTimeoutOrNull(TITLE_WAIT_MILLIS) { titling.await() }
+    if (cost == null) titling.cancel()
+    return cost ?: 0.0
   }
 
   /** Tells the model about documents the member changed since its last reply. */
@@ -263,12 +299,12 @@ constructor(
     return rows
   }
 
-  /** Puts the turn's elapsed time on its final assistant message. */
+  /** Puts the turn's elapsed time and the title's cost on its final assistant message. */
   private fun withDuration(rows: List<NewMessage>, state: TurnState): List<NewMessage> {
     val last = rows.indexOfLast { it.role == AgentRoles.ASSISTANT }
     if (last < 0) return rows
     val elapsed = (System.currentTimeMillis() - state.startedAtMillis).toInt()
-    return rows.toMutableList().also { it[last] = it[last].copy(durationMs = elapsed) }
+    return rows.toMutableList().also { it[last] = it[last].copy(durationMs = elapsed, costUsd = it[last].costUsd + state.titleCostUsd) }
   }
 
   fun activeTurn(conversationId: String): ActiveTurn? = turnStreams.get(conversationId)
@@ -377,6 +413,7 @@ constructor(
     const val MAX_CONCURRENT_TURNS = 5
     private const val QUEUE_TIMEOUT_MILLIS = 60_000L
     private const val TITLE_CHARS = 120
+    private const val TITLE_WAIT_MILLIS = 3_000L
     private const val MAX_TITLE_CHARS = 120
     private const val RETENTION_YEARS = 2L
     private const val USAGE_RETENTION_MONTHS = 13L

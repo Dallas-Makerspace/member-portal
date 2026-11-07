@@ -295,6 +295,10 @@ class DmsChat extends LitElement {
             try { change = JSON.parse(e.text); } catch (err) { return; }
             this._loadArtifacts(true, change.id);
         });
+        on('title', e => {
+            if (!e.text || !this._conversation) return;
+            this._conversation = {...this._conversation, title: e.text};
+        });
         on('busy', () => { this._busy = true; });
         on('error', e => { this._error = e.text || 'Something went wrong.'; });
         on('turn-end', () => this._finishTurn(id));

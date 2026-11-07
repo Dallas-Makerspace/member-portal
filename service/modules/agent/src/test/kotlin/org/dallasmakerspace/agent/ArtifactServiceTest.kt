@@ -82,7 +82,8 @@ class ArtifactServiceTest {
             PiiMasker(loggerFactory),
             TurnStreams(),
             loggerFactory,
-            artifacts)
+            artifacts,
+            ChatTitler(MockChatModelClient(0), PiiMasker(loggerFactory), loggerFactory))
     ArtifactService(chat, artifacts)
   }
 

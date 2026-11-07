@@ -272,6 +272,16 @@ class ConversationRepository @Inject constructor() {
     }
   }
 
+  /** Renames only if the title is still [expected]; false when the member changed it first. */
+  suspend fun renameIfTitle(conversationId: String, expected: String, title: String): Boolean =
+      suspendTransaction {
+        AgentConversationTable.update({
+          (AgentConversationTable.id eq conversationId) and (AgentConversationTable.title eq expected)
+        }) {
+          it[AgentConversationTable.title] = title.take(TITLE_LENGTH)
+        } > 0
+      }
+
   suspend fun rename(conversationId: String, title: String) {
     suspendTransaction {
       AgentConversationTable.update({ AgentConversationTable.id eq conversationId }) {
