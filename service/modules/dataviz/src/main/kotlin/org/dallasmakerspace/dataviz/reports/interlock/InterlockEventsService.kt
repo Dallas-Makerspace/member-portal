@@ -6,6 +6,10 @@ import co.elastic.clients.elasticsearch._types.query_dsl.Query
 import co.elastic.clients.elasticsearch.core.SearchRequest
 import co.elastic.clients.json.JsonData
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +34,17 @@ private val LEADING_TIMESTAMP_PREFIX = Regex("""^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\
 
 fun stripLeadingTimestamp(message: String): String =
     message.replaceFirst(LEADING_TIMESTAMP_PREFIX, "")
+
+private val EVENT_TIME =
+    DateTimeFormatter.ofPattern("EEE, MMM d, h:mm a", Locale.US).withZone(ZoneId.of("America/Chicago"))
+
+/** A log timestamp as a short Central time, like "Fri, Nov 6, 6:53 PM"; as given if unreadable. */
+fun formatEventTime(timestamp: String): String =
+    try {
+      EVENT_TIME.format(Instant.parse(timestamp))
+    } catch (e: DateTimeParseException) {
+      timestamp
+    }
 
 data class SessionInfo(
     val host: String,

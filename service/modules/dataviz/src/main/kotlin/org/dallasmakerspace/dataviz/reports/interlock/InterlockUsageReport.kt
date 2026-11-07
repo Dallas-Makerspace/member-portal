@@ -144,7 +144,7 @@ constructor(
           DataItem(
               values =
                   mapOf(
-                      "Time" to JsonPrimitive(session.startTime),
+                      "Time" to JsonPrimitive(formatEventTime(session.startTime)),
                       "Member" to memberJson,
                       "Auth" to authJson,
                       "Duration" to JsonPrimitive(duration),
@@ -154,7 +154,7 @@ constructor(
 
     val dataFields =
         listOf(
-            DataField(name = "Time", type = DataType.RELATIVE_DATE, label = "Time"),
+            DataField(name = "Time", type = DataType.STRING, label = "Time"),
             DataField(name = "Member", type = DataType.MEMBER, label = "Member"),
             DataField(name = "Auth", type = DataType.BADGE, label = "Auth"),
             DataField(name = "Duration", type = DataType.STRING, label = "Duration"),

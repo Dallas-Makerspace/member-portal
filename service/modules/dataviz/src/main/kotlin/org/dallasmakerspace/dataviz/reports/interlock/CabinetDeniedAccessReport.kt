@@ -137,7 +137,7 @@ constructor(
                 JsonPrimitive("Badge: ${events.maskBadge(badge, isInfra)}")
               }
 
-          val values = mutableMapOf<String, JsonElement>("Time" to JsonPrimitive(timestamp))
+          val values = mutableMapOf<String, JsonElement>("Time" to JsonPrimitive(formatEventTime(timestamp)))
           if (isCommitteeScope) {
             val cabinetName = Cabinets.findBySlug(host)?.name ?: host
             values["Cabinet"] = JsonPrimitive(cabinetName)
@@ -149,7 +149,7 @@ constructor(
         }
 
     val dataFields = mutableListOf<DataField>()
-    dataFields.add(DataField(name = "Time", type = DataType.RELATIVE_DATE, label = "Time"))
+    dataFields.add(DataField(name = "Time", type = DataType.STRING, label = "Time"))
     if (isCommitteeScope) {
       dataFields.add(DataField(name = "Cabinet", type = DataType.STRING, label = "Cabinet"))
     }
