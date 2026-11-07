@@ -92,7 +92,7 @@ constructor(
     if (hits.shown.isEmpty()) return ToolResult("No members matched \"$query\".")
     val lines =
         hits.shown.map { h ->
-          val name = UserToolSupport.clean(h.displayName) ?: "(name unknown)"
+          val name = UserToolSupport.clean(h.displayName)?.let { memberLink(h.username, it) } ?: "(name unknown)"
           val state =
               when {
                 !h.inDirectory -> "not found in the directory"

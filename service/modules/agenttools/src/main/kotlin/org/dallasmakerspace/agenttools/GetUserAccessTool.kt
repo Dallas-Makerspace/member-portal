@@ -27,7 +27,7 @@ import org.dallasmakerspace.moodle.MoodleMemberCoursesService
 
 private const val MAX_GROUPS = 60
 private const val MAX_COURSES = 30
-private const val RESULT_CHARS = 6_000
+private const val RESULT_CHARS = 8_000
 private const val DATE_LENGTH = 8
 private const val LEARN = "DMS Learn"
 
@@ -125,7 +125,7 @@ constructor(
     val user = loaded.user
     val username = UserToolSupport.clean(user.sAMAccountName) ?: "unknown"
     val name = UserToolSupport.clean(user.displayName) ?: username
-    val lines = mutableListOf("Member: $name ($username)")
+    val lines = mutableListOf("Member: ${memberLink(username, name)} ($username)")
     lines += "Account: " + if (user.enabled) "enabled (active)" else "disabled (not active)"
     lines += badgeLine(user.employeeID, access)
     createdDate(user.whenCreated)?.let { lines += "Member since: $it (directory account created)" }
@@ -157,7 +157,7 @@ constructor(
 
   private fun groupsLine(names: List<String>): String {
     if (names.isEmpty()) return "AD groups: none (direct memberships only)"
-    val shown = names.take(MAX_GROUPS).joinToString("; ")
+    val shown = names.take(MAX_GROUPS).joinToString("; ") { groupLink(it) }
     val more = if (names.size > MAX_GROUPS) "; and ${names.size - MAX_GROUPS} more" else ""
     return "AD groups (${names.size}, direct memberships only): $shown$more"
   }

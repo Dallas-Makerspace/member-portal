@@ -50,13 +50,15 @@ class DmsChatMessage extends LitElement {
     }
 
     willUpdate(changed) {
-        if (!changed.has('message')) return;
+        if (!changed.has('message') && !changed.has('streaming')) return;
         if (!this.streaming) {
+            if (this._frame !== null) cancelAnimationFrame(this._frame);
+            this._frame = null;
             this._html = renderMarkdown(this.message?.text);
         } else if (this._frame === null) {
             this._frame = requestAnimationFrame(() => {
                 this._frame = null;
-                this._html = renderMarkdown(this.message?.text);
+                this._html = renderMarkdown(this.message?.text, {upgrade: false});
             });
         }
     }

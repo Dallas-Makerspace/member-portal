@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.dallasmakerspace.agent.AgentTool
 import org.dallasmakerspace.agent.ToolContext
 import org.dallasmakerspace.agent.ToolResult
+import org.dallasmakerspace.agenttools.memberLink
 
 internal fun JsonObject.string(name: String): String? =
     this[name]?.jsonPrimitive?.contentOrNull?.trim()?.ifEmpty { null }
@@ -55,12 +56,11 @@ abstract class ActivityTool(
   protected fun memberArg(args: JsonObject): String? =
       args.string("member")?.also { require(USERNAME.matches(it)) { "member must be a username." } }
 
-  /** "jdoe (Jane Doe)", or the last four digits for a badge that isn't linked to a member. */
+  /** A link to the member, or the last four digits for a badge that isn't linked to a member. */
   protected fun who(username: String?, badgeTail: String?, display: Map<String, String>): String =
       when {
         username == null -> "unlinked badge ending ${badgeTail ?: "????"}"
-        display[username] != null -> "$username (${display[username]})"
-        else -> username
+        else -> memberLink(username, display[username])
       }
 
   /**

@@ -8,6 +8,7 @@
 //   noDocuments: no document may be created
 //   revised:    a document must have been saved at least twice (version >= 2)
 //   allowToolErrors: a refused tool call is fine (safety cases)
+//   linksMember / linksGroup: answer keeps a member or group link from the tools
 //   forbid:     none may appear                            cites: answer must link to a source
 //   rubric:     plain-language check for the judge model
 const DEFAULTS = {maxCostUsd: 0.1, maxLatencyMs: 90000};
@@ -34,6 +35,8 @@ function expand(c) {
   if (c.questions) {
     asserts.push(js(`${meta}.artifacts.some(a => a.kind === 'quiz' && JSON.parse(a.content).questions.length >= ${c.questions})`));
   }
+  if (c.linksMember) asserts.push(js(`output.includes('](/profile/@')`));
+  if (c.linksGroup) asserts.push(js(`output.includes('](/groups/')`));
   if (c.cites) asserts.push(js(`output.includes('](http') || output.includes('](/')`));
   for (const s of c.mention || []) {
     asserts.push({type: 'icontains', value: s});

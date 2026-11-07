@@ -55,7 +55,7 @@ class SearchUserToolTest {
 
     assertFalse(result.isError)
     assertTrue(result.output.contains("1 match for \"jane\""))
-    assertTrue(result.output.contains("- jdoe | Jane Doe | Talk: janed | active"))
+    assertTrue(result.output.contains("- jdoe | [Jane Doe](/profile/@jdoe) | Talk: janed | active"))
     assertEquals("/profile/@jdoe", result.sources.single().url)
   }
 
@@ -67,7 +67,7 @@ class SearchUserToolTest {
 
     val out = tool.run(args("maker_amy"), staff).output
 
-    assertTrue(out.contains("- asmith | Amy Smith | Talk: maker_amy | active"))
+    assertTrue(out.contains("- asmith | [Amy Smith](/profile/@asmith) | Talk: maker_amy | active"))
     verify(members, never()).getMembersByUsernames(any())
   }
 
@@ -88,7 +88,7 @@ class SearchUserToolTest {
     val out = tool.run(args("jdoe"), staff).output
 
     assertTrue(out.contains("1 match"))
-    assertTrue(out.contains("- jdoe | Jane Doe | Talk: janed | not active"))
+    assertTrue(out.contains("- jdoe | [Jane Doe](/profile/@jdoe) | Talk: janed | not active"))
     verify(members, never()).getMembersByUsernames(any())
     verify(directory, never()).getMembersByUsernameList(any())
   }
@@ -180,7 +180,7 @@ class SearchUserToolTest {
     givenProfiles(profile("jdoe", "janed"))
     whenever(directory.getMembersByUsernameList(any())).thenReturn(mapOf("jdoe" to adUser("jdoe", "Jane Doe")))
 
-    assertTrue(tool.run(args("jdoe"), staff).output.contains("- jdoe | Jane Doe"))
+    assertTrue(tool.run(args("jdoe"), staff).output.contains("- jdoe | [Jane Doe](/profile/@jdoe)"))
 
     whenever(members.searchProfiles(any(), any())).thenThrow(IllegalStateException("db down"))
     val result = tool.run(args("jdoe"), staff)

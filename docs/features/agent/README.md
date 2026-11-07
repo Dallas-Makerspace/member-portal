@@ -56,6 +56,20 @@ the chat, so deleting a chat doesn't reset a cap; the nightly job deletes them a
   to the pilot), audience, `startsPrivate`.
 - Add the bot's tool names to `toolLabel` in `static/js/agent/markdown.js` for friendly chips.
 
+## Members and groups in answers
+
+The model never writes component tags. It writes markdown links, and the chat page renders them.
+
+- **Tools** emit ready-made links (`memberLink`, `groupLink` in `EntityLinks.kt`). So far: the activity tools,
+  `search_user` and `get_user_access`. `get_audit_trail` and `search_calendar` still print plain usernames.
+- **Prompt:** `AgentRuntime.ENTITY_LINK_RULE`, on every bot, tells the model to keep those links and never make
+  one up.
+- **Rendering:** `static/js/agent/entities.js` runs on the sanitized DOM, so DOMPurify keeps rejecting custom
+  elements. `/profile/@username` becomes `<dms-member-card>` (`mini` inside a table cell, `inline` elsewhere) and
+  `/groups/<slug>` becomes `<dms-group-pill>`. Add a row to `ENTITIES` for a new pill. While a message streams
+  links stay plain, so cards are not rebuilt on every frame; they turn into cards when it finishes.
+- **Limit:** nothing checks a link against real members, so an invented username renders like a real card.
+
 ## Member data access
 
 Each bot sets `memberAccess`: `SELF_ONLY` (default) or `ANY_MEMBER`. The runtime copies it onto every

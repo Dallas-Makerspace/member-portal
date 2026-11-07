@@ -1,4 +1,6 @@
 // Markdown to sanitized HTML for chat messages. Needs the marked and DOMPurify globals.
+import {upgradeEntities} from './entities.js';
+
 let hooked = false;
 
 function ensureHook() {
@@ -12,15 +14,21 @@ function ensureHook() {
     });
 }
 
-export function renderMarkdown(text) {
+/** With upgrade off (while streaming) links stay links, so cards are not rebuilt on every frame. */
+export function renderMarkdown(text, {upgrade = true} = {}) {
     ensureHook();
     let source = (text || '').replace(/\u00ab\d+\u00bb/g, '');
     if ((source.match(/```/g) || []).length % 2 === 1) source += '\n```';
     const html = window.marked.parse(source, {gfm: true, breaks: true});
-    return window.DOMPurify.sanitize(html, {
+    const clean = window.DOMPurify.sanitize(html, {
         FORBID_TAGS: ['img', 'style', 'form', 'input', 'iframe'],
         ADD_ATTR: ['target'],
+        RETURN_DOM_FRAGMENT: true,
     });
+    if (upgrade) upgradeEntities(clean);
+    const holder = document.createElement('div');
+    holder.appendChild(clean);
+    return holder.innerHTML;
 }
 
 const TOOL_ICONS = {

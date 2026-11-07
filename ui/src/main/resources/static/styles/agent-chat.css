@@ -286,3 +286,5 @@ dms-chat .material-symbols-outlined { font-variation-settings: 'FILL' 0; display
 .chat-activity-meta dt { flex: 0 0 8.5rem; font-weight: 500; color: var(--chat-muted); }
 .chat-activity-meta dd { margin: 0; min-width: 0; color: var(--chat-ink); font-variant-numeric: tabular-nums; }
 @media (max-width: 399.98px) { .chat-activity-meta dt { flex-basis: 6.5rem; } }
+/* The card takes a whole line by default; inside a sentence it has to flow with the text. */
+.chat-markdown dms-member-card[state="inline"] { display: inline-block; width: auto; max-width: none; vertical-align: baseline; }

@@ -42,8 +42,8 @@ class ActivityToolsTest {
     assertFalse(result.isError, result.text())
     val lines = result.text().lines()
     assertContains(lines[0], "2 people seen")
-    assertTrue(lines[1].startsWith("1. jdoe (Jane Doe) | used Auto Lift 1 18:00-19:30 (ended by idle timeout); entered Garage-In 17:55"), lines[1])
-    assertTrue(lines[2].startsWith("2. asmith (Alex Smith) | entered Garage-In 19:10"), lines[2])
+    assertTrue(lines[1].startsWith("1. [Jane Doe](/profile/@jdoe) | used Auto Lift 1 18:00-19:30 (ended by idle timeout); entered Garage-In 17:55"), lines[1])
+    assertTrue(lines[2].startsWith("2. [Alex Smith](/profile/@asmith) | entered Garage-In 19:10"), lines[2])
     assertContains(result.text(), "not proof of who left a mess")
     assertEquals(listOf("/profile/@jdoe", "/profile/@asmith"), result.sources.map { it.url })
   }
@@ -120,8 +120,8 @@ class ActivityToolsTest {
 
     val result = tool.run(args("door" to "garage-in", "deniedOnly" to "false"), context())
 
-    assertContains(result.text(), "17:05 | Garage-In | granted | jdoe (Jane Doe)")
-    assertContains(result.text(), "19:00 | Garage-In | denied | asmith")
+    assertContains(result.text(), "17:05 | Garage-In | granted | [Jane Doe](/profile/@jdoe)")
+    assertContains(result.text(), "19:00 | Garage-In | denied | [asmith](/profile/@asmith)")
     assertEquals(listOf("Garage-In"), swipes.lastDoors?.toList())
   }
 
@@ -158,9 +158,9 @@ class ActivityToolsTest {
     val result = tool.run(args("tool" to "Auto Lift 1"), context())
 
     assertContains(result.text(), "3 sessions on Auto Lift 1")
-    assertContains(result.text(), "17:12-18:40 (1h 28m) | Auto Lift 1 | jdoe (Jane Doe) | ended by idle timeout")
-    assertContains(result.text(), "19:00-19:10 (10m) | Auto Lift 1 | asmith | badged out")
-    assertContains(result.text(), "20:00 | Auto Lift 1 | asmith | denied start")
+    assertContains(result.text(), "17:12-18:40 (1h 28m) | Auto Lift 1 | [Jane Doe](/profile/@jdoe) | ended by idle timeout")
+    assertContains(result.text(), "19:00-19:10 (10m) | Auto Lift 1 | [asmith](/profile/@asmith) | badged out")
+    assertContains(result.text(), "20:00 | Auto Lift 1 | [asmith](/profile/@asmith) | denied start")
   }
 
   @Test
