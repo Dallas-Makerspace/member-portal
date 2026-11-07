@@ -72,6 +72,16 @@ class DoorEventsRepository @Inject constructor() {
   }
 
   /**
+   * Only scraped rows count: the imported ones (dbindextype 0) are numbered by the old system, far
+   * above what the controllers now count, and would hide every new event.
+   */
+  internal fun maxDbindexSql(controllerIds: List<Int>): String =
+      "SELECT controllerId, slotNumber, MAX(dbindex) AS maxDbindex " +
+          "FROM `AccessControl`.`events` " +
+          "WHERE controllerId IN (${controllerIds.joinToString(",")}) AND dbindextype = 1 " +
+          "GROUP BY controllerId, slotNumber"
+
+  /**
    * Returns the max dbindex seen per (controllerId, slotNumber) for the given controller IDs. Used
    * to filter out already-persisted events before inserting.
    *
@@ -81,12 +91,7 @@ class DoorEventsRepository @Inject constructor() {
   suspend fun getMaxDbindexPerSlot(controllerIds: List<Int>): Map<Pair<Int, Int>, Int> {
     if (controllerIds.isEmpty()) return emptyMap()
 
-    val idList = controllerIds.joinToString(",")
-    val sql =
-        "SELECT controllerId, slotNumber, MAX(dbindex) AS maxDbindex " +
-            "FROM `AccessControl`.`events` " +
-            "WHERE controllerId IN ($idList) " +
-            "GROUP BY controllerId, slotNumber"
+    val sql = maxDbindexSql(controllerIds)
 
     return suspendTransaction {
       val result = mutableMapOf<Pair<Int, Int>, Int>()

@@ -205,6 +205,48 @@ class HttpRfidClient(
         emptyList()
       }
 
+  /**
+   * Reads the controller's log newest-first, page by page, until a page reaches back before
+   * [sinceMillis] (or the log ends), to recover events missed while ingestion was broken. A pause
+   * between pages keeps load on the small controller low. Returns events at or after [sinceMillis].
+   */
+  @Suppress("LoopWithTooManyJumpStatements")
+  suspend fun readSwipesSince(
+      sinceMillis: Long,
+      pageDelayMs: Long = CATCH_UP_PAGE_DELAY_MS,
+      maxPages: Int = CATCH_UP_MAX_PAGES,
+  ): List<BadgeSwipeEvent> =
+      withContext(Dispatchers.IO) {
+        if (!login()) return@withContext emptyList()
+        val events = mutableListOf<BadgeSwipeEvent>()
+        var html =
+            httpClient
+                .submitForm(
+                    url = "$baseUrl/ACT_ID_21", formParameters = Parameters.build { append("s4", "Swipe") })
+                .bodyAsText()
+        var page = 1
+        while (page <= maxPages && !isLoginPage(html)) {
+          val rows = parseSwipeEvents(html)
+          events += rows
+          val cursor = PAGE_CURSOR.find(html)?.groupValues?.get(1)
+          if (rows.isEmpty() || rows.minOf { it.timestamp } < sinceMillis || cursor == null) break
+          delay(pageDelayMs)
+          html =
+              httpClient
+                  .submitForm(
+                      url = "$baseUrl/ACT_ID_345",
+                      formParameters =
+                          Parameters.build {
+                            append("PC", cursor)
+                            append("PE", "0")
+                            append("PN", "Next")
+                          })
+                  .bodyAsText()
+          page++
+        }
+        events.filter { it.timestamp >= sinceMillis }
+      }
+
   private fun isLoginPage(html: String): Boolean =
       html.contains("action=ACT_ID_1") || (html.contains("UserName:") && html.contains("Password:"))
 
@@ -402,5 +444,11 @@ class HttpRfidClient(
   override fun close() {
     httpClient.close()
     log.debug("Closed HTTP client for $ip")
+  }
+
+  private companion object {
+    const val CATCH_UP_PAGE_DELAY_MS = 250L
+    const val CATCH_UP_MAX_PAGES = 3_000
+    val PAGE_CURSOR = """name=PC value='(\d+)'""".toRegex()
   }
 }
