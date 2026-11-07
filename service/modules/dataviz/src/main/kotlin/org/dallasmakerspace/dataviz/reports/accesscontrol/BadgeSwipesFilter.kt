@@ -43,7 +43,7 @@ private constructor(
         require(to.isAfter(from)) { "to must be after from" }
         require(Duration.between(from, to) <= Duration.ofDays(MAX_WINDOW_DAYS)) { "The window is too long" }
       }
-      return BadgeSwipesFilter(doors, from, to)
+      return BadgeSwipesFilter(doors, from, to ?: from?.plusDays(MAX_WINDOW_DAYS))
     }
 
     private fun utc(text: String): LocalDateTime =

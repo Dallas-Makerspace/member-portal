@@ -215,6 +215,7 @@ constructor(
    * Writes a better title alongside the first answer, without holding it up. A question with personal
    * details keeps its placeholder, and a title the member already changed is left alone.
    */
+  @Suppress("TooGenericExceptionCaught")
   private fun launchTitle(
       conversation: ConversationRow,
       text: String,
@@ -224,17 +225,30 @@ constructor(
     if (conversation.title == PRIVATE_TITLE) return null
     return scope.async {
       val suggested = titler.suggest(text, modelId) ?: return@async 0.0
-      if (repository.renameIfTitle(conversation.id, conversation.title, suggested.title)) {
-        turn.publish(AgentStreamEvent("title", turn.nextId(), text = suggested.title))
+      try {
+        if (repository.renameIfTitle(conversation.id, conversation.title, suggested.title)) {
+          turn.publish(AgentStreamEvent("title", turn.nextId(), text = suggested.title))
+        }
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        log.warn("Could not save the title of ${conversation.id}: ${e.message}")
       }
       suggested.costUsd
     }
   }
 
   /** The title call's cost for this turn; one that runs long is abandoned so the turn can end. */
+  @Suppress("TooGenericExceptionCaught") // Whatever went wrong, the turn must still finish.
   private suspend fun awaitTitleCost(titling: Deferred<Double>?): Double {
     if (titling == null) return 0.0
-    val cost = withTimeoutOrNull(TITLE_WAIT_MILLIS) { titling.await() }
+    val cost =
+        try {
+          withTimeoutOrNull(TITLE_WAIT_MILLIS) { titling.await() }
+        } catch (e: Exception) {
+          log.warn("Chat title did not finish: ${e.message}")
+          null
+        }
     if (cost == null) titling.cancel()
     return cost ?: 0.0
   }
@@ -258,10 +272,7 @@ constructor(
   ) {
     var answerId: Long? = null
     try {
-      val rows = withDuration(completedRows(state, failure), state)
-      val ids = repository.appendTurn(conversation.id, rows, state.toolCalls)
-      answerId = ids.getOrNull(rows.indexOfLast { it.role == AgentRoles.ASSISTANT })
-      spendCap.record(state.costUsd)
+      // Private first, so a failure can't leave a saved answer with member data public.
       state.privateReason?.let {
         if (conversation.visibility == AgentVisibility.PUBLIC) {
           repository.makePrivate(conversation.id, it)
@@ -269,6 +280,10 @@ constructor(
               AgentStreamEvent("visibility", turn.nextId(), visibility = AgentVisibility.PRIVATE))
         }
       }
+      val rows = withDuration(completedRows(state, failure), state)
+      val ids = repository.appendTurn(conversation.id, rows, state.toolCalls)
+      answerId = ids.getOrNull(rows.indexOfLast { it.role == AgentRoles.ASSISTANT })
+      spendCap.record(state.costUsd)
       if (state.sources.isNotEmpty()) {
         turn.publish(AgentStreamEvent("sources", turn.nextId(), sources = state.sources))
       }

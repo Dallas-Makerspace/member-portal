@@ -20,6 +20,8 @@ import org.dallasmakerspace.models.DataVizResponse
 import org.dallasmakerspace.models.displayAvatarUrl
 import org.dallasmakerspace.models.normalizeAvatarUrl
 
+private const val MAX_USAGE_DAYS = 90
+
 class InterlockUsageReport
 @Inject
 constructor(
@@ -45,7 +47,7 @@ constructor(
             )
     val scopeLabel = if (cabinetParam != null) "Cabinet" else "Tool"
 
-    val days = params["days"]?.firstOrNull()?.toIntOrNull() ?: 14
+    val days = (params["days"]?.firstOrNull()?.toIntOrNull() ?: 14).coerceIn(1, MAX_USAGE_DAYS)
     val actorUsername = params["actorUsername"]?.firstOrNull()
     val isInfra =
         actorUsername?.let { withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) } }

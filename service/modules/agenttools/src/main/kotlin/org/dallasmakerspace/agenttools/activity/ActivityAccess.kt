@@ -45,8 +45,10 @@ constructor(
   suspend fun areasOf(username: String): List<Area> {
     val now = clock()
     decisions[username]?.takeIf { now - it.decidedAt < TTL_MILLIS }?.let { return it.areas }
-    val areas = areasFor(agentAccess.groupsOf(username))
-    decisions[username] = Decision(areas, now)
+    val groups = agentAccess.groupsOf(username)
+    val areas = areasFor(groups)
+    // No groups usually means the directory lookup failed, so that isn't worth remembering.
+    if (groups.isNotEmpty()) decisions[username] = Decision(areas, now)
     return areas
   }
 

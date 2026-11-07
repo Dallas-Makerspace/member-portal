@@ -30,7 +30,7 @@ class ActivityAccessTest {
 
   @Test
   fun `the decision is made once per period, for members with and without access`() = blocking<Unit> {
-    val agentAccess = mock<AgentAccess> { onBlocking { groupsOf("chair") } doReturn listOf("Infrastructure"); onBlocking { groupsOf("plain") } doReturn emptyList() }
+    val agentAccess = mock<AgentAccess> { onBlocking { groupsOf("chair") } doReturn listOf("Infrastructure"); onBlocking { groupsOf("plain") } doReturn listOf("Some Group"); onBlocking { groupsOf("failed") } doReturn emptyList() }
     var now = 0L
     val access = activityAccess(emptyList(), agentAccess = agentAccess).also { it.clock = { now } }
 
@@ -42,6 +42,9 @@ class ActivityAccessTest {
     }
     verify(agentAccess, times(1)).groupsOf("chair")
     verify(agentAccess, times(1)).groupsOf("plain")
+
+    repeat(2) { assertFalse(access.isOffered("failed")) }
+    verify(agentAccess, times(2)).groupsOf("failed")
 
     now = ActivityAccess.TTL_MILLIS
     assertTrue(access.isOffered("chair"))

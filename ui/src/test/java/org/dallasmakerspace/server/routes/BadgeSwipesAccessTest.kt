@@ -1,6 +1,7 @@
 package org.dallasmakerspace.server.routes
 
 import io.ktor.http.parametersOf
+import io.ktor.http.parseQueryString
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -28,6 +29,14 @@ class BadgeSwipesAccessTest {
     assertFalse(canReadBadgeSwipes(false, listOf("/Woodshop Committee Chair"), listOf("Garage-In")))
     assertFalse(canReadBadgeSwipes(false, plain, listOf("Garage-In")))
     assertFalse(canReadBadgeSwipes(false, plain, emptyList<String>()))
+  }
+
+  @Test
+  fun `the forwarded query names doors exactly as the service expects, whatever case was sent`() {
+    val params = parseQueryString("DOORS=Garage-In&FROM=2026-10-01T00:00&extra=1")
+
+    assertTrue(canReadBadgeSwipes(false, chair, params.getAll(BADGE_SWIPES_DOORS_PARAM).orEmpty()))
+    assertEquals("?doors=Garage-In&from=2026-10-01T00%3A00", badgeSwipesQuery(params))
   }
 
   @Test

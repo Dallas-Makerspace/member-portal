@@ -33,6 +33,8 @@ private val bodyMapType = object : TypeToken<Map<String, Any?>>() {}.type
  */
 private val BLOCKED_PREFIXES = setOf("notifications", "webhook", "moodle")
 
+private val PRIVATE_MEMBER_PATHS = setOf("badge-swipes", "debug-info")
+
 /** Path segments after normalizing encoding and dot/empty segments, lowercased; null if traversal. */
 internal fun proxiedSegments(path: String): List<String>? {
   val decoded = runCatching { java.net.URLDecoder.decode(path.substringBefore('?'), "UTF-8") }
@@ -54,9 +56,15 @@ internal fun isKioskPhotoPath(path: String): Boolean {
 internal fun isWaiverReportPath(path: String): Boolean =
     proxiedSegments(path)?.take(2) == listOf("data-viz", "recent-signed-waivers")
 
+/** `members/{username}/...` data about one member, served only by user-checked handlers. */
+internal fun isPrivateMemberPath(path: String): Boolean {
+  val segments = proxiedSegments(path) ?: return false
+  return segments.size >= 3 && segments[0] == "members" && segments[2] in PRIVATE_MEMBER_PATHS
+}
+
 internal fun isProxyAllowed(path: String): Boolean {
   val root = proxiedRootSegment(path) ?: return false
-  return root !in BLOCKED_PREFIXES && !isKioskPhotoPath(path)
+  return root !in BLOCKED_PREFIXES && !isKioskPhotoPath(path) && !isPrivateMemberPath(path)
 }
 
 /** Whether [username] is listed in the comma-separated `waiver-report.allowed-usernames` value. */
@@ -73,7 +81,12 @@ class BackendApiHandler(
   override suspend fun handleAuthenticated(call: ApplicationCall) {
     val path = call.request.path().removePrefix("/backend-api/")
     val queryString = call.request.queryString()
-    val fullPath = if (queryString.isNotEmpty()) "$path?$queryString" else path
+    val fullPath =
+        when {
+          isBadgeSwipesData(path) -> "$path${badgeSwipesQuery(call.request.queryParameters)}"
+          queryString.isNotEmpty() -> "$path?$queryString"
+          else -> path
+        }
     val username = userInfo["preferred_username"] as? String
     if (!isProxyAllowed(path)) {
       call.respond(HttpStatusCode.Forbidden)

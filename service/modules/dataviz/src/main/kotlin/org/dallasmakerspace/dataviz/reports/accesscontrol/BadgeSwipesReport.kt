@@ -11,6 +11,8 @@ import org.dallasmakerspace.core.api.DataVizReport
 import org.dallasmakerspace.db.master.GenericRepository
 import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.models.DataField
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.dallasmakerspace.models.DataItem
 import org.dallasmakerspace.models.DataType
 import org.dallasmakerspace.models.DataVizResponse
@@ -37,6 +39,10 @@ constructor(
               metadata = mapOf("error" to (e.message ?: "Invalid filter")))
         }
     val query = buildQuery(filter)
+    val isInfra =
+        params["actorUsername"]?.firstOrNull()?.let {
+          withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(it) }
+        } ?: false
     val totalStartTime = System.currentTimeMillis()
 
     // The past 72 hours unless the filter says otherwise
@@ -74,7 +80,7 @@ constructor(
                 }
               } else {
                 // For badge swipes with no associated member, show card number
-                JsonPrimitive("Unknown: $cardNumber")
+                JsonPrimitive("Unknown: ${if (isInfra) cardNumber else "****" + cardNumber.takeLast(BADGE_TAIL)}")
               }
 
           // Get door name from query (from slots table)
@@ -111,10 +117,14 @@ constructor(
             "Query time" to "${queryTimeTaken}ms",
             "Members fetch time" to "${membersTimeTaken}ms",
             "Total swipes" to "${rows.size}",
-            "SQL Query" to query,
+            "SQL Query" to if (isInfra) query else "(hidden)",
         )
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
+  }
+
+  private companion object {
+    const val BADGE_TAIL = 4
   }
 
   private fun buildQuery(filter: BadgeSwipesFilter): String {

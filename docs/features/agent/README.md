@@ -167,10 +167,11 @@ section (`AgentTool.promptSection`, added once to the system prompt), and every 
 - **Checking the data:** each tool result links to the report behind it, in the sources list and in a "Check the data" line for
   the model. Doors link to `/reports/member-visits/badge-swipes?doors=...&from=...&to=...`, tools to
   `/interlock-tools?tool=...&days=N` (up to 90 days back; older windows have no tool link).
-- **Badge swipes report access:** enforced in `BackendApiHandler`, not only on the page. Officers and Infrastructure read
+- **Badge swipes report access:** enforced in `BackendApiHandler`, not only on the page. The proxy forwards a query rebuilt from the checked values. Officers and Infrastructure read
   everything; a chair must name only the doors of their committee's areas (`BadgeSwipesAccess`); everyone else gets 403.
   The filter (`BadgeSwipesFilter`) validates doors and times because the report's query is built as text. Without a window
   the report shows the last 72 hours.
+- **Live answers:** only the chat owner can follow a running answer, because it may turn private when it finishes.
 - **Mock mode** returns canned fake swipes and sessions.
 
 ## Evals

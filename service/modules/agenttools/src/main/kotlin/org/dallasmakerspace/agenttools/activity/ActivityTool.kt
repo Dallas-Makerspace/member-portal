@@ -1,5 +1,6 @@
 package org.dallasmakerspace.agenttools.activity
 
+import java.time.Duration
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -11,6 +12,7 @@ import org.dallasmakerspace.agent.AgentTool
 import org.dallasmakerspace.agent.ToolContext
 import org.dallasmakerspace.agent.ToolResult
 import org.dallasmakerspace.agenttools.memberLink
+import org.dallasmakerspace.core.appLogger
 
 internal fun JsonObject.string(name: String): String? =
     this[name]?.jsonPrimitive?.contentOrNull?.trim()?.ifEmpty { null }
@@ -50,6 +52,7 @@ abstract class ActivityTool(
     } catch (e: IllegalArgumentException) {
       ToolResult(e.message ?: "Invalid request.", isError = true)
     } catch (e: Exception) {
+      log.error("Activity tool ${descriptor.name} failed", e)
       ToolResult("The activity data is unavailable right now.", isError = true)
     }
   }
@@ -72,7 +75,7 @@ abstract class ActivityTool(
   protected suspend fun doorLogGap(swipes: SwipeSearch, doors: Collection<String>, window: ActivityWindow): String? {
     val latest = swipes.latestEvent(doors)
     return when {
-      latest != null && latest >= window.to -> null
+      latest != null && latest >= window.to.minus(DOOR_LOG_SLACK) -> null
       latest == null -> "Door log gap: no events are recorded for these doors at all, so door entries are missing."
       else ->
           "Door log gap: the last event recorded by these doors' controllers was ${window.stamp(latest)} " +
@@ -81,6 +84,10 @@ abstract class ActivityTool(
   }
 
   companion object {
+    private val log = appLogger("ActivityTool")
+
+    /** Doors can go quiet overnight, so a recent lull in the log isn't reported as a gap. */
+    private val DOOR_LOG_SLACK: Duration = Duration.ofHours(12)
     const val RESULT_CHARS = 6_000
     const val TIME_PARAMS =
         "Central time, as 2026-11-05 or 2026-11-05T17:00. A date alone means the whole day " +

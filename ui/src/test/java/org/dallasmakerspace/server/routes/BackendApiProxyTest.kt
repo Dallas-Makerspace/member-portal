@@ -5,6 +5,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackendApiProxyTest {
+  @org.junit.Test
+  fun `one member's badge swipes and debug info are not reachable through the proxy`() {
+    kotlin.test.assertFalse(isProxyAllowed("members/jdoe/badge-swipes"))
+    kotlin.test.assertFalse(isProxyAllowed("MEMBERS/jdoe/Badge-Swipes"))
+    kotlin.test.assertFalse(isProxyAllowed("members/jdoe/debug-info"))
+    kotlin.test.assertFalse(isProxyAllowed("members%2Fjdoe%2Fbadge-swipes"))
+  }
 
   @Test
   fun allowsOrdinaryServicePaths() {

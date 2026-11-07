@@ -77,7 +77,7 @@ constructor(
           }
         }
     val more = if (found.size > shown.size) "\nShowing the first $MAX_LINES of ${found.size}; narrow the window for the rest." else ""
-    return ToolResult("${found.size} session${if (found.size == 1) "" else "s"} on ${label(tools)}, $window:\n" + lines.joinToString("\n") + more)
+    return ToolResult("${found.size} session${if (found.size == 1) "" else "s"} on ${label(tools)}, $window:\n" + lines.joinToString("\n") + more + ActivityLinks.line(reports), reports)
   }
 
   private fun label(tools: List<Tool>) = tools.joinToString { it.name }

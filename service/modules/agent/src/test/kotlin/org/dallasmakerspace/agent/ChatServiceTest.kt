@@ -317,6 +317,16 @@ class ChatServiceTest {
   }
 
   @Test
+  fun `a chat that used member data is private before its answer is saved`() = runBlocking<Unit> {
+    val service = service()
+    val started = assertIs<TurnOutcome.Started>(service.startConversation("people", "jdoe", "Who is it?"))
+    service.awaitTurn(started.conversationId)
+
+    assertEquals(AgentVisibility.PRIVATE, repository.get(started.conversationId)!!.visibility)
+    assertEquals(null, service.detail(started.conversationId, "asmith"))
+  }
+
+  @Test
   fun `a failed title keeps the question as the title`() = runBlocking<Unit> {
     val service = service(titles = ChatModelClient { _, _, _ -> flow { error("down") } })
     val started = assertIs<TurnOutcome.Started>(service.startConversation("ask-ai", "jdoe", "When is the class?"))

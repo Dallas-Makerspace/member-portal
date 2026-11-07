@@ -23,6 +23,13 @@ class BadgeSwipesFilterTest {
   }
 
   @Test
+  fun `a start with no end still has a limit`() {
+    assertEquals(
+        "e.date >= '2026-01-05 06:00:00' AND e.date <= '2026-02-05 06:00:00'",
+        where("from" to listOf("2026-01-05T00:00")))
+  }
+
+  @Test
   fun `anything that could break out of the query is refused`() {
     assertFailsWith<IllegalArgumentException> { where("doors" to listOf("x' OR '1'='1")) }
     assertFailsWith<IllegalArgumentException> { where("from" to listOf("2026-11-05' OR 1=1 --")) }

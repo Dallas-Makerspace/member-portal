@@ -103,11 +103,13 @@ constructor(
    * user IDs, and saves to AccessControl.events
    *
    * @param events List of badge swipe events to persist
+   * @param skipKnown Drop events at or below the newest stored record number. A catch-up reading
+   *   older events passes false, and relies on the insert ignoring duplicates.
    * @return Number of events successfully inserted
    */
   @Suppress(
       "TooGenericExceptionCaught", "SwallowedException", "LongMethod", "ReturnCount", "MagicNumber")
-  suspend fun persistEvents(events: List<BadgeSwipeEvent>): Int {
+  suspend fun persistEvents(events: List<BadgeSwipeEvent>, skipKnown: Boolean = true): Int {
     if (events.isEmpty()) return 0
 
     log.debug("Persisting ${events.size} badge swipe events to database")
@@ -204,7 +206,7 @@ constructor(
       val newEvents =
           doorEvents.filter { event ->
             val maxSeen = maxBySlot[Pair(event.controllerId, event.slotNumber)]
-            maxSeen == null || event.dbindex > maxSeen
+            !skipKnown || maxSeen == null || event.dbindex > maxSeen
           }
       log.debug(
           "Deduplication: ${doorEvents.size - newEvents.size} already-persisted events filtered, " +

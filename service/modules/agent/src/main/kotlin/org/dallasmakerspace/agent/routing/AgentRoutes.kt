@@ -108,8 +108,11 @@ fun Route.agentRoutes(
         get("/conversations/{id}/stream") {
           val username = call.username() ?: return@get
           val id = call.parameters["id"]!!
-          chatService.viewable(id, username)
-              ?: return@get call.error(HttpStatusCode.NotFound, "Conversation not found")
+          val conversation =
+              chatService.viewable(id, username)
+                  ?: return@get call.error(HttpStatusCode.NotFound, "Conversation not found")
+          // A live answer may become private when it finishes, so only its owner can follow it.
+          if (conversation.ownerUsername != username) return@get call.respond(HttpStatusCode.NoContent)
           val turn =
               chatService.activeTurn(id)
                   ?: return@get call.respond(HttpStatusCode.NoContent)

@@ -208,7 +208,9 @@ class HttpRfidClient(
   /**
    * Reads the controller's log newest-first, page by page, until a page reaches back before
    * [sinceMillis] (or the log ends), to recover events missed while ingestion was broken. A pause
-   * between pages keeps load on the small controller low. Returns events at or after [sinceMillis].
+   * between pages keeps load on the small controller low. Returns events at or after [sinceMillis],
+   * and throws rather than return part of the log. Store them with
+   * `persistEvents(events, skipKnown = false)`.
    */
   @Suppress("LoopWithTooManyJumpStatements")
   suspend fun readSwipesSince(
@@ -217,7 +219,7 @@ class HttpRfidClient(
       maxPages: Int = CATCH_UP_MAX_PAGES,
   ): List<BadgeSwipeEvent> =
       withContext(Dispatchers.IO) {
-        if (!login()) return@withContext emptyList()
+        check(login()) { "Could not log in to $ip" }
         val events = mutableListOf<BadgeSwipeEvent>()
         var html =
             httpClient
@@ -225,7 +227,8 @@ class HttpRfidClient(
                     url = "$baseUrl/ACT_ID_21", formParameters = Parameters.build { append("s4", "Swipe") })
                 .bodyAsText()
         var page = 1
-        while (page <= maxPages && !isLoginPage(html)) {
+        while (page <= maxPages) {
+          check(!isLoginPage(html)) { "Session ended on page $page of $ip" }
           val rows = parseSwipeEvents(html)
           events += rows
           val cursor = PAGE_CURSOR.find(html)?.groupValues?.get(1)

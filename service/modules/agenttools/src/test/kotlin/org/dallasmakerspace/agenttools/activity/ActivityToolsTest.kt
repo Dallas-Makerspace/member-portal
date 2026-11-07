@@ -64,11 +64,11 @@ class ActivityToolsTest {
 
   @Test
   fun `a door log that stops before the window ends is called out, not read as an empty room`() = blocking {
-    val behind = presence(infra, FakeSwipes(latest = at("19:00")))
+    val behind = presence(infra, FakeSwipes(latest = at("10:00")))
     val none = presence(infra, FakeSwipes(latest = null))
     val current = presence(infra, FakeSwipes(listOf(swipe("18:00", "jdoe")), latest = at("23:59", "2026-11-06")))
 
-    assertContains(behind.run(args("area" to "auto"), context()).text(), "Door log gap: the last event recorded by these doors' controllers was Thu Nov 5 19:00")
+    assertContains(behind.run(args("area" to "auto"), context()).text(), "Door log gap: the last event recorded by these doors' controllers was Thu Nov 5 10:00")
     assertContains(none.run(args("area" to "auto"), context()).text(), "no events are recorded for these doors at all")
     assertFalse(current.run(args("area" to "auto"), context()).text().contains("Door log gap"))
   }
@@ -78,6 +78,16 @@ class ActivityToolsTest {
     val tool = BadgeSwipesTool(activityAccess(chair), names(), FakeSwipes(latest = at("10:00", "2026-03-11")))
 
     assertContains(tool.run(args(), context()).text(), "Door log gap")
+  }
+
+  @Test
+  fun `a recent lull in a door log is not called a gap`() = blocking {
+    val hoursAgo = java.time.Instant.now().minus(java.time.Duration.ofHours(3))
+    val tool = presence(infra, FakeSwipes(latest = hoursAgo))
+    val today = java.time.LocalDate.now(ActivityWindow.CENTRAL).toString()
+    val json = buildJsonObject { put("area", "auto"); put("from", today); put("to", today) }
+
+    assertFalse(tool.run(json, context()).text().contains("Door log gap"))
   }
 
   @Test
@@ -167,6 +177,8 @@ class ActivityToolsTest {
     assertContains(result.text(), "17:12-18:40 (1h 28m) | Auto Lift 1 | [Jane Doe](/profile/@jdoe) | ended by idle timeout")
     assertContains(result.text(), "19:00-19:10 (10m) | Auto Lift 1 | [asmith](/profile/@asmith) | badged out")
     assertContains(result.text(), "20:00 | Auto Lift 1 | [asmith](/profile/@asmith) | denied start")
+    assertContains(result.text(), "Check the data: [Auto Lift 1 usage](/interlock-tools?tool=auto-lift-1&days=")
+    assertEquals(listOf("Auto Lift 1 usage"), result.sources.map { it.title })
   }
 
   @Test

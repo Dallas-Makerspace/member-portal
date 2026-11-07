@@ -22,6 +22,19 @@ internal fun canReadBadgeSwipes(canManageBadges: Boolean, groups: List<*>, doors
 internal fun isBadgeSwipesData(path: String): Boolean =
     proxiedSegments(path)?.take(2) == listOf("data-viz", BADGE_SWIPES_SLUG)
 
+/**
+ * The query to forward, rebuilt from what [canReadBadgeSwipes] checked. Parameter names here ignore
+ * case but the service's don't, so forwarding the original could drop a door filter that was checked.
+ */
+internal fun badgeSwipesQuery(params: Parameters): String {
+  val parts =
+      params.getAll(BADGE_SWIPES_DOORS_PARAM).orEmpty().map { "$BADGE_SWIPES_DOORS_PARAM=${it.encodeURLParameter()}" } +
+          listOfNotNull(
+              params["from"]?.let { "from=${it.encodeURLParameter()}" },
+              params["to"]?.let { "to=${it.encodeURLParameter()}" })
+  return if (parts.isEmpty()) "" else "?" + parts.joinToString("&")
+}
+
 /** Template model for the report page: a chair who names no door gets all of theirs. */
 internal fun badgeSwipesPageModel(canManageBadges: Boolean, groups: List<*>, params: Parameters): Map<String, Any> {
   val requested = params.getAll(BADGE_SWIPES_DOORS_PARAM).orEmpty()
@@ -29,8 +42,12 @@ internal fun badgeSwipesPageModel(canManageBadges: Boolean, groups: List<*>, par
   val from = params["from"]
   val to = params["to"]
   val query =
-      doors.map { "$BADGE_SWIPES_DOORS_PARAM=${it.encodeURLParameter()}" } +
-          listOfNotNull(from?.let { "from=${it.encodeURLParameter()}" }, to?.let { "to=${it.encodeURLParameter()}" })
+      badgeSwipesQuery(
+          Parameters.build {
+            appendAll(BADGE_SWIPES_DOORS_PARAM, doors)
+            from?.let { append("from", it) }
+            to?.let { append("to", it) }
+          })
   val title =
       listOfNotNull(
               doors.takeIf { it.isNotEmpty() }?.joinToString(", "),
@@ -39,9 +56,7 @@ internal fun badgeSwipesPageModel(canManageBadges: Boolean, groups: List<*>, par
           .joinToString(" ")
   return mapOf(
       "allowed" to canReadBadgeSwipes(canManageBadges, groups, doors),
-      "dataUrl" to
-          "/backend-api/data-viz/$BADGE_SWIPES_SLUG" +
-              if (query.isEmpty()) "" else "?" + query.joinToString("&"),
+      "dataUrl" to "/backend-api/data-viz/$BADGE_SWIPES_SLUG$query",
       "title" to if (title.isEmpty()) DEFAULT_TITLE else "Badge swipes: $title",
   )
 }
