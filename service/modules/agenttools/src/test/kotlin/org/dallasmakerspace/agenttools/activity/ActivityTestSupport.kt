@@ -12,7 +12,6 @@ import org.dallasmakerspace.models.Tool
 import org.dallasmakerspace.models.Tools
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doReturn
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 
 val LIFT: Tool = Tools.ALL.first { it.interlockTag == "auto-lift-1" }
@@ -36,14 +35,12 @@ fun session(
 fun activityAccess(
     groups: List<String>,
     configured: String = "Infrastructure,President",
-    enabled: Boolean = true,
+    agentAccess: AgentAccess = mock { onBlocking { groupsOf(any()) } doReturn groups },
 ): ActivityAccess {
   val config =
       mock<ConfigOverrideService> {
         onBlocking { get(ConfigRegistry.AGENT_ACTIVITY_TOOLS_AD_GROUPS, false) } doReturn configured
-        onBlocking { isFeatureEnabledFor(eq(ConfigRegistry.AGENT_ACTIVITY_TOOLS_ENABLED), any(), any()) } doReturn enabled
       }
-  val agentAccess = mock<AgentAccess> { onBlocking { groupsOf(any()) } doReturn groups }
   return ActivityAccess(config, agentAccess)
 }
 

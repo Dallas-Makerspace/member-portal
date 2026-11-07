@@ -32,7 +32,7 @@ abstract class ActivityTool(
 
   override val promptSection = ActivityPrompt.SECTION
 
-  override suspend fun isAvailableTo(username: String) = access.areasOf(username).isNotEmpty()
+  override suspend fun isAvailableTo(username: String) = access.isOffered(username)
 
   protected abstract suspend fun execute(args: JsonObject, areas: List<Area>, window: ActivityWindow): ToolResult
 

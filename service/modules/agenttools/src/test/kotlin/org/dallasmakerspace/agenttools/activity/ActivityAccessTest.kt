@@ -1,7 +1,16 @@
 package org.dallasmakerspace.agenttools.activity
 
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import org.dallasmakerspace.agent.AgentAccess
 import org.junit.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
 
 class ActivityAccessTest {
   private val auto = Areas.ALL.single { it.key == "auto" }
@@ -19,8 +28,34 @@ class ActivityAccessTest {
   }
 
   @Test
-  fun `a member the flag is off for can ask about nothing, whatever their groups`() = blocking {
-    assertEquals(emptyList(), activityAccess(listOf("Infrastructure"), enabled = false).areasOf("jdoe"))
+  fun `the offer is decided once per few minutes, for members with and without access`() = blocking<Unit> {
+    val agentAccess = mock<AgentAccess> { onBlocking { groupsOf("chair") } doReturn listOf("Infrastructure"); onBlocking { groupsOf("plain") } doReturn emptyList() }
+    var now = 0L
+    val access = activityAccess(emptyList(), agentAccess = agentAccess).also { it.clock = { now } }
+
+    repeat(3) {
+      assertTrue(access.isOffered("chair"))
+      assertFalse(access.isOffered("plain"))
+    }
+    verify(agentAccess, times(1)).groupsOf("chair")
+    verify(agentAccess, times(1)).groupsOf("plain")
+
+    now = ActivityAccess.OFFER_TTL_MILLIS
+    assertTrue(access.isOffered("chair"))
+    verify(agentAccess, times(2)).groupsOf("chair")
+  }
+
+  @Test
+  fun `every tool call is checked against current groups, not the cached offer`() = blocking<Unit> {
+    var groups = listOf("Infrastructure")
+    val agentAccess = mock<AgentAccess> { onBlocking { groupsOf(any()) } doAnswer { groups } }
+    val access = activityAccess(emptyList(), agentAccess = agentAccess)
+
+    assertTrue(access.isOffered("jdoe"))
+    groups = emptyList()
+
+    assertTrue(access.isOffered("jdoe"))
+    assertEquals(emptyList(), access.areasOf("jdoe"))
   }
 
   @Test

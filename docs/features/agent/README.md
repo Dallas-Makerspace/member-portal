@@ -115,10 +115,12 @@ section (`AgentTool.promptSection`, added once to the system prompt), and every 
   evidence), `get_interlock_sessions` (who used an interlocked tool, when, how long, how it ended),
   `get_badge_swipes` (door swipes, granted or denied). Windows are Central time and at most 7 days. Every
   bot's system prompt ends with today's date, so "Thursday" resolves.
-- **Who:** the flag `agent.activity-tools.enabled` (pilot) must be on for the member, and then groups in
-  `agent.activity-tools.ad-groups` (default: Infrastructure and the officer groups) see every area, while a
-  committee chair sees only the areas of their committee (`ActivityAccess`). `get_user_access` is unchanged
-  and still shows only the asker.
+- **Who:** members of the groups in `agent.activity-tools.ad-groups` (default: Infrastructure and the officer
+  groups) see every area, and a committee chair sees only the areas of their committee (`ActivityAccess`).
+  There is no separate flag: it reaches whoever has the Ask AI chat. Whether the tools are *offered* is decided
+  at most every 5 minutes per member (so most turns cost no directory lookup, including for members with no
+  access); every tool *call* is checked against their current groups (60 s cache). `get_user_access` is
+  unchanged and still shows only the asker.
 - **Areas** (`Areas` in `Area.kt`): an area is a set of door names (from `DoorMapping`) plus interlock tags.
   Today only `auto` exists: door `Garage-In` and tool `Auto Lift 1`. Add a row for a new area.
 - **Evidence, not blame:** presence is ranked by tool use (3 points per session) then a door entry (1
@@ -129,9 +131,12 @@ section (`AgentTool.promptSection`, added once to the system prompt), and every 
   interlock are invisible. Door events are matched to controllers by serial number (the controller names stored
   in `AccessControl.controllers` predate the configured names). When the doors' controller has recorded nothing
   up to the end of the window, the tools say so (a "door log gap") instead of reporting an empty room. As of
-  2026-11-07 the controller behind `Garage-In` last recorded an event on 2026-03-11, so door entries for the
-  auto area are missing until that controller is being polled again; Auto Lift 1 sessions (Elasticsearch) are
-  unaffected. No denied swipes appeared in the door log for 5 Nov 2026, so the scraper may not record them.
+  2026-11-07 door events from the 102 controllers and the special-doors controllers (incl. `Garage-In`) stop on
+  2026-03-11/12, so door entries for the auto area are missing; Auto Lift 1 sessions (Elasticsearch) are
+  unaffected. Cause: commit 25983c84 (2026-03-11) filters out scraped events whose `dbindex` is not above the
+  stored max for that controller and door, but the max includes the old MDB-import rows (numbered about 1.36M)
+  while those controllers' own record numbers are far lower (about 557k, 51k, 67k), so everything new is
+  dropped; only `104 Door Control` (about 1.6M) still passes. Not a door ID or mapping change. No denied swipes appeared in the door log for 5 Nov 2026, so the scraper may not record them.
 - **Mock mode** returns canned fake swipes and sessions.
 
 ## Evals

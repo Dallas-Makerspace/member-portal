@@ -97,13 +97,10 @@ class ActivityToolsTest {
     val chairTool = presence(chair)
     val infraTool = presence(infra)
     val plain = presence(listOf("Automotive 102 (Lift Training)"))
-    val flagOff = AreaPresenceTool(activityAccess(infra, enabled = false), names(), FakeSwipes(), FakeSessions())
 
     assertTrue(chairTool.isAvailableTo("asker"))
     assertTrue(infraTool.isAvailableTo("asker"))
     assertFalse(plain.isAvailableTo("asker"))
-    assertFalse(flagOff.isAvailableTo("asker"))
-    assertTrue(flagOff.run(args("area" to "auto"), context()).isError)
   }
 
   @Test
