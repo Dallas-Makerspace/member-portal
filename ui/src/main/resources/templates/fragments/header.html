@@ -183,7 +183,7 @@
                             </li>
                             <!-- Ask-AI -->
                             <li>
-                                <a class="dropdown-item" href="/ask-ai">Ask-AI</a>
+                                <a class="dropdown-item" href="/ask-ai" th:text="${aiAssistantEnabled} ? 'AI Assistant' : 'Ask-AI'">Ask-AI</a>
                             </li>
                             <li th:if="${courseAssistantEnabled}">
                                 <a class="dropdown-item" href="/course-assistant">Course Assistant <span

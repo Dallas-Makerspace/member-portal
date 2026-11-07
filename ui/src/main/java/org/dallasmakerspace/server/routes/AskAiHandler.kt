@@ -131,7 +131,7 @@ constructor(
                   mapOf(
                       "profile_url" to "./profile/@$username",
                       "botKey" to "ask-ai",
-                      "botTitle" to "Ask AI")))
+                      "botTitle" to "AI Assistant")))
       return
     }
 

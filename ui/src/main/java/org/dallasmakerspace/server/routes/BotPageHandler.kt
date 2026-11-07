@@ -36,5 +36,6 @@ class BotPageHandler(
   companion object {
     const val IT_BOT_KEY = "it-assistant"
     const val COURSE_BOT_KEY = "course-assistant"
+    const val ASK_AI_BOT_KEY = "ask-ai"
   }
 }

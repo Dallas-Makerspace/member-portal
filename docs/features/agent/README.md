@@ -74,7 +74,11 @@ Staff bots are the IT assistant only. Shared tools live in `:service:agenttools`
 | `get_authorization_path` | Ask AI | Topic to AD group, DMS Learn course, upcoming classes and committee. No member data. |
 | `get_committees` | Ask AI, course | Static committee list: description, homepage, chair group, courses. |
 
-## Ask AI bot
+## AI Assistant bot (key `ask-ai`)
+
+Members see this chat as "AI Assistant" (page title, bot name, and the single menu entry, which reads "Ask-AI" for
+members who still get the old page). The URL `/ask-ai`, the bot key `ask-ai` and old answer links are unchanged.
+
 
 Tools: `search_source` and `read_source_page` (Source, the Confluence documentation site), `search_talk`,
 `search_calendar` (marks the chat private: organizer usernames), `search_online_courses`
@@ -104,9 +108,9 @@ otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
 - Each bot's page and header link show only for members the service allows
   (`GET /agent/bots`: flag plus audience).
 
-## Activity tools in Ask AI
+## Activity tools in the AI Assistant
 
-Staff can ask Ask AI "who was in the auto area on Thursday evening?". Three tools (`:service:agenttools`,
+Staff can ask the AI Assistant "who was in the auto area on Thursday evening?". Three tools (`:service:agenttools`,
 package `activity`) are on the Ask AI bot but offered only to members allowed to use them: `AgentTool.isAvailableTo`
 is checked per member at the start of each turn, so other members never see the tools or their prompt
 section (`AgentTool.promptSection`, added once to the system prompt), and every call re-checks.
@@ -117,9 +121,9 @@ section (`AgentTool.promptSection`, added once to the system prompt), and every 
   bot's system prompt ends with today's date, so "Thursday" resolves.
 - **Who:** members of the groups in `agent.activity-tools.ad-groups` (default: Infrastructure and the officer
   groups) see every area, and a committee chair sees only the areas of their committee (`ActivityAccess`).
-  There is no separate flag: it reaches whoever has the Ask AI chat. Whether the tools are *offered* is decided
-  at most every 5 minutes per member (so most turns cost no directory lookup, including for members with no
-  access); every tool *call* is checked against their current groups (60 s cache). `get_user_access` is
+  There is no separate flag: it reaches whoever has the AI Assistant chat. The decision (tools offered, and each call checked)
+  is cached per member for 15 minutes, including "no access", so it costs at most one directory lookup per
+  member per 15 minutes; a group change can take that long to apply. `get_user_access` is
   unchanged and still shows only the asker.
 - **Areas** (`Areas` in `Area.kt`): an area is a set of door names (from `DoorMapping`) plus interlock tags.
   Today only `auto` exists: door `Garage-In` and tool `Auto Lift 1`. Add a row for a new area.

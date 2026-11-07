@@ -130,7 +130,7 @@ class AskAiModule {
   ): BotDefinition =
       BotDefinition(
           key = ASK_AI_BOT_KEY,
-          displayName = "Ask AI",
+          displayName = "AI Assistant",
           systemPrompt = AskAiBotPrompt.TEXT,
           tools =
               listOf(

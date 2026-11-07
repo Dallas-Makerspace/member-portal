@@ -11,9 +11,9 @@ import org.dallasmakerspace.config.ConfigRegistry
  * Which areas a member may ask about: all of them for the configured groups (Infrastructure and
  * officers), otherwise only the areas of a committee they chair.
  *
- * [areasOf] is what every tool call is checked against. [isOffered] only decides whether the tools
- * are shown to the model, so it may lag a group change by [OFFER_TTL_MILLIS]; this keeps the
- * directory lookup off most turns, including for the many members who have no access.
+ * The answer, including "none" for the many members with no access, is remembered for
+ * [TTL_MILLIS] and used both to offer the tools and to check each call, so this costs a directory
+ * lookup at most once per member per period. A group change can therefore take that long to apply.
  */
 @Singleton
 class ActivityAccess
@@ -22,9 +22,9 @@ constructor(
     private val configOverrideService: ConfigOverrideService,
     private val agentAccess: AgentAccess,
 ) {
-  private class Offer(val offered: Boolean, val decidedAt: Long)
+  private class Decision(val areas: List<Area>, val decidedAt: Long)
 
-  private val offers = ConcurrentHashMap<String, Offer>()
+  private val decisions = ConcurrentHashMap<String, Decision>()
 
   internal var clock: () -> Long = System::currentTimeMillis
 
@@ -40,17 +40,17 @@ constructor(
     }
   }
 
-  suspend fun areasOf(username: String): List<Area> = areasFor(agentAccess.groupsOf(username))
-
-  suspend fun isOffered(username: String): Boolean {
+  suspend fun areasOf(username: String): List<Area> {
     val now = clock()
-    offers[username]?.takeIf { now - it.decidedAt < OFFER_TTL_MILLIS }?.let { return it.offered }
-    val offered = areasOf(username).isNotEmpty()
-    offers[username] = Offer(offered, now)
-    return offered
+    decisions[username]?.takeIf { now - it.decidedAt < TTL_MILLIS }?.let { return it.areas }
+    val areas = areasFor(agentAccess.groupsOf(username))
+    decisions[username] = Decision(areas, now)
+    return areas
   }
 
+  suspend fun isOffered(username: String): Boolean = areasOf(username).isNotEmpty()
+
   companion object {
-    const val OFFER_TTL_MILLIS = 5 * 60_000L
+    const val TTL_MILLIS = 15 * 60_000L
   }
 }
