@@ -4,6 +4,8 @@ dependencies {
   implementation(project(":service:config"))
   implementation(project(":service:members"))
   implementation(project(":service:activedirectory"))
+  implementation(project(":service:doorcontroller"))
+  implementation(project(":service:dataviz"))
   implementation(project(":service:moodle"))
   implementation(project(":service:calendar"))
   implementation(project(":service:workflows-api"))

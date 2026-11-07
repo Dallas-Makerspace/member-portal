@@ -62,8 +62,8 @@ class NewFeatureFlagDefaultsTest {
   }
 
   @Test
-  fun `the activity assistant flag starts as a pilot for the early access group, off for everyone else`() {
-    val default = ConfigRegistry.AGENT_ACTIVITY_BOT_ENABLED.defaultValue
+  fun `the activity tools flag starts as a pilot for the early access group, off for everyone else`() {
+    val default = ConfigRegistry.AGENT_ACTIVITY_TOOLS_ENABLED.defaultValue
 
     assertFalse(default.enabled)
     assertEquals(setOf("mandarlimaye"), default.enabledUsernames)

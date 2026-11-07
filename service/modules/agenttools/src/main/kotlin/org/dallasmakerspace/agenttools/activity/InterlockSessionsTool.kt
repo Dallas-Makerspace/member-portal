@@ -1,6 +1,6 @@
 @file:Suppress("MaxLineLength")
 
-package org.dallasmakerspace.activitybot.tools
+package org.dallasmakerspace.agenttools.activity
 
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolParameterDescriptor
@@ -9,11 +9,6 @@ import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.JsonObject
-import org.dallasmakerspace.activitybot.ActivityAccess
-import org.dallasmakerspace.activitybot.ActivityWindow
-import org.dallasmakerspace.activitybot.Area
-import org.dallasmakerspace.activitybot.MemberNames
-import org.dallasmakerspace.activitybot.SessionSearch
 import org.dallasmakerspace.agent.ToolResult
 import org.dallasmakerspace.models.Tool
 

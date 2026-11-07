@@ -77,16 +77,19 @@ class AgentRuntime(
       sink: AgentEventSink,
   ) {
     val context = asker.copy(memberAccess = bot.memberAccess)
-    val toolsByName = bot.tools.associateBy { it.descriptor.name }
+    val tools = bot.tools.filter { it.isAvailableTo(asker.username) }
+    val toolsByName = tools.associateBy { it.descriptor.name }
     val cache = if (supportsCachePoints(modelId)) CACHE else null
     val descriptors =
-        bot.tools.mapIndexed { i, tool ->
+        tools.mapIndexed { i, tool ->
           val descriptor = tool.descriptorFor(bot.memberAccess)
-          if (i == bot.tools.lastIndex) descriptor.copy(cacheControl = cache) else descriptor
+          if (i == tools.lastIndex) descriptor.copy(cacheControl = cache) else descriptor
         }
+    val sections = tools.mapNotNull { it.promptSection }.distinct()
     val system =
         Message.System(
-            "${bot.systemPrompt}\n\n$TOOL_DATA_RULE\n\n${todayLine()}",
+            (listOf(bot.systemPrompt) + sections + listOf(TOOL_DATA_RULE, todayLine()))
+                .joinToString("\n\n"),
             RequestMetaInfo.create(KoogClock.System),
             cache)
     var toolCallsUsed = 0

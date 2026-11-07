@@ -1,17 +1,11 @@
-package org.dallasmakerspace.activitybot.tools
+package org.dallasmakerspace.agenttools.activity
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import org.dallasmakerspace.activitybot.ActivityAccess
-import org.dallasmakerspace.activitybot.ActivityWindow
-import org.dallasmakerspace.activitybot.Area
-import org.dallasmakerspace.activitybot.MemberNames
-import org.dallasmakerspace.activitybot.SwipeSearch
 import org.dallasmakerspace.agent.AgentTool
-import org.dallasmakerspace.agent.MemberAccess
 import org.dallasmakerspace.agent.ToolContext
 import org.dallasmakerspace.agent.ToolResult
 
@@ -23,26 +17,27 @@ internal fun JsonObject.bool(name: String): Boolean? = this[name]?.jsonPrimitive
 private val USERNAME = Regex("^[a-zA-Z0-9_.-]{1,64}$")
 
 /**
- * Shared checks for the activity tools: staff-only, limited to the areas the asker may see, with a
- * parsed Central-time window. Subclasses only build the answer.
+ * Shared checks for the activity tools. They sit in bots that otherwise answer only about the
+ * asker, so each member's own access decides (not the bot's): a tool is offered only to members
+ * who may ask about at least one area, and every call is limited to the areas the asker may see,
+ * with a parsed Central-time window. Subclasses only build the answer.
  */
 abstract class ActivityTool(
     private val access: ActivityAccess,
     protected val names: MemberNames,
 ) : AgentTool {
-  override val requiredMemberAccess = MemberAccess.ANY_MEMBER
-
   override val touchesPersonalInfo = true
 
   override val maxResultChars = RESULT_CHARS
+
+  override val promptSection = ActivityPrompt.SECTION
+
+  override suspend fun isAvailableTo(username: String) = access.areasOf(username).isNotEmpty()
 
   protected abstract suspend fun execute(args: JsonObject, areas: List<Area>, window: ActivityWindow): ToolResult
 
   @Suppress("TooGenericExceptionCaught", "SwallowedException", "ReturnCount")
   final override suspend fun run(args: JsonObject, context: ToolContext): ToolResult {
-    if (context.memberAccess != MemberAccess.ANY_MEMBER) {
-      return ToolResult("This lookup is only available to staff assistants.", isError = true)
-    }
     val areas = access.areasOf(context.username)
     if (areas.isEmpty()) return ToolResult("You can't look up activity in any area.", isError = true)
     return try {

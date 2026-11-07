@@ -464,21 +464,6 @@ class RoutesModule {
 
   @IntoMap
   @Provides
-  @StringKey("/activity-assistant")
-  fun providesActivityAssistantHandler(
-      loggerFactory: LoggerFactory,
-      userInfoProvider: UserInfoProvider,
-      agentBotAccess: AgentBotAccess,
-  ): IRouteHandler =
-      BotPageHandler(
-          loggerFactory,
-          userInfoProvider,
-          agentBotAccess,
-          BotPageHandler.ACTIVITY_BOT_KEY,
-          "Activity Assistant")
-
-  @IntoMap
-  @Provides
   @StringKey("/api/agent/{path...}")
   fun providesAgentApiHandler(
       loggerFactory: LoggerFactory,

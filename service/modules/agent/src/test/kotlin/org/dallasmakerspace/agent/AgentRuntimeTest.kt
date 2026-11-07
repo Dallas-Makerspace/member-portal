@@ -88,6 +88,68 @@ class AgentRuntimeTest {
     assertTrue(system.endsWith("Today is Thursday, 2026-11-05 (Central time)."), system)
   }
 
+  private class GatedTool(private val allowed: Boolean) : AgentTool {
+    override val descriptor = ToolDescriptor("staff_lookup", "Staff only", emptyList())
+    override val promptSection = "STAFF SECTION"
+
+    override suspend fun isAvailableTo(username: String) = allowed
+
+    override suspend fun run(args: JsonObject, context: ToolContext) = ToolResult("ok")
+  }
+
+  private suspend fun offered(vararg tools: AgentTool): Pair<List<String>, String> {
+    var names = emptyList<String>()
+    var system = ""
+    val model =
+        ChatModelClient { prompt, _, descriptors ->
+          names = descriptors.map { it.name }
+          system = (prompt.messages.first() as Message.System).parts.filterIsInstance<MessagePart.Text>().joinToString("") { it.text }
+          flowOf(StreamFrame.TextDelta("Hi."), StreamFrame.End("end_turn", ResponseMetaInfo.create(KoogClock.System)))
+        }
+    val bot = BotDefinition("ask-ai", "Ask AI", "You help members.", tools.toList(), flag)
+    AgentRuntime(model).runTurn(bot, "model", context, emptyList(), TurnState(1, "Hello"), sink)
+    return names to system
+  }
+
+  @Test
+  fun `a tool the member may not use is neither offered nor described`() = runBlocking<Unit> {
+    val (names, system) = offered(FakeTool(), GatedTool(allowed = false))
+
+    assertEquals(listOf("search_wiki"), names)
+    assertTrue(!system.contains("STAFF SECTION"))
+  }
+
+  @Test
+  fun `a tool the member may use is offered and its prompt section added once`() = runBlocking<Unit> {
+    val (names, system) = offered(FakeTool(), GatedTool(allowed = true), GatedTool(allowed = true))
+
+    assertEquals(listOf("search_wiki", "staff_lookup", "staff_lookup"), names)
+    assertEquals(1, Regex("STAFF SECTION").findAll(system).count())
+  }
+
+  @Test
+  fun `a model that calls a tool it was not offered gets an error, not a run`() = runBlocking<Unit> {
+    val hidden = GatedTool(allowed = false)
+    var calls = 0
+    val model =
+        ChatModelClient { _, _, _ ->
+          flow {
+            if (calls++ == 0) {
+              emit(StreamFrame.ToolCallComplete("c1", "staff_lookup", "{}"))
+              emit(StreamFrame.End("tool_use", ResponseMetaInfo.create(KoogClock.System)))
+            } else {
+              emit(StreamFrame.TextDelta("Done."))
+              emit(StreamFrame.End("end_turn", ResponseMetaInfo.create(KoogClock.System)))
+            }
+          }
+        }
+    val state = TurnState(1, "Who was there?")
+
+    AgentRuntime(model).runTurn(bot(hidden), "model", context, emptyList(), state, sink)
+
+    assertEquals(false, state.toolCalls.single().ok)
+  }
+
   @Test
   fun `a tool call with empty arguments still runs and the turn finishes`() = runBlocking<Unit> {
     val tool = FakeTool()

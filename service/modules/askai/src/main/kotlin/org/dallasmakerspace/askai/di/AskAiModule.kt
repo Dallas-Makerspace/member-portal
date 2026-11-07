@@ -9,6 +9,9 @@ import org.dallasmakerspace.agent.BotDefinition
 import org.dallasmakerspace.agenttools.GetAuthorizationPathTool
 import org.dallasmakerspace.agenttools.GetCommitteesTool
 import org.dallasmakerspace.agenttools.GetUserAccessTool
+import org.dallasmakerspace.agenttools.activity.AreaPresenceTool
+import org.dallasmakerspace.agenttools.activity.BadgeSwipesTool
+import org.dallasmakerspace.agenttools.activity.InterlockSessionsTool
 import org.dallasmakerspace.askai.AskAiConfig
 import org.dallasmakerspace.askai.bedrock.BedrockClient
 import org.dallasmakerspace.askai.bedrock.BedrockEmbeddingClient
@@ -121,6 +124,9 @@ class AskAiModule {
       getUserAccess: GetUserAccessTool,
       getAuthorizationPath: GetAuthorizationPathTool,
       getCommittees: GetCommitteesTool,
+      areaPresence: AreaPresenceTool,
+      interlockSessions: InterlockSessionsTool,
+      badgeSwipes: BadgeSwipesTool,
   ): BotDefinition =
       BotDefinition(
           key = ASK_AI_BOT_KEY,
@@ -129,7 +135,9 @@ class AskAiModule {
           tools =
               listOf(
                   searchSource, readSourcePage, searchTalk, readTalkTopic, searchCalendar,
-                  searchOnlineCourses, getUserAccess, getAuthorizationPath, getCommittees),
+                  searchOnlineCourses, getUserAccess, getAuthorizationPath, getCommittees,
+                  // Offered only to members allowed to ask about activity; see ActivityAccess.
+                  areaPresence, interlockSessions, badgeSwipes),
           featureFlag = ConfigRegistry.AGENT_CHAT_ENABLED,
           starterPrompts = AskAiBotPrompt.STARTER_PROMPTS,
       )

@@ -1,4 +1,4 @@
-package org.dallasmakerspace.activitybot.tools
+package org.dallasmakerspace.agenttools.activity
 
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -6,16 +6,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.dallasmakerspace.activitybot.FakeSessions
-import org.dallasmakerspace.activitybot.FakeSwipes
-import org.dallasmakerspace.activitybot.IDLE_TIMEOUT
-import org.dallasmakerspace.activitybot.activityAccess
-import org.dallasmakerspace.activitybot.at
-import org.dallasmakerspace.activitybot.names
-import org.dallasmakerspace.activitybot.blocking
-import org.dallasmakerspace.activitybot.session
-import org.dallasmakerspace.activitybot.swipe
-import org.dallasmakerspace.agent.MemberAccess
 import org.dallasmakerspace.agent.ToolContext
 import org.dallasmakerspace.agent.ToolResult
 import org.junit.Test
@@ -24,8 +14,7 @@ class ActivityToolsTest {
   private val chair = listOf("Automotive Committee Chair")
   private val infra = listOf("Infrastructure")
 
-  private fun context(access: MemberAccess = MemberAccess.ANY_MEMBER) =
-      ToolContext("asker", "conversation", "activity-assistant", access)
+  private fun context() = ToolContext("asker", "conversation", "ask-ai")
 
   private fun args(vararg extra: Pair<String, String>) =
       buildJsonObject {
@@ -104,10 +93,17 @@ class ActivityToolsTest {
   }
 
   @Test
-  fun `a bot that is not allowed to look up other members is refused`() = blocking {
-    val result = presence(infra).run(args("area" to "auto"), context(MemberAccess.SELF_ONLY))
+  fun `the tools are offered only to members who may ask about an area`() = blocking {
+    val chairTool = presence(chair)
+    val infraTool = presence(infra)
+    val plain = presence(listOf("Automotive 102 (Lift Training)"))
+    val flagOff = AreaPresenceTool(activityAccess(infra, enabled = false), names(), FakeSwipes(), FakeSessions())
 
-    assertTrue(result.isError)
+    assertTrue(chairTool.isAvailableTo("asker"))
+    assertTrue(infraTool.isAvailableTo("asker"))
+    assertFalse(plain.isAvailableTo("asker"))
+    assertFalse(flagOff.isAvailableTo("asker"))
+    assertTrue(flagOff.run(args("area" to "auto"), context()).isError)
   }
 
   @Test
@@ -183,17 +179,16 @@ class ActivityToolsTest {
   }
 
   @Test
-  fun `every tool is staff only and marks the chat private`() {
+  fun `every tool marks the chat private and shares one prompt section`() {
     val all =
         listOf(
             presence(infra),
             BadgeSwipesTool(activityAccess(infra), names(), FakeSwipes()),
             InterlockSessionsTool(activityAccess(infra), names(), FakeSessions()))
 
-    all.forEach {
-      assertEquals(MemberAccess.ANY_MEMBER, it.requiredMemberAccess)
-      assertTrue(it.touchesPersonalInfo)
-    }
+    all.forEach { assertTrue(it.touchesPersonalInfo) }
+    assertEquals(1, all.map { it.promptSection }.distinct().size)
+    assertContains(all.first().promptSection!!, "not proof that they caused anything")
     assertEquals(
         setOf("get_area_presence", "get_badge_swipes", "get_interlock_sessions"), all.map { it.descriptor.name }.toSet())
   }

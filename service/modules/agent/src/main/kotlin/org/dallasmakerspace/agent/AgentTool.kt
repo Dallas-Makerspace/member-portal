@@ -31,6 +31,16 @@ interface AgentTool {
   val touchesPersonalInfo: Boolean
     get() = false
 
+  /**
+   * Whether the tool is offered to [username] at all. A tool that is not never reaches the model,
+   * so a bot can carry tools only some of its members may use.
+   */
+  suspend fun isAvailableTo(username: String): Boolean = true
+
+  /** Added to the bot's system prompt on turns where the tool is offered; equal text is added once. */
+  val promptSection: String?
+    get() = null
+
   /** Results are cut to this length before the model sees them. */
   val maxResultChars: Int
     get() = DEFAULT_MAX_RESULT_CHARS

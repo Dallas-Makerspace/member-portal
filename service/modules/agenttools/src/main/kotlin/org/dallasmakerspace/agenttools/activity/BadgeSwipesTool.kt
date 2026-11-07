@@ -1,6 +1,6 @@
 @file:Suppress("MaxLineLength")
 
-package org.dallasmakerspace.activitybot.tools
+package org.dallasmakerspace.agenttools.activity
 
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolParameterDescriptor
@@ -8,11 +8,6 @@ import ai.koog.agents.core.tools.ToolParameterType
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.JsonObject
-import org.dallasmakerspace.activitybot.ActivityAccess
-import org.dallasmakerspace.activitybot.ActivityWindow
-import org.dallasmakerspace.activitybot.Area
-import org.dallasmakerspace.activitybot.MemberNames
-import org.dallasmakerspace.activitybot.SwipeSearch
 import org.dallasmakerspace.agent.ToolResult
 
 private const val MAX_LINES = 80

@@ -1,4 +1,4 @@
-package org.dallasmakerspace.activitybot
+package org.dallasmakerspace.agenttools.activity
 
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -7,8 +7,9 @@ import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 
 /**
- * Which areas a member may ask about: all of them for the configured groups (Infrastructure and
- * officers), otherwise only the areas of a committee they chair.
+ * Which areas a member may ask about: none unless the feature flag is on for them, then all areas
+ * for the configured groups (Infrastructure and officers), otherwise only the areas of a committee
+ * they chair.
  */
 @Singleton
 class ActivityAccess
@@ -20,7 +21,7 @@ constructor(
 
   suspend fun areasFor(groups: List<String>): List<Area> {
     val all =
-        configOverrideService.get(ConfigRegistry.AGENT_ACTIVITY_BOT_AD_GROUPS)
+        configOverrideService.get(ConfigRegistry.AGENT_ACTIVITY_TOOLS_AD_GROUPS)
             .split(',')
             .map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -30,5 +31,11 @@ constructor(
     }
   }
 
-  suspend fun areasOf(username: String): List<Area> = areasFor(agentAccess.groupsOf(username))
+  suspend fun areasOf(username: String): List<Area> {
+    val groups = agentAccess.groupsOf(username)
+    val enabled =
+        configOverrideService.isFeatureEnabledFor(
+            ConfigRegistry.AGENT_ACTIVITY_TOOLS_ENABLED, username, groups)
+    return if (enabled) areasFor(groups) else emptyList()
+  }
 }

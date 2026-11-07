@@ -1,4 +1,4 @@
-package org.dallasmakerspace.activitybot
+package org.dallasmakerspace.agenttools.activity
 
 import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.models.Tool

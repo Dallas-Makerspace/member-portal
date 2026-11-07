@@ -1,4 +1,4 @@
-package org.dallasmakerspace.activitybot
+package org.dallasmakerspace.agenttools.activity
 
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

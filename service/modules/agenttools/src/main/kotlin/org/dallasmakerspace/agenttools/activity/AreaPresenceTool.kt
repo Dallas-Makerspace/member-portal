@@ -1,4 +1,4 @@
-package org.dallasmakerspace.activitybot.tools
+package org.dallasmakerspace.agenttools.activity
 
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolParameterDescriptor
@@ -8,16 +8,6 @@ import javax.inject.Singleton
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonObject
-import org.dallasmakerspace.activitybot.ActivityAccess
-import org.dallasmakerspace.activitybot.ActivityWindow
-import org.dallasmakerspace.activitybot.Area
-import org.dallasmakerspace.activitybot.Areas
-import org.dallasmakerspace.activitybot.Candidate
-import org.dallasmakerspace.activitybot.MemberNames
-import org.dallasmakerspace.activitybot.Presence
-import org.dallasmakerspace.activitybot.SessionSearch
-import org.dallasmakerspace.activitybot.SwipeSearch
-import org.dallasmakerspace.activitybot.ToolSession
 import org.dallasmakerspace.agent.ToolResult
 import org.dallasmakerspace.doorcontroller.DoorSwipe
 import org.dallasmakerspace.models.agent.AgentSourceLink

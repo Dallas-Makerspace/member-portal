@@ -1,4 +1,4 @@
-package org.dallasmakerspace.activitybot
+package org.dallasmakerspace.agenttools.activity
 
 import kotlin.test.assertEquals
 import org.junit.Test
@@ -16,6 +16,11 @@ class ActivityAccessTest {
   fun `a committee chair can ask only about their committee's areas`() = blocking {
     assertEquals(listOf(auto), activityAccess(listOf("Automotive Committee Chair")).areasOf("jdoe"))
     assertEquals(emptyList(), activityAccess(listOf("Woodshop Committee Chair")).areasOf("jdoe"))
+  }
+
+  @Test
+  fun `a member the flag is off for can ask about nothing, whatever their groups`() = blocking {
+    assertEquals(emptyList(), activityAccess(listOf("Infrastructure"), enabled = false).areasOf("jdoe"))
   }
 
   @Test

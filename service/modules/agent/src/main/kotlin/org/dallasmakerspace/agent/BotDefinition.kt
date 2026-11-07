@@ -13,9 +13,6 @@ sealed interface BotAudience {
 
   /** Members of any AD group whose name ends with [suffix]. */
   data class AdGroupSuffix(val suffix: String) : BotAudience
-
-  /** Members whose AD group names satisfy [allows]. */
-  class Groups(val allows: suspend (groups: List<String>) -> Boolean) : BotAudience
 }
 
 /** A chat bot: its prompt, tools and who may use it. Feature modules contribute these. */

@@ -1,4 +1,4 @@
-package org.dallasmakerspace.activitybot
+package org.dallasmakerspace.agenttools.activity
 
 import java.time.Duration
 import java.time.Instant

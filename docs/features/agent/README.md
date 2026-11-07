@@ -63,7 +63,7 @@ tool call (`ToolContext.memberAccess`), tools read the member only through `cont
 (the asker under `SELF_ONLY`; anyone under `ANY_MEMBER`), and a tool can drop its `username`
 parameter from what the model sees via `descriptorFor(access)`. A tool that only makes sense for
 staff sets `requiredMemberAccess = ANY_MEMBER`, and a bot with less access cannot be built with it.
-Staff bots are the IT assistant and the activity assistant. Shared tools live in `:service:agenttools`.
+Staff bots are the IT assistant only. Shared tools live in `:service:agenttools`.
 
 | Tool | Bots | Notes |
 | --- | --- | --- |
@@ -104,25 +104,27 @@ otherwise; `/ask-ai/q/{slug}` links keep working from the old answer cache.
 - Each bot's page and header link show only for members the service allows
   (`GET /agent/bots`: flag plus audience).
 
-## Activity assistant
+## Activity tools in Ask AI
 
-`activity-assistant` (`:service:activitybot`) answers "who was in the auto area on Thursday evening?" for
-staff. Chats are always private. Page: `/activity-assistant`; flag `activity-assistant.enabled` (pilot).
+Staff can ask Ask AI "who was in the auto area on Thursday evening?". Three tools (`:service:agenttools`,
+package `activity`) are on the Ask AI bot but offered only to members allowed to use them: `AgentTool.isAvailableTo`
+is checked per member at the start of each turn, so other members never see the tools or their prompt
+section (`AgentTool.promptSection`, added once to the system prompt), and every call re-checks.
 
-- **Tools** (all staff-only, `ANY_MEMBER`, results make the chat private): `get_area_presence` (people seen in an
-  area and window, ranked by evidence), `get_interlock_sessions` (who used an interlocked tool, when, how
-  long, how it ended), `get_badge_swipes` (door swipes, granted or denied). Windows are Central time and at
-  most 7 days. The model is told today's date (every bot is, in the system prompt) to resolve "Thursday".
+- **Tools** (results make the chat private): `get_area_presence` (people seen in an area and window, ranked by
+  evidence), `get_interlock_sessions` (who used an interlocked tool, when, how long, how it ended),
+  `get_badge_swipes` (door swipes, granted or denied). Windows are Central time and at most 7 days. Every
+  bot's system prompt ends with today's date, so "Thursday" resolves.
+- **Who:** the flag `agent.activity-tools.enabled` (pilot) must be on for the member, and then groups in
+  `agent.activity-tools.ad-groups` (default: Infrastructure and the officer groups) see every area, while a
+  committee chair sees only the areas of their committee (`ActivityAccess`). `get_user_access` is unchanged
+  and still shows only the asker.
 - **Areas** (`Areas` in `Area.kt`): an area is a set of door names (from `DoorMapping`) plus interlock tags.
   Today only `auto` exists: door `Garage-In` and tool `Auto Lift 1`. Add a row for a new area.
-- **Who can ask:** members of the groups in `agent.activity-bot.ad-groups` (default: Infrastructure and the
-  officer groups) see every area; a committee chair sees only the areas of their committee. The chat page and
-  menu entry show for exactly those members (`BotAudience.Groups`), and each tool re-checks per call, so a
-  chair cannot read other areas' doors or tools even by naming them.
 - **Evidence, not blame:** presence is ranked by tool use (3 points per session) then a door entry (1
   point), ties by arrival. Most Auto Lift 1 sessions end by idle timeout, so how a session ended is shown but
-  not scored. The prompt tells the model to say what was seen and not to name anyone as responsible, and not
-  to trace one member's movements beyond the question.
+  not scored. The prompt section tells the model to say what was seen, never to name anyone as responsible,
+  and not to trace one member's movements beyond the question.
 - **Data limits:** door readers record entries only (no exits, tailgating is invisible); tools without an
   interlock are invisible. Door events are matched to controllers by serial number (the controller names stored
   in `AccessControl.controllers` predate the configured names). When the doors' controller has recorded nothing

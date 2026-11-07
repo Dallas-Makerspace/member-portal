@@ -128,7 +128,6 @@ object RouteFactory {
     ASK_AI("/ask-ai"),
     IT_ASSISTANT("/it-assistant"),
     COURSE_ASSISTANT("/course-assistant"),
-    ACTIVITY_ASSISTANT("/activity-assistant"),
     MANIFEST("/manifest.json"),
     OFFLINE("/offline"),
     CONFIG_ADMIN("/admin/config"),

@@ -74,7 +74,6 @@ fun Application.configureCommonModel(
     }
     val itAssistantEnabled = BotPageHandler.IT_BOT_KEY in agentBots
     val courseAssistantEnabled = BotPageHandler.COURSE_BOT_KEY in agentBots
-    val activityAssistantEnabled = BotPageHandler.ACTIVITY_BOT_KEY in agentBots
     val remoteAccessEnabled = flags.getValue(REMOTE_ACCESS_FLAG)
     cmLog.info("CommonModel: remoteAccessEnabled=$remoteAccessEnabled")
     val accountMenuEnabled = flags.getValue(ACCOUNT_MENU_FLAG)
@@ -96,7 +95,6 @@ fun Application.configureCommonModel(
                     "remoteAccessEnabled" to remoteAccessEnabled,
                     "itAssistantEnabled" to itAssistantEnabled,
                     "courseAssistantEnabled" to courseAssistantEnabled,
-                    "activityAssistantEnabled" to activityAssistantEnabled,
                     "current_username" to currentUsername,
                     "current_display_name" to displayName,
                     "current_first_name" to firstName,
