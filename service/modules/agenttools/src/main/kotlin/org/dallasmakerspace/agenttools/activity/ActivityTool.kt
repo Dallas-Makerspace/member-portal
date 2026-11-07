@@ -5,6 +5,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import org.dallasmakerspace.models.Area
+import org.dallasmakerspace.models.Areas
 import org.dallasmakerspace.agent.AgentTool
 import org.dallasmakerspace.agent.ToolContext
 import org.dallasmakerspace.agent.ToolResult

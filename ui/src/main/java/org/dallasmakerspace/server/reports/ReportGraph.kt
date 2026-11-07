@@ -73,7 +73,7 @@ object ReportGraph {
                             ),
                             ReportNode(
                                 name = "Recent Badge Swipes",
-                                description = "Recent badge swipe activity (Infra/Officers only)",
+                                description = "Recent badge swipe activity (Infra/Officers, chairs for their own areas)",
                                 urlSlug = "badge-swipes",
                             ),
                         ),

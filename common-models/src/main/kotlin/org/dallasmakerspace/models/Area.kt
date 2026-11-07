@@ -1,15 +1,11 @@
-package org.dallasmakerspace.agenttools.activity
-
-import org.dallasmakerspace.models.Committees
-import org.dallasmakerspace.models.Tool
-import org.dallasmakerspace.models.Tools
+package org.dallasmakerspace.models
 
 /** A part of the space, seen through its door readers and interlocked tools. */
 data class Area(
     val key: String,
     val name: String,
     val committeeId: Int,
-    /** Friendly door names from `DoorMapping`. */
+    /** Door names, as in `AccessControl.slots`. */
     val doors: List<String>,
     val interlockTags: List<String>,
 ) {

@@ -34,7 +34,7 @@ private val bodyMapType = object : TypeToken<Map<String, Any?>>() {}.type
 private val BLOCKED_PREFIXES = setOf("notifications", "webhook", "moodle")
 
 /** Path segments after normalizing encoding and dot/empty segments, lowercased; null if traversal. */
-private fun proxiedSegments(path: String): List<String>? {
+internal fun proxiedSegments(path: String): List<String>? {
   val decoded = runCatching { java.net.URLDecoder.decode(path.substringBefore('?'), "UTF-8") }
       .getOrDefault(path)
   val segments = decoded.replace('\\', '/').split('/').filter { it.isNotEmpty() && it != "." }
@@ -80,6 +80,14 @@ class BackendApiHandler(
       return
     }
     if (isWaiverReportPath(path) && !canViewWaiverReport(username.orEmpty())) {
+      call.respond(HttpStatusCode.Forbidden)
+      return
+    }
+    if (isBadgeSwipesData(path) &&
+        !canReadBadgeSwipes(
+            authz.can(Permission.MANAGE_BADGES.name),
+            userInfo["groups"] as? List<*> ?: emptyList<Any>(),
+            call.request.queryParameters.getAll(BADGE_SWIPES_DOORS_PARAM).orEmpty())) {
       call.respond(HttpStatusCode.Forbidden)
       return
     }

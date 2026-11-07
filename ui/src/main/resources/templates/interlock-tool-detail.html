@@ -70,9 +70,8 @@
     <div class="row">
         <div class="col-12">
             <dms-data-visualizer
-                    th:attr="dataUrl='/backend-api/data-viz/interlock-usage?tool=' + ${toolTag} + '&days=14'"
+                    th:attr="dataUrl='/backend-api/data-viz/interlock-usage?tool=' + ${toolTag} + '&days=' + ${days},title='Usage — last ' + ${days} + ' days'"
                     renderAs="table"
-                    title="Usage — last 14 days"
                     filterable="true"
             ></dms-data-visualizer>
         </div>

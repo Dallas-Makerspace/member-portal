@@ -45,7 +45,13 @@ class ActivityToolsTest {
     assertTrue(lines[1].startsWith("1. [Jane Doe](/profile/@jdoe) | used Auto Lift 1 18:00-19:30 (ended by idle timeout); entered Garage-In 17:55"), lines[1])
     assertTrue(lines[2].startsWith("2. [Alex Smith](/profile/@asmith) | entered Garage-In 19:10"), lines[2])
     assertContains(result.text(), "not proof of who left a mess")
-    assertEquals(listOf("/profile/@jdoe", "/profile/@asmith"), result.sources.map { it.url })
+    assertEquals(
+        listOf("Garage-In badge swipes", "Auto Lift 1 usage"), result.sources.map { it.title })
+    assertEquals(
+        "/reports/member-visits/badge-swipes?doors=Garage-In&from=2026-11-05T17:00&to=2026-11-05T23:59",
+        result.sources.first().url)
+    assertTrue(result.sources.last().url.startsWith("/interlock-tools?tool=auto-lift-1&days="))
+    assertContains(result.text(), "Check the data: [Garage-In badge swipes](/reports/member-visits/badge-swipes?doors=Garage-In")
   }
 
   @Test

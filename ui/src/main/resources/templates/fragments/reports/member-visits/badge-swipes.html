@@ -8,17 +8,16 @@
 <div th:fragment="report">
     <!-- Restriction note - ALWAYS shown to all users -->
     <div class="alert alert-info" role="alert">
-        <strong>Note:</strong> This report is restricted to Officers and IT Infrastructure team.
+        <strong>Note:</strong> This report is restricted to Officers and the IT Infrastructure team. Committee chairs can see their own area's doors.
     </div>
 
     <!-- Report content - ONLY shown to authorized users -->
-    <div th:if="${authz.can('MANAGE_BADGES')}">
+    <div th:if="${badgeSwipes['allowed']}">
         <!-- Data visualizer component -->
         <dms-data-visualizer
                 id="badge-swipes-visualizer"
-                dataUrl="/backend-api/data-viz/badge-swipes"
+                th:attr="dataUrl=${badgeSwipes['dataUrl']},title=${badgeSwipes['title']}"
                 renderAs="table"
-                title="Recent Badge Swipes"
                 description=""
                 filterable="true"
                 alwaysShowRawData="true"

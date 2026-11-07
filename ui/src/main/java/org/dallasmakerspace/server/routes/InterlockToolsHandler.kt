@@ -13,6 +13,9 @@ import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.models.getSlugFromName
 
+private const val DEFAULT_USAGE_DAYS = 14
+private const val MAX_USAGE_DAYS = 90
+
 class InterlockToolsHandler
 @Inject
 constructor(
@@ -76,6 +79,9 @@ constructor(
             "prerequisiteGroup" to tool.prerequisiteGroup,
             "prerequisiteGroupSlug" to tool.prerequisiteGroup?.let { getSlugFromName(it) },
             "timeoutSeconds" to tool.timeoutSeconds,
+            "days" to
+                (call.request.queryParameters["days"]?.toIntOrNull()?.coerceIn(1, MAX_USAGE_DAYS)
+                    ?: DEFAULT_USAGE_DAYS),
         )
     call.respond(ThymeleafContent("interlock-tool-detail", model))
   }

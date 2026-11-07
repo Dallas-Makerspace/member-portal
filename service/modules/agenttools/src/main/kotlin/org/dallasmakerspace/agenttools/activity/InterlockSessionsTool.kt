@@ -9,6 +9,8 @@ import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.JsonObject
+import org.dallasmakerspace.models.Area
+import org.dallasmakerspace.models.Areas
 import org.dallasmakerspace.agent.ToolResult
 import org.dallasmakerspace.models.Tool
 
@@ -52,13 +54,14 @@ constructor(
                     "Unknown tool \"$wanted\". You can ask about: ${visible.joinToString { it.name }}.")
               }
         }
+    val reports = tools.mapNotNull { ActivityLinks.usage(it, window) }
     val member = memberArg(args)
     val found =
         sessions.search(tools, window.from, window.to).filter {
           member == null || it.username.equals(member, ignoreCase = true)
         }
     if (found.isEmpty()) {
-      return ToolResult("No sessions were recorded on ${label(tools)} from $window${member?.let { " for $it" } ?: ""}.")
+      return ToolResult("No sessions were recorded on ${label(tools)} from $window${member?.let { " for $it" } ?: ""}." + ActivityLinks.line(reports), reports)
     }
     val shown = found.take(MAX_LINES)
     val display = names.of(shown.mapNotNull { it.username }.toSet())

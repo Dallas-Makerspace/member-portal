@@ -3,6 +3,7 @@ package org.dallasmakerspace.agenttools.activity
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.dallasmakerspace.models.Areas
 import org.dallasmakerspace.agent.AgentAccess
 import org.junit.Test
 import org.mockito.kotlin.any

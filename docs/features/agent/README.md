@@ -56,6 +56,15 @@ the chat, so deleting a chat doesn't reset a cap; the nightly job deletes them a
   to the pilot), audience, `startsPrivate`.
 - Add the bot's tool names to `toolLabel` in `static/js/agent/markdown.js` for friendly chips.
 
+## Chat titles
+
+A new chat starts with its question as the title. `ChatTitler` asks the default model for a 3 to 6 word title alongside the
+first answer, using only the question, and the page updates from a `title` stream event. A reply that is too long, has
+markup or has personal details is dropped, and a failure keeps the question. A question with personal details is never
+sent (the chat stays "Private question"), and a title the member changed first is left alone. A call costs about
+$0.00002 and is added to the first answer's cost, so it counts toward the spend cap but not the daily question limit.
+The turn waits at most 3 seconds for it to finish.
+
 ## Members and groups in answers
 
 The model never writes component tags. It writes markdown links, and the chat page renders them.
@@ -155,6 +164,13 @@ section (`AgentTool.promptSection`, added once to the system prompt), and every 
   stored max for that controller and door, but the max includes the old MDB-import rows (numbered about 1.36M)
   while those controllers' own record numbers are far lower (about 557k, 51k, 67k), so everything new is
   dropped; only `104 Door Control` (about 1.6M) still passes. Not a door ID or mapping change. No denied swipes appeared in the door log for 5 Nov 2026, so the scraper may not record them.
+- **Checking the data:** each tool result links to the report behind it, in the sources list and in a "Check the data" line for
+  the model. Doors link to `/reports/member-visits/badge-swipes?doors=...&from=...&to=...`, tools to
+  `/interlock-tools?tool=...&days=N` (up to 90 days back; older windows have no tool link).
+- **Badge swipes report access:** enforced in `BackendApiHandler`, not only on the page. Officers and Infrastructure read
+  everything; a chair must name only the doors of their committee's areas (`BadgeSwipesAccess`); everyone else gets 403.
+  The filter (`BadgeSwipesFilter`) validates doors and times because the report's query is built as text. Without a window
+  the report shows the last 72 hours.
 - **Mock mode** returns canned fake swipes and sessions.
 
 ## Evals

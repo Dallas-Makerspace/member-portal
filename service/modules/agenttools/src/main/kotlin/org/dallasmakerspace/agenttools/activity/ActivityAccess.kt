@@ -3,6 +3,8 @@ package org.dallasmakerspace.agenttools.activity
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import org.dallasmakerspace.models.Area
+import org.dallasmakerspace.models.Areas
 import org.dallasmakerspace.agent.AgentAccess
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry

@@ -16,6 +16,9 @@ class ActivityWindow private constructor(val from: Instant, val to: Instant) {
 
   fun clock(time: Instant): String = clock.format(time.atZone(CENTRAL))
 
+  /** [time] as the report pages take it, e.g. 2026-11-05T17:00. */
+  fun param(time: Instant): String = PARAM.format(time.atZone(CENTRAL))
+
   /** [time] with its day, for a moment that may fall outside the window. */
   fun stamp(time: Instant): String = DAY_CLOCK.format(time.atZone(CENTRAL))
 
@@ -25,6 +28,7 @@ class ActivityWindow private constructor(val from: Instant, val to: Instant) {
     val CENTRAL: ZoneId = ZoneId.of("America/Chicago")
     const val MAX_DAYS = 7L
     private const val HOURS_PER_DAY = 24L
+    private val PARAM = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm", Locale.US)
     private val CLOCK = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
     private val DAY_CLOCK = DateTimeFormatter.ofPattern("EEE MMM d HH:mm", Locale.US)
     private val DATE_TIME = Regex("""\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?""")

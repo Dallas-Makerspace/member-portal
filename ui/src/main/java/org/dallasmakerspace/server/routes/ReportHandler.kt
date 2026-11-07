@@ -127,6 +127,14 @@ constructor(
       templateData["isWaiverReportAuthorized"] = isWaiverReportAuthorized
     }
 
+    if (parentSlug == BADGE_SWIPES_PARENT_SLUG && childSlug == BADGE_SWIPES_SLUG) {
+      templateData["badgeSwipes"] =
+          badgeSwipesPageModel(
+              authz.can(Permission.MANAGE_BADGES.name),
+              userInfo["groups"] as? List<*> ?: emptyList<Any>(),
+              call.request.queryParameters)
+    }
+
     if (parentSlug == "online-courses") addMoodleModel(templateData, queryParams)
 
     if (parentSlug == ArchivedGroupsReport.PARENT_SLUG && childSlug == ArchivedGroupsReport.SLUG) {

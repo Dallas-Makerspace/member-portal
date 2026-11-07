@@ -27,11 +27,21 @@ constructor(
   override fun getName(): String = "badge-swipes"
 
   override suspend fun getData(params: Map<String, List<String>>): DataVizResponse {
+    val filter =
+        try {
+          BadgeSwipesFilter.parse(params)
+        } catch (e: IllegalArgumentException) {
+          return DataVizResponse(
+              data = emptyList(),
+              dataFields = emptyList(),
+              metadata = mapOf("error" to (e.message ?: "Invalid filter")))
+        }
+    val query = buildQuery(filter)
     val totalStartTime = System.currentTimeMillis()
 
-    // Execute SQL query to get all badge swipes from past 24 hours
+    // The past 72 hours unless the filter says otherwise
     val queryStartTime = System.currentTimeMillis()
-    val dbData = genericRepository.getReportData(buildQuery())
+    val dbData = genericRepository.getReportData(query)
     val queryTimeTaken = System.currentTimeMillis() - queryStartTime
 
     // Extract data rows
@@ -101,13 +111,13 @@ constructor(
             "Query time" to "${queryTimeTaken}ms",
             "Members fetch time" to "${membersTimeTaken}ms",
             "Total swipes" to "${rows.size}",
-            "SQL Query" to buildQuery(),
+            "SQL Query" to query,
         )
 
     return DataVizResponse(data = dataItems, dataFields = dataFields, metadata = metadata)
   }
 
-  private fun buildQuery(): String {
+  private fun buildQuery(filter: BadgeSwipesFilter): String {
     return """
     SELECT DISTINCT
         DATE_FORMAT(CONVERT_TZ(e.date, 'UTC', 'America/Chicago'), '%a, %b %e, %Y at %l:%i %p') as swipe_time,
@@ -119,7 +129,7 @@ constructor(
     FROM `AccessControl`.events e
     LEFT JOIN `AccessControl`.slots s ON e.controllerId = s.controllerId AND e.slotNumber = s.slotNumber
     LEFT JOIN `dms-makermanager`.users u ON e.userId = u.id
-    WHERE e.date >= DATE_SUB(NOW(), INTERVAL 72 HOUR)
+    WHERE ${filter.whereClause()}
     ORDER BY e.date DESC
     LIMIT 5000
     """

@@ -8,9 +8,10 @@ import javax.inject.Singleton
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonObject
+import org.dallasmakerspace.models.Area
+import org.dallasmakerspace.models.Areas
 import org.dallasmakerspace.agent.ToolResult
 import org.dallasmakerspace.doorcontroller.DoorSwipe
-import org.dallasmakerspace.models.agent.AgentSourceLink
 
 private const val MAX_PEOPLE = 15
 private const val MAX_SWIPES = 300
@@ -56,12 +57,15 @@ constructor(
           val freshness = async { doorLogGap(swipes, area.doors, window) }
           Triple(doors.await(), tools.await(), freshness.await())
         }
+    val reports = area.doors.map { ActivityLinks.swipes(it, window) } + area.tools.mapNotNull { ActivityLinks.usage(it, window) }
     val shownSwipes = entries.take(MAX_SWIPES)
     val ranked = Presence.rank(uses, shownSwipes)
     if (ranked.isEmpty()) {
       return ToolResult(
           "No door entries or tool sessions were recorded in the ${area.name} from $window." +
-              (gap?.let { "\n$it" } ?: ""))
+              (gap?.let { "\n$it" } ?: "") +
+              ActivityLinks.line(reports),
+          reports)
     }
     val shown = ranked.take(MAX_PEOPLE)
     val display = names.of(shown.mapNotNull { it.username }.toSet())
@@ -79,14 +83,10 @@ constructor(
           "Evidence only: door readers record entries (not exits), tailgating and other doors " +
               "are invisible, and being seen is not proof of who left a mess.")
     }
-    val sources =
-        shown.mapNotNull { c ->
-          c.username?.let { AgentSourceLink(display[it] ?: it, "/profile/@$it", "Member portal") }
-        }
     return ToolResult(
         "${area.name}, $window: ${ranked.size} ${if (ranked.size == 1) "person" else "people"} seen.\n" +
-            lines.joinToString("\n") + "\n" + notes.joinToString("\n"),
-        sources)
+            lines.joinToString("\n") + "\n" + notes.joinToString("\n") + ActivityLinks.line(reports),
+        reports)
   }
 
   private fun evidence(c: Candidate, window: ActivityWindow): String =

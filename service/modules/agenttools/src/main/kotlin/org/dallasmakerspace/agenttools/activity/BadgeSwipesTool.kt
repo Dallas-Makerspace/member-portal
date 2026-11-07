@@ -8,6 +8,8 @@ import ai.koog.agents.core.tools.ToolParameterType
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.JsonObject
+import org.dallasmakerspace.models.Area
+import org.dallasmakerspace.models.Areas
 import org.dallasmakerspace.agent.ToolResult
 
 private const val MAX_LINES = 80
@@ -55,7 +57,8 @@ constructor(
         swipes.search(doors, window.from, window.to, member?.let { setOf(it) }, args.bool("deniedOnly") == true, MAX_LINES + 1)
     val label = doors.joinToString()
     val gap = doorLogGap(swipes, doors, window)?.let { "\n$it" } ?: ""
-    if (found.isEmpty()) return ToolResult("No swipes were recorded at $label from $window${member?.let { " for $it" } ?: ""}.$gap")
+    val reports = doors.map { ActivityLinks.swipes(it, window) }
+    if (found.isEmpty()) return ToolResult("No swipes were recorded at $label from $window${member?.let { " for $it" } ?: ""}.$gap" + ActivityLinks.line(reports), reports)
     val shown = found.take(MAX_LINES)
     val display = names.of(shown.mapNotNull { it.username }.toSet())
     val lines =
@@ -63,6 +66,6 @@ constructor(
           "${window.clock(it.time)} | ${it.door} | ${if (it.granted) "granted" else "denied"} | ${who(it.username, it.badgeTail, display)}"
         }
     val more = if (found.size > shown.size) "\nShowing the first $MAX_LINES; narrow the window for the rest." else ""
-    return ToolResult("${shown.size} swipe${if (shown.size == 1) "" else "s"} at $label, $window:\n" + lines.joinToString("\n") + more + gap)
+    return ToolResult("${shown.size} swipe${if (shown.size == 1) "" else "s"} at $label, $window:\n" + lines.joinToString("\n") + more + gap + ActivityLinks.line(reports), reports)
   }
 }
