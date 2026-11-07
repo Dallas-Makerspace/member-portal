@@ -5,6 +5,7 @@ import io.ktor.server.application.*
 import javax.inject.Singleton
 import org.dallasmakerspace.agent.AgentEvalService
 import org.dallasmakerspace.agent.ArtifactService
+import org.dallasmakerspace.activitybot.di.ActivityBotModule
 import org.dallasmakerspace.agent.ChatService
 import org.dallasmakerspace.agent.di.AgentModule
 import org.dallasmakerspace.askai.AskAiService
@@ -78,6 +79,7 @@ import org.dallasmakerspace.workflows.groups.references.GroupReferenceChecker
             AskAiModule::class,
             ItBotModule::class,
             CourseBotModule::class,
+            ActivityBotModule::class,
             CalendarModule::class,
             ConfigModule::class,
             DiscourseModule::class,

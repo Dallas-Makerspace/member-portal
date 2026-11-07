@@ -36,6 +36,7 @@ dependencies {
   implementation(project(":service:askai"))
   implementation(project(":service:itbot"))
   implementation(project(":service:coursebot"))
+  implementation(project(":service:activitybot"))
   implementation(project(":service:dataviz"))
   implementation(project(":service:notifications"))
   implementation(project(":service:keyvalue"))

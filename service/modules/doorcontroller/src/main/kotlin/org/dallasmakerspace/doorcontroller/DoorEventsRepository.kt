@@ -1,15 +1,30 @@
 package org.dallasmakerspace.doorcontroller
 
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.dallasmakerspace.db.master.suspendTransaction
+import org.jetbrains.exposed.sql.JoinType
+import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.Transaction
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
+import org.jetbrains.exposed.sql.max
+import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 
 /** Repository for managing door badge swipe events in the AccessControl.events table */
 @Singleton
 class DoorEventsRepository @Inject constructor() {
+  private companion object {
+    const val DEFAULT_SWIPE_LIMIT = 200
+    const val BADGE_TAIL = 4
+    val USERNAME = Regex("^[a-zA-Z0-9_.-]+$")
+  }
 
   // Cache controller serial number -> database ID mappings
   private val controllerIdCache = mutableMapOf<Long, Int>()
@@ -153,6 +168,103 @@ class DoorEventsRepository @Inject constructor() {
       }
       result
     }
+  }
+
+  /**
+   * Swipes at [places] from [from] to [to], oldest first, at most [limit]. [usernames] keeps only
+   * those members' swipes. Controllers are matched by serial number, since the name stored with a
+   * controller predates the names in the configuration.
+   */
+  @Suppress("LongParameterList")
+  suspend fun searchSwipes(
+      places: Collection<DoorPlace>,
+      from: Instant,
+      to: Instant,
+      usernames: Set<String>? = null,
+      deniedOnly: Boolean = false,
+      limit: Int = DEFAULT_SWIPE_LIMIT,
+  ): List<DoorSwipe> {
+    if (places.isEmpty() || (usernames != null && usernames.isEmpty())) return emptyList()
+    usernames?.forEach { require(it.matches(USERNAME)) { "Invalid username" } }
+    val start = LocalDateTime.ofInstant(from, ZoneOffset.UTC)
+    val end = LocalDateTime.ofInstant(to, ZoneOffset.UTC)
+    val doorNames = places.associate { (it.serial to it.slot) to it.name }
+
+    return suspendTransaction {
+      val userIds = usernames?.let { userIdsOf(it) }
+      if (userIds != null && userIds.isEmpty()) return@suspendTransaction emptyList()
+      val atDoor =
+          places
+              .map { (_, serial, slot) ->
+                (ControllersTable.sn eq serial) and (DoorEventsTable.slotNumber eq slot)
+              }
+              .reduce { a, b -> a or b }
+      val rows =
+          DoorEventsTable.join(ControllersTable, JoinType.INNER, DoorEventsTable.controllerId, ControllersTable.id)
+              .select {
+                var match =
+                    atDoor and (DoorEventsTable.date greaterEq start) and (DoorEventsTable.date lessEq end)
+                if (deniedOnly) match = match and (DoorEventsTable.granted eq 0)
+                if (userIds != null) match = match and (DoorEventsTable.userId inList userIds)
+                match
+              }
+              .orderBy(DoorEventsTable.date to SortOrder.ASC)
+              .limit(limit)
+              .map {
+                RawSwipe(
+                    it[DoorEventsTable.date],
+                    doorNames.getValue(it[ControllersTable.sn] to it[DoorEventsTable.slotNumber]),
+                    it[DoorEventsTable.granted] == 1,
+                    it[DoorEventsTable.userId],
+                    it[DoorEventsTable.cardNumber])
+              }
+      val names = usernamesOf(rows.mapNotNull { it.userId }.toSet())
+      rows.map {
+        DoorSwipe(
+            it.date.toInstant(ZoneOffset.UTC),
+            it.door,
+            it.granted,
+            it.userId?.let(names::get),
+            it.card.takeLast(BADGE_TAIL))
+      }
+    }
+  }
+
+  /** The newest event of any door on the controllers of [places], or null if there is none. */
+  suspend fun latestEventTime(places: Collection<DoorPlace>): Instant? {
+    if (places.isEmpty()) return null
+    val serials = places.map { it.serial }.distinct()
+    return suspendTransaction {
+      DoorEventsTable.join(ControllersTable, JoinType.INNER, DoorEventsTable.controllerId, ControllersTable.id)
+          .slice(DoorEventsTable.date.max())
+          .select { ControllersTable.sn inList serials }
+          .firstOrNull()
+          ?.get(DoorEventsTable.date.max())
+          ?.toInstant(ZoneOffset.UTC)
+    }
+  }
+
+  private class RawSwipe(
+      val date: LocalDateTime,
+      val door: String,
+      val granted: Boolean,
+      val userId: Int?,
+      val card: String,
+  )
+
+  private fun Transaction.userIdsOf(usernames: Set<String>): List<Int> {
+    val list = usernames.joinToString(",") { "'${it.replace("'", "''")}'" }
+    return exec("SELECT id FROM `dms-makermanager`.users WHERE username IN ($list)") { rs ->
+      buildList { while (rs.next()) add(rs.getInt("id")) }
+    } ?: emptyList()
+  }
+
+  private fun Transaction.usernamesOf(userIds: Set<Int>): Map<Int, String> {
+    if (userIds.isEmpty()) return emptyMap()
+    val list = userIds.joinToString(",")
+    return exec("SELECT id, username FROM `dms-makermanager`.users WHERE id IN ($list)") { rs ->
+      buildMap { while (rs.next()) put(rs.getInt("id"), rs.getString("username")) }
+    } ?: emptyMap()
   }
 
   /**

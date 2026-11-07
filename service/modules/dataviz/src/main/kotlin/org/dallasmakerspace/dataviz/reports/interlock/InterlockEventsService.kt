@@ -82,8 +82,26 @@ constructor(
   // ES fetch — multi-host
   // ---------------------------------------------------------------------------
 
+  suspend fun fetchEvents(interlockTags: List<String>, days: Int): List<EsEvent> =
+      fetch(interlockTags, rangeQuery(gte = "now-${days}d"))
+
+  /** Events from [from] to [to], oldest first. */
+  suspend fun fetchEventsBetween(
+      interlockTags: List<String>,
+      from: Instant,
+      to: Instant,
+  ): List<EsEvent> = fetch(interlockTags, rangeQuery(gte = from.toString(), lte = to.toString()))
+
+  private fun rangeQuery(gte: String, lte: String? = null): Query =
+      Query.Builder()
+          .range { r ->
+            val range = r.field("@timestamp").gte(JsonData.of(gte))
+            if (lte != null) range.lte(JsonData.of(lte)) else range
+          }
+          .build()
+
   @Suppress("TooGenericExceptionCaught")
-  suspend fun fetchEvents(interlockTags: List<String>, days: Int): List<EsEvent> {
+  private suspend fun fetch(interlockTags: List<String>, rangeQuery: Query): List<EsEvent> {
     if (interlockTags.isEmpty()) return emptyList()
     return withContext(Dispatchers.IO) {
       val client = ElasticsearchClientManager.client
@@ -95,11 +113,6 @@ constructor(
                   tv.value(interlockTags.map { FieldValue.of(it) })
                 }
               }
-              .build()
-
-      val rangeQuery =
-          Query.Builder()
-              .range { r -> r.field("@timestamp").gte(JsonData.of("now-${days}d")) }
               .build()
 
       val boolQuery = Query.Builder().bool { b -> b.must(listOf(termsQuery, rangeQuery)) }.build()

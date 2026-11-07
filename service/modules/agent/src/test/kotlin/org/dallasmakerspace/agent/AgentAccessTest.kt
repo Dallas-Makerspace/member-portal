@@ -88,4 +88,14 @@ class AgentAccessTest {
     assertFalse(access(FeatureFlagValue(enabled = true)).canUse(staffBot, "jdoe"))
     verify(directory, times(1)).getMembersByUsernameList(any())
   }
+
+  @Test
+  fun `a custom group audience decides from the member's groups`() = runBlocking<Unit> {
+    val open = bot.copy(audience = BotAudience.Groups { "Pilot Group" in it })
+    val closed = bot.copy(audience = BotAudience.Groups { "Other Group" in it })
+    val access = access(FeatureFlagValue(enabled = true))
+
+    assertTrue(access.canUse(open, "jdoe"))
+    assertFalse(access.canUse(closed, "jdoe"))
+  }
 }

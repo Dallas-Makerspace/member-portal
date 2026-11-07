@@ -73,6 +73,22 @@ class AgentRuntimeTest {
   }
 
   @Test
+  fun `the model is told today's date in Central time`() = runBlocking<Unit> {
+    var system = ""
+    val model =
+        ChatModelClient { prompt, _, _ ->
+          system = (prompt.messages.first() as Message.System).parts.filterIsInstance<MessagePart.Text>().joinToString("") { it.text }
+          flowOf(StreamFrame.TextDelta("Hi."), StreamFrame.End("end_turn", ResponseMetaInfo.create(KoogClock.System)))
+        }
+    // 03:30 UTC on Friday the 6th is still Thursday evening in Chicago.
+    val clock = java.time.Clock.fixed(java.time.Instant.parse("2026-11-06T03:30:00Z"), java.time.ZoneOffset.UTC)
+
+    AgentRuntime(model, clock).runTurn(bot(FakeTool()), "model", context, emptyList(), TurnState(1, "Hello"), sink)
+
+    assertTrue(system.endsWith("Today is Thursday, 2026-11-05 (Central time)."), system)
+  }
+
+  @Test
   fun `a tool call with empty arguments still runs and the turn finishes`() = runBlocking<Unit> {
     val tool = FakeTool()
     var calls = 0

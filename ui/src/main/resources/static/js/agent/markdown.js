@@ -86,6 +86,9 @@ export function toolLabel(tool) {
         case 'get_authorization_path': return 'Looked up how to get authorized';
         case 'get_committees': return 'Looked up committees';
         case 'get_site_config': return 'Checked site settings';
+        case 'get_area_presence': return 'Checked who was in the area';
+        case 'get_interlock_sessions': return 'Checked tool sessions';
+        case 'get_badge_swipes': return 'Checked badge swipes';
         case 'get_audit_trail': return 'Checked change history';
         default: return 'Used ' + tool.replace(/_/g, ' ');
     }

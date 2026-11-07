@@ -189,6 +189,10 @@
                                 <a class="dropdown-item" href="/course-assistant">Course Assistant <span
                                         class="badge bg-warning text-dark" style="font-size:0.7em">Beta</span></a>
                             </li>
+                            <li th:if="${activityAssistantEnabled}">
+                                <a class="dropdown-item" href="/activity-assistant">Activity Assistant <span
+                                        class="badge bg-warning text-dark" style="font-size:0.7em">Beta</span></a>
+                            </li>
                             <li th:if="${itAssistantEnabled}">
                                 <a class="dropdown-item" href="/it-assistant">IT Assistant <span
                                         class="badge bg-warning text-dark" style="font-size:0.7em">Beta</span></a>

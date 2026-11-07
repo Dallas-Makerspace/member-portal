@@ -420,6 +420,33 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val AGENT_ACTIVITY_BOT_ENABLED =
+      ConfigKey(
+          key = "activity-assistant.enabled",
+          description =
+              "Shows the activity assistant (who was in an area or using a tool) to its " +
+                  "audience; can be piloted for specific usernames or AD groups before a full rollout",
+          category = "AI Assistant",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
+  val AGENT_ACTIVITY_BOT_AD_GROUPS =
+      ConfigKey(
+          key = "agent.activity-bot.ad-groups",
+          description =
+              "Comma-separated AD groups that can ask the activity assistant about every area. " +
+                  "Each committee chair can also ask about their own committee's areas",
+          category = "AI Assistant",
+          defaultValue =
+              "Infrastructure,President,Treasurer,Secretary,Logistics Committee Chair," +
+                  "Infrastructure Committee Chair",
+          type = ConfigValueType.StringType,
+      )
+
   val AGENT_IT_BOT_AD_GROUP =
       ConfigKey(
           key = "agent.it-bot.ad-group",
@@ -485,6 +512,8 @@ object ConfigRegistry {
           AGENT_USER_DAILY_TURN_CAP,
           AGENT_IT_BOT_ENABLED,
           AGENT_COURSE_BOT_ENABLED,
+          AGENT_ACTIVITY_BOT_ENABLED,
+          AGENT_ACTIVITY_BOT_AD_GROUPS,
           AGENT_IT_BOT_AD_GROUP,
           AGENT_IT_BOT_REPOS,
       )

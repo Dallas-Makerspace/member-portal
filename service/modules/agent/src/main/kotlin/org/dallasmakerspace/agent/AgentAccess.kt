@@ -71,5 +71,6 @@ constructor(
         }
         is BotAudience.AdGroupSuffix ->
             groups.any { it.endsWith(audience.suffix, ignoreCase = true) }
+        is BotAudience.Groups -> audience.allows(groups)
       }
 }
