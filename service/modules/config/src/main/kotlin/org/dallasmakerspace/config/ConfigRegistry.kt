@@ -265,6 +265,29 @@ object ConfigRegistry {
           type = ConfigValueType.StringType,
       )
 
+  val COMMITTEE_DASHBOARD_ENABLED =
+      ConfigKey(
+          key = "committees.dashboard-enabled",
+          description =
+              "Lets committee chairs build a TV dashboard; can be piloted for specific " +
+                  "usernames or AD groups before a full rollout",
+          category = "Committees",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
+  val COMMITTEE_DASHBOARD_COMMITTEES =
+      ConfigKey(
+          key = "committees.dashboard-committees",
+          description = "Committees that have a TV dashboard, as comma-separated names",
+          category = "Committees",
+          defaultValue = "Woodshop",
+          type = ConfigValueType.StringType,
+      )
+
   val FOLLOW_FEATURE_ENABLED =
       ConfigKey(
           key = "notifications.follow-feature-enabled",
@@ -482,6 +505,8 @@ object ConfigRegistry {
           NOTIFICATIONS_SMS_ENABLED,
           COMMITTEE_BROADCAST_ENABLED,
           COMMITTEE_TALK_CATEGORIES,
+          COMMITTEE_DASHBOARD_ENABLED,
+          COMMITTEE_DASHBOARD_COMMITTEES,
           COMMITTEE_FOLLOW_ENABLED,
           FOLLOW_FEATURE_ENABLED,
           PROFILE_PHOTO_ENABLED,

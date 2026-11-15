@@ -50,6 +50,7 @@ dependencies {
   implementation(project(":service:doorcontroller"))
   implementation(project(":service:calendar"))
   implementation(project(":service:storage"))
+  implementation(project(":service:dashboards"))
   implementation(project(":service:workflows-api"))
   implementation(project(":service:workflows"))
   implementation(project(":service:workflows-store"))

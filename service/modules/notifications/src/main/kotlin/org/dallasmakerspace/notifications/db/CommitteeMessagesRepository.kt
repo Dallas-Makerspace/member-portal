@@ -7,6 +7,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import org.dallasmakerspace.core.db.suspendTransaction
 import org.dallasmakerspace.members.db.ProfileResolver
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
@@ -36,6 +37,20 @@ class CommitteeMessagesRepository @Inject constructor() {
   /** Send times (UTC) of [committeeId]'s messages in the past week that count toward the limits. */
   suspend fun recentSends(committeeId: Int, now: LocalDateTime = nowUtc()): List<LocalDateTime> =
       suspendTransaction { countedSends(committeeId, now) }
+
+  /** Texts and send times (UTC) of [committeeId]'s messages since [since], newest first. */
+  suspend fun recentMessages(
+      committeeId: Int,
+      since: LocalDateTime,
+  ): List<Pair<LocalDateTime, String>> = suspendTransaction {
+    CommitteeMessagesTable.select {
+          (CommitteeMessagesTable.committeeId eq committeeId) and
+              (CommitteeMessagesTable.status neq CommitteeMessageStatus.FAILED) and
+              (CommitteeMessagesTable.createdAt greaterEq since)
+        }
+        .orderBy(CommitteeMessagesTable.createdAt, SortOrder.DESC)
+        .map { it[CommitteeMessagesTable.createdAt] to it[CommitteeMessagesTable.message] }
+  }
 
   /**
    * Records a PENDING message for [committeeId] by [senderUsername] unless a limit is reached.

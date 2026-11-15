@@ -19,6 +19,8 @@ import org.dallasmakerspace.bambuddy.notifications.EphemeralNotificationService
 import org.dallasmakerspace.bambuddy.notifications.webhook.BambuddyWebhookHandler
 import org.dallasmakerspace.calendar.CalendarService
 import org.dallasmakerspace.committees.CommitteeMessageService
+import org.dallasmakerspace.dashboards.DashboardEvents
+import org.dallasmakerspace.dashboards.DashboardService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.config.di.ConfigModule
@@ -198,6 +200,10 @@ interface AppComponent {
   fun getCommitteeFollowersService(): CommitteeFollowersService
 
   fun getCommitteeMessageService(): CommitteeMessageService
+
+  fun getDashboardService(): DashboardService
+
+  fun getDashboardEvents(): DashboardEvents
 
   fun getObjectStoreFactory(): ObjectStoreFactory
 

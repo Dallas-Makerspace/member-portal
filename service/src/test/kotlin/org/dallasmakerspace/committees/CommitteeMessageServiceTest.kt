@@ -14,6 +14,7 @@ import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.core.DBMemberPortalConnection
 import org.dallasmakerspace.core.LoggerFactory
+import org.dallasmakerspace.dashboards.CommitteeAccess
 import org.dallasmakerspace.discourse.DiscourseApiException
 import org.dallasmakerspace.discourse.DiscoursePostResponse
 import org.dallasmakerspace.discourse.DiscourseTopicDetails
@@ -90,8 +91,8 @@ class CommitteeMessageServiceTest {
     whenever(loggerFactory.create(any<Class<*>>())).thenReturn(mock<Logger>())
     service =
         CommitteeMessageService(
-            ad, flags, config, discourse, shortLinks, followers, messages, notifications,
-            members, loggerFactory)
+            flags, config, discourse, shortLinks, followers, messages, notifications,
+            CommitteeAccess(ad, members, flags, config, loggerFactory), loggerFactory)
 
     whenever(flags.isEnabledForUsername(eq(ConfigRegistry.COMMITTEE_BROADCAST_ENABLED), any()))
         .thenReturn(true)

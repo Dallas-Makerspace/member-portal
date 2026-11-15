@@ -4,20 +4,17 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import org.dallasmakerspace.activedirectory.IActiveDirectoryService
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.FeatureFlagService
 import org.dallasmakerspace.core.LoggerFactory
 import org.dallasmakerspace.core.db.suspendTransaction
+import org.dallasmakerspace.dashboards.CommitteeAccess
 import org.dallasmakerspace.discourse.DiscourseApiException
 import org.dallasmakerspace.discourse.DiscourseTopicNotFoundException
 import org.dallasmakerspace.discourse.DiscourseUserNotFoundException
 import org.dallasmakerspace.discourse.IDiscourseApiClient
-import org.dallasmakerspace.members.MemberService
 import org.dallasmakerspace.members.db.ProfileDAO
 import org.dallasmakerspace.members.db.ProfileResolver
 import org.dallasmakerspace.members.db.ProfileTable
@@ -97,7 +94,6 @@ internal val LIMITS = SendLimits(perDay = 2, perWeek = 3)
 class CommitteeMessageService
 @Inject
 constructor(
-    private val activeDirectoryService: IActiveDirectoryService,
     private val featureFlagService: FeatureFlagService,
     private val configOverrideService: ConfigOverrideService,
     private val discourse: IDiscourseApiClient,
@@ -105,7 +101,7 @@ constructor(
     private val followers: CommitteeSubscriptionsRepository,
     private val messages: CommitteeMessagesRepository,
     private val notificationService: NotificationService,
-    private val memberService: MemberService,
+    private val access: CommitteeAccess,
     loggerFactory: LoggerFactory,
 ) {
   private val log = loggerFactory.create(javaClass)
@@ -244,27 +240,7 @@ constructor(
           isChairOrInfra(actor, committee)
 
   private suspend fun isChairOrInfra(actor: String, committee: Committee): Boolean =
-      isChair(actor, committee) || isInfra(actor)
-
-  /** Fails closed (the member service already does). */
-  private suspend fun isInfra(actor: String): Boolean =
-      withContext(Dispatchers.IO) { memberService.isUserInInfraGroup(actor) }
-
-  /** Fails closed: any directory error means "not a chair". */
-  @Suppress("TooGenericExceptionCaught")
-  private suspend fun isChair(actor: String, committee: Committee): Boolean {
-    val chairGroup = committee.chairGroupName ?: return false
-    return withContext(Dispatchers.IO) {
-      try {
-        activeDirectoryService.getMemberByUsername(actor).groups.any {
-          it.cn.equals(chairGroup, ignoreCase = true)
-        }
-      } catch (e: Exception) {
-        log.warn("Could not check chair status of $actor for ${committee.name}; denying", e)
-        false
-      }
-    }
-  }
+      access.isChairOrInfra(actor, committee)
 
   private suspend fun discourseUsername(actor: String): String? = suspendTransaction {
     ProfileDAO.findById(EntityID(actor, ProfileTable))?.discourseUsername?.takeIf {

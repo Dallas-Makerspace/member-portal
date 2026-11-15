@@ -1,0 +1,159 @@
+package org.dallasmakerspace.dashboards
+
+import java.time.Duration
+import javax.inject.Inject
+import javax.inject.Singleton
+import org.dallasmakerspace.dashboards.db.CastTargetRow
+import org.dallasmakerspace.dashboards.db.DashboardRepository
+import org.dallasmakerspace.models.Committee
+
+/**
+ * Editing, the TV token handshake and rendering. Every editor call is checked against
+ * [CommitteeAccess] here (the UI's own check is only for showing or hiding buttons).
+ */
+@Suppress("TooManyFunctions")
+@Singleton
+class DashboardService
+@Inject
+constructor(
+    private val repository: DashboardRepository,
+    private val access: CommitteeAccess,
+    private val tokens: DashboardTokenService,
+    private val render: DashboardRenderService,
+    private val events: DashboardEvents,
+) {
+  private val verifiedTargets = TtlCache<Int, CastTargetRow?>(TARGET_TTL)
+
+  // ---- Editor ----
+
+  suspend fun canEdit(actor: String, committeeId: Int): Boolean =
+      access.committee(committeeId)?.let { access.canEditDashboard(actor, it) } ?: false
+
+  suspend fun document(actor: String, committeeId: Int): DashboardDocument {
+    val committee = editable(actor, committeeId)
+    return DashboardDocument(repository.loadPages(committee.id))
+  }
+
+  suspend fun saveDocument(actor: String, committeeId: Int, document: DashboardDocument) {
+    val committee = editable(actor, committeeId)
+    DashboardValidator.validateDocument(committee, document)
+    repository.replacePages(committee.id, document.pages, actor)
+    events.reload(committee.id)
+  }
+
+  suspend fun announcements(actor: String, committeeId: Int): List<AnnouncementDto> =
+      repository.announcements(editable(actor, committeeId).id)
+
+  suspend fun addAnnouncement(actor: String, committeeId: Int, dto: AnnouncementDto): Int {
+    val committee = editable(actor, committeeId)
+    DashboardValidator.validateAnnouncement(dto)
+    return repository.addAnnouncement(committee.id, dto, actor).also { events.reload(committee.id) }
+  }
+
+  suspend fun updateAnnouncement(actor: String, committeeId: Int, id: Int, dto: AnnouncementDto) {
+    val committee = editable(actor, committeeId)
+    DashboardValidator.validateAnnouncement(dto)
+    if (!repository.updateAnnouncement(committee.id, id, dto)) throw notFound("announcement")
+    events.reload(committee.id)
+  }
+
+  suspend fun deleteAnnouncement(actor: String, committeeId: Int, id: Int) {
+    val committee = editable(actor, committeeId)
+    if (!repository.deleteAnnouncement(committee.id, id)) throw notFound("announcement")
+    events.reload(committee.id)
+  }
+
+  suspend fun targets(actor: String, committeeId: Int): List<CastTargetDto> =
+      repository.targets(editable(actor, committeeId).id).map { it.dto }
+
+  suspend fun addTarget(actor: String, committeeId: Int, dto: CastTargetDto): Int {
+    val committee = editable(actor, committeeId)
+    DashboardValidator.validateTarget(dto)
+    if (repository.targets(committee.id).size >= MAX_TARGETS_PER_COMMITTEE) {
+      throw DashboardException("At most $MAX_TARGETS_PER_COMMITTEE TVs per committee")
+    }
+    return repository.addTarget(committee.id, dto).also { events.targetsChanged(committee.id) }
+  }
+
+  suspend fun updateTarget(actor: String, committeeId: Int, id: Int, dto: CastTargetDto) {
+    val committee = editable(actor, committeeId)
+    DashboardValidator.validateTarget(dto)
+    if (!repository.updateTarget(committee.id, id, dto)) throw notFound("TV")
+    verifiedTargets.clear()
+    events.targetsChanged(committee.id)
+  }
+
+  suspend fun deleteTarget(actor: String, committeeId: Int, id: Int) {
+    val committee = editable(actor, committeeId)
+    if (!repository.deleteTarget(committee.id, id)) throw notFound("TV")
+    verifiedTargets.clear()
+    events.targetsChanged(committee.id)
+  }
+
+  /** Cuts off the TV's current tokens; the agent is told to hand it a fresh one. */
+  suspend fun revokeTarget(actor: String, committeeId: Int, id: Int) {
+    val committee = editable(actor, committeeId)
+    if (!repository.revokeTarget(committee.id, id)) throw notFound("TV")
+    verifiedTargets.clear()
+    events.targetsChanged(committee.id)
+  }
+
+  // ---- Cast agent ----
+
+  suspend fun agentTargets(): List<AgentTarget> =
+      repository.allEnabledTargets()
+          .filter { row -> access.committee(row.committeeId)?.let { access.hasDashboard(it) } == true }
+          .map {
+            AgentTarget(
+                id = it.dto.id!!,
+                committeeId = it.committeeId,
+                name = it.dto.name,
+                host = it.dto.host,
+                port = it.dto.port,
+                displayStart = it.dto.displayStart,
+                displayEnd = it.dto.displayEnd,
+                reclaimAfterMinutes = it.dto.reclaimAfterMinutes)
+          }
+
+  suspend fun issueToken(targetId: Int): TokenResponse {
+    if (!tokens.isConfigured) {
+      throw DashboardException("Dashboard tokens are not configured", DashboardError.UNAVAILABLE)
+    }
+    val row = repository.target(targetId)?.takeIf { it.dto.enabled } ?: throw notFound("TV")
+    return tokens.issue(targetId, row.committeeId, row.tokenGeneration)
+  }
+
+  suspend fun reportStatus(targetId: Int, report: TargetStatusReport) {
+    val status = if (report.connected) report.app ?: "idle" else "offline"
+    repository.reportStatus(targetId, status, DashboardTime.nowUtc())
+  }
+
+  // ---- TV ----
+
+  /** The dashboard for a valid token; null when the token is bad, expired or revoked. */
+  @Suppress("ReturnCount")
+  suspend fun dashboardFor(token: String?): DashboardPayload? {
+    val claims = tokens.verify(token) ?: return null
+    val row = verifiedTargets.getOrLoad(claims.targetId) { repository.target(claims.targetId) }
+    if (row == null || !row.dto.enabled || row.tokenGeneration != claims.generation) return null
+    if (row.committeeId != claims.committeeId) return null
+    val committee = access.committee(row.committeeId)?.takeIf { access.hasDashboard(it) } ?: return null
+    return render.render(committee)
+  }
+
+  private suspend fun editable(actor: String, committeeId: Int): Committee {
+    val committee = access.committee(committeeId) ?: throw notFound("committee")
+    if (!access.canEditDashboard(actor, committee)) {
+      throw DashboardException(
+          "Only the committee's chairs can edit its dashboard", DashboardError.FORBIDDEN)
+    }
+    return committee
+  }
+
+  private fun notFound(what: String) =
+      DashboardException("Unknown $what", DashboardError.NOT_FOUND)
+
+  private companion object {
+    val TARGET_TTL: Duration = Duration.ofMinutes(5)
+  }
+}

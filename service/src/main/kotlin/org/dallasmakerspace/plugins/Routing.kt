@@ -31,6 +31,7 @@ import org.dallasmakerspace.bambuddy.routing.bambuWatchRoutes
 import org.dallasmakerspace.bambuddy.routing.bambuddyRoutes
 import org.dallasmakerspace.bambuddy.routing.bambuddyWebhookRoute
 import org.dallasmakerspace.committees.committeeMessageRoutes
+import org.dallasmakerspace.dashboards.routing.dashboardRoutes
 import org.dallasmakerspace.config.ConfigOverrideService
 import org.dallasmakerspace.config.ConfigRegistry
 import org.dallasmakerspace.config.routing.configRoutes
@@ -1342,6 +1343,11 @@ fun Application.configureRouting() {
 
     /** A chair's short message to a committee's followers * */
     committeeMessageRoutes(AppComponentHolder.instance.getCommitteeMessageService())
+
+    /** Committee TV dashboards: editor, TV receiver data and the cast agent * */
+    dashboardRoutes(
+        AppComponentHolder.instance.getDashboardService(),
+        AppComponentHolder.instance.getDashboardEvents())
 
     /** Upload/remove/serve a member's profile photo * */
     val profilePhotoService by lazy { AppComponentHolder.instance.getProfilePhotoService() }

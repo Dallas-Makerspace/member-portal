@@ -9,4 +9,5 @@ enum class Permission {
   EXECUTE_CRON,
   USE_ASKAI,
   RUN_WORKFLOWS,
+  CAST_AGENT,
 }

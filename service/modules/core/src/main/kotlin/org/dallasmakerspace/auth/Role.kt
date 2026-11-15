@@ -11,7 +11,8 @@ enum class Role(val permissions: Set<Permission>) {
   // Service-account roles (used by API clients in env vars)
   MEMBER_READER(setOf(Permission.MANAGE_MEMBERS)),
   BADGE_READER(setOf(Permission.MANAGE_BADGES)),
-  CRON_EXECUTOR(setOf(Permission.EXECUTE_CRON));
+  CRON_EXECUTOR(setOf(Permission.EXECUTE_CRON)),
+  CAST_AGENT(setOf(Permission.CAST_AGENT));
 
   companion object {
     fun fromName(name: String): Role? = entries.find { it.name.equals(name, ignoreCase = true) }
