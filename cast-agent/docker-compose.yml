@@ -1,0 +1,13 @@
+# Manual run on docker-h0 (the deploy workflow uses `docker run` with the same settings):
+#   docker compose up -d --build
+services:
+  cast-agent:
+    build: .
+    container_name: cast-agent
+    restart: unless-stopped
+    env_file: .env
+    networks: [member-portal]
+
+networks:
+  member-portal:
+    external: true
