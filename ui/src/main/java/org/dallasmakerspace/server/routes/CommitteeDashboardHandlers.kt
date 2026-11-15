@@ -4,12 +4,15 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.http.ContentType
 import io.ktor.server.request.header
+import io.ktor.server.request.receive
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.thymeleaf.ThymeleafContent
 import javax.inject.Inject
 import org.dallasmakerspace.models.Committee
@@ -17,6 +20,7 @@ import org.dallasmakerspace.models.Committees
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.DashboardCallResult
+import org.dallasmakerspace.server.memberservice.DashboardImageResult
 import org.dallasmakerspace.server.memberservice.DashboardServiceClient
 import org.dallasmakerspace.server.memberservice.MemberService
 
@@ -94,7 +98,8 @@ constructor(
     val model =
         mapOf(
             "mode" to "preview",
-            "sourceUrl" to "/committees/${committee.slug}/dashboard-api/dashboard/preview")
+            "sourceUrl" to "/committees/${committee.slug}/dashboard-api/dashboard/preview",
+            "imageBase" to "/committees/${committee.slug}/dashboard-api/dashboard/images/")
     call.respond(ThymeleafContent("tv-receiver", model))
   }
 }
@@ -127,6 +132,21 @@ constructor(
       call.respond(HttpStatusCode.Forbidden, mapOf("status" to "ERROR", "message" to "Cross-site request rejected"))
       return
     }
+    if (path == "dashboard/images" && method == HttpMethod.Post) {
+      uploadImage(call, committee, username)
+      return
+    }
+    if (path.startsWith("dashboard/images/") && method == HttpMethod.Get) {
+      val file = path.substringAfterLast('/')
+      val image =
+          if (DashboardImageNames.isValid(file)) {
+            dashboard.editorImage(committee.id, file, username, session.sessionId)
+          } else {
+            null
+          }
+      call.respondImage(image, "private, max-age=3600")
+      return
+    }
     val body: Any? =
         if (method == HttpMethod.Put || method == HttpMethod.Post) {
           val text = call.receiveText()
@@ -143,19 +163,75 @@ constructor(
         dashboard.call(method, "committees/${committee.id}/$path", username, body, session.sessionId))
   }
 
+  private suspend fun uploadImage(call: ApplicationCall, committee: Committee, username: String) {
+    val length = call.request.header("Content-Length")?.toLongOrNull() ?: 0L
+    val type = call.request.header("Content-Type")?.substringBefore(';')?.trim()?.lowercase()
+    if (length > MAX_IMAGE_BYTES || type !in IMAGE_TYPES) {
+      val message = if (type !in IMAGE_TYPES) "Use a JPEG or PNG picture" else "That picture is over 5 MB"
+      call.respond(HttpStatusCode.BadRequest, mapOf("status" to "ERROR", "message" to message))
+      return
+    }
+    val bytes = call.receive<ByteArray>()
+    call.respondResult(
+        dashboard.uploadImage(committee.id, username, bytes, checkNotNull(type), session.sessionId))
+  }
+
   private companion object {
+    const val MAX_IMAGE_BYTES = 5L * 1024 * 1024
+    val IMAGE_TYPES = setOf("image/jpeg", "image/png")
     val ALLOWED =
         Regex(
-            "dashboard(/preview|/announcements(/[0-9]+)?)?|" +
+            "dashboard(/preview|/announcements(/[0-9]+)?|/images(/[0-9a-f-]{36}\\.jpg)?)?|" +
                 "cast-targets(/[0-9]+(/revoke)?)?")
   }
+}
+
+/** The names the service gives stored pictures (`{uuid}.jpg`); anything else is never forwarded. */
+internal object DashboardImageNames {
+  private val FILE = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.jpg$")
+
+  fun isValid(file: String) = FILE.matches(file)
+}
+
+private suspend fun ApplicationCall.respondImage(image: DashboardImageResult?, cacheControl: String) {
+  if (image?.bytes == null) {
+    respond(HttpStatusCode.fromValue(image?.statusCode ?: HttpStatusCode.NotFound.value))
+    return
+  }
+  response.header("Cache-Control", cacheControl)
+  respondBytes(image.bytes, ContentType.parse(image.contentType ?: "image/jpeg"))
 }
 
 /** `/tv/receiver`: the page a Chromecast loads. Public and empty until it is handed a token. */
 class TvReceiverHandler @Inject constructor() : IRouteHandler {
   override suspend fun handle(call: ApplicationCall) {
     call.response.header("Cache-Control", "no-store")
-    call.respond(ThymeleafContent("tv-receiver", mapOf("mode" to "tv", "sourceUrl" to "/tv/api/dashboard")))
+    call.respond(
+        ThymeleafContent(
+            "tv-receiver",
+            mapOf("mode" to "tv", "sourceUrl" to "/tv/api/dashboard", "imageBase" to "/tv/api/images/")))
+  }
+}
+
+/** `/tv/api/images/{file}`: a picture for the device token in the `Authorization` header. */
+class TvImageApiHandler
+@Inject
+constructor(
+    private val dashboard: DashboardServiceClient,
+) : IRouteHandler {
+  override suspend fun handle(call: ApplicationCall) {
+    val token = call.request.header("Authorization")?.removePrefix("Bearer ")?.trim()
+    val file = call.request.path().substringAfterLast('/')
+    if (token.isNullOrBlank()) {
+      call.respond(HttpStatusCode.Unauthorized)
+      return
+    }
+    if (!DashboardImageNames.isValid(file)) {
+      call.respond(HttpStatusCode.NotFound)
+      return
+    }
+    // File names never repeat, so a TV can keep a picture; the token is checked on every fetch.
+    call.respondImage(dashboard.tvImage(file, token), "private, max-age=86400")
   }
 }
 

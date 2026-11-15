@@ -63,3 +63,6 @@
 }
 
 #dash-app .text-muted, #dash-app .dash-slot-sub { color: #5c636a !important; }
+
+.dash-thumb-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.dash-thumb { max-height: 96px; max-width: 160px; border-radius: 6px; border: 1px solid #dee2e6; object-fit: contain; background: #fff; }

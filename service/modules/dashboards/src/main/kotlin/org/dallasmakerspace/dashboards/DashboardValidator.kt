@@ -16,11 +16,9 @@ class DashboardException(
 
 /** Checks what chairs submit, so the receiver only ever sees well-formed pages. */
 object DashboardValidator {
-  private val IMAGE_KEY = Regex("^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
   private val HOST = Regex("^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$")
   private const val MAX_GROUP_NAME = 100
   private const val MAX_FILTER_GROUPS = 20
-  private const val MAX_IMAGE_KEY = 200
   private const val MAX_NAME = 80
   private const val MAX_PORT = 65535
   private const val MAX_RECLAIM_MINUTES = 1440
@@ -69,7 +67,7 @@ object DashboardValidator {
         fail((config.body?.length ?: 0) > MAX_TEXT_LENGTH, "$where: text is too long")
         config.imageKey?.let {
           fail(
-              it.length > MAX_IMAGE_KEY || !IMAGE_KEY.matches(it) || ".." in it,
+              !DashboardImageService.isValidFile(it),
               "$where: invalid image")
         }
         fail(

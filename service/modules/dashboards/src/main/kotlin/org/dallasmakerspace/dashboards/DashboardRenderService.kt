@@ -113,7 +113,7 @@ constructor(
                 type = widget.type,
                 heading = widget.config.heading,
                 body = widget.config.body,
-                imageUrl = widget.config.imageKey?.let { "/tv/api/images/$it" })
+                imageKey = widget.config.imageKey)
       }
 
   @Suppress("TooGenericExceptionCaught")

@@ -88,7 +88,7 @@ data class RenderedWidget(
     val classes: List<ClassRow> = emptyList(),
     val heading: String? = null,
     val body: String? = null,
-    val imageUrl: String? = null,
+    val imageKey: String? = null,
 )
 
 @Serializable

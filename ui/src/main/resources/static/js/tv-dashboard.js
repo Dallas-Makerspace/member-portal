@@ -20,6 +20,7 @@
 
   var mode = document.body.getAttribute('data-mode');
   var source = document.body.getAttribute('data-source');
+  var imageBase = document.body.getAttribute('data-images') || '';
   // The editor preview doesn't auto-rotate for people who asked for less motion.
   var still = mode === 'preview' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var token = null;
@@ -128,6 +129,7 @@
     stage.setAttribute('data-layout', page.layout);
     (page.widgets || []).forEach(function (widget) { stage.appendChild(renderWidget(widget)); });
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-classes'), fitRows);
+    Array.prototype.forEach.call(stage.querySelectorAll('.tv-text-body'), fitText);
     stage.classList.remove('fade');
     void stage.offsetWidth;
     stage.classList.add('fade');
@@ -210,6 +212,19 @@
     box.appendChild(list);
   }
 
+  // Shows as many lines of a text card as fit, ending in an ellipsis instead of a half-cut line.
+  function fitText(node) {
+    node.style.webkitLineClamp = '100';
+    node.style.maxHeight = '';
+    node.style.alignSelf = '';
+    var line = parseFloat(window.getComputedStyle(node).lineHeight);
+    if (!line || !node.clientHeight) { return; }
+    var lines = Math.max(1, Math.floor(node.clientHeight / line));
+    node.style.webkitLineClamp = String(lines);
+    node.style.maxHeight = (lines * line) + 'px';
+    node.style.alignSelf = 'start';
+  }
+
   // Drops rows that would be cut off, so the TV never shows a half-visible class.
   function fitRows(list) {
     while (list.children.length > 1 && list.scrollHeight > list.clientHeight + 1) { list.removeChild(list.lastChild); }
@@ -217,15 +232,16 @@
 
   function renderText(box, widget) {
     var wrap = el('div', 'tv-text');
+    if (widget.imageKey) { wrap.className = 'tv-text has-image' + (widget.body ? '' : ' no-body'); }
     if (widget.heading) { wrap.appendChild(el('div', 'tv-text-head', widget.heading)); }
     if (widget.body) { wrap.appendChild(el('div', 'tv-text-body', widget.body)); }
-    if (widget.imageUrl) { loadImage(wrap, widget.imageUrl); }
+    if (widget.imageKey) { loadImage(wrap, imageBase + widget.imageKey); }
     box.appendChild(wrap);
   }
 
   function loadImage(wrap, url) {
     var headers = token ? { Authorization: 'Bearer ' + token } : {};
-    fetch(url, { headers: headers, cache: 'force-cache' })
+    fetch(url, { headers: headers, cache: 'force-cache', credentials: mode === 'preview' ? 'same-origin' : 'omit' })
       .then(function (response) { return response.ok ? response.blob() : null; })
       .then(function (blob) {
         if (!blob) { return; }

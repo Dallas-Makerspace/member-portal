@@ -4,9 +4,11 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
+import io.ktor.server.request.contentLength
 import io.ktor.server.request.receive
 import io.ktor.server.response.cacheControl
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -27,6 +29,7 @@ import org.dallasmakerspace.dashboards.DashboardDocument
 import org.dallasmakerspace.dashboards.DashboardError
 import org.dallasmakerspace.dashboards.DashboardEvents
 import org.dallasmakerspace.dashboards.DashboardException
+import org.dallasmakerspace.dashboards.DashboardImageService
 import org.dallasmakerspace.dashboards.DashboardService
 import org.dallasmakerspace.dashboards.TargetStatusReport
 
@@ -56,6 +59,23 @@ private fun Route.editorRoutes(service: DashboardService) {
   get("/committees/{id}/dashboard") {
     val (actor, id) = call.actorAndCommittee() ?: return@get
     call.guarded { ApiResponse(Status.SUCCESS, "Dashboard", service.document(actor, id)) }
+  }
+  post("/committees/{id}/dashboard/images") {
+    val (actor, id) = call.actorAndCommittee() ?: return@post
+    val length = call.request.contentLength() ?: 0
+    if (length > DashboardImageService.MAX_UPLOAD_BYTES) {
+      return@post call.respond(
+          HttpStatusCode.PayloadTooLarge,
+          ApiResponse<String?>(Status.ERROR, "That picture is over 5 MB", null))
+    }
+    val bytes = call.receive<ByteArray>()
+    call.guarded {
+      ApiResponse(Status.SUCCESS, "Picture saved", mapOf("key" to service.uploadImage(actor, id, bytes)))
+    }
+  }
+  get("/committees/{id}/dashboard/images/{file}") {
+    val (actor, id) = call.actorAndCommittee() ?: return@get
+    call.guardedImage { service.editorImage(actor, id, call.parameters["file"].orEmpty()) }
   }
   get("/committees/{id}/dashboard/preview") {
     val (actor, id) = call.actorAndCommittee() ?: return@get
@@ -138,6 +158,10 @@ private fun Route.editorRoutes(service: DashboardService) {
 }
 
 private fun Route.tvRoutes(service: DashboardService) {
+  get("/tv/images/{file}") {
+    call.response.cacheControl(CacheControl.NoStore(null))
+    call.guardedImage { service.tvImage(call.request.headers[TOKEN_HEADER], call.parameters["file"].orEmpty()) }
+  }
   get("/tv/dashboard") {
     call.response.cacheControl(CacheControl.NoStore(null))
     val payload = service.dashboardFor(call.request.headers[TOKEN_HEADER])
@@ -190,6 +214,17 @@ private suspend fun ApplicationCall.actorAndCommittee(): Pair<String, Int>? {
   return actor to committeeId
 }
 
+/** Responds with a stored picture, 404 when it isn't there, or the error a [DashboardException] maps to. */
+private suspend fun ApplicationCall.guardedImage(load: suspend () -> Pair<ByteArray, String>?) {
+  try {
+    val image = load()
+    if (image == null) respond(HttpStatusCode.NotFound, ApiResponse<String?>(Status.ERROR, "No such picture", null))
+    else respondBytes(image.first, ContentType.parse(image.second))
+  } catch (e: DashboardException) {
+    respond(statusFor(e), ApiResponse<String?>(Status.ERROR, e.message ?: "Request failed", null))
+  }
+}
+
 private suspend fun ApplicationCall.itemId(): Int? {
   val id = parameters["itemId"]?.toIntOrNull()
   if (id == null) {
@@ -203,15 +238,16 @@ private suspend inline fun <reified T> ApplicationCall.guarded(block: () -> ApiR
   try {
     respond(block())
   } catch (e: DashboardException) {
-    val code =
-        when (e.error) {
-          DashboardError.NOT_FOUND -> HttpStatusCode.NotFound
-          DashboardError.FORBIDDEN -> HttpStatusCode.Forbidden
-          DashboardError.INVALID -> HttpStatusCode.BadRequest
-          DashboardError.UNAVAILABLE -> HttpStatusCode.ServiceUnavailable
-        }
-    respond(code, ApiResponse<String?>(Status.ERROR, e.message ?: "Request failed", null))
+    respond(statusFor(e), ApiResponse<String?>(Status.ERROR, e.message ?: "Request failed", null))
   }
 }
+
+private fun statusFor(e: DashboardException): HttpStatusCode =
+    when (e.error) {
+      DashboardError.NOT_FOUND -> HttpStatusCode.NotFound
+      DashboardError.FORBIDDEN -> HttpStatusCode.Forbidden
+      DashboardError.INVALID -> HttpStatusCode.BadRequest
+      DashboardError.UNAVAILABLE -> HttpStatusCode.ServiceUnavailable
+    }
 
 private fun ok(message: String) = ApiResponse<String?>(Status.SUCCESS, message, null)

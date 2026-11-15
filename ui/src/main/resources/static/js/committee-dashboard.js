@@ -364,7 +364,60 @@
     } else {
       body.appendChild(textField('Heading', config.heading, 80, function (v) { config.heading = v || null; }));
       body.appendChild(textField('Text', config.body, 600, function (v) { config.body = v || null; }, true));
+      body.appendChild(pictureField(widget));
     }
+  }
+
+  // ---- pictures ----
+
+  var MAX_PICTURE_BYTES = 5 * 1024 * 1024;
+
+  function uploadPicture(file) {
+    return fetch(base + '/dashboard/images', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': file.type },
+      body: file
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (json) {
+        if (!response.ok || !json.data || !json.data.key) { throw new Error(json.message || 'The picture could not be saved.'); }
+        return json.data.key;
+      });
+    });
+  }
+
+  function pictureField(widget) {
+    var config = widget.config;
+    var id = nextId('f');
+    var note = h('div', { 'class': 'form-text', id: id + '-note', role: 'status', text: 'JPEG or PNG up to 5 MB. It is resized for the TV.' });
+    var input = h('input', { 'class': 'form-control', type: 'file', id: id, accept: 'image/jpeg,image/png', 'aria-describedby': id + '-note' });
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) { return; }
+      if (file.size > MAX_PICTURE_BYTES) { note.textContent = 'That picture is over 5 MB.'; input.value = ''; return; }
+      note.textContent = 'Uploading…';
+      uploadPicture(file).then(function (key) {
+        config.imageKey = key;
+        markDirty();
+        renderWidgets();
+        var again = byId('dash-slot-' + widget.slot);
+        if (again) { again.focus(); }
+      }).catch(function (e) { note.textContent = e.message; input.value = ''; });
+    });
+    var children = [h('label', { 'class': 'form-label', 'for': id, text: config.imageKey ? 'Replace picture' : 'Picture (optional)' })];
+    if (config.imageKey) {
+      children.push(h('div', { 'class': 'dash-thumb-row' }, [
+        h('img', { 'class': 'dash-thumb', src: base + '/dashboard/images/' + config.imageKey, alt: 'Picture on this card' }),
+        h('button', { type: 'button', 'class': 'btn btn-outline-secondary btn-sm', 'data-fk': 'rm-pic-' + widget.slot, text: 'Remove picture', onclick: function () {
+          config.imageKey = null;
+          markDirty();
+          renderWidgets();
+          setStatus('Picture removed. Unsaved changes.');
+        } })
+      ]));
+    }
+    children.push(input, note);
+    return h('div', { 'class': 'mb-2' }, children);
   }
 
   // ---- announcements ----

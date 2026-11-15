@@ -70,7 +70,7 @@ class DashboardValidatorTest {
 
     assertFailsWith<DashboardException> { validate(card(WidgetConfig())) }
     assertFailsWith<DashboardException> { validate(card(WidgetConfig(imageKey = "../secret"))) }
-    validate(card(WidgetConfig(heading = "Safety first", imageKey = "woodshop/abc.jpg")))
+    validate(card(WidgetConfig(heading = "Safety first", imageKey = "3f2a6c1e-0b7d-4a55-9c1e-2d4b6a8c0e11.jpg")))
   }
 
   @Test

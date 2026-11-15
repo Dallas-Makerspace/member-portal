@@ -61,6 +61,7 @@ object RouteFactory {
         // [^/]+ would swallow "3d-fab" and leave a stray "/printers" behind.
         .replace("/committees/(?!3d-fab/printers$)[^/]+".toRegex(), "/committees/{committee_slug}")
         .replace("/dashboard-api/.*".toRegex(), "/dashboard-api/{path...}")
+        .replace("/tv/api/images/[^/]+".toRegex(), "/tv/api/images/{file}")
         .replace("/remote-access/connect/[^/]+".toRegex(), "/remote-access/connect/{connectionId}")
         .replace(
             "/remote-access/disconnect/[^/]+".toRegex(), "/remote-access/disconnect/{connectionId}")
@@ -145,6 +146,7 @@ object RouteFactory {
     MOODLE_WEBHOOK("/webhook/moodle"),
     TV_RECEIVER("/tv/receiver"),
     TV_API_DASHBOARD("/tv/api/dashboard"),
+    TV_API_IMAGE("/tv/api/images/{file}"),
     CAMERAS("/cameras"),
     CAMERAS_API("/cameras-api/{path...}"),
     PERSONAL_BIN_SCANNER("/personal-bin-scanner"),

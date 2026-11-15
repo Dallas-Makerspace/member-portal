@@ -21,6 +21,7 @@ constructor(
     private val tokens: DashboardTokenService,
     private val render: DashboardRenderService,
     private val events: DashboardEvents,
+    private val images: DashboardImageService,
 ) {
   private val verifiedTargets = TtlCache<Int, CastTargetRow?>(TARGET_TTL)
 
@@ -40,6 +41,13 @@ constructor(
     repository.replacePages(committee.id, document.pages, actor)
     events.reload(committee.id)
   }
+
+  /** Stores a picture for a text card and returns the file name to put in the widget. */
+  suspend fun uploadImage(actor: String, committeeId: Int, bytes: ByteArray): String =
+      images.save(editable(actor, committeeId).id, bytes)
+
+  suspend fun editorImage(actor: String, committeeId: Int, file: String): Pair<ByteArray, String>? =
+      images.get(editable(actor, committeeId).id, file)
 
   /** What a TV would show right now, for the editor's preview. */
   suspend fun preview(actor: String, committeeId: Int): DashboardPayload =
@@ -136,13 +144,21 @@ constructor(
 
   /** The dashboard for a valid token; null when the token is bad, expired or revoked. */
   @Suppress("ReturnCount")
-  suspend fun dashboardFor(token: String?): DashboardPayload? {
+  suspend fun dashboardFor(token: String?): DashboardPayload? =
+      committeeForToken(token)?.let { render.render(it) }
+
+  /** A picture for a TV: only from the committee its token belongs to. */
+  suspend fun tvImage(token: String?, file: String): Pair<ByteArray, String>? =
+      committeeForToken(token)?.let { images.get(it.id, file) }
+
+  /** The committee a valid, unrevoked TV token belongs to; null otherwise. */
+  @Suppress("ReturnCount")
+  private suspend fun committeeForToken(token: String?): Committee? {
     val claims = tokens.verify(token) ?: return null
     val row = verifiedTargets.getOrLoad(claims.targetId) { repository.target(claims.targetId) }
     if (row == null || !row.dto.enabled || row.tokenGeneration != claims.generation) return null
     if (row.committeeId != claims.committeeId) return null
-    val committee = access.committee(row.committeeId)?.takeIf { access.hasDashboard(it) } ?: return null
-    return render.render(committee)
+    return access.committee(row.committeeId)?.takeIf { access.hasDashboard(it) }
   }
 
   private suspend fun editable(actor: String, committeeId: Int): Committee {

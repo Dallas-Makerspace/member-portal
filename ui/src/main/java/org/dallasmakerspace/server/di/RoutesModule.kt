@@ -31,6 +31,7 @@ import org.dallasmakerspace.server.routes.CommitteeDashboardApiHandler
 import org.dallasmakerspace.server.routes.CommitteeDashboardHandler
 import org.dallasmakerspace.server.routes.CommitteeDashboardPreviewHandler
 import org.dallasmakerspace.server.routes.TvDashboardApiHandler
+import org.dallasmakerspace.server.routes.TvImageApiHandler
 import org.dallasmakerspace.server.routes.TvReceiverHandler
 import org.dallasmakerspace.server.routes.CommitteeFollowersHandler
 import org.dallasmakerspace.server.routes.CommitteeMessageHandler
@@ -700,4 +701,10 @@ class RoutesModule {
   @StringKey("/tv/api/dashboard")
   fun providesTvDashboardApiHandler(dashboard: DashboardServiceClient): IRouteHandler =
       TvDashboardApiHandler(dashboard)
+
+  @IntoMap
+  @Provides
+  @StringKey("/tv/api/images/{file}")
+  fun providesTvImageApiHandler(dashboard: DashboardServiceClient): IRouteHandler =
+      TvImageApiHandler(dashboard)
 }

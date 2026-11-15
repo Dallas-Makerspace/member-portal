@@ -9,4 +9,5 @@ enum class StorageNamespace(val prefix: String) {
   PROFILE_PHOTOS("profile-photos"),
   WORKFLOW_EXPORTS("workflow-exports"),
   SMARTWAIVER("smartwaiver"),
+  DASHBOARD_IMAGES("dashboard-images"),
 }
