@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from .controller import TargetController
 from .device import DeviceFactory
-from .identity import Identity, fetch_identity, find_devices, normalize_id
+from .identity import Identity, fetch_identity, find_devices, match_device, normalize_id, normalize_name
 from .models import Target
 from .reactor import Handle, Reactor
 from .service import ServiceApi
@@ -28,7 +28,7 @@ SYNC_RETRY = 30.0
 STREAM_BACKOFF_START = 1.0
 STREAM_BACKOFF_MAX = 60.0
 SWEEP_BACKOFF_START = 60.0  # while a TV stays missing: 1 min, 2, 4 ... capped, so it is never a steady poll
-SWEEP_BACKOFF_MAX = 6 * 3600.0
+SWEEP_BACKOFF_MAX = 3600.0
 
 Finder = Callable[[Iterable[str]], dict[str, tuple[str, Identity]]]
 
@@ -128,8 +128,9 @@ class Agent:
         future.add_done_callback(lambda f: self._reactor.post(lambda: controller.on_identity(_value(f))))
 
     def lost(self, controller: TargetController) -> None:
-        if not self._ranges or not normalize_id(controller.target.device_id):
-            log.info("%s is unreachable; no sweep ranges or no recorded id, so it cannot be searched for", controller.target.name)
+        target = controller.target
+        if not self._ranges or not (normalize_id(target.device_id) or normalize_name(target.device_name)):
+            log.info("%s is unreachable; no sweep ranges, or no recorded id or name, so it cannot be searched for", target.name)
             return
         self._missing[controller.target.id] = controller
         self._request_sweep(0.0)
@@ -157,7 +158,7 @@ class Agent:
         self._drop_recovered()
         moved = False
         for target_id, controller in list(self._missing.items()):
-            hit = (found or {}).get(normalize_id(controller.target.device_id) or "")
+            hit = match_device(found or {}, controller.target.device_id, controller.target.device_name)
             if hit is None:
                 continue
             host = hit[0]

@@ -103,9 +103,16 @@ TVs are on DHCP and addressed by IP, so the agent can recognise one by what it i
 - A TV unreachable for 10 minutes (or found to be someone else) is searched for: the agent probes the Cast
   port across `SWEEP_RANGES` (comma-separated CIDRs in the agent's env), looks each hit up, and matches by id.
   If found, it tells the service the new address (`POST /cast-agent/targets/{id}/host`), which moves the TV and
-  the agent reconnects. If not found (asleep, off), it searches again after 1, 2, 4 ... minutes, capped at 6 h,
+  the agent reconnects. If not found (asleep, off), it searches again after 1, 2, 4 ... minutes, capped at 1 h,
   so it never becomes a steady poll; a TV that reconnects by itself stops being searched for.
-- Editing a TV's host in the editor clears what was recorded about it (a different address may be a different TV).
+- A chair can also enter the TV's **name on the network** (its Cast name, e.g. in the Cast menu) when adding it.
+  A TV known only by name is found by name (a never-connected TV with a wrong or guessed address is searched
+  for after 10 minutes), and a device at the address with a different name is left alone. This is how to add a
+  TV that is off and whose address is unknown: enter any address plus its name, and the agent locates it once it
+  powers on (within the search gap, at most an hour).
+- Editing a TV's host in the editor clears the recorded id (a different address may be a different TV); the name stays.
+- A sleeping or powered-off TV answers neither ARP nor the Cast port, so it cannot be located from the network
+  until it is on.
 - To find a TV by name when setting it up (it must be awake):
   `docker run --rm -e SWEEP_RANGES=... <agent image> python -m cast_agent.find "<name>"` (or `--list`).
 

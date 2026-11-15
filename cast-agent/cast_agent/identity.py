@@ -54,10 +54,30 @@ def fetch_identity(host: str, timeout: float = LOOKUP_TIMEOUT) -> Identity | Non
     return Identity(device_id, data.get("name"))
 
 
-def is_same_device(known_id: str | None, actual: Identity) -> bool:
-    """False only when we know who the TV should be and this is someone else."""
+def normalize_name(value: str | None) -> str | None:
+    return value.strip().casefold() if value and value.strip() else None
+
+
+def is_same_device(known_id: str | None, actual: Identity, known_name: str | None = None) -> bool:
+    """False only when we know who the TV should be (by id, else by name) and this is someone else."""
     expected = normalize_id(known_id)
-    return expected is None or expected == actual.device_id
+    if expected is not None:
+        return expected == actual.device_id
+    wanted = normalize_name(known_name)
+    return wanted is None or wanted == normalize_name(actual.name)
+
+
+def match_device(
+    found: dict[str, tuple[str, Identity]], known_id: str | None, known_name: str | None
+) -> tuple[str, Identity] | None:
+    """The device in [found] that is the TV we mean: by id if we have one, else by its name."""
+    expected = normalize_id(known_id)
+    if expected is not None:
+        return found.get(expected)
+    wanted = normalize_name(known_name)
+    if wanted is None:
+        return None
+    return next((hit for hit in found.values() if normalize_name(hit[1].name) == wanted), None)
 
 
 def hosts_in(ranges: Iterable[str]) -> list[str]:

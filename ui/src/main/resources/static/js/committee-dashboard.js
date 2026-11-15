@@ -495,6 +495,7 @@
     var label = tv.name || ('TV ' + n);
     var name = h('input', { 'class': 'form-control', id: 'tv-name-' + n, maxlength: 80, value: tv.name || '', placeholder: 'e.g. Shop floor TV' });
     var host = h('input', { 'class': 'form-control', id: 'tv-host-' + n, maxlength: 255, value: tv.host || '', placeholder: 'e.g. tv-1.example.internal', 'aria-describedby': 'tv-host-help-' + n });
+    var devname = h('input', { 'class': 'form-control', id: 'tv-devname-' + n, maxlength: 80, value: tv.deviceName || '', placeholder: 'e.g. South_work_area', 'aria-describedby': 'tv-devname-help-' + n });
     var port = h('input', { 'class': 'form-control', id: 'tv-port-' + n, type: 'number', min: 1, max: 65535, value: String(tv.port || 8009) });
     var from = h('input', { 'class': 'form-control', id: 'tv-from-' + n, type: 'time', value: tv.displayStart || '', 'aria-describedby': 'tv-hours-help-' + n });
     var to = h('input', { 'class': 'form-control', id: 'tv-to-' + n, type: 'time', value: tv.displayEnd || '', 'aria-describedby': 'tv-hours-help-' + n });
@@ -503,7 +504,7 @@
     function body() {
       return {
         name: name.value, host: host.value.trim(), port: parseInt(port.value, 10) || 8009, enabled: enabled.checked,
-        displayStart: from.value || null, displayEnd: to.value || null,
+        displayStart: from.value || null, displayEnd: to.value || null, deviceName: devname.value.trim() || null,
         reclaimAfterMinutes: reclaim.value ? parseInt(reclaim.value, 10) : null
       };
     }
@@ -524,12 +525,14 @@
       api('DELETE', '/cast-targets/' + tv.id).then(function () { clearError(); setStatus(label + ' removed'); return loadTvs(); }).then(function () { byId('dash-add-tv').focus(); }).catch(function (e) { showError(e.message); });
     } }));
     var seen = tv.lastSeenAt ? 'Last seen ' + whenText(tv.lastSeenAt) + (tv.lastStatus ? ' · ' + tv.lastStatus : '') : (tv.id ? 'Not seen yet' : '');
-    if (tv.deviceName) { seen += (seen ? ' · ' : '') + 'Recognised as “' + tv.deviceName + '”'; }
     return h('div', { 'class': 'dash-row', role: 'group', 'aria-label': label }, [
       h('div', { 'class': 'row g-3' }, [
         h('div', { 'class': 'col-md-4' }, [field('tv-name-' + n, 'Name', name)]),
         h('div', { 'class': 'col-md-5' }, [field('tv-host-' + n, 'Host or address', host, 'Ask IT if you are not sure.', 'tv-host-help-' + n)]),
         h('div', { 'class': 'col-md-3' }, [field('tv-port-' + n, 'Port', port)])
+      ]),
+      h('div', { 'class': 'row g-3' }, [
+        h('div', { 'class': 'col-md-9' }, [field('tv-devname-' + n, 'Name on the network (optional)', devname, 'The name the TV shows in the Cast menu. If the address above is wrong or changes, the system finds the TV by this name.', 'tv-devname-help-' + n)])
       ]),
       h('div', { 'class': 'row g-3' }, [
         h('div', { 'class': 'col-6 col-md-3' }, [field('tv-from-' + n, 'Turn on at', from)]),

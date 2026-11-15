@@ -95,6 +95,7 @@ object DashboardValidator {
 
   fun validateTarget(dto: CastTargetDto) {
     fail(dto.name.isBlank() || dto.name.length > MAX_NAME, "A TV needs a name")
+    fail((dto.deviceName?.length ?: 0) > MAX_NAME, "The name on the network is too long")
     validateHost(dto.host)
     fail(dto.port !in 1..MAX_PORT, "Invalid port")
     val start = DashboardTime.parseClock(dto.displayStart)

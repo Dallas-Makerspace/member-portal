@@ -153,13 +153,15 @@ class DashboardRepository @Inject constructor() {
           it[displayStart] = dto.displayStart
           it[displayEnd] = dto.displayEnd
           it[reclaimAfterMinutes] = dto.reclaimAfterMinutes
+          it[deviceName] = dto.deviceName?.trim()?.take(NAME_MAX)?.ifBlank { null }
         }
         .value
   }
 
   suspend fun updateTarget(committeeId: Int, id: Int, dto: CastTargetDto): Boolean =
       suspendTransaction {
-        // A different address may be a different TV, so what was learned about the old one is dropped.
+        // A different address may be a different TV, so the id learned for the old one is dropped; the name
+        // is whatever the chair entered.
         val moved =
             CastTargetsTable.select {
                   (CastTargetsTable.id eq id) and (CastTargetsTable.committeeId eq committeeId)
@@ -170,10 +172,8 @@ class DashboardRepository @Inject constructor() {
         CastTargetsTable.update({
           (CastTargetsTable.id eq id) and (CastTargetsTable.committeeId eq committeeId)
         }) {
-          if (moved) {
-            it[deviceId] = null
-            it[deviceName] = null
-          }
+          if (moved) it[deviceId] = null
+          it[deviceName] = dto.deviceName?.trim()?.take(NAME_MAX)?.ifBlank { null }
           it[name] = dto.name
           it[host] = dto.host
           it[port] = dto.port

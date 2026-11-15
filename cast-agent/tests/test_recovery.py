@@ -228,3 +228,30 @@ def test_the_agent_asks_the_device_who_it_is_when_a_tv_connects(clock, reactor, 
     assert asked == ["a.example.internal"]
     assert service.identified == [(1, "aaa", "Shop TV")]
     assert device.launches == [APP]
+
+
+def test_a_tv_known_only_by_name_is_found_by_that_name(clock, reactor, service):
+    service.target_list = [make_target(host="192.0.2.1", device_name="South_work_area")]
+    found = {"ccc": ("192.0.2.88", Identity("ccc", "South_work_area"))}
+    agent, devices = build_agent(clock, reactor, service, finder=lambda ranges: found)
+    agent.reconcile()
+    devices["192.0.2.1"].events.on_connection(False)  # never connected: nothing at the guessed address
+
+    advance(clock, reactor, LOST_AFTER + 5)
+
+    assert service.moves == [(1, "192.0.2.88")]
+
+
+def test_a_device_with_the_wrong_name_at_the_guessed_address_is_left_alone(clock, reactor, service):
+    service.target_list = [make_target(host="192.0.2.1", device_name="South_work_area")]
+    agent, devices = build_agent(
+        clock, reactor, service, finder=lambda ranges: {}, lookup=lambda host: Identity("zzz", "Another TV")
+    )
+    agent.reconcile()
+    device = devices["192.0.2.1"]
+    device.events.on_connection(True)
+    device.events.on_status(BACKDROP, "Backdrop", None)
+    reactor.run_due()
+
+    assert device.launches == [] and device.stopped
+    assert service.identified == []

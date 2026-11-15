@@ -73,7 +73,10 @@ data class CastTargetDto(
     val reclaimAfterMinutes: Int? = null,
     val lastSeenAt: String? = null,
     val lastStatus: String? = null,
-    /** What the TV calls itself on the network, learned by the cast agent; read-only in the editor. */
+    /**
+     * What the TV calls itself on the network (its Cast name). The agent fills it in once it has seen the
+     * TV; a chair can enter it first so the agent can find a TV whose address is unknown or has changed.
+     */
     val deviceName: String? = null,
 )
 

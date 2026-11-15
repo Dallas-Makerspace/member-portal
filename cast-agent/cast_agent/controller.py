@@ -138,7 +138,7 @@ class TargetController:
         """Who answered at the address: None if it would not say (the TV is then trusted)."""
         if self._stopped or self.wrong_device or not self.connected:
             return
-        if actual is not None and not is_same_device(self.target.device_id, actual):
+        if actual is not None and not is_same_device(self.target.device_id, actual, self.target.device_name):
             log.warning("%s: %s is now %r, not the TV we expect; letting go", self.target.name, self.target.host, actual.name)
             self.wrong_device = True
             self._cancel_all()
