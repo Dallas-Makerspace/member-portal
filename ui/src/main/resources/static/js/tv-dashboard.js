@@ -313,6 +313,27 @@
     holder.appendChild(svg);
   }
 
+  // ---- keep the TV awake ----
+
+  function keepAwake() {
+    try {
+      if (navigator.wakeLock) { navigator.wakeLock.request('screen').catch(function () {}); }
+    } catch (e) { /* unsupported */ }
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = 2;
+      canvas.height = 2;
+      canvas.getContext('2d').fillRect(0, 0, 2, 2);
+      var video = document.createElement('video');
+      video.muted = true;
+      video.setAttribute('playsinline', '');
+      video.className = 'tv-awake';
+      video.srcObject = canvas.captureStream();
+      document.body.appendChild(video);
+      video.play().catch(function () {});
+    } catch (e) { /* unsupported */ }
+  }
+
   // ---- Cast / start-up ----
 
   function startCast() {
@@ -335,5 +356,5 @@
   }
 
   window.DmsTv = { render: apply };
-  if (mode === 'tv') { startCast(); } else { load(); }
+  if (mode === 'tv') { keepAwake(); startCast(); } else { load(); }
 })();
