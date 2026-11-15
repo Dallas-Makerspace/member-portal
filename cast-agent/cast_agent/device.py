@@ -68,6 +68,7 @@ class ChromecastDevice:
         self._cast.register_handler(self._channel)
         self._cast.register_status_listener(self)
         self._cast.register_connection_listener(self)
+        self._cast.register_launch_error_listener(self)
         self._cast.start()
 
     # -- pychromecast listener callbacks (run on its threads; hand off to the reactor) --
@@ -79,6 +80,12 @@ class ChromecastDevice:
     def new_connection_status(self, status) -> None:
         connected = status.status == "CONNECTED"
         self._reactor.post(lambda: self._events.on_connection(connected))
+
+    def new_launch_error(self, launch_failure) -> None:
+        # e.g. NOT_ALLOWED: the receiver is unpublished and this TV is not registered for testing.
+        log.warning(
+            "%s refused to launch app %s: %s", self._name, launch_failure.app_id, launch_failure.reason
+        )
 
     # -- commands --
 
