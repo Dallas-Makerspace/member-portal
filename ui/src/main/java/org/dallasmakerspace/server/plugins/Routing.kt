@@ -123,6 +123,24 @@ fun Application.configureRouting() {
       post(RouteFactory.Paths.COMMITTEE_MESSAGE.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.COMMITTEE_DASHBOARD.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.COMMITTEE_DASHBOARD_PREVIEW.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      get(RouteFactory.Paths.COMMITTEE_DASHBOARD_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      put(RouteFactory.Paths.COMMITTEE_DASHBOARD_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      post(RouteFactory.Paths.COMMITTEE_DASHBOARD_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
+      delete(RouteFactory.Paths.COMMITTEE_DASHBOARD_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.BAMBU_PRINTER_STATUS.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
@@ -240,6 +258,10 @@ fun Application.configureRouting() {
     }
 
     get(RouteFactory.Paths.PING.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+
+    // TV dashboards: public page; its data call is authorized by the device token it carries.
+    get(RouteFactory.Paths.TV_RECEIVER.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+    get(RouteFactory.Paths.TV_API_DASHBOARD.path) { RouteFactory.getHandler(call)?.handleBase(call) }
 
     // Outside auth_session so an already-expired session still lands on the redirect, not login.
     post(RouteFactory.Paths.SIGN_OUT.path) { RouteFactory.getHandler(call)?.handleBase(call) }

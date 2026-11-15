@@ -41,6 +41,10 @@ constructor(
     events.reload(committee.id)
   }
 
+  /** What a TV would show right now, for the editor's preview. */
+  suspend fun preview(actor: String, committeeId: Int): DashboardPayload =
+      render.render(editable(actor, committeeId))
+
   suspend fun announcements(actor: String, committeeId: Int): List<AnnouncementDto> =
       repository.announcements(editable(actor, committeeId).id)
 

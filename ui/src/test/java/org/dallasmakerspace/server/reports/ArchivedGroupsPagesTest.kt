@@ -287,7 +287,7 @@ class ArchivedGroupsPagesTest {
       block: suspend ApplicationTestBuilder.() -> Unit,
   ) =
       withApp(
-          committees = CommitteeDetailHandler(LoggerFactory(), userInfoProvider(), service, emptySet()),
+          committees = CommitteeDetailHandler(LoggerFactory(), userInfoProvider(), service, emptySet(), mock()),
           block = block)
 
   @Test

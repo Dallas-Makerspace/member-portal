@@ -30,6 +30,8 @@ import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.CommitteeFollowers
 import org.dallasmakerspace.server.memberservice.CommitteeMessageEligibility
+import org.dallasmakerspace.server.memberservice.DashboardCallResult
+import org.dallasmakerspace.server.memberservice.DashboardServiceClient
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.plugins.UserSession
 import org.mockito.kotlin.any
@@ -110,8 +112,14 @@ class CommitteeFollowButtonTest {
       service: MemberService,
       slug: String,
       groups: List<String> = emptyList(),
+      dashboardEditable: Boolean = false,
       block: suspend (String) -> Unit,
   ) {
+    val dashboard = mock<DashboardServiceClient>()
+    runBlocking {
+      whenever(dashboard.call(any(), any(), any(), anyOrNull(), anyOrNull()))
+          .thenReturn(DashboardCallResult(200, null, mapOf("canEdit" to dashboardEditable)))
+    }
     testApplication {
       application {
         install(Sessions) { cookie<UserSession>("user_session") }
@@ -125,7 +133,7 @@ class CommitteeFollowButtonTest {
         }
         routing {
           val handler =
-              CommitteeDetailHandler(LoggerFactory(), userInfoProvider(groups), service, emptySet())
+              CommitteeDetailHandler(LoggerFactory(), userInfoProvider(groups), service, emptySet(), dashboard)
           get("/committees/{committee_slug}") { asUser(handler) }
         }
       }
@@ -248,6 +256,21 @@ class CommitteeFollowButtonTest {
       assertTrue("/static/js/committee-message.js" in html)
       assertTrue("Start a new Talk thread for me" in html)
     }
+  }
+
+  @Test
+  fun `a chair of a committee with a dashboard is offered the editor link`() {
+    val service = service(status(false), chairs = listOf("mia"), eligibility = eligibility())
+    committeePage(service, laser.slug, dashboardEditable = true) { html ->
+      assertTrue("Edit TV dashboard" in html, html)
+      assertTrue("href=\"/committees/${laser.slug}/dashboard\"" in html, html)
+    }
+  }
+
+  @Test
+  fun `a chair is not offered the editor link when the service says they can't edit`() {
+    val service = service(status(false), chairs = listOf("mia"), eligibility = eligibility())
+    committeePage(service, laser.slug) { html -> assertFalse("Edit TV dashboard" in html, html) }
   }
 
   @Test

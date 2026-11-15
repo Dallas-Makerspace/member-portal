@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en-US" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="robots" content="noindex"/>
+    <title>Committee dashboard</title>
+    <!-- Not a portal page: no header, session, Bootstrap, app.js or page loader. It is public and
+         shows nothing until it is handed a device token (TV) or opened from the signed-in editor. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap"/>
+    <link rel="stylesheet" href="/static/styles/tv-dashboard.css"/>
+</head>
+<body th:attr="data-mode=${mode},data-source=${sourceUrl}">
+<div id="tv" class="tv" aria-live="off">
+    <header class="tv-top">
+        <div class="tv-brand">
+            <span class="tv-brand-mark"></span>
+            <span id="tv-committee" class="tv-committee"></span>
+        </div>
+        <div id="tv-page-title" class="tv-page-title"></div>
+        <div class="tv-meta">
+            <div id="tv-dots" class="tv-dots"></div>
+            <div id="tv-updated" class="tv-updated"></div>
+        </div>
+    </header>
+
+    <main id="tv-stage" class="tv-stage"></main>
+
+    <footer class="tv-bottom">
+        <section class="tv-news" aria-label="Announcements">
+            <div class="tv-news-label">News</div>
+            <div id="tv-news-text" class="tv-news-text"></div>
+        </section>
+        <aside class="tv-qr" aria-label="Committee page">
+            <div id="tv-qr-code" class="tv-qr-code"></div>
+            <div class="tv-qr-caption">Scan for classes<br/>and updates</div>
+        </aside>
+    </footer>
+
+    <div id="tv-waiting" class="tv-waiting" hidden>
+        <div class="tv-waiting-title">Dallas Makerspace</div>
+        <div id="tv-waiting-text" class="tv-waiting-text">Waiting for the dashboard&hellip;</div>
+    </div>
+</div>
+
+<script th:if="${mode == 'tv'}" src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+<script src="/static/vendor/qrcodejs/qrcode.min.js"></script>
+<script src="/static/js/tv-dashboard.js"></script>
+</body>
+</html>

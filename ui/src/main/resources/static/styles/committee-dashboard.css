@@ -1,0 +1,65 @@
+/* Committee TV dashboard editor (templates/committee-dashboard.html). Selection uses the portal's
+   blue; red stays inside the TV preview. */
+
+.dash-page-list { border-radius: 6px; }
+.dash-page-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 4px; }
+.dash-page-row.active { background: #eaf1ff; border-color: #0d6efd; color: inherit; z-index: 1; }
+.dash-page-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: 0; padding: 6px 8px; text-align: left; border-radius: 6px; }
+.dash-page-pick:focus-visible { outline: 3px solid #0d6efd; outline-offset: 1px; }
+.dash-page-num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #e9ecef; color: #333; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+.dash-page-row.active .dash-page-num { background: #0d6efd; color: #fff; }
+.dash-page-name { display: flex; flex-direction: column; min-width: 0; }
+.dash-page-title-text { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-page-meta { font-size: 13px; color: #565e64; }
+.dash-page-actions { flex: none; display: flex; gap: 0; }
+.dash-icon-btn { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #343a40; border: 0; }
+.dash-icon-btn:hover:not(:disabled) { background: #dde3ea; }
+.dash-icon-btn:focus-visible { outline: 3px solid #0d6efd; outline-offset: -2px; }
+.dash-icon-btn:disabled { opacity: .35; }
+
+.dash-layouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dash-layout { position: relative; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #ced4da; border-radius: 6px; padding: 8px 10px; cursor: pointer; margin: 0; }
+.dash-layout.on { border-color: #0d6efd; box-shadow: 0 0 0 1px #0d6efd; background: #eaf1ff; }
+.dash-layout-input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.dash-layout:focus-within { outline: 3px solid #0d6efd; outline-offset: 1px; }
+.dash-layout-name { font-size: 13.5px; font-weight: 600; line-height: 1.2; flex: 1; white-space: nowrap; }
+.dash-layout-check { color: #0d6efd; font-size: 20px; }
+.dash-mini { flex: none; width: 44px; height: 28px; display: grid; gap: 2px; }
+.dash-mini i { background: #adb5bd; border-radius: 2px; display: block; }
+.dash-layout.on .dash-mini i { background: #0d6efd; }
+.dash-mini-FULL { grid-template-columns: 1fr; }
+.dash-mini-TWO_COL { grid-template-columns: 1fr 1fr; }
+.dash-mini-HERO_PLUS_2 { grid-template-columns: 1.4fr 1fr; grid-template-rows: 1fr 1fr; }
+.dash-mini-HERO_PLUS_2 i:first-child { grid-row: 1 / span 2; }
+.dash-mini-GRID_2X2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+.dash-preview { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #0f1117; border-radius: 6px; overflow: hidden; }
+.dash-preview iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+.dash-note-warn { color: #8a4b00; background: #fff4e0; border-radius: 6px; padding: 6px 10px; }
+
+.dash-slot-title { font-size: 1.05rem; }
+.dash-slot-sub { font-weight: 400; color: #6c757d; font-size: .85rem; }
+.dash-slot-type { min-width: 190px; }
+.dash-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; padding: 8px 10px; border: 1px solid #dee2e6; border-radius: 6px; background: #fff; }
+.dash-narrow { max-width: 180px; }
+
+.dash-row { padding: 14px 0; border-top: 1px solid #dee2e6; }
+.dash-row:first-child { border-top: 0; }
+.dash-row .btn { min-height: 38px; }
+.dash-switch-row { display: flex; align-items: center; gap: 8px; min-height: 38px; margin-top: 4px; padding-left: 2.5em; }
+.dash-seconds-row { align-items: flex-start !important; }
+.dash-seconds-switch { margin-top: 32px; min-height: 38px; display: flex; align-items: center; gap: 8px; padding-left: 2.5em; }
+
+#dash-app .text-muted, #dash-app .dash-slot-sub { color: #5c636a !important; }
+
+@media (min-width: 768px) {
+    .dash-groups { max-height: 240px; overflow: auto; }
+}
+
+@media (max-width: 575px) {
+    .dash-layouts { grid-template-columns: 1fr; }
+    .dash-slot-type { min-width: 0; flex: 1; }
+    .dash-page-title-text { white-space: normal; }
+}
+
+#dash-app .text-muted, #dash-app .dash-slot-sub { color: #5c636a !important; }

@@ -10,6 +10,7 @@ import org.dallasmakerspace.server.committees.CommitteePageSectionProvider
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
+import org.dallasmakerspace.server.memberservice.DashboardServiceClient
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
 import org.dallasmakerspace.server.memberservice.MemberSettingsHandler
 import org.dallasmakerspace.server.memberservice.ProfilePhotoClient
@@ -26,6 +27,11 @@ import org.dallasmakerspace.server.routes.CabinetsHandler
 import org.dallasmakerspace.server.routes.CamerasApiHandler
 import org.dallasmakerspace.server.routes.CamerasHandler
 import org.dallasmakerspace.server.routes.CommitteeDetailHandler
+import org.dallasmakerspace.server.routes.CommitteeDashboardApiHandler
+import org.dallasmakerspace.server.routes.CommitteeDashboardHandler
+import org.dallasmakerspace.server.routes.CommitteeDashboardPreviewHandler
+import org.dallasmakerspace.server.routes.TvDashboardApiHandler
+import org.dallasmakerspace.server.routes.TvReceiverHandler
 import org.dallasmakerspace.server.routes.CommitteeFollowersHandler
 import org.dallasmakerspace.server.routes.CommitteeMessageHandler
 import org.dallasmakerspace.server.routes.CommitteesHandler
@@ -353,8 +359,10 @@ class RoutesModule {
       userInfoProvider: UserInfoProvider,
       memberService: MemberService,
       sectionProviders: Set<@JvmSuppressWildcards CommitteePageSectionProvider>,
+      dashboard: DashboardServiceClient,
   ): IRouteHandler =
-      CommitteeDetailHandler(loggerFactory, userInfoProvider, memberService, sectionProviders)
+      CommitteeDetailHandler(
+          loggerFactory, userInfoProvider, memberService, sectionProviders, dashboard)
 
   @IntoMap
   @Provides
@@ -653,4 +661,43 @@ class RoutesModule {
   ): IRouteHandler =
       WorkflowPagesHandler(
           loggerFactory, userInfoProvider, memberServiceClient, workflowServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/committees/{committee_slug}/dashboard")
+  fun providesCommitteeDashboardHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      dashboard: DashboardServiceClient,
+      memberService: MemberService,
+  ): IRouteHandler =
+      CommitteeDashboardHandler(loggerFactory, userInfoProvider, dashboard, memberService)
+
+  @IntoMap
+  @Provides
+  @StringKey("/committees/{committee_slug}/dashboard/preview")
+  fun providesCommitteeDashboardPreviewHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+  ): IRouteHandler = CommitteeDashboardPreviewHandler(loggerFactory, userInfoProvider)
+
+  @IntoMap
+  @Provides
+  @StringKey("/committees/{committee_slug}/dashboard-api/{path...}")
+  fun providesCommitteeDashboardApiHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      dashboard: DashboardServiceClient,
+  ): IRouteHandler = CommitteeDashboardApiHandler(loggerFactory, userInfoProvider, dashboard)
+
+  @IntoMap
+  @Provides
+  @StringKey("/tv/receiver")
+  fun providesTvReceiverHandler(): IRouteHandler = TvReceiverHandler()
+
+  @IntoMap
+  @Provides
+  @StringKey("/tv/api/dashboard")
+  fun providesTvDashboardApiHandler(dashboard: DashboardServiceClient): IRouteHandler =
+      TvDashboardApiHandler(dashboard)
 }

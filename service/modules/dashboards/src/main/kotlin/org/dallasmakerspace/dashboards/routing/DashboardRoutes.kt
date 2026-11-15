@@ -57,6 +57,10 @@ private fun Route.editorRoutes(service: DashboardService) {
     val (actor, id) = call.actorAndCommittee() ?: return@get
     call.guarded { ApiResponse(Status.SUCCESS, "Dashboard", service.document(actor, id)) }
   }
+  get("/committees/{id}/dashboard/preview") {
+    val (actor, id) = call.actorAndCommittee() ?: return@get
+    call.guarded { ApiResponse(Status.SUCCESS, "Preview", service.preview(actor, id)) }
+  }
   put("/committees/{id}/dashboard") {
     val (actor, id) = call.actorAndCommittee() ?: return@put
     val document = call.receive<DashboardDocument>()

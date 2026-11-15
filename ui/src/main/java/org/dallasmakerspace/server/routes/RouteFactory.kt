@@ -60,6 +60,7 @@ object RouteFactory {
         // Must come before the generic /committees/{committee_slug} rule below, or that rule's
         // [^/]+ would swallow "3d-fab" and leave a stray "/printers" behind.
         .replace("/committees/(?!3d-fab/printers$)[^/]+".toRegex(), "/committees/{committee_slug}")
+        .replace("/dashboard-api/.*".toRegex(), "/dashboard-api/{path...}")
         .replace("/remote-access/connect/[^/]+".toRegex(), "/remote-access/connect/{connectionId}")
         .replace(
             "/remote-access/disconnect/[^/]+".toRegex(), "/remote-access/disconnect/{connectionId}")
@@ -110,6 +111,9 @@ object RouteFactory {
     COMMITTEE_DETAIL("/committees/{committee_slug}"),
     COMMITTEE_FOLLOWERS("/committees/{committee_slug}/followers"),
     COMMITTEE_MESSAGE("/committees/{committee_slug}/message"),
+    COMMITTEE_DASHBOARD("/committees/{committee_slug}/dashboard"),
+    COMMITTEE_DASHBOARD_PREVIEW("/committees/{committee_slug}/dashboard/preview"),
+    COMMITTEE_DASHBOARD_API("/committees/{committee_slug}/dashboard-api/{path...}"),
     BAMBU_PRINTER_STATUS("/committees/3d-fab/printers"),
     BAMBU_CAMERA_API("/bambu-api/printers/{id}/camera"),
     BAMBU_MODEL_ICON_API("/bambu-api/models/{model}/icon"),
@@ -139,6 +143,8 @@ object RouteFactory {
     SPARKPOST_WEBHOOK("/webhook/sparkpost"),
     DISCOURSE_WEBHOOK("/webhook/discourse"),
     MOODLE_WEBHOOK("/webhook/moodle"),
+    TV_RECEIVER("/tv/receiver"),
+    TV_API_DASHBOARD("/tv/api/dashboard"),
     CAMERAS("/cameras"),
     CAMERAS_API("/cameras-api/{path...}"),
     PERSONAL_BIN_SCANNER("/personal-bin-scanner"),

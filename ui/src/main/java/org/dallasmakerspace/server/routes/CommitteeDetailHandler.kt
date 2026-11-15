@@ -17,6 +17,7 @@ import org.dallasmakerspace.server.auth.Permission
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.committees.CommitteePageSectionProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
+import org.dallasmakerspace.server.memberservice.DashboardServiceClient
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.models.getSlugFromName
 import org.dallasmakerspace.server.plugins.AuthException
@@ -30,6 +31,7 @@ constructor(
     userInfoProvider: UserInfoProvider,
     private val memberService: MemberService,
     private val sectionProviders: Set<@JvmSuppressWildcards CommitteePageSectionProvider>,
+    private val dashboard: DashboardServiceClient,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
   private val log = loggerFactory.create(javaClass)
 
@@ -156,10 +158,12 @@ constructor(
 
     // Only a chair (or Infrastructure) is offered the message form. This just avoids a service call
     // for everyone else; the service re-checks who may send and the feature flag on every request.
-    val messageEligibility =
-        if (currentUsername != null &&
+    val isChairOrAdmin =
+        currentUsername != null &&
             (authz.can(Permission.MANAGE_CONFIG.name) ||
-                chairpersons.any { (it["username"] as? String).equals(currentUsername, true) })) {
+                chairpersons.any { (it["username"] as? String).equals(currentUsername, true) })
+    val messageEligibility =
+        if (currentUsername != null && isChairOrAdmin) {
           memberService.getCommitteeMessageEligibility(
               committee.id, currentUsername, session.sessionId)
         } else {
@@ -311,6 +315,20 @@ constructor(
                   "nextAllowedAt" to it.nextAllowedAt,
               )
         }
+
+    // Same cheap gate as above; the service decides whether the committee has a dashboard to edit.
+    if (currentUsername != null && isChairOrAdmin) {
+      val access =
+          dashboard.call(
+              HttpMethod.Get,
+              "committees/${committee.id}/dashboard/access",
+              currentUsername,
+              null,
+              session.sessionId)
+      if ((access.data as? Map<*, *>)?.get("canEdit") == true) {
+        jsonMap["dashboard_edit_url"] = "/committees/${committee.slug}/dashboard"
+      }
+    }
 
     val archivedCount = archivedCountDeferred.await()
     if (archivedCount > 0) {
