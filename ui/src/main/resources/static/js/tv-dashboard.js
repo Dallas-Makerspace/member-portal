@@ -125,7 +125,8 @@
       return;
     }
     var page = pages[pageIndex];
-    byId('tv-page-title').textContent = page.title || '';
+    var title = page.title || '';
+    byId('tv-page-title').textContent = title === byId('tv-committee').textContent ? '' : title;
     stage.setAttribute('data-layout', page.layout);
     (page.widgets || []).forEach(function (widget) { stage.appendChild(renderWidget(widget)); });
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-classes'), fitRows);
@@ -283,7 +284,33 @@
     qrUrl = url;
     var holder = byId('tv-qr-code');
     clear(holder);
-    new QRCode(holder, { text: url, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.M });
+    var scratch = document.createElement('div');
+    var qr = new QRCode(scratch, { text: url, width: 64, height: 64, correctLevel: QRCode.CorrectLevel.M });
+    var model = qr._oQRCode;
+    if (!model) { return; }
+    var count = model.getModuleCount();
+    var quiet = 2;
+    var path = '';
+    for (var row = 0; row < count; row++) {
+      for (var col = 0; col < count; col++) {
+        if (model.isDark(row, col)) { path += 'M' + (col + quiet) + ' ' + (row + quiet) + 'h1v1h-1z'; }
+      }
+    }
+    var size = count + quiet * 2;
+    var svgNs = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(svgNs, 'svg');
+    svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
+    svg.setAttribute('shape-rendering', 'crispEdges');
+    var bg = document.createElementNS(svgNs, 'rect');
+    bg.setAttribute('width', size);
+    bg.setAttribute('height', size);
+    bg.setAttribute('fill', '#fff');
+    var dark = document.createElementNS(svgNs, 'path');
+    dark.setAttribute('d', path);
+    dark.setAttribute('fill', '#000');
+    svg.appendChild(bg);
+    svg.appendChild(dark);
+    holder.appendChild(svg);
   }
 
   // ---- Cast / start-up ----

@@ -79,7 +79,7 @@ html, body { margin: 0; height: 100%; background: var(--tv-bg); color: var(--tv-
 .tv-news-text.idle { color: var(--tv-muted); font-weight: 400; }
 .tv-qr { background: #f1f2f5; border-radius: 1.4rem; padding: .6rem; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem; }
 .tv-qr-code { width: 8.6rem; height: 8.6rem; background: #fff; }
-.tv-qr-code img, .tv-qr-code canvas { width: 100% !important; height: 100% !important; display: block; }
+.tv-qr-code svg { width: 100%; height: 100%; display: block; }
 .tv-qr-caption { font-size: 1.25rem; font-weight: 700; line-height: 1.1; color: #1a1d27; text-align: center; }
 
 /* ---- waiting state ---- */
