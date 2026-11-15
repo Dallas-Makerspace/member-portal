@@ -37,7 +37,10 @@ def main() -> int:
     def make_device(host: str, port: int, name: str, events):
         return ChromecastDevice(host, port, name, events, reactor)
 
-    agent = Agent(service, reactor, make_device, app_id)
+    ranges = [r.strip() for r in os.environ.get("SWEEP_RANGES", "").split(",") if r.strip()]
+    if not ranges:
+        log.warning("SWEEP_RANGES is not set: a TV whose address changes will not be found again")
+    agent = Agent(service, reactor, make_device, app_id, sweep_ranges=ranges)
 
     def stop(_signum, _frame) -> None:
         reactor.post(agent.shutdown)

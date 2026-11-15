@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -66,6 +67,8 @@ class FakeService:
         self.reports: list[tuple[int, str | None, bool]] = []
         self.target_list: list[Target] = []
         self.fail_tokens = False
+        self.identified: list[tuple[int, str, str | None]] = []
+        self.moves: list[tuple[int, str]] = []
 
     def targets(self) -> list[Target]:
         return list(self.target_list)
@@ -78,6 +81,13 @@ class FakeService:
 
     def report(self, target_id: int, app: str | None, connected: bool) -> None:
         self.reports.append((target_id, app, connected))
+
+    def identify(self, target_id: int, device_id: str, name: str | None) -> None:
+        self.identified.append((target_id, device_id, name))
+
+    def move(self, target_id: int, host: str) -> None:
+        self.moves.append((target_id, host))
+        self.target_list = [replace(t, host=host) if t.id == target_id else t for t in self.target_list]
 
     def events(self):
         return iter(())

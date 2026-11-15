@@ -92,6 +92,23 @@ through the session, a TV through its token (`/tv/api/images/{file}`). Replaced 
 - **Logs**: `docker logs cast-agent`. The TVs tab shows each TV's last status ("Dashboard", "idle", app name,
   or nothing if it never connected).
 
+## When a TV's address changes
+
+TVs are on DHCP and addressed by IP, so the agent can recognise one by what it is instead:
+
+- On each connection the agent asks the device at the address who it is
+  (`http://<ip>:8008/setup/eureka_info?options=detail`: friendly name plus a stable `ssdp_udn`) and records it
+  on the TV (`cast_targets.device_id/device_name`; the TVs tab shows "Recognised as ..."). It never drives a
+  device whose id doesn't match the recorded one: that address now belongs to something else, so it lets go.
+- A TV unreachable for 10 minutes (or found to be someone else) is searched for: the agent probes the Cast
+  port across `SWEEP_RANGES` (comma-separated CIDRs in the agent's env), looks each hit up, and matches by id.
+  If found, it tells the service the new address (`POST /cast-agent/targets/{id}/host`), which moves the TV and
+  the agent reconnects. If not found (asleep, off), it searches again after 1, 2, 4 ... minutes, capped at 6 h,
+  so it never becomes a steady poll; a TV that reconnects by itself stops being searched for.
+- Editing a TV's host in the editor clears what was recorded about it (a different address may be a different TV).
+- To find a TV by name when setting it up (it must be awake):
+  `docker run --rm -e SWEEP_RANGES=... <agent image> python -m cast_agent.find "<name>"` (or `--list`).
+
 ## Adding a committee
 
 Add its name (or slug) to `committees.dashboard-committees` and make sure its chair group exists in

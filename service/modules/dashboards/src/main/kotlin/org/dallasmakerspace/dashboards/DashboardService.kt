@@ -124,7 +124,9 @@ constructor(
                 port = it.dto.port,
                 displayStart = it.dto.displayStart,
                 displayEnd = it.dto.displayEnd,
-                reclaimAfterMinutes = it.dto.reclaimAfterMinutes)
+                reclaimAfterMinutes = it.dto.reclaimAfterMinutes,
+                deviceId = it.deviceId,
+                deviceName = it.dto.deviceName)
           }
 
   suspend fun issueToken(targetId: Int): TokenResponse {
@@ -133,6 +135,22 @@ constructor(
     }
     val row = repository.target(targetId)?.takeIf { it.dto.enabled } ?: throw notFound("TV")
     return tokens.issue(targetId, row.committeeId, row.tokenGeneration)
+  }
+
+  /** The agent learned who a TV is; kept so it can find the TV again if its address changes. */
+  suspend fun recordIdentity(targetId: Int, identity: TargetIdentity) {
+    if (identity.deviceId.isBlank()) throw DashboardException("A device id is required")
+    repository.target(targetId) ?: throw notFound("TV")
+    repository.setIdentity(targetId, identity.deviceId.trim(), identity.deviceName?.trim())
+  }
+
+  /** The agent found a TV at a new address; the TV is moved and the agent reconnects. */
+  suspend fun moveTarget(targetId: Int, host: String) {
+    DashboardValidator.validateHost(host)
+    val row = repository.target(targetId) ?: throw notFound("TV")
+    if (!repository.moveTarget(targetId, host)) throw notFound("TV")
+    verifiedTargets.clear()
+    events.targetsChanged(row.committeeId)
   }
 
   suspend fun reportStatus(targetId: Int, report: TargetStatusReport) {

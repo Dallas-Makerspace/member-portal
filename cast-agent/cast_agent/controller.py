@@ -15,11 +15,13 @@ Nothing here polls: it reacts to status changes, and uses timers only for deadli
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Protocol
 
 from . import window
 from .device import IDLE_APP_IDS, Device, DeviceFactory
+from .identity import Identity, is_same_device
 from .models import Target
 from .reactor import Handle, Reactor
 from .service import ServiceApi, Token
@@ -30,7 +32,26 @@ TOKEN_SEND_DELAYS = (1.0, 4.0, 12.0)  # seconds after our receiver appears
 LAUNCH_GRACE = 30.0  # don't launch again while a launch may still be starting
 LAUNCH_RETRY = 60.0  # if the TV still isn't showing us after a launch, evaluate again
 TOKEN_RETRY = 30.0
+LOST_AFTER = 600.0  # a TV unreachable this long may have moved to another address
 TOKEN_REFRESH_LEAD = 3600.0  # send a new token this long before the old one expires
+
+
+class Hooks(Protocol):
+    """What the controller asks of the agent; both may run work elsewhere and call back on the reactor."""
+
+    def verify(self, controller: "TargetController") -> None:
+        """Look up who is at the TV's address, then call controller.on_identity with the answer."""
+
+    def lost(self, controller: "TargetController") -> None:
+        """The TV can't be reached (or is not the TV expected): try to find it again."""
+
+
+class NoHooks:
+    def verify(self, controller: "TargetController") -> None:
+        controller.on_identity(None)
+
+    def lost(self, controller: "TargetController") -> None:
+        pass
 
 
 class TargetController:
@@ -43,8 +64,10 @@ class TargetController:
         app_id: str,
         now: Callable[[], datetime],
         wall_ms: Callable[[], int],
+        hooks: Hooks | None = None,
     ) -> None:
         self.target = target
+        self._hooks: Hooks = hooks or NoHooks()
         self._service = service
         self._reactor = reactor
         self._app_id = app_id
@@ -53,6 +76,9 @@ class TargetController:
 
         self.connected = False
         self._status_seen = False  # a connection is only acted on once the TV has said what it is showing
+        self._identity_checked = False  # ... and once we know it is the TV we expect
+        self.wrong_device = False  # the address now belongs to a different device; hands off
+        self._lost_timer: Handle | None = None
         self.app_id: str | None = None
         self.display_name: str | None = None
         self.session_id: str | None = None
@@ -89,17 +115,62 @@ class TargetController:
     # ---- events from the device (reactor thread) ----
 
     def on_connection(self, connected: bool) -> None:
+        if self.wrong_device:
+            return
         self.connected = connected
         self._status_seen = False
+        self._identity_checked = False
         self.app_id = self.display_name = self.session_id = None
-        if not connected:
+        if connected:
+            self._cancel(self._lost_timer)
+            self._lost_timer = None
+            self._hooks.verify(self)
+        else:
             self._cancel_timers_for_session()
             self._cancel(self._reclaim)
             self._reclaim = None
+            if self._lost_timer is None and not self._stopped:
+                self._lost_timer = self._reactor.call_later(LOST_AFTER, self._lost)
         self._report()
         self._evaluate()
 
+    def on_identity(self, actual: Identity | None) -> None:
+        """Who answered at the address: None if it would not say (the TV is then trusted)."""
+        if self._stopped or self.wrong_device or not self.connected:
+            return
+        if actual is not None and not is_same_device(self.target.device_id, actual):
+            log.warning("%s: %s is now %r, not the TV we expect; letting go", self.target.name, self.target.host, actual.name)
+            self.wrong_device = True
+            self._cancel_all()
+            self._device.stop()
+            self._hooks.lost(self)
+            return
+        if actual is not None and self.target.device_id is None:
+            self._learn(actual)
+        self._identity_checked = True
+        self._evaluate()
+
+    def _learn(self, actual: Identity) -> None:
+        try:
+            self._service.identify(self.target.id, actual.device_id, actual.name)
+            self.target = replace(self.target, device_id=actual.device_id, device_name=actual.name)
+            log.info("%s is %r (%s)", self.target.name, actual.name, actual.device_id)
+        except Exception:
+            log.warning("Could not record who %s is", self.target.name, exc_info=True)
+
+    def _lost(self) -> None:
+        self._lost_timer = None
+        if not self._stopped and not self.connected:
+            self._hooks.lost(self)
+
+    def in_hours(self) -> bool:
+        return window.in_window(
+            self._now(), window.parse_clock(self.target.display_start), window.parse_clock(self.target.display_end)
+        )
+
     def on_status(self, app_id: str | None, display_name: str | None, session_id: str | None) -> None:
+        if self.wrong_device:
+            return
         previous_app, previous_session = self.app_id, self.session_id
         self._status_seen = True
         self.app_id, self.display_name, self.session_id = app_id, display_name, session_id
@@ -128,7 +199,9 @@ class TargetController:
     # ---- decisions ----
 
     def _evaluate(self) -> None:
-        if self._stopped or not self.connected or not self._status_seen:
+        if self._stopped or self.wrong_device or not self.connected or not self._status_seen:
+            return
+        if not self._identity_checked:
             return
         now = self._now()
         start, end = window.parse_clock(self.target.display_start), window.parse_clock(self.target.display_end)
@@ -260,6 +333,6 @@ class TargetController:
 
     def _cancel_all(self) -> None:
         self._cancel_timers_for_session()
-        for handle in (self._reclaim, self._window_check, self._launch_retry):
+        for handle in (self._reclaim, self._window_check, self._launch_retry, self._lost_timer):
             self._cancel(handle)
-        self._reclaim = self._window_check = self._launch_retry = None
+        self._reclaim = self._window_check = self._launch_retry = self._lost_timer = None

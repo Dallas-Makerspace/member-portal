@@ -73,6 +73,8 @@ data class CastTargetDto(
     val reclaimAfterMinutes: Int? = null,
     val lastSeenAt: String? = null,
     val lastStatus: String? = null,
+    /** What the TV calls itself on the network, learned by the cast agent; read-only in the editor. */
+    val deviceName: String? = null,
 )
 
 @Serializable
@@ -122,7 +124,14 @@ data class AgentTarget(
     val displayStart: String?,
     val displayEnd: String?,
     val reclaimAfterMinutes: Int?,
+    val deviceId: String? = null,
+    val deviceName: String? = null,
 )
+
+/** The TV's own id and name, reported by the agent so it can find the TV again if its address changes. */
+@Serializable data class TargetIdentity(val deviceId: String, val deviceName: String? = null)
+
+@Serializable data class TargetHost(val host: String)
 
 @Serializable data class TokenResponse(val token: String, val expiresAtMs: Long)
 

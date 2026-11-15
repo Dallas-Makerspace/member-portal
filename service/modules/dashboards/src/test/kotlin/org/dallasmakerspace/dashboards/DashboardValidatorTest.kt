@@ -103,4 +103,12 @@ class DashboardValidatorTest {
         )
         .forEach { assertFailsWith<DashboardException>("for $it") { DashboardValidator.validateTarget(it) } }
   }
+
+  @Test
+  fun `a moved TV needs a valid host`() {
+    DashboardValidator.validateHost("192.0.2.77")
+    DashboardValidator.validateHost("tv-1.example.internal")
+    assertFailsWith<DashboardException> { DashboardValidator.validateHost("bad host!") }
+    assertFailsWith<DashboardException> { DashboardValidator.validateHost("") }
+  }
 }

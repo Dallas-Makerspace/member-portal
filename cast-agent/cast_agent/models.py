@@ -15,6 +15,8 @@ class Target:
     display_start: str | None
     display_end: str | None
     reclaim_after_minutes: int | None
+    device_id: str | None = None  # the TV's own stable id, once the agent has learned it
+    device_name: str | None = None
 
     @staticmethod
     def from_json(data: dict) -> "Target":
@@ -27,6 +29,8 @@ class Target:
             display_start=data.get("displayStart"),
             display_end=data.get("displayEnd"),
             reclaim_after_minutes=data.get("reclaimAfterMinutes"),
+            device_id=data.get("deviceId"),
+            device_name=data.get("deviceName"),
         )
 
     @property

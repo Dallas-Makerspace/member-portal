@@ -31,6 +31,8 @@ import org.dallasmakerspace.dashboards.DashboardEvents
 import org.dallasmakerspace.dashboards.DashboardException
 import org.dallasmakerspace.dashboards.DashboardImageService
 import org.dallasmakerspace.dashboards.DashboardService
+import org.dallasmakerspace.dashboards.TargetHost
+import org.dallasmakerspace.dashboards.TargetIdentity
 import org.dallasmakerspace.dashboards.TargetStatusReport
 
 private const val TOKEN_HEADER = "X-Dashboard-Token"
@@ -180,6 +182,22 @@ private fun Route.castAgentRoutes(service: DashboardService, events: DashboardEv
   post("/cast-agent/targets/{itemId}/token") {
     val itemId = call.itemId() ?: return@post
     call.guarded { ApiResponse(Status.SUCCESS, "Token", service.issueToken(itemId)) }
+  }
+  post("/cast-agent/targets/{itemId}/identity") {
+    val itemId = call.itemId() ?: return@post
+    val identity = call.receive<TargetIdentity>()
+    call.guarded {
+      service.recordIdentity(itemId, identity)
+      ok("Recorded")
+    }
+  }
+  post("/cast-agent/targets/{itemId}/host") {
+    val itemId = call.itemId() ?: return@post
+    val moved = call.receive<TargetHost>()
+    call.guarded {
+      service.moveTarget(itemId, moved.host.trim())
+      ok("Moved")
+    }
   }
   post("/cast-agent/targets/{itemId}/status") {
     val itemId = call.itemId() ?: return@post

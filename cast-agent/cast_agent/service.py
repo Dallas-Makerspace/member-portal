@@ -30,6 +30,10 @@ class ServiceApi(Protocol):
 
     def report(self, target_id: int, app: str | None, connected: bool) -> None: ...
 
+    def identify(self, target_id: int, device_id: str, name: str | None) -> None: ...
+
+    def move(self, target_id: int, host: str) -> None: ...
+
     def events(self) -> Iterator[dict]: ...
 
 
@@ -72,6 +76,12 @@ class HttpService:
 
     def report(self, target_id: int, app: str | None, connected: bool) -> None:
         self._call("POST", f"/cast-agent/targets/{target_id}/status", json={"app": app, "connected": connected})
+
+    def identify(self, target_id: int, device_id: str, name: str | None) -> None:
+        self._call("POST", f"/cast-agent/targets/{target_id}/identity", json={"deviceId": device_id, "deviceName": name})
+
+    def move(self, target_id: int, host: str) -> None:
+        self._call("POST", f"/cast-agent/targets/{target_id}/host", json={"host": host})
 
     def events(self) -> Iterator[dict]:
         """Streams events until the connection drops (then the generator ends or raises)."""

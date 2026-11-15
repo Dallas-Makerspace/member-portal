@@ -29,6 +29,7 @@ import org.jetbrains.exposed.sql.update
 data class CastTargetRow(
     val committeeId: Int,
     val tokenGeneration: Int,
+    val deviceId: String? = null,
     val dto: CastTargetDto,
 )
 
@@ -158,9 +159,21 @@ class DashboardRepository @Inject constructor() {
 
   suspend fun updateTarget(committeeId: Int, id: Int, dto: CastTargetDto): Boolean =
       suspendTransaction {
+        // A different address may be a different TV, so what was learned about the old one is dropped.
+        val moved =
+            CastTargetsTable.select {
+                  (CastTargetsTable.id eq id) and (CastTargetsTable.committeeId eq committeeId)
+                }
+                .singleOrNull()
+                ?.let { it[CastTargetsTable.host] != dto.host || it[CastTargetsTable.port] != dto.port }
+                ?: false
         CastTargetsTable.update({
           (CastTargetsTable.id eq id) and (CastTargetsTable.committeeId eq committeeId)
         }) {
+          if (moved) {
+            it[deviceId] = null
+            it[deviceName] = null
+          }
           it[name] = dto.name
           it[host] = dto.host
           it[port] = dto.port
@@ -175,6 +188,19 @@ class DashboardRepository @Inject constructor() {
     CastTargetsTable.deleteWhere {
       (CastTargetsTable.id eq id) and (CastTargetsTable.committeeId eq committeeId)
     } > 0
+  }
+
+  /** Records what the TV calls itself and its stable id (reported by the cast agent). */
+  suspend fun setIdentity(id: Int, deviceId: String, deviceName: String?) = suspendTransaction {
+    CastTargetsTable.update({ CastTargetsTable.id eq id }) {
+      it[CastTargetsTable.deviceId] = deviceId.take(ID_MAX)
+      it[CastTargetsTable.deviceName] = deviceName?.take(NAME_MAX)
+    }
+  }
+
+  /** Points a TV at a new address, keeping what is known about it (the agent found it again). */
+  suspend fun moveTarget(id: Int, host: String): Boolean = suspendTransaction {
+    CastTargetsTable.update({ CastTargetsTable.id eq id }) { it[CastTargetsTable.host] = host } > 0
   }
 
   /** Invalidates every token issued for the TV by moving to the next generation. */
@@ -218,6 +244,7 @@ class DashboardRepository @Inject constructor() {
       CastTargetRow(
           committeeId = row[CastTargetsTable.committeeId],
           tokenGeneration = row[CastTargetsTable.tokenGeneration],
+          deviceId = row[CastTargetsTable.deviceId],
           dto =
               CastTargetDto(
                   id = row[CastTargetsTable.id].value,
@@ -229,9 +256,12 @@ class DashboardRepository @Inject constructor() {
                   displayEnd = row[CastTargetsTable.displayEnd],
                   reclaimAfterMinutes = row[CastTargetsTable.reclaimAfterMinutes],
                   lastSeenAt = DashboardTime.utcToChicago(row[CastTargetsTable.lastSeenAt]),
-                  lastStatus = row[CastTargetsTable.lastStatus]))
+                  lastStatus = row[CastTargetsTable.lastStatus],
+                  deviceName = row[CastTargetsTable.deviceName]))
 
   private companion object {
     const val STATUS_MAX = 120
+    const val ID_MAX = 64
+    const val NAME_MAX = 80
   }
 }

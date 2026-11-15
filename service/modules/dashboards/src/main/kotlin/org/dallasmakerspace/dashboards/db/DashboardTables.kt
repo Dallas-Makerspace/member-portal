@@ -49,6 +49,8 @@ object CastTargetsTable : IntIdTable("cast_targets") {
   val displayEnd = varchar("display_end", 5).nullable()
   val reclaimAfterMinutes = integer("reclaim_after_minutes").nullable()
   val tokenGeneration = integer("token_generation").default(1)
+  val deviceId = varchar("device_id", 64).nullable()
+  val deviceName = varchar("device_name", 80).nullable()
   val lastSeenAt = datetime("last_seen_at").nullable()
   val lastStatus = varchar("last_status", 120).nullable()
 }

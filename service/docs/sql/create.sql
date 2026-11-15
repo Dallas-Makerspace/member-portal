@@ -807,6 +807,8 @@ CREATE TABLE `cast_targets` (
   `display_end` varchar(5) DEFAULT NULL COMMENT 'HH:mm America/Chicago',
   `reclaim_after_minutes` int(11) DEFAULT NULL COMMENT 'Take the TV back from another app after this long; null = never',
   `token_generation` int(11) NOT NULL DEFAULT 1 COMMENT 'Bumped to revoke tokens issued for this TV',
+  `device_id` varchar(64) DEFAULT NULL COMMENT 'The TV''s own stable id (ssdp_udn), learned by the cast agent so it can find the TV if its address changes',
+  `device_name` varchar(80) DEFAULT NULL COMMENT 'What the TV calls itself on the network (read-only in the editor)',
   `last_seen_at` timestamp NULL DEFAULT NULL COMMENT 'UTC; reported by the cast agent',
   `last_status` varchar(120) DEFAULT NULL COMMENT 'What the TV was last reported showing',
   PRIMARY KEY (`id`),

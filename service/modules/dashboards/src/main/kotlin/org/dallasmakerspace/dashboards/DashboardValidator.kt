@@ -89,9 +89,13 @@ object DashboardValidator {
     fail(starts != null && ends != null && !ends.isAfter(starts), "End must be after the start")
   }
 
+  fun validateHost(host: String) {
+    fail(!HOST.matches(host), "Enter the TV's host name or address")
+  }
+
   fun validateTarget(dto: CastTargetDto) {
     fail(dto.name.isBlank() || dto.name.length > MAX_NAME, "A TV needs a name")
-    fail(!HOST.matches(dto.host), "Enter the TV's host name or address")
+    validateHost(dto.host)
     fail(dto.port !in 1..MAX_PORT, "Invalid port")
     val start = DashboardTime.parseClock(dto.displayStart)
     val end = DashboardTime.parseClock(dto.displayEnd)

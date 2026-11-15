@@ -524,6 +524,7 @@
       api('DELETE', '/cast-targets/' + tv.id).then(function () { clearError(); setStatus(label + ' removed'); return loadTvs(); }).then(function () { byId('dash-add-tv').focus(); }).catch(function (e) { showError(e.message); });
     } }));
     var seen = tv.lastSeenAt ? 'Last seen ' + whenText(tv.lastSeenAt) + (tv.lastStatus ? ' · ' + tv.lastStatus : '') : (tv.id ? 'Not seen yet' : '');
+    if (tv.deviceName) { seen += (seen ? ' · ' : '') + 'Recognised as “' + tv.deviceName + '”'; }
     return h('div', { 'class': 'dash-row', role: 'group', 'aria-label': label }, [
       h('div', { 'class': 'row g-3' }, [
         h('div', { 'class': 'col-md-4' }, [field('tv-name-' + n, 'Name', name)]),
