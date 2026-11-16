@@ -14,6 +14,7 @@
   var NAMESPACE = 'urn:x-cast:org.dallasmakerspace.dashboard';
   var NEWS_ROTATE_MS = 9000;
   var MAX_TIMER_MS = 2147483000;
+  var MEMBERS_REM_PER_SECOND = 3.2;
   var RETRY_START_MS = 15000;
   var RETRY_MAX_MS = 300000;
   var SVG_NS = 'http://www.w3.org/2000/svg';
@@ -21,6 +22,7 @@
   var mode = document.body.getAttribute('data-mode');
   var source = document.body.getAttribute('data-source');
   var imageBase = document.body.getAttribute('data-images') || '';
+  var avatarBase = document.body.getAttribute('data-avatars') || '';
   // The editor preview doesn't auto-rotate for people who asked for less motion.
   var still = mode === 'preview' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var token = null;
@@ -33,6 +35,7 @@
   var retryMs = RETRY_START_MS;
   var qrUrl = null;
   var imageUrls = [];
+  var avatarFetches = {};
 
   function byId(id) { return document.getElementById(id); }
 
@@ -115,6 +118,7 @@
     clear(stage);
     imageUrls.forEach(function (url) { URL.revokeObjectURL(url); });
     imageUrls = [];
+    avatarFetches = {};
     renderDots();
     if (!pages.length) {
       stage.setAttribute('data-layout', 'FULL');
@@ -131,6 +135,7 @@
     (page.widgets || []).forEach(function (widget) { stage.appendChild(renderWidget(widget)); });
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-classes'), fitRows);
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-text-body'), fitText);
+    Array.prototype.forEach.call(stage.querySelectorAll('.tv-members'), scrollMembers);
     stage.classList.remove('fade');
     void stage.offsetWidth;
     stage.classList.add('fade');
@@ -157,6 +162,7 @@
     var box = el('section', 'tv-w');
     if (widget.type === 'GROUP_COUNT') { renderCounts(box, widget); }
     else if (widget.type === 'UPCOMING_CLASSES') { renderClasses(box, widget); }
+    else if (widget.type === 'MEMBER_LIST') { renderMembers(box, widget); }
     else { renderText(box, widget); }
     return box;
   }
@@ -254,6 +260,78 @@
         wrap.appendChild(image);
       })
       .catch(function () { /* the card just shows its text */ });
+  }
+
+  // ---- member list ----
+
+  function renderMembers(box, widget) {
+    box.appendChild(el('div', 'tv-w-head', widget.heading || 'Team'));
+    var view = el('div', 'tv-members');
+    var track = el('div', 'tv-members-track');
+    var people = widget.members || [];
+    if (!people.length) { view.appendChild(el('div', 'tv-empty', 'No one to show yet.')); }
+    people.forEach(function (person) { track.appendChild(memberRow(person)); });
+    view._people = people;
+    view.appendChild(track);
+    box.appendChild(view);
+  }
+
+  function memberRow(person) {
+    var row = el('div', 'tv-member');
+    var avatar = el('div', 'tv-member-avatar', (person.displayName || person.username).charAt(0).toUpperCase());
+    row.appendChild(avatar);
+    var who = el('div', 'tv-member-who');
+    who.appendChild(el('div', 'tv-member-name', person.displayName || person.username));
+    who.appendChild(el('div', 'tv-member-user', '@' + person.username));
+    row.appendChild(who);
+    loadAvatar(avatar, person);
+    return row;
+  }
+
+  // One fetch per person per page, shared by the repeated rows of the scrolling list.
+  function loadAvatar(avatar, person) {
+    var done = function (url) {
+      if (!url) { return; }
+      avatar.textContent = '';
+      var image = document.createElement('img');
+      image.alt = '';
+      image.src = url;
+      avatar.appendChild(image);
+    };
+    if (person.hasPhoto) {
+      if (!avatarFetches[person.username]) {
+        var headers = token ? { Authorization: 'Bearer ' + token } : {};
+        avatarFetches[person.username] = fetch(avatarBase + encodeURIComponent(person.username), { headers: headers, cache: 'force-cache', credentials: mode === 'preview' ? 'same-origin' : 'omit' })
+          .then(function (response) { return response.ok ? response.blob() : null; })
+          .then(function (blob) {
+            if (!blob) { return null; }
+            var objectUrl = URL.createObjectURL(blob);
+            imageUrls.push(objectUrl);
+            return objectUrl;
+          })
+          .catch(function () { return null; });
+      }
+      avatarFetches[person.username].then(done);
+    } else if (person.photoUrl) {
+      done(person.photoUrl);
+    }
+  }
+
+  // A list that doesn't fit scrolls without end: it is repeated once and wraps at the bottom.
+  function scrollMembers(view) {
+    var track = view.firstChild;
+    var people = view._people || [];
+    if (!track || !track.children.length || still || !track.animate) { return; }
+    if (track.scrollHeight <= view.clientHeight + 1) { return; }
+    view.classList.add('scrolling');
+    var first = track.children.length;
+    people.forEach(function (person) { track.appendChild(memberRow(person)); });
+    var shift = track.children[first].offsetTop;
+    var rem = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    var duration = (shift / (rem * MEMBERS_REM_PER_SECOND)) * 1000;
+    track.animate(
+      [{ transform: 'translateY(0)' }, { transform: 'translateY(-' + shift + 'px)' }],
+      { duration: duration, iterations: Infinity, easing: 'linear' });
   }
 
   // ---- bottom row ----

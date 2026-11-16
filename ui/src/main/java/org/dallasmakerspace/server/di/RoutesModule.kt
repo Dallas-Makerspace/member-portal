@@ -31,6 +31,7 @@ import org.dallasmakerspace.server.routes.CommitteeDashboardApiHandler
 import org.dallasmakerspace.server.routes.CommitteeDashboardHandler
 import org.dallasmakerspace.server.routes.CommitteeDashboardPreviewHandler
 import org.dallasmakerspace.server.routes.TvDashboardApiHandler
+import org.dallasmakerspace.server.routes.TvAvatarApiHandler
 import org.dallasmakerspace.server.routes.TvImageApiHandler
 import org.dallasmakerspace.server.routes.TvReceiverHandler
 import org.dallasmakerspace.server.routes.CommitteeFollowersHandler
@@ -707,4 +708,10 @@ class RoutesModule {
   @StringKey("/tv/api/images/{file}")
   fun providesTvImageApiHandler(dashboard: DashboardServiceClient): IRouteHandler =
       TvImageApiHandler(dashboard)
+
+  @IntoMap
+  @Provides
+  @StringKey("/tv/api/avatars/{username}")
+  fun providesTvAvatarApiHandler(dashboard: DashboardServiceClient): IRouteHandler =
+      TvAvatarApiHandler(dashboard)
 }

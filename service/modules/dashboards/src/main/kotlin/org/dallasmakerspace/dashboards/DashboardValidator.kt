@@ -17,6 +17,7 @@ class DashboardException(
 /** Checks what chairs submit, so the receiver only ever sees well-formed pages. */
 object DashboardValidator {
   private val HOST = Regex("^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$")
+  private val USERNAME = Regex("^[A-Za-z0-9._-]{1,64}$")
   private const val MAX_GROUP_NAME = 100
   private const val MAX_FILTER_GROUPS = 20
   private const val MAX_NAME = 80
@@ -62,6 +63,11 @@ object DashboardValidator {
           fail(!committee.ownsGroup(it), "$where: '$it' is not one of ${committee.name}'s groups")
         }
       }
+      WidgetType.MEMBER_LIST -> {
+        fail((config.heading?.length ?: 0) > MAX_HEADING_LENGTH, "$where: heading is too long")
+        validateUsernames(config.members, where)
+        fail(config.members.isEmpty(), "$where: add at least one member to the list")
+      }
       WidgetType.TEXT_IMAGE -> {
         fail((config.heading?.length ?: 0) > MAX_HEADING_LENGTH, "$where: heading is too long")
         fail((config.body?.length ?: 0) > MAX_TEXT_LENGTH, "$where: text is too long")
@@ -77,6 +83,15 @@ object DashboardValidator {
             "$where: a text/image card needs a heading, text or image")
       }
     }
+  }
+
+  /** Usernames a chair may put on a member list: well-formed, no repeats, and not too many. */
+  fun validateUsernames(usernames: List<String>, where: String = "The list") {
+    fail(
+        usernames.size > MAX_LIST_MEMBERS,
+        "$where: a member list holds at most $MAX_LIST_MEMBERS members; we cannot add too many members to the card")
+    fail(usernames.any { !USERNAME.matches(it) }, "$where: invalid username")
+    fail(usernames.toSet().size != usernames.size, "$where: a member is listed twice")
   }
 
   fun validateAnnouncement(dto: AnnouncementDto) {

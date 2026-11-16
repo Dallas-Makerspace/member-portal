@@ -66,3 +66,11 @@
 
 .dash-thumb-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .dash-thumb { max-height: 96px; max-width: 160px; border-radius: 6px; border: 1px solid #dee2e6; object-fit: contain; background: #fff; }
+
+/* member list card */
+.dash-people { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.dash-person { display: flex; align-items: center; gap: 8px; border: 1px solid #dee2e6; border-radius: 6px; padding: 4px 8px; background: #fff; }
+.dash-person dms-member-card { flex: 1; min-width: 0; }
+.dash-person-actions { display: flex; flex: none; }
+.dash-group-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.dash-group-add select { max-width: 320px; }

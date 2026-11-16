@@ -3,6 +3,7 @@ package org.dallasmakerspace.dashboards
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import org.dallasmakerspace.models.Committee
 
 class DashboardValidatorTest {
@@ -110,5 +111,26 @@ class DashboardValidatorTest {
     DashboardValidator.validateHost("tv-1.example.internal")
     assertFailsWith<DashboardException> { DashboardValidator.validateHost("bad host!") }
     assertFailsWith<DashboardException> { DashboardValidator.validateHost("") }
+  }
+
+  private fun list(vararg usernames: String) =
+      page(
+          DashboardLayout.FULL,
+          WidgetDto(0, WidgetType.MEMBER_LIST, WidgetConfig(members = usernames.toList())))
+
+  @Test
+  fun `a member list needs members and valid usernames`() {
+    validate(list("jdoe", "asmith"))
+    assertFailsWith<DashboardException> { validate(list()) }
+    assertFailsWith<DashboardException> { validate(list("bad name")) }
+    assertFailsWith<DashboardException> { validate(list("jdoe", "jdoe")) }
+  }
+
+  @Test
+  fun `a member list is capped`() {
+    val tooMany = (1..MAX_LIST_MEMBERS + 1).map { "user$it" }.toTypedArray()
+    val error = assertFailsWith<DashboardException> { validate(list(*tooMany)) }
+    assertTrue(error.message!!.contains("too many members"))
+    validate(list(*tooMany.take(MAX_LIST_MEMBERS).toTypedArray()))
   }
 }

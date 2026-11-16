@@ -21,7 +21,8 @@ import org.dallasmakerspace.notifications.db.CommitteeMessagesRepository
 
 /**
  * Builds what a TV shows: the committee's enabled pages with their widgets filled in, the bottom
- * announcement row and the QR target. Only aggregate data goes out - never member names.
+ * announcement row and the QR target. Counts and classes are aggregate; only a member-list card a
+ * chair filled in names people.
  */
 @Singleton
 class DashboardRenderService
@@ -33,6 +34,7 @@ constructor(
     private val calendarService: CalendarService,
     private val groupHistory: GroupHistoryRepository,
     private val chairMessages: CommitteeMessagesRepository,
+    private val members: DashboardMembers,
     private val appConfig: AppConfig,
     loggerFactory: LoggerFactory,
 ) {
@@ -107,6 +109,12 @@ constructor(
               heading = widget.config.heading,
               classes = classes)
         }
+        WidgetType.MEMBER_LIST ->
+            RenderedWidget(
+                slot = widget.slot,
+                type = widget.type,
+                heading = widget.config.heading,
+                members = members.rows(widget.config.members))
         WidgetType.TEXT_IMAGE ->
             RenderedWidget(
                 slot = widget.slot,
@@ -121,7 +129,9 @@ constructor(
       groupCounts.getOrLoad("$name|$withTrend") {
         try {
           val count =
-              withContext(Dispatchers.IO) { activeDirectoryService.getGroup(name).members.size }
+              withContext(Dispatchers.IO) {
+                activeDirectoryService.getGroup(name).members.count { it.enabled }
+              }
           GroupCount(name, count, if (withTrend) trend(name, count) else emptyList())
         } catch (e: Exception) {
           log.warn("Could not count group $name for a dashboard", e)

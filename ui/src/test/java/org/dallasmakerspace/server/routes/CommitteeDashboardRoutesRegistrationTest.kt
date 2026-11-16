@@ -33,5 +33,6 @@ class CommitteeDashboardRoutesRegistrationTest {
     resolved("/tv/api/dashboard", RouteFactory.Paths.TV_API_DASHBOARD)
     resolved(
         "/tv/api/images/3f2a6c1e-0b7d-4a55-9c1e-2d4b6a8c0e11.jpg", RouteFactory.Paths.TV_API_IMAGE)
+    resolved("/tv/api/avatars/jdoe", RouteFactory.Paths.TV_API_AVATAR)
   }
 }

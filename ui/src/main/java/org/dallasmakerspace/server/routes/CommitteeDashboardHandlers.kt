@@ -99,7 +99,8 @@ constructor(
         mapOf(
             "mode" to "preview",
             "sourceUrl" to "/committees/${committee.slug}/dashboard-api/dashboard/preview",
-            "imageBase" to "/committees/${committee.slug}/dashboard-api/dashboard/images/")
+            "imageBase" to "/committees/${committee.slug}/dashboard-api/dashboard/images/",
+            "avatarBase" to "/avatar/@")
     call.respond(ThymeleafContent("tv-receiver", model))
   }
 }
@@ -181,7 +182,8 @@ constructor(
     val IMAGE_TYPES = setOf("image/jpeg", "image/png")
     val ALLOWED =
         Regex(
-            "dashboard(/preview|/announcements(/[0-9]+)?|/images(/[0-9a-f-]{36}\\.jpg)?)?|" +
+            "dashboard(/preview|/members|/group-members|/announcements(/[0-9]+)?|" +
+                "/images(/[0-9a-f-]{36}\\.jpg)?)?|" +
                 "cast-targets(/[0-9]+(/revoke)?)?")
   }
 }
@@ -209,7 +211,11 @@ class TvReceiverHandler @Inject constructor() : IRouteHandler {
     call.respond(
         ThymeleafContent(
             "tv-receiver",
-            mapOf("mode" to "tv", "sourceUrl" to "/tv/api/dashboard", "imageBase" to "/tv/api/images/")))
+            mapOf(
+                "mode" to "tv",
+                "sourceUrl" to "/tv/api/dashboard",
+                "imageBase" to "/tv/api/images/",
+                "avatarBase" to "/tv/api/avatars/")))
   }
 }
 
@@ -249,5 +255,30 @@ constructor(
       return
     }
     call.respondResult(dashboard.tvDashboard(token))
+  }
+}
+
+/** `/tv/api/avatars/{username}`: an uploaded member photo for the device token in the header. */
+class TvAvatarApiHandler
+@Inject
+constructor(
+    private val dashboard: DashboardServiceClient,
+) : IRouteHandler {
+  override suspend fun handle(call: ApplicationCall) {
+    val token = call.request.header("Authorization")?.removePrefix("Bearer ")?.trim()
+    val username = call.request.path().substringAfterLast('/')
+    if (token.isNullOrBlank()) {
+      call.respond(HttpStatusCode.Unauthorized)
+      return
+    }
+    if (!USERNAME.matches(username)) {
+      call.respond(HttpStatusCode.NotFound)
+      return
+    }
+    call.respondImage(dashboard.tvAvatar(username, token), "private, max-age=3600")
+  }
+
+  private companion object {
+    val USERNAME = Regex("^[A-Za-z0-9._-]{1,64}$")
   }
 }

@@ -17,6 +17,7 @@ enum class WidgetType {
   GROUP_COUNT,
   UPCOMING_CLASSES,
   TEXT_IMAGE,
+  MEMBER_LIST,
 }
 
 /** One flat config for every widget type; each type reads (and validates) only its own fields. */
@@ -30,6 +31,8 @@ data class WidgetConfig(
     val heading: String? = null,
     val body: String? = null,
     val imageKey: String? = null,
+    /** MEMBER_LIST: usernames, in display order. */
+    val members: List<String> = emptyList(),
 )
 
 @Serializable
@@ -85,12 +88,22 @@ data class GroupCount(val name: String, val count: Int?, val trend: List<Int> = 
 
 @Serializable data class ClassRow(val name: String, val startLabel: String, val startMs: Long?)
 
+/** [photoUrl] is a public picture address; [hasPhoto] means an uploaded photo the TV fetches with its token. */
+@Serializable
+data class MemberRow(
+    val username: String,
+    val displayName: String,
+    val photoUrl: String? = null,
+    val hasPhoto: Boolean = false,
+)
+
 @Serializable
 data class RenderedWidget(
     val slot: Int,
     val type: WidgetType,
     val groups: List<GroupCount> = emptyList(),
     val classes: List<ClassRow> = emptyList(),
+    val members: List<MemberRow> = emptyList(),
     val heading: String? = null,
     val body: String? = null,
     val imageKey: String? = null,
@@ -136,6 +149,11 @@ data class AgentTarget(
 
 @Serializable data class TargetHost(val host: String)
 
+/** Body of the editor's "add members" and "add a group" calls. */
+@Serializable data class UsernamePick(val usernames: List<String> = emptyList())
+
+@Serializable data class GroupPick(val group: String = "")
+
 @Serializable data class TokenResponse(val token: String, val expiresAtMs: Long)
 
 @Serializable data class TargetStatusReport(val app: String? = null, val connected: Boolean = true)
@@ -152,3 +170,5 @@ const val MAX_PAGE_SECONDS = 300
 const val MAX_TEXT_LENGTH = 600
 const val MAX_HEADING_LENGTH = 80
 const val MAX_TARGETS_PER_COMMITTEE = 10
+const val MAX_LIST_MEMBERS = 20
+const val MAX_GROUP_MEMBERS_TO_ADD = 10

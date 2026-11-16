@@ -33,7 +33,13 @@ channel (never in a URL):
   `DASHBOARD_TOKEN_SECRET` on the service (empty = tokens off; the service still starts).
 - **Revoke** (TVs tab) bumps the TV's generation. The service re-checks the target row (cached 5 min, cleared
   on revoke), so a revoked token stops working at once on this instance, and the agent hands out a fresh one.
-- Widgets show aggregate data only — never member names.
+- Counts and classes are aggregate. The **member list** card is the one widget that names people, and only those
+  a chair picked: up to 20 usernames (stored in the widget config), added one by one with the member picker or
+  from a committee group of at most 10 enabled members (a snapshot taken when added; later group changes are not
+  picked up). The service returns display name and photo for them; an uploaded photo is fetched with the TV's
+  token from `/tv/api/avatars/{username}`, and only for someone on that committee's lists. A list too long for the
+  card scrolls without end (repeated once, wraps at the bottom).
+- Group-count widgets count enabled accounts only.
 
 ## Nothing polls
 

@@ -31,9 +31,11 @@ import org.dallasmakerspace.dashboards.DashboardEvents
 import org.dallasmakerspace.dashboards.DashboardException
 import org.dallasmakerspace.dashboards.DashboardImageService
 import org.dallasmakerspace.dashboards.DashboardService
+import org.dallasmakerspace.dashboards.GroupPick
 import org.dallasmakerspace.dashboards.TargetHost
 import org.dallasmakerspace.dashboards.TargetIdentity
 import org.dallasmakerspace.dashboards.TargetStatusReport
+import org.dallasmakerspace.dashboards.UsernamePick
 
 private const val TOKEN_HEADER = "X-Dashboard-Token"
 
@@ -78,6 +80,18 @@ private fun Route.editorRoutes(service: DashboardService) {
   get("/committees/{id}/dashboard/images/{file}") {
     val (actor, id) = call.actorAndCommittee() ?: return@get
     call.guardedImage { service.editorImage(actor, id, call.parameters["file"].orEmpty()) }
+  }
+  post("/committees/{id}/dashboard/members") {
+    val (actor, id) = call.actorAndCommittee() ?: return@post
+    val pick = call.receive<UsernamePick>()
+    call.guarded {
+      ApiResponse(Status.SUCCESS, "Members", service.checkMembers(actor, id, pick.usernames))
+    }
+  }
+  post("/committees/{id}/dashboard/group-members") {
+    val (actor, id) = call.actorAndCommittee() ?: return@post
+    val pick = call.receive<GroupPick>()
+    call.guarded { ApiResponse(Status.SUCCESS, "Members", service.groupMembers(actor, id, pick.group)) }
   }
   get("/committees/{id}/dashboard/preview") {
     val (actor, id) = call.actorAndCommittee() ?: return@get
@@ -163,6 +177,10 @@ private fun Route.tvRoutes(service: DashboardService) {
   get("/tv/images/{file}") {
     call.response.cacheControl(CacheControl.NoStore(null))
     call.guardedImage { service.tvImage(call.request.headers[TOKEN_HEADER], call.parameters["file"].orEmpty()) }
+  }
+  get("/tv/avatars/{username}") {
+    call.response.cacheControl(CacheControl.NoStore(null))
+    call.guardedImage { service.tvAvatar(call.request.headers[TOKEN_HEADER], call.parameters["username"].orEmpty()) }
   }
   get("/tv/dashboard") {
     call.response.cacheControl(CacheControl.NoStore(null))

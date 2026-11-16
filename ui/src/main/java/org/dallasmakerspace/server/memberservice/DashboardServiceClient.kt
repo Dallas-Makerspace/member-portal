@@ -109,6 +109,10 @@ constructor(
   suspend fun tvImage(file: String, token: String): DashboardImageResult =
       fetchImage("tv/images/$file") { header("X-Dashboard-Token", token) }
 
+  /** An uploaded member photo for the TV holding [token]. */
+  suspend fun tvAvatar(username: String, token: String): DashboardImageResult =
+      fetchImage("tv/avatars/$username") { header("X-Dashboard-Token", token) }
+
   private suspend fun fetchImage(
       path: String,
       extra: io.ktor.client.request.HttpRequestBuilder.() -> Unit,

@@ -17,8 +17,10 @@
     { id: '', name: 'Empty' },
     { id: 'GROUP_COUNT', name: 'Member counts' },
     { id: 'UPCOMING_CLASSES', name: 'Upcoming classes' },
-    { id: 'TEXT_IMAGE', name: 'Text card' }
+    { id: 'TEXT_IMAGE', name: 'Text card' },
+    { id: 'MEMBER_LIST', name: 'Member list' }
   ];
+  var MAX_LIST_MEMBERS = 20;
   var MAX_GROUPS = 4;
   var MIN_SECONDS = 10;
   var MAX_SECONDS = 300;
@@ -294,7 +296,7 @@
 
   function setWidgetType(page, slot, type) {
     page.widgets = page.widgets.filter(function (w) { return w.slot !== slot; });
-    if (type) { page.widgets.push({ slot: slot, type: type, config: { groupNames: [], showTrend: true, limit: 5 } }); }
+    if (type) { page.widgets.push({ slot: slot, type: type, config: { groupNames: [], showTrend: true, limit: 5, members: [] } }); }
     markDirty();
     renderWidgets();
     var select = byId('dash-slot-' + slot);
@@ -361,11 +363,96 @@
       });
       body.appendChild(h('div', { 'class': 'mb-3 dash-narrow' }, [h('label', { 'class': 'form-label', 'for': limitId, text: 'Classes to list (1–8)' }), limit]));
       body.appendChild(groupPicker(widget, 0, 'Only classes that lead to these groups', 'Leave all unchecked to list every upcoming class for the committee.'));
+    } else if (widget.type === 'MEMBER_LIST') {
+      body.appendChild(textField('Heading (optional)', config.heading, 80, function (v) { config.heading = v || null; }));
+      body.appendChild(memberListField(widget));
     } else {
       body.appendChild(textField('Heading', config.heading, 80, function (v) { config.heading = v || null; }));
       body.appendChild(textField('Text', config.body, 600, function (v) { config.body = v || null; }, true));
       body.appendChild(pictureField(widget));
     }
+  }
+
+  // ---- member list ----
+
+  function addListMembers(widget, usernames) {
+    var members = widget.config.members || [];
+    var fresh = usernames.filter(function (u) { return members.indexOf(u) < 0; });
+    if (members.length + fresh.length > MAX_LIST_MEMBERS) {
+      showError('We cannot add too many members to the card: a list holds at most ' + MAX_LIST_MEMBERS + ' people.');
+      return;
+    }
+    clearError();
+    widget.config.members = members.concat(fresh);
+    markDirty();
+    setStatus(fresh.length + ' added. Unsaved changes.');
+    renderWidgets();
+  }
+
+  function memberListField(widget) {
+    var config = widget.config;
+    var members = config.members || [];
+    var wrap = h('div', { 'class': 'mb-2' });
+    var listId = nextId('people');
+    wrap.appendChild(h('div', { 'class': 'form-label', id: listId, text: 'People on the card (' + members.length + ' of ' + MAX_LIST_MEMBERS + ')' }));
+    var list = h('div', { 'class': 'dash-people', role: 'list', 'aria-labelledby': listId });
+    if (!members.length) { list.appendChild(h('div', { 'class': 'text-muted small', text: 'No one yet. Search for a member or add a group below.' })); }
+    members.forEach(function (username, index) {
+      var card = document.createElement('dms-member-card');
+      card.setAttribute('username', username);
+      card.setAttribute('state', 'mini');
+      list.appendChild(h('div', { 'class': 'dash-person', role: 'listitem' }, [
+        card,
+        h('span', { 'class': 'dash-person-actions' }, [
+          iconButton('arrow_upward', 'Move ' + username + ' up', 'pm-up-' + widget.slot + '-' + index, index === 0, function () { moveListMember(widget, index, -1); }),
+          iconButton('arrow_downward', 'Move ' + username + ' down', 'pm-down-' + widget.slot + '-' + index, index === members.length - 1, function () { moveListMember(widget, index, 1); }),
+          iconButton('close', 'Remove ' + username, 'pm-rm-' + widget.slot + '-' + index, false, function () {
+            config.members = members.filter(function (u) { return u !== username; });
+            markDirty();
+            setStatus(username + ' removed. Unsaved changes.');
+            renderWidgets();
+          })
+        ])
+      ]));
+    });
+    wrap.appendChild(list);
+
+    var picker = document.createElement('dms-member-picker');
+    picker.setAttribute('add-endpoint', base + '/dashboard/members');
+    picker.setAttribute('existing-usernames', JSON.stringify(members));
+    picker.setAttribute('add-button-label', 'Add to card');
+    picker.setAttribute('search-placeholder', 'Search members to add…');
+    picker.setAttribute('reload-on-success', 'false');
+    picker.addEventListener('dms-picker-add-success', function (e) { addListMembers(widget, e.detail.usernames || []); });
+    picker.addEventListener('dms-picker-add-error', function (e) { showError(e.detail.error || 'Those members could not be added.'); });
+    wrap.appendChild(picker);
+
+    if (groupNames.length) {
+      var selectId = nextId('grp');
+      var select = h('select', { 'class': 'form-select', id: selectId, 'aria-label': 'Group whose members to add' },
+        [h('option', { value: '', text: 'Add everyone in a group…' })].concat(groupNames.map(function (name) { return h('option', { value: name, text: name }); })));
+      var add = h('button', { type: 'button', 'class': 'btn btn-outline-primary', text: 'Add group', onclick: function () {
+        if (!select.value) { return; }
+        add.disabled = true;
+        api('POST', '/dashboard/group-members', { group: select.value })
+          .then(function (json) { addListMembers(widget, json.data || []); })
+          .catch(function (e) { add.disabled = false; showError(e.message); });
+      } });
+      wrap.appendChild(h('div', { 'class': 'dash-group-add' }, [select, add]));
+      wrap.appendChild(h('div', { 'class': 'form-text', text: 'Adds the people in the group right now (groups of up to 10). Later changes to the group are not picked up; remove or add people here.' }));
+    }
+    return wrap;
+  }
+
+  function moveListMember(widget, index, delta) {
+    var members = widget.config.members;
+    var target = index + delta;
+    var moved = members.splice(index, 1)[0];
+    members.splice(target, 0, moved);
+    markDirty();
+    renderWidgets();
+    var button = document.querySelector('[data-fk="pm-' + (delta < 0 ? 'up' : 'down') + '-' + widget.slot + '-' + target + '"]');
+    if (button && !button.disabled) { button.focus(); }
   }
 
   // ---- pictures ----

@@ -263,6 +263,7 @@ fun Application.configureRouting() {
     get(RouteFactory.Paths.TV_RECEIVER.path) { RouteFactory.getHandler(call)?.handleBase(call) }
     get(RouteFactory.Paths.TV_API_DASHBOARD.path) { RouteFactory.getHandler(call)?.handleBase(call) }
     get(RouteFactory.Paths.TV_API_IMAGE.path) { RouteFactory.getHandler(call)?.handleBase(call) }
+    get(RouteFactory.Paths.TV_API_AVATAR.path) { RouteFactory.getHandler(call)?.handleBase(call) }
 
     // Outside auth_session so an already-expired session still lands on the redirect, not login.
     post(RouteFactory.Paths.SIGN_OUT.path) { RouteFactory.getHandler(call)?.handleBase(call) }

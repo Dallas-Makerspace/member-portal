@@ -22,6 +22,7 @@ constructor(
     private val render: DashboardRenderService,
     private val events: DashboardEvents,
     private val images: DashboardImageService,
+    private val members: DashboardMembers,
 ) {
   private val verifiedTargets = TtlCache<Int, CastTargetRow?>(TARGET_TTL)
 
@@ -45,6 +46,17 @@ constructor(
   /** Stores a picture for a text card and returns the file name to put in the widget. */
   suspend fun uploadImage(actor: String, committeeId: Int, bytes: ByteArray): String =
       images.save(editable(actor, committeeId).id, bytes)
+
+  /** The enabled members of one of the committee's groups, for adding them to a member list. */
+  suspend fun groupMembers(actor: String, committeeId: Int, group: String): List<String> =
+      members.groupMembers(editable(actor, committeeId), group)
+
+  /** Checks a pick for a member list and returns the ones that can be added. */
+  suspend fun checkMembers(actor: String, committeeId: Int, usernames: List<String>): List<String> {
+    editable(actor, committeeId)
+    DashboardValidator.validateUsernames(usernames)
+    return members.existing(usernames)
+  }
 
   suspend fun editorImage(actor: String, committeeId: Int, file: String): Pair<ByteArray, String>? =
       images.get(editable(actor, committeeId).id, file)
@@ -168,6 +180,16 @@ constructor(
   /** A picture for a TV: only from the committee its token belongs to. */
   suspend fun tvImage(token: String?, file: String): Pair<ByteArray, String>? =
       committeeForToken(token)?.let { images.get(it.id, file) }
+
+  /** An uploaded member photo for a TV: only for people on that committee's member lists. */
+  suspend fun tvAvatar(token: String?, username: String): Pair<ByteArray, String>? {
+    val committee = committeeForToken(token) ?: return null
+    val listed =
+        repository.loadPages(committee.id).filter { it.enabled }.flatMap { it.widgets }.filter {
+          it.type == WidgetType.MEMBER_LIST
+        }.flatMap { it.config.members }.toSet()
+    return members.photo(listed, username)
+  }
 
   /** The committee a valid, unrevoked TV token belongs to; null otherwise. */
   @Suppress("ReturnCount")
