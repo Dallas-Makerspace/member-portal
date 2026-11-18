@@ -63,6 +63,9 @@ object DashboardValidator {
           fail(!committee.ownsGroup(it), "$where: '$it' is not one of ${committee.name}'s groups")
         }
       }
+      WidgetType.TOOL_STATUS -> {
+        fail((config.heading?.length ?: 0) > MAX_HEADING_LENGTH, "$where: heading is too long")
+      }
       WidgetType.MEMBER_LIST -> {
         fail((config.heading?.length ?: 0) > MAX_HEADING_LENGTH, "$where: heading is too long")
         validateUsernames(config.members, where)

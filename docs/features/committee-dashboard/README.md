@@ -40,6 +40,14 @@ channel (never in a URL):
   token from `/tv/api/avatars/{username}`, and only for someone on that committee's lists. A list too long for the
   card scrolls without end (repeated once, wraps at the bottom).
 - Group-count widgets count enabled accounts only.
+- **Tool status** card lists the tools in use right now (with who is using each) or those under maintenance. It
+  reads the tool interlock system (RFID Interlock) through its GraphQL API, signing in with a service account
+  (`INTERLOCK_BASE_URL` / `INTERLOCK_EMAIL` / `INTERLOCK_PASSWORD`; empty = the card says tool status is
+  unavailable). Only queries are sent. The operator is matched to a member by RFID badge number (operator names
+  repeat and have no email): the tool's newest in-activity gives the operator id, the operator record gives the
+  badge, and AD's `employeeID` gives the username (tried as given and without the interlock's zero padding).
+  Tool lists are cached 30 s and badge matches 1 h. There is no push source, so a page with this card asks the
+  service again about once a minute; that is the one place the TV refreshes on a timer.
 
 ## Nothing polls
 

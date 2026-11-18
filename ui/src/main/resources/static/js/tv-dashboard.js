@@ -163,6 +163,7 @@
     if (widget.type === 'GROUP_COUNT') { renderCounts(box, widget); }
     else if (widget.type === 'UPCOMING_CLASSES') { renderClasses(box, widget); }
     else if (widget.type === 'MEMBER_LIST') { renderMembers(box, widget); }
+    else if (widget.type === 'TOOL_STATUS') { renderTools(box, widget); }
     else { renderText(box, widget); }
     return box;
   }
@@ -271,7 +272,8 @@
     var people = widget.members || [];
     if (!people.length) { view.appendChild(el('div', 'tv-empty', 'No one to show yet.')); }
     people.forEach(function (person) { track.appendChild(memberRow(person)); });
-    view._people = people;
+    view._items = people;
+    view._build = memberRow;
     view.appendChild(track);
     box.appendChild(view);
   }
@@ -317,15 +319,49 @@
     }
   }
 
+  // ---- tool status ----
+
+  function renderTools(box, widget) {
+    var maintenance = widget.toolMode === 'MAINTENANCE';
+    box.appendChild(el('div', 'tv-w-head', widget.heading || (maintenance ? 'Under maintenance' : 'In use now')));
+    var view = el('div', 'tv-members');
+    var track = el('div', 'tv-members-track');
+    var rows = widget.tools || [];
+    var build = function (row) { return toolRow(row, maintenance); };
+    if (widget.toolsAvailable === false) { view.appendChild(el('div', 'tv-empty', 'Tool status isn’t available right now.')); }
+    else if (!rows.length) { view.appendChild(el('div', 'tv-empty', maintenance ? 'All tools are in service.' : 'No tools in use right now.')); }
+    rows.forEach(function (row) { track.appendChild(build(row)); });
+    view._items = rows;
+    view._build = build;
+    view.appendChild(track);
+    box.appendChild(view);
+  }
+
+  function toolRow(row, maintenance) {
+    var who = row.operator;
+    var label = who ? (who.displayName || who.username) : (row.operatorName || '');
+    var mark = maintenance ? '!' : (label ? label.charAt(0).toUpperCase() : '•');
+    var avatar = el('div', maintenance ? 'tv-member-avatar warn' : 'tv-member-avatar', mark);
+    var text = el('div', 'tv-member-who');
+    text.appendChild(el('div', 'tv-member-name', row.name));
+    text.appendChild(el('div', 'tv-member-user', maintenance ? 'Under maintenance' : (label || 'In use')));
+    var item = el('div', 'tv-member');
+    item.appendChild(avatar);
+    item.appendChild(text);
+    if (who && !maintenance) { loadAvatar(avatar, who); }
+    return item;
+  }
+
   // A list that doesn't fit scrolls without end: it is repeated once and wraps at the bottom.
   function scrollMembers(view) {
     var track = view.firstChild;
-    var people = view._people || [];
+    var people = view._items || [];
+    var build = view._build;
     if (!track || !track.children.length || still || !track.animate) { return; }
     if (track.scrollHeight <= view.clientHeight + 1) { return; }
     view.classList.add('scrolling');
     var first = track.children.length;
-    people.forEach(function (person) { track.appendChild(memberRow(person)); });
+    people.forEach(function (person) { track.appendChild(build(person)); });
     var shift = track.children[first].offsetTop;
     var rem = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
     var duration = (shift / (rem * MEMBERS_REM_PER_SECOND)) * 1000;

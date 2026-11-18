@@ -18,6 +18,14 @@ enum class WidgetType {
   UPCOMING_CLASSES,
   TEXT_IMAGE,
   MEMBER_LIST,
+  TOOL_STATUS,
+}
+
+/** TOOL_STATUS: which tools the card lists. */
+@Serializable
+enum class ToolMode {
+  IN_USE,
+  MAINTENANCE,
 }
 
 /** One flat config for every widget type; each type reads (and validates) only its own fields. */
@@ -33,6 +41,8 @@ data class WidgetConfig(
     val imageKey: String? = null,
     /** MEMBER_LIST: usernames, in display order. */
     val members: List<String> = emptyList(),
+    /** TOOL_STATUS: the tools to list. */
+    val toolMode: ToolMode = ToolMode.IN_USE,
 )
 
 @Serializable
@@ -89,6 +99,14 @@ data class GroupCount(val name: String, val count: Int?, val trend: List<Int> = 
 @Serializable data class ClassRow(val name: String, val startLabel: String, val startMs: Long?)
 
 /** [photoUrl] is a public picture address; [hasPhoto] means an uploaded photo the TV fetches with its token. */
+/** One tool on a tool-status card; [operator] is who is using it, when the system can tell. */
+@Serializable
+data class ToolRow(
+    val name: String,
+    val operator: MemberRow? = null,
+    val operatorName: String? = null,
+)
+
 @Serializable
 data class MemberRow(
     val username: String,
@@ -104,6 +122,10 @@ data class RenderedWidget(
     val groups: List<GroupCount> = emptyList(),
     val classes: List<ClassRow> = emptyList(),
     val members: List<MemberRow> = emptyList(),
+    val tools: List<ToolRow> = emptyList(),
+    val toolMode: ToolMode? = null,
+    /** False when the tool system could not be reached; the TV says so instead of "none". */
+    val toolsAvailable: Boolean = true,
     val heading: String? = null,
     val body: String? = null,
     val imageKey: String? = null,

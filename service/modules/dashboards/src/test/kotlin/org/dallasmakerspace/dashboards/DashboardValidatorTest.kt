@@ -133,4 +133,18 @@ class DashboardValidatorTest {
     assertTrue(error.message!!.contains("too many members"))
     validate(list(*tooMany.take(MAX_LIST_MEMBERS).toTypedArray()))
   }
+
+  @Test
+  fun `a tool status card needs nothing but a mode`() {
+    validate(
+        page(
+            DashboardLayout.FULL,
+            WidgetDto(0, WidgetType.TOOL_STATUS, WidgetConfig(toolMode = ToolMode.MAINTENANCE))))
+    assertFailsWith<DashboardException> {
+      validate(
+          page(
+              DashboardLayout.FULL,
+              WidgetDto(0, WidgetType.TOOL_STATUS, WidgetConfig(heading = "x".repeat(200)))))
+    }
+  }
 }

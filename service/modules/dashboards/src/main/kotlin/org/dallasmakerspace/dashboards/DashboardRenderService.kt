@@ -35,6 +35,7 @@ constructor(
     private val groupHistory: GroupHistoryRepository,
     private val chairMessages: CommitteeMessagesRepository,
     private val members: DashboardMembers,
+    private val interlock: InterlockService,
     private val appConfig: AppConfig,
     loggerFactory: LoggerFactory,
 ) {
@@ -115,6 +116,17 @@ constructor(
                 type = widget.type,
                 heading = widget.config.heading,
                 members = members.rows(widget.config.members))
+        WidgetType.TOOL_STATUS -> {
+          val list = interlock.list(widget.config.toolMode)
+          candidates += System.currentTimeMillis() + TOOL_REFRESH.toMillis()
+          RenderedWidget(
+              slot = widget.slot,
+              type = widget.type,
+              heading = widget.config.heading,
+              tools = list.rows,
+              toolMode = widget.config.toolMode,
+              toolsAvailable = list.available)
+        }
         WidgetType.TEXT_IMAGE ->
             RenderedWidget(
                 slot = widget.slot,
@@ -192,6 +204,8 @@ constructor(
     val COUNT_TTL: Duration = Duration.ofMinutes(30)
     val GROUPS_TTL: Duration = Duration.ofHours(1)
     val CHAIR_WINDOW: Duration = Duration.ofDays(14)
+    /** Tool status changes by the minute and has no push source, so a TV asks again this often. */
+    val TOOL_REFRESH: Duration = Duration.ofSeconds(60)
     val LABEL: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE MMM d, h:mm a", Locale.US)
   }
 }

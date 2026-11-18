@@ -23,6 +23,7 @@ constructor(
     private val events: DashboardEvents,
     private val images: DashboardImageService,
     private val members: DashboardMembers,
+    private val interlock: InterlockService,
 ) {
   private val verifiedTargets = TtlCache<Int, CastTargetRow?>(TARGET_TTL)
 
@@ -184,11 +185,15 @@ constructor(
   /** An uploaded member photo for a TV: only for people on that committee's member lists. */
   suspend fun tvAvatar(token: String?, username: String): Pair<ByteArray, String>? {
     val committee = committeeForToken(token) ?: return null
-    val listed =
-        repository.loadPages(committee.id).filter { it.enabled }.flatMap { it.widgets }.filter {
-          it.type == WidgetType.MEMBER_LIST
-        }.flatMap { it.config.members }.toSet()
-    return members.photo(listed, username)
+    val widgets = repository.loadPages(committee.id).filter { it.enabled }.flatMap { it.widgets }
+    val listed = widgets.filter { it.type == WidgetType.MEMBER_LIST }.flatMap { it.config.members }.toSet()
+    val operators =
+        if (widgets.any { it.type == WidgetType.TOOL_STATUS && it.config.toolMode == ToolMode.IN_USE }) {
+          interlock.operatorUsernames()
+        } else {
+          emptySet()
+        }
+    return members.photo(listed + operators, username)
   }
 
   /** The committee a valid, unrevoked TV token belongs to; null otherwise. */

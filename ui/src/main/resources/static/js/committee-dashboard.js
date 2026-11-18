@@ -18,7 +18,8 @@
     { id: 'GROUP_COUNT', name: 'Member counts' },
     { id: 'UPCOMING_CLASSES', name: 'Upcoming classes' },
     { id: 'TEXT_IMAGE', name: 'Text card' },
-    { id: 'MEMBER_LIST', name: 'Member list' }
+    { id: 'MEMBER_LIST', name: 'Member list' },
+    { id: 'TOOL_STATUS', name: 'Tool status' }
   ];
   var MAX_LIST_MEMBERS = 20;
   var MAX_GROUPS = 4;
@@ -296,7 +297,7 @@
 
   function setWidgetType(page, slot, type) {
     page.widgets = page.widgets.filter(function (w) { return w.slot !== slot; });
-    if (type) { page.widgets.push({ slot: slot, type: type, config: { groupNames: [], showTrend: true, limit: 5, members: [] } }); }
+    if (type) { page.widgets.push({ slot: slot, type: type, config: { groupNames: [], showTrend: true, limit: 5, members: [], toolMode: 'IN_USE' } }); }
     markDirty();
     renderWidgets();
     var select = byId('dash-slot-' + slot);
@@ -363,6 +364,9 @@
       });
       body.appendChild(h('div', { 'class': 'mb-3 dash-narrow' }, [h('label', { 'class': 'form-label', 'for': limitId, text: 'Classes to list (1–8)' }), limit]));
       body.appendChild(groupPicker(widget, 0, 'Only classes that lead to these groups', 'Leave all unchecked to list every upcoming class for the committee.'));
+    } else if (widget.type === 'TOOL_STATUS') {
+      body.appendChild(textField('Heading (optional)', config.heading, 80, function (v) { config.heading = v || null; }));
+      body.appendChild(toolModeField(widget));
     } else if (widget.type === 'MEMBER_LIST') {
       body.appendChild(textField('Heading (optional)', config.heading, 80, function (v) { config.heading = v || null; }));
       body.appendChild(memberListField(widget));
@@ -371,6 +375,22 @@
       body.appendChild(textField('Text', config.body, 600, function (v) { config.body = v || null; }, true));
       body.appendChild(pictureField(widget));
     }
+  }
+
+  // ---- tool status ----
+
+  function toolModeField(widget) {
+    var config = widget.config;
+    var name = nextId('toolmode');
+    var wrap = h('fieldset', { 'class': 'mb-2' }, [h('legend', { 'class': 'form-label fs-6', text: 'Which tools to list' })]);
+    [['IN_USE', 'Tools in use right now', 'Shows who is using each one.'], ['MAINTENANCE', 'Tools under maintenance', 'Shows tools marked as under maintenance.']].forEach(function (option) {
+      var id = nextId('tm');
+      var input = h('input', { 'class': 'form-check-input', type: 'radio', name: name, id: id, value: option[0], checked: (config.toolMode || 'IN_USE') === option[0] });
+      input.addEventListener('change', function () { config.toolMode = option[0]; markDirty(); });
+      wrap.appendChild(h('div', { 'class': 'form-check' }, [input, h('label', { 'class': 'form-check-label', 'for': id, text: option[1] }), h('div', { 'class': 'form-text', text: option[2] })]));
+    });
+    wrap.appendChild(h('div', { 'class': 'form-text mt-2', text: 'Comes from the tool interlock system and refreshes about once a minute while this page is on screen.' }));
+    return wrap;
   }
 
   // ---- member list ----
