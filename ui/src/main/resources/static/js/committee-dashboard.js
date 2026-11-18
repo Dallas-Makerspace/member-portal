@@ -89,15 +89,86 @@
   function clearError() { byId('dash-alert').classList.add('d-none'); }
   function setStatus(text) { byId('dash-status').textContent = text || ''; }
 
+  // ---- preview: "On the TV" (the saved version) or "With my changes" (the unsaved pages) ----
+
+  var frame = byId('dash-preview');
+  var DRAFT_DELAY_MS = 600;
+  var pv = { mode: 'live', timer: null, seq: 0, busy: false, error: '', pinned: false };
+
+  function previewWindow() {
+    try { return frame.contentWindow && frame.contentWindow.DmsTv ? frame.contentWindow : null; } catch (e) { return null; }
+  }
+
   function setPreviewNote() {
     var note = byId('dash-preview-note');
-    if (state.dirty) {
-      note.textContent = 'You have unsaved changes — save to update this preview.';
-      note.className = 'small mt-2 fw-bold dash-note-warn';
+    var warn = false;
+    var text;
+    if (pv.mode === 'live') {
+      text = 'What the TVs show now: the last saved version.';
+      if (state.dirty) { text += ' Your unsaved changes are not on the TV yet. Switch to "With my changes" to see them.'; warn = true; }
+    } else if (pv.error) {
+      text = 'The preview can’t update yet: ' + pv.error.replace(/[.!?]+$/, '') + '. It is still showing the last version that worked.';
+      warn = true;
+    } else if (pv.busy) {
+      text = 'Updating the preview…';
     } else {
-      note.textContent = 'Shows the last saved version, as a TV would.';
-      note.className = 'text-muted small mt-2';
+      var page = pv.pinned ? state.pages[state.selected] : null;
+      text = 'Your unsaved changes, as a TV would show them. They are not on the TV until you save.';
+      if (page) {
+        text = 'Your unsaved changes: page ' + (state.selected + 1) + ' on its own. Not on the TV until you save.';
+        if (!page.enabled) { text += ' This page is hidden, so TVs skip it.'; }
+        else if (!page.widgets.length) { text += ' This page has no widgets yet.'; }
+      }
     }
+    note.textContent = text;
+    note.className = warn ? 'small mt-2 fw-bold dash-note-warn' : 'text-muted small mt-2';
+    byId('dash-pv-draft').disabled = !state.dirty;
+    byId('dash-pv-follow-row').classList.toggle('d-none', pv.mode !== 'draft');
+    byId('dash-preview-frame').classList.toggle('draft', pv.mode === 'draft');
+  }
+
+  function setPreviewMode(mode) {
+    pv.mode = mode;
+    pv.error = '';
+    pv.busy = false;
+    clearTimeout(pv.timer);
+    pv.seq += 1;
+    byId('dash-pv-live').checked = mode === 'live';
+    byId('dash-pv-draft').checked = mode === 'draft';
+    if (mode === 'live') { frame.src = previewUrl; } else { runDraft(); }
+    setPreviewNote();
+  }
+
+  /** Asks the service to render the unsaved pages (nothing is stored) and hands the result to the preview. */
+  function runDraft() {
+    clearTimeout(pv.timer);
+    var seq = pv.seq + 1;
+    pv.seq = seq;
+    pv.busy = true;
+    var follow = byId('dash-pv-follow').checked && state.selected >= 0;
+    pv.pinned = follow;
+    setPreviewNote();
+    api('POST', '/dashboard/preview', { pages: state.pages, pin: follow ? state.selected : null }).then(function (json) {
+      if (seq !== pv.seq || pv.mode !== 'draft') { return; }
+      pv.busy = false;
+      pv.error = '';
+      var w = previewWindow();
+      if (w) { w.DmsTv.showDraft(json.data); }
+      setPreviewNote();
+    }).catch(function (e) {
+      if (seq !== pv.seq || pv.mode !== 'draft') { return; }
+      pv.busy = false;
+      pv.error = e.message;
+      setPreviewNote();
+    });
+  }
+
+  function scheduleDraft() {
+    if (pv.mode !== 'draft') { return; }
+    clearTimeout(pv.timer);
+    pv.busy = true;
+    setPreviewNote();
+    pv.timer = setTimeout(runDraft, DRAFT_DELAY_MS);
   }
 
   // "Save changes" only covers the Pages tab; it stays visible elsewhere while page edits are unsaved.
@@ -109,10 +180,12 @@
   }
 
   function markDirty() {
+    var firstEdit = !state.dirty;
     state.dirty = true;
     byId('dash-save').disabled = false;
     setStatus('Unsaved changes');
-    setPreviewNote();
+    byId('dash-pv-draft').disabled = false;
+    if (firstEdit && pv.mode === 'live') { setPreviewMode('draft'); } else { scheduleDraft(); }
     syncSaveBar();
   }
 
@@ -148,6 +221,7 @@
       renderPageCard();
       renderWidgets();
     });
+    scheduleDraft();
   }
 
   function renderPageList() {
@@ -667,10 +741,9 @@
       state.selected = Math.min(state.selected, state.pages.length - 1);
       state.dirty = false;
       setStatus('Saved. TVs will update shortly.');
-      setPreviewNote();
+      setPreviewMode('live');
       syncSaveBar();
       renderPages();
-      refreshPreview();
     }).catch(function (e) {
       button.disabled = false;
       setStatus('Unsaved changes');
@@ -678,7 +751,7 @@
     });
   }
 
-  function refreshPreview() { byId('dash-preview').src = previewUrl; }
+  function refreshPreview() { if (pv.mode === 'draft') { runDraft(); } else { frame.src = previewUrl; } }
 
   function onSeconds(e) {
     var input = e.target;
@@ -692,6 +765,10 @@
   byId('dash-add-page').addEventListener('click', addPage);
   byId('dash-save').addEventListener('click', savePages);
   byId('dash-refresh-preview').addEventListener('click', refreshPreview);
+  byId('dash-pv-live').addEventListener('change', function () { setPreviewMode('live'); });
+  byId('dash-pv-draft').addEventListener('change', function () { setPreviewMode('draft'); });
+  byId('dash-pv-follow').addEventListener('change', function () { if (pv.mode === 'draft') { runDraft(); } });
+  frame.addEventListener('load', function () { if (pv.mode === 'draft') { runDraft(); } });
   byId('dash-add-news').addEventListener('click', function () { state.news.push({ text: '' }); renderNews(); byId('news-text-' + state.news.length).focus(); });
   byId('dash-add-tv').addEventListener('click', function () { state.tvs.push({ name: '', host: '', port: 8009, enabled: true }); renderTvs(); byId('tv-name-' + state.tvs.length).focus(); });
   byId('dash-page-title').addEventListener('input', function (e) { state.pages[state.selected].title = e.target.value; markDirty(); renderPageList(); });

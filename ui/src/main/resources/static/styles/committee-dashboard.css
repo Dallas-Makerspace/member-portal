@@ -74,3 +74,7 @@
 .dash-person-actions { display: flex; flex: none; }
 .dash-group-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .dash-group-add select { max-width: 320px; }
+
+/* the preview of unsaved changes is outlined so it is not mistaken for what the TVs show */
+.dash-preview.draft { outline: 3px solid #0d6efd; outline-offset: 2px; }
+.dash-pv-toggle .btn-check:checked + .btn-outline-primary { background: #0d6efd; color: #fff; }

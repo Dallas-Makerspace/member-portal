@@ -20,6 +20,14 @@ import org.dallasmakerspace.models.Committee
 import org.dallasmakerspace.notifications.db.CommitteeMessagesRepository
 
 /**
+ * The pages a TV rotates through: the enabled ones that have widgets. A pinned page (the editor's
+ * preview of the page being edited) is shown on its own whatever its state.
+ */
+internal fun pagesToShow(pages: List<PageDto>, pin: Int?): List<PageDto> =
+    if (pin != null) listOfNotNull(pages.getOrNull(pin))
+    else pages.filter { it.enabled && it.widgets.isNotEmpty() }
+
+/**
  * Builds what a TV shows: the committee's enabled pages with their widgets filled in, the bottom
  * announcement row and the QR target. Counts and classes are aggregate; only a member-list card a
  * chair filled in names people.
@@ -43,11 +51,16 @@ constructor(
   private val groupCounts = TtlCache<String, GroupCount>(COUNT_TTL)
   private val committeeGroups = TtlCache<Int, List<String>>(GROUPS_TTL)
 
-  suspend fun render(committee: Committee, nowMs: Long = System.currentTimeMillis()): DashboardPayload {
+  /** What a TV shows now, or with [draft] what it would show if the unsaved pages were saved. */
+  suspend fun render(
+      committee: Committee,
+      nowMs: Long = System.currentTimeMillis(),
+      draft: DraftPreviewRequest? = null,
+  ): DashboardPayload {
     val candidates = mutableListOf<Long>()
+    val source = draft?.pages ?: repository.loadPages(committee.id)
     val pages =
-        repository.loadPages(committee.id).filter { it.enabled && it.widgets.isNotEmpty() }.map {
-          page ->
+        pagesToShow(source, draft?.pin).map { page ->
           RenderedPage(
               title = page.title,
               layout = page.layout,

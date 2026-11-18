@@ -31,6 +31,7 @@ import org.dallasmakerspace.dashboards.DashboardEvents
 import org.dallasmakerspace.dashboards.DashboardException
 import org.dallasmakerspace.dashboards.DashboardImageService
 import org.dallasmakerspace.dashboards.DashboardService
+import org.dallasmakerspace.dashboards.DraftPreviewRequest
 import org.dallasmakerspace.dashboards.GroupPick
 import org.dallasmakerspace.dashboards.TargetHost
 import org.dallasmakerspace.dashboards.TargetIdentity
@@ -92,6 +93,11 @@ private fun Route.editorRoutes(service: DashboardService) {
     val (actor, id) = call.actorAndCommittee() ?: return@post
     val pick = call.receive<GroupPick>()
     call.guarded { ApiResponse(Status.SUCCESS, "Members", service.groupMembers(actor, id, pick.group)) }
+  }
+  post("/committees/{id}/dashboard/preview") {
+    val (actor, id) = call.actorAndCommittee() ?: return@post
+    val draft = call.receive<DraftPreviewRequest>()
+    call.guarded { ApiResponse(Status.SUCCESS, "Preview", service.previewDraft(actor, id, draft)) }
   }
   get("/committees/{id}/dashboard/preview") {
     val (actor, id) = call.actorAndCommittee() ?: return@get

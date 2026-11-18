@@ -68,6 +68,20 @@ channel (never in a URL):
 5. When our receiver is running it gets the token a few times (1 s, 4 s, 12 s); the receiver ignores a token it
    already has. A new token is sent an hour before the old one expires.
 
+## The editor's preview
+
+Two views in one panel, so a chair is never unsure what they are looking at:
+
+- **On the TV**: the last saved version, rendered by `GET .../dashboard/preview`. This is what the TVs show
+  (they reload on save).
+- **With my changes**: the unsaved pages, rendered by `POST .../dashboard/preview` (same validation as saving,
+  nothing stored) and handed to the preview frame with `DmsTv.showDraft`. The first edit switches to it, later
+  edits refresh it after a short pause, and saving switches back. It is outlined and labelled "Unsaved preview".
+  An invalid draft keeps the last good preview and says what to fix.
+
+By default the draft view follows the page being edited and shows it alone, even if it is hidden or empty
+(`pagesToShow` with `pin`); turning that off rotates through the pages as a TV would.
+
 ## Pictures
 
 Text cards can carry a JPEG/PNG. The service decodes, shrinks to 1600 px, and re-encodes as JPEG; it is stored

@@ -34,6 +34,8 @@
   var retryTimer = null;
   var retryMs = RETRY_START_MS;
   var qrUrl = null;
+  // The editor can hand this page unsaved pages to show; nothing reloads or refreshes until it is reloaded.
+  var draft = false;
   var imageUrls = [];
   var avatarFetches = {};
 
@@ -75,7 +77,7 @@
         return response.json();
       })
       .then(function (json) {
-        if (json && json.data) { retryMs = RETRY_START_MS; apply(json.data); }
+        if (json && json.data && !draft) { retryMs = RETRY_START_MS; apply(json.data); }
       })
       .catch(function () {
         if (!pages.length) { waiting('Waiting for the dashboard…'); }
@@ -84,16 +86,17 @@
       });
   }
 
-  function apply(data) {
+  function apply(data, keepPage) {
     waiting(null);
     byId('tv-committee').textContent = data.committeeName || '';
     renderQr(data.qrUrl);
     renderUpdated(data.generatedAtMs);
     pages = data.pages || [];
-    pageIndex = 0;
+    pageIndex = keepPage ? Math.min(pageIndex, Math.max(pages.length - 1, 0)) : 0;
     showPage();
     renderNews(data.announcements || []);
     clearTimeout(changeTimer);
+    if (draft) { return; }
     var wait = (data.nextChangeAtMs || 0) - Date.now();
     changeTimer = setTimeout(load, Math.min(Math.max(wait, 5000), MAX_TIMER_MS));
   }
@@ -107,7 +110,7 @@
     } catch (e) {
       time = new Date(ms).toLocaleTimeString();
     }
-    node.textContent = 'Updated ' + time;
+    node.textContent = draft ? 'Unsaved preview' : 'Updated ' + time;
   }
 
   // ---- pages ----
@@ -129,10 +132,16 @@
       return;
     }
     var page = pages[pageIndex];
+    var widgets = page.widgets || [];
     var title = page.title || '';
     byId('tv-page-title').textContent = title === byId('tv-committee').textContent ? '' : title;
     stage.setAttribute('data-layout', page.layout);
-    (page.widgets || []).forEach(function (widget) { stage.appendChild(renderWidget(widget)); });
+    if (!widgets.length) {
+      var blank = el('div', 'tv-w');
+      blank.appendChild(el('div', 'tv-empty', 'Nothing on this page yet.'));
+      stage.appendChild(blank);
+    }
+    widgets.forEach(function (widget) { stage.appendChild(renderWidget(widget)); });
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-classes'), fitRows);
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-text-body'), fitText);
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-members'), scrollMembers);
@@ -469,6 +478,14 @@
     load();
   }
 
-  window.DmsTv = { render: apply };
+  window.DmsTv = {
+    render: apply,
+    showDraft: function (data) {
+      draft = true;
+      clearTimeout(retryTimer);
+      clearTimeout(changeTimer);
+      apply(data, true);
+    }
+  };
   if (mode === 'tv') { keepAwake(); startCast(); } else { load(); }
 })();

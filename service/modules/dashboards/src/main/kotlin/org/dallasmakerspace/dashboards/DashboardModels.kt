@@ -64,6 +64,9 @@ data class PageDto(
 
 @Serializable data class DashboardDocument(val pages: List<PageDto> = emptyList())
 
+/** Unsaved pages to preview; [pin] shows only that page (by position), even if it is hidden or empty. */
+@Serializable data class DraftPreviewRequest(val pages: List<PageDto> = emptyList(), val pin: Int? = null)
+
 /** Times are America/Chicago local, `yyyy-MM-ddTHH:mm`; null = no bound. */
 @Serializable
 data class AnnouncementDto(

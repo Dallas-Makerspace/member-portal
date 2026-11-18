@@ -121,11 +121,21 @@
                                             Refresh
                                         </button>
                                     </div>
+                                    <div class="btn-group dash-pv-toggle mb-2" role="group" aria-label="What to preview">
+                                        <input type="radio" class="btn-check" name="dash-pv-mode" id="dash-pv-live" value="live" checked>
+                                        <label class="btn btn-outline-secondary btn-sm" for="dash-pv-live">On the TV</label>
+                                        <input type="radio" class="btn-check" name="dash-pv-mode" id="dash-pv-draft" value="draft" disabled>
+                                        <label class="btn btn-outline-primary btn-sm" for="dash-pv-draft">With my changes</label>
+                                    </div>
                                     <div class="dash-preview" id="dash-preview-frame">
                                         <iframe id="dash-preview" title="Dashboard preview" loading="lazy" aria-hidden="true"
                                                 tabindex="-1"></iframe>
                                     </div>
-                                    <div class="text-muted small mt-2" id="dash-preview-note">Shows the last saved version, as a TV would.</div>
+                                    <div class="text-muted small mt-2" id="dash-preview-note" role="status">Shows the last saved version, as a TV would.</div>
+                                    <div class="form-check form-switch mt-2 d-none" id="dash-pv-follow-row">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="dash-pv-follow" checked>
+                                        <label class="form-check-label small" for="dash-pv-follow">Follow the page I'm editing (turn off to see the pages rotate)</label>
+                                    </div>
                                 </div>
                             </div>
                             <div id="dash-widgets"></div>

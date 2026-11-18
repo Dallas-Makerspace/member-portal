@@ -66,6 +66,13 @@ constructor(
   suspend fun preview(actor: String, committeeId: Int): DashboardPayload =
       render.render(editable(actor, committeeId))
 
+  /** What a TV would show if the unsaved pages were saved; nothing is stored. Same checks as saving. */
+  suspend fun previewDraft(actor: String, committeeId: Int, draft: DraftPreviewRequest): DashboardPayload {
+    val committee = editable(actor, committeeId)
+    DashboardValidator.validateDocument(committee, DashboardDocument(draft.pages))
+    return render.render(committee, draft = draft)
+  }
+
   suspend fun announcements(actor: String, committeeId: Int): List<AnnouncementDto> =
       repository.announcements(editable(actor, committeeId).id)
 
