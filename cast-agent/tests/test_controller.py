@@ -214,3 +214,24 @@ def test_a_new_connection_is_not_acted_on_until_the_tv_says_what_it_is_showing(c
     controller.on_status("YOUTUBE", "YouTube", "y1")
     advance(clock, reactor, 60)
     assert device.launches == []
+
+
+def test_an_overnight_window_runs_through_midnight_and_pauses_until_the_morning(clock, reactor, service):
+    # It is 10:00; hours are 07:00-02:00, so the dashboard runs from the morning until 2 AM the next day.
+    controller, device = build(clock, reactor, service, make_target(display_start="07:00", display_end="02:00"))
+    connect(controller, BACKDROP)
+    assert device.launches == [APP]
+    controller.on_status(APP, "Dashboard", "s1")
+
+    advance(clock, reactor, 15 * 3600)  # 01:00 the next day: still inside the hours
+    assert device.quits == 0
+
+    advance(clock, reactor, 3600 + 5)  # just past 02:00
+    assert device.quits == 1
+    controller.on_status(BACKDROP, "Backdrop", None)
+
+    advance(clock, reactor, 4 * 3600)  # 06:00: the quiet hours, nothing is relaunched
+    assert device.launches == [APP]
+
+    advance(clock, reactor, 3600 + 5)  # just past 07:00
+    assert device.launches == [APP, APP]

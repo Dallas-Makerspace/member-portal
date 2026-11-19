@@ -106,6 +106,12 @@ class DashboardValidatorTest {
   }
 
   @Test
+  fun `display hours may run overnight`() {
+    val tv = CastTargetDto(name = "Shop TV", host = "tv-1.example.internal")
+    DashboardValidator.validateTarget(tv.copy(displayStart = "07:00", displayEnd = "02:00"))
+  }
+
+  @Test
   fun `a moved TV needs a valid host`() {
     DashboardValidator.validateHost("192.0.2.77")
     DashboardValidator.validateHost("tv-1.example.internal")
