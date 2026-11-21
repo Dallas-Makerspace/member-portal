@@ -61,6 +61,8 @@ class DisplaysTemplateTest {
           setVariable("online", displays.count { it["state"] == "ONLINE" })
           setVariable("offline", displays.count { it["state"] == "OFFLINE" })
           setVariable("notSetUp", displays.count { it["managed"] == false })
+          setVariable("setUp", displays.count { it["managed"] == true })
+          setVariable("attention", displays.count { it["state"] in setOf("OFFLINE", "UNSEEN", "DISABLED") })
           setVariable("dashboards", displays.count { it["showingDashboard"] == true })
         }
     return engine.process(template, context)
@@ -72,6 +74,7 @@ class DisplaysTemplateTest {
           tv("Lobby TV", false, "Offline"),
           tv("Classroom TV", null, "Not seen yet"),
           tv("Spare TV", true, "Showing YouTube", enabled = false),
+          tv("Classroom Display With A Rather Long Name For Wrapping", true, "Showing Google Photos", true, listOf("Tool Status", "Upcoming Classes", "Lathe Room")),
           tv("Hallway Display", null, "Not set up for a committee", managed = false, state = "ON_NETWORK"))
 
   @Test
@@ -82,7 +85,7 @@ class DisplaysTemplateTest {
     assertTrue(html.contains("Shop floor TV"))
     assertTrue(html.contains("The committee dashboard"))
     assertTrue(html.contains(">Tool Status<") && html.contains(">Classes<"))
-    assertEquals(1, Regex("disp-badge-ok").findAll(html).count())
+    assertEquals(2, Regex("disp-badge-ok").findAll(html).count())
     assertTrue(html.contains("Offline") && html.contains("Not seen yet") && html.contains("Disabled"))
     assertTrue(html.contains("Showing YouTube"))
   }
@@ -95,7 +98,7 @@ class DisplaysTemplateTest {
     assertTrue(html.contains("On the network"))
     assertTrue(html.contains("No committee yet"))
     assertEquals(1, Regex("data-managed=\"false\"").findAll(html).count())
-    assertEquals(4, Regex("data-managed=\"true\"").findAll(html).count())
+    assertEquals(5, Regex("data-managed=\"true\"").findAll(html).count())
   }
 
   @Test
@@ -110,7 +113,7 @@ class DisplaysTemplateTest {
 
     assertTrue(html.contains("data-search=\"shop floor tv test shop test_tv\""))
     assertEquals(3, Regex("data-problem=\"true\"").findAll(html).count())
-    assertEquals(2, Regex("data-problem=\"false\"").findAll(html).count())
+    assertEquals(3, Regex("data-problem=\"false\"").findAll(html).count())
   }
 
   @Test

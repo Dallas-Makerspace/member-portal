@@ -1,19 +1,40 @@
 /* TVs / Displays (templates/displays.html) */
-.disp-tile { padding: 14px 18px; }
-.disp-tile-num { font-size: 2rem; font-weight: 800; line-height: 1.1; }
-.disp-tile-label { font-size: .85rem; color: #5a6270; }
-.disp-tile-ok { border-top: 3px solid #198754; }
-.disp-tile-bad { border-top: 3px solid #dc3545; background: #fdecea; }
+.disp-summary { margin-top: 4px; font-size: .95rem; color: #3a4252; }
+.disp-summary-bad { color: #842029; font-weight: 700; }
 
-.disp-filter { max-width: 320px; }
-.disp-table th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #5a6270; white-space: nowrap; }
+.disp-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.disp-filter { max-width: 300px; }
+.disp-count { margin-left: 4px; font-variant-numeric: tabular-nums; opacity: .8; }
 
-.disp-badge { font-size: .8rem; font-weight: 700; padding: .4em .7em; }
+.disp-table { margin-bottom: 0; font-variant-numeric: tabular-nums; }
+.disp-table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: #5a6270; white-space: nowrap; }
+.disp-table tbody tr:hover > * { background: #f4f6fa; }
+.disp-table tr[hidden] { display: none !important; }
+.disp-name { font-weight: 700; }
+.disp-host { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; color: #3a4252; white-space: nowrap; }
+
+.disp-badge { font-size: .8rem; font-weight: 700; padding: .4em .7em; white-space: nowrap; }
 .disp-badge-ok { background: #d1f0dd; color: #0b5a2b; }
 .disp-badge-bad { background: #f8d7da; color: #842029; }
-.disp-badge-off { background: #e9ecef; color: #495057; }
+.disp-badge-off { background: #e9ecef; color: #3f464d; }
+.disp-badge-net { background: #d9e8fb; color: #0b3d7a; }
 
 .disp-pages { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .disp-page { font-size: .75rem; background: #eef1f6; border-radius: 10px; padding: 2px 8px; color: #3a4252; }
-.disp-badge-net { background: #d9e8fb; color: #0b3d7a; }
-.disp-scope { max-width: 220px; }
+
+/* Phones: each TV becomes a small stacked block instead of a squeezed six-column row. */
+@media (max-width: 767.98px) {
+  .disp-filter { max-width: none; width: 100%; }
+  .disp-scope { flex-wrap: wrap; gap: 6px; }
+  .disp-scope > .btn { border-radius: var(--bs-border-radius-sm) !important; margin-left: 0 !important; flex: 0 0 auto; }
+  .disp-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .disp-table, .disp-table tbody, .disp-table tr, .disp-table td { display: block; width: 100%; }
+  .disp-table tr { padding: 14px 0; border-bottom: 1px solid #dee2e6; }
+  .disp-table tbody tr:hover > * { background: transparent; }
+  .disp-table td { padding: 2px 0; border: 0; background: transparent; }
+  .disp-table td[data-label]::before {
+    content: attr(data-label); display: block; font-size: .7rem; text-transform: uppercase;
+    letter-spacing: .04em; color: #5a6270; margin-top: 6px;
+  }
+  .disp-cell-status { margin: 4px 0 2px; }
+}

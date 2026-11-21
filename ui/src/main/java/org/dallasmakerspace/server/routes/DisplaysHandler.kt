@@ -41,6 +41,8 @@ constructor(
             "online" to rows.count { it["state"] == "ONLINE" },
             "offline" to rows.count { it["state"] == "OFFLINE" },
             "notSetUp" to rows.count { it["managed"] == false },
+            "setUp" to rows.count { it["managed"] == true },
+            "attention" to rows.count { it["state"] in ATTENTION },
             "dashboards" to rows.count { it["showingDashboard"] == true })
     call.respond(ThymeleafContent("displays", model))
   }
@@ -78,6 +80,7 @@ constructor(
 
   companion object {
     private val OK_RANGE = 200..299
+    private val ATTENTION = setOf("OFFLINE", "UNSEEN", "DISABLED")
     private val CHICAGO = ZoneId.of("America/Chicago")
     private val TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     private val DAY = DateTimeFormatter.ofPattern("MMM d", Locale.US)
