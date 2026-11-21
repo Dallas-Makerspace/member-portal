@@ -103,13 +103,9 @@ private fun Route.editorRoutes(service: DashboardService) {
     val draft = call.receive<DraftPreviewRequest>()
     call.guarded { ApiResponse(Status.SUCCESS, "Preview", service.previewDraft(actor, id, draft)) }
   }
-  get("/committees/{id}/dashboard/preview/{pageId}") {
+  get("/committees/{id}/dashboard/preview/all") {
     val (actor, id) = call.actorAndCommittee() ?: return@get
-    val pageId = call.parameters["pageId"]?.toIntOrNull()
-    if (pageId == null) {
-      return@get call.respond(HttpStatusCode.BadRequest, ApiResponse<String?>(Status.ERROR, "Invalid page", null))
-    }
-    call.guarded { ApiResponse(Status.SUCCESS, "Preview", service.previewSavedPage(actor, id, pageId)) }
+    call.guarded { ApiResponse(Status.SUCCESS, "Preview", service.previewSavedAll(actor, id)) }
   }
   get("/committees/{id}/dashboard/preview") {
     val (actor, id) = call.actorAndCommittee() ?: return@get

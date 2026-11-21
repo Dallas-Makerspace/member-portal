@@ -65,7 +65,13 @@ data class PageDto(
 @Serializable data class DashboardDocument(val pages: List<PageDto> = emptyList())
 
 /** Unsaved pages to preview; [pin] shows only that page (by position), even if it is hidden or empty. */
-@Serializable data class DraftPreviewRequest(val pages: List<PageDto> = emptyList(), val pin: Int? = null)
+@Serializable
+data class DraftPreviewRequest(
+    val pages: List<PageDto> = emptyList(),
+    val pin: Int? = null,
+    /** Render every page in order, hidden and empty ones too, so the editor can show any of them without asking again. */
+    val all: Boolean = false,
+)
 
 /** Times are America/Chicago local, `yyyy-MM-ddTHH:mm`; null = no bound. */
 @Serializable
@@ -136,6 +142,9 @@ data class RenderedWidget(
 
 @Serializable
 data class RenderedPage(
+    /** Set for a saved page. */
+    val id: Int? = null,
+    val enabled: Boolean = true,
     val title: String,
     val layout: DashboardLayout,
     val durationSeconds: Int,

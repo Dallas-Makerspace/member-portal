@@ -27,13 +27,10 @@ class DashboardPagesTest {
   }
 
   @Test
-  fun `a saved page is found by its id, and an unsaved one is not`() {
-    val first = shown.copy(id = 11)
-    val second = hidden.copy(id = 12)
+  fun `all shows every page in order, hidden and empty ones too`() {
+    val pages = listOf(shown, hidden, empty)
 
-    assertEquals(0, pinIndexOf(listOf(first, second), 11))
-    assertEquals(1, pinIndexOf(listOf(first, second), 12))
-    assertEquals(null, pinIndexOf(listOf(first, second), 99))
-    assertEquals(null, pinIndexOf(listOf(first, empty), 12))
+    assertEquals(listOf("shown", "hidden", "empty"), pagesToShow(pages, null, all = true).map { it.title })
+    assertEquals(listOf("shown"), pagesToShow(pages, null).map { it.title })
   }
 }

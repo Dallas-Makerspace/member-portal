@@ -151,7 +151,7 @@
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-members'), scrollMembers);
     stage.classList.remove('fade');
     void stage.offsetWidth;
-    stage.classList.add('fade');
+    if (!draft || forceRotate) { stage.classList.add('fade'); }
     pageDeadline = 0;
     if (pages.length > 1 && (!still || forceRotate)) {
       var wait = Math.max(10, page.durationSeconds || 20) * 1000;

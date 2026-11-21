@@ -92,10 +92,18 @@
   // ---- preview: the selected page, as "On the TV" (saved) or "With my changes" (unsaved) ----
   // Clicking a page on the left shows that page. "Play all pages" is optional: it cycles the pages at their
   // set times, with a countdown, until a page is clicked or it is stopped.
+  // The service is asked once for every page (saved, or the unsaved ones after each edit) and the answer is
+  // kept, so switching pages and pressing Play need no round trip and show at once.
 
   var frame = byId('dash-preview');
   var DRAFT_DELAY_MS = 600;
-  var pv = { mode: 'live', timer: null, seq: 0, busy: false, error: '', hint: '', playing: false, ticker: null, target: '' };
+  var pv = {
+    mode: 'live', timer: null, seq: 0, busy: false, error: '', hint: '', playing: false, ticker: null, target: '',
+    saved: null,      // every saved page, rendered
+    draft: null,      // every unsaved page, rendered
+    draftRev: -1,     // the edit count draft was rendered at
+    rev: 0            // counts edits, so a stale draft is never shown for another page
+  };
 
   function previewWindow() {
     try { return frame.contentWindow && frame.contentWindow.DmsTv ? frame.contentWindow : null; } catch (e) { return null; }
@@ -104,6 +112,20 @@
   function selectedPage() { return state.pages[state.selected] || null; }
   function targetKey() { var p = selectedPage(); return state.selected + ':' + (p ? (p.id || 'new') : ''); }
   function visiblePageCount() { return state.pages.filter(function (p) { return p.enabled && p.widgets.length; }).length; }
+  function shownPages(pages) { return pages.filter(function (p) { return p.enabled && p.widgets.length; }); }
+  function withPages(data, pages) {
+    var copy = {};
+    Object.keys(data).forEach(function (key) { copy[key] = data[key]; });
+    copy.pages = pages;
+    return copy;
+  }
+
+  function dropCaches() {
+    pv.saved = null;
+    pv.draft = null;
+    pv.draftRev = -1;
+    pv.rev += 1;
+  }
 
   function setPreviewNote() {
     var note = byId('dash-preview-note');
@@ -169,79 +191,84 @@
     tick();
   }
 
-  /** Hands a rendered dashboard to the preview, and starts or stops the countdown. */
-  function deliver(data, label, rotate) {
+  /**
+   * What to show right now, from what is already loaded: { data, label, rotate }, { hint }, or null when the
+   * pages are not loaded yet (or are out of date after an edit).
+   */
+  function currentView() {
+    var live = pv.mode === 'live';
+    var data = live ? pv.saved : (pv.draftRev === pv.rev ? pv.draft : null);
+    if (!data) { return null; }
+    var label = live ? 'Saved version' : 'Unsaved preview';
+    var shown = shownPages(data.pages);
+    if (pv.playing) { return { data: withPages(data, shown), label: label, rotate: true }; }
+    var page = selectedPage();
+    if (!page) { return { data: withPages(data, shown.slice(0, 1)), label: label, rotate: false }; }
+    if (live) {
+      if (!page.id) { return { hint: 'This page isn’t saved yet. Switch to “With my changes” to see it.' }; }
+      var saved = data.pages.filter(function (p) { return p.id === page.id; })[0];
+      return saved ? { data: withPages(data, [saved]), label: label, rotate: false } : null;
+    }
+    var unsaved = data.pages[state.selected];
+    return unsaved ? { data: withPages(data, [unsaved]), label: label, rotate: false } : null;
+  }
+
+  /** Hands a view to the preview, and starts or stops the countdown. */
+  function deliver(view) {
     var w = previewWindow();
     if (!w) { return; }
-    var pages = (data && data.pages) || [];
-    if (rotate && pages.length < 2) {
+    var rotate = view.rotate;
+    if (rotate && view.data.pages.length < 2) {
       pv.playing = false;
       pv.hint = 'Only one page is shown, so there is nothing to play.';
       rotate = false;
     }
-    w.DmsTv.showFixed(data, label, rotate);
+    w.DmsTv.showFixed(view.data, view.label, rotate);
     if (rotate) { startTicker(); } else { stopTicker(); }
     setPreviewNote();
   }
 
-  function renderLive() {
+  /** Shows the selected page (or the cycle) from what is loaded; asks the service only when it must. */
+  function showNow(afterFetch) {
+    if (!previewWindow()) { return; }
+    var view = currentView();
+    if (view && view.hint) { pv.hint = view.hint; pv.busy = false; stopTicker(); setPreviewNote(); return; }
+    if (view) { pv.hint = ''; deliver(view); return; }
+    if (pv.mode === 'draft' && pv.timer) { return; }  // an edit is waiting to be rendered; it will show then
+    if (afterFetch) {
+      if (pv.mode === 'live') { pv.hint = 'That page is not in the saved version.'; stopTicker(); setPreviewNote(); }
+      return;
+    }
+    fetchPages();
+  }
+
+  /** Asks the service for every page (saved, or the unsaved ones); nothing is stored. */
+  function fetchPages() {
     if (!previewWindow()) { return; }
     clearTimeout(pv.timer);
+    pv.timer = null;
+    var mode = pv.mode;
     var seq = pv.seq + 1;
     pv.seq = seq;
+    var rev = pv.rev;
+    pv.busy = true;
     pv.error = '';
     pv.hint = '';
-    var page = selectedPage();
-    var path = '/dashboard/preview';
-    if (!pv.playing && page) {
-      if (!page.id) {
-        pv.hint = 'This page isn’t saved yet. Switch to “With my changes” to see it.';
-        pv.busy = false;
-        stopTicker();
-        setPreviewNote();
-        return;
-      }
-      path = '/dashboard/preview/' + page.id;
-    }
-    pv.busy = true;
     setPreviewNote();
-    api('GET', path).then(function (json) {
-      if (seq !== pv.seq || pv.mode !== 'live') { return; }
+    var request = mode === 'live' ? api('GET', '/dashboard/preview/all') : api('POST', '/dashboard/preview', { pages: state.pages, all: true });
+    request.then(function (json) {
+      if (seq !== pv.seq || pv.mode !== mode) { return; }
       pv.busy = false;
-      deliver(json.data, 'Saved version', pv.playing);
+      if (mode === 'live') { pv.saved = json.data; } else { pv.draft = json.data; pv.draftRev = rev; }
+      showNow(true);
     }).catch(function (e) {
-      if (seq !== pv.seq || pv.mode !== 'live') { return; }
+      if (seq !== pv.seq || pv.mode !== mode) { return; }
       pv.busy = false;
       pv.error = e.message;
       stopTicker();
       setPreviewNote();
     });
   }
-
-  /** Asks the service to render the unsaved pages (nothing is stored) and hands the result to the preview. */
-  function runDraft() {
-    if (!previewWindow()) { return; }
-    clearTimeout(pv.timer);
-    var seq = pv.seq + 1;
-    pv.seq = seq;
-    pv.busy = true;
-    pv.hint = '';
-    var pin = !pv.playing && state.selected >= 0 ? state.selected : null;
-    setPreviewNote();
-    api('POST', '/dashboard/preview', { pages: state.pages, pin: pin }).then(function (json) {
-      if (seq !== pv.seq || pv.mode !== 'draft') { return; }
-      pv.busy = false;
-      pv.error = '';
-      deliver(json.data, 'Unsaved preview', pv.playing);
-    }).catch(function (e) {
-      if (seq !== pv.seq || pv.mode !== 'draft') { return; }
-      pv.busy = false;
-      pv.error = e.message;
-      setPreviewNote();
-    });
-  }
-
-  function showSelected() { if (pv.mode === 'draft') { runDraft(); } else { renderLive(); } }
 
   function setPreviewMode(mode) {
     pv.mode = mode;
@@ -250,39 +277,39 @@
     pv.busy = false;
     pv.playing = false;
     clearTimeout(pv.timer);
+    pv.timer = null;
     pv.seq += 1;
     stopTicker();
     byId('dash-pv-live').checked = mode === 'live';
     byId('dash-pv-draft').checked = mode === 'draft';
-    showSelected();
+    showNow();
     setPreviewNote();
   }
 
+  /** After an edit: render the unsaved pages again once typing pauses. */
   function scheduleDraft() {
     if (pv.mode !== 'draft') { return; }
     clearTimeout(pv.timer);
     pv.busy = true;
     setPreviewNote();
-    pv.timer = setTimeout(runDraft, DRAFT_DELAY_MS);
+    pv.timer = setTimeout(fetchPages, DRAFT_DELAY_MS);
   }
 
-  /** After the page list changed: a different selected page ends playback and shows that page. */
+  /** After the page list was redrawn: a different selected page ends playback and shows that page at once. */
   function previewSoon() {
     var key = targetKey();
-    if (key !== pv.target) {
-      pv.target = key;
-      if (pv.playing) { pv.playing = false; stopTicker(); }
-      if (pv.mode === 'live') { renderLive(); } else { scheduleDraft(); }
-      return;
-    }
-    scheduleDraft();
+    if (key === pv.target) { return; }
+    pv.target = key;
+    if (pv.playing) { pv.playing = false; stopTicker(); }
+    showNow();
+    setPreviewNote();
   }
 
   function togglePlay() {
     pv.playing = !pv.playing;
     if (!pv.playing) { stopTicker(); }
     pv.hint = '';
-    showSelected();
+    showNow();
     setPreviewNote();
   }
 
@@ -296,6 +323,7 @@
 
   function markDirty() {
     var firstEdit = !state.dirty;
+    pv.rev += 1;
     state.dirty = true;
     byId('dash-save').disabled = false;
     setStatus('Unsaved changes');
@@ -856,6 +884,7 @@
       state.selected = Math.min(state.selected, state.pages.length - 1);
       state.dirty = false;
       setStatus('Saved. TVs will update shortly.');
+      dropCaches();
       setPreviewMode('live');
       syncSaveBar();
       renderPages();
@@ -866,7 +895,7 @@
     });
   }
 
-  function refreshPreview() { showSelected(); }
+  function refreshPreview() { dropCaches(); showNow(); }
 
   function onSeconds(e) {
     var input = e.target;
@@ -883,7 +912,7 @@
   byId('dash-pv-live').addEventListener('change', function () { setPreviewMode('live'); });
   byId('dash-pv-draft').addEventListener('change', function () { setPreviewMode('draft'); });
   byId('dash-pv-play').addEventListener('click', togglePlay);
-  frame.addEventListener('load', showSelected);
+  frame.addEventListener('load', function () { showNow(); });
   window.addEventListener('beforeunload', stopTicker);
   byId('dash-add-news').addEventListener('click', function () { state.news.push({ text: '' }); renderNews(); byId('news-text-' + state.news.length).focus(); });
   byId('dash-add-tv').addEventListener('click', function () { state.tvs.push({ name: '', host: '', port: 8009, enabled: true }); renderTvs(); byId('tv-name-' + state.tvs.length).focus(); });
