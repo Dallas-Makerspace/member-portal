@@ -79,8 +79,15 @@ Two views in one panel, so a chair is never unsure what they are looking at:
   edits refresh it after a short pause, and saving switches back. It is outlined and labelled "Unsaved preview".
   An invalid draft keeps the last good preview and says what to fix.
 
-By default the draft view follows the page being edited and shows it alone, even if it is hidden or empty
-(`pagesToShow` with `pin`); turning that off rotates through the pages as a TV would.
+Both views follow the page selected on the left and show it alone, even if it is hidden or empty (`pagesToShow`
+with `pin`). "On the TV" finds the saved page by its id (`GET .../dashboard/preview/{pageId}`), so it survives
+reordering; a page that is not saved yet has no saved version and says so. The preview is its own copy of the
+dashboard, not a mirror of any TV, so it cannot know which page a TV is showing.
+
+**Play all pages** is optional: it cycles the pages at their set times, as a TV does, with a readout of the
+page and the seconds until the next one (`DmsTv.status()`). It also plays for people who asked for reduced
+motion, since they pressed it. Selecting a page, switching views or pressing Stop ends it. The editor loads the
+receiver with `?manual=1` so it waits for the pages the editor sends instead of loading the saved ones first.
 
 ## TVs / Displays page
 

@@ -23,6 +23,10 @@ import org.dallasmakerspace.notifications.db.CommitteeMessagesRepository
  * The pages a TV rotates through: the enabled ones that have widgets. A pinned page (the editor's
  * preview of the page being edited) is shown on its own whatever its state.
  */
+/** The position of the saved page with [pageId], for showing that page on its own; null if it is not saved. */
+internal fun pinIndexOf(pages: List<PageDto>, pageId: Int): Int? =
+    pages.indexOfFirst { it.id == pageId }.takeIf { it >= 0 }
+
 internal fun pagesToShow(pages: List<PageDto>, pin: Int?): List<PageDto> =
     if (pin != null) listOfNotNull(pages.getOrNull(pin))
     else pages.filter { it.enabled && it.widgets.isNotEmpty() }

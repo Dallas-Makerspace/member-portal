@@ -78,3 +78,4 @@
 /* the preview of unsaved changes is outlined so it is not mistaken for what the TVs show */
 .dash-preview.draft { outline: 3px solid #0d6efd; outline-offset: 2px; }
 .dash-pv-toggle .btn-check:checked + .btn-outline-primary { background: #0d6efd; color: #fff; }
+.dash-pv-count { font-variant-numeric: tabular-nums; }

@@ -73,6 +73,14 @@ constructor(
     return render.render(committee, draft = draft)
   }
 
+  /** One saved page on its own (even if hidden), for the editor's "On the TV" preview of the selected page. */
+  suspend fun previewSavedPage(actor: String, committeeId: Int, pageId: Int): DashboardPayload {
+    val committee = editable(actor, committeeId)
+    val pages = repository.loadPages(committee.id)
+    val pin = pinIndexOf(pages, pageId) ?: throw notFound("page")
+    return render.render(committee, draft = DraftPreviewRequest(pages, pin))
+  }
+
   suspend fun announcements(actor: String, committeeId: Int): List<AnnouncementDto> =
       repository.announcements(editable(actor, committeeId).id)
 

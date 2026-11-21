@@ -182,7 +182,7 @@ constructor(
     val IMAGE_TYPES = setOf("image/jpeg", "image/png")
     val ALLOWED =
         Regex(
-            "dashboard(/preview|/members|/group-members|/announcements(/[0-9]+)?|" +
+            "dashboard(/preview(/[0-9]+)?|/members|/group-members|/announcements(/[0-9]+)?|" +
                 "/images(/[0-9a-f-]{36}\\.jpg)?)?|" +
                 "cast-targets(/[0-9]+(/revoke)?)?")
   }

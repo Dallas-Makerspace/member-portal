@@ -89,72 +89,150 @@
   function clearError() { byId('dash-alert').classList.add('d-none'); }
   function setStatus(text) { byId('dash-status').textContent = text || ''; }
 
-  // ---- preview: "On the TV" (the saved version) or "With my changes" (the unsaved pages) ----
+  // ---- preview: the selected page, as "On the TV" (saved) or "With my changes" (unsaved) ----
+  // Clicking a page on the left shows that page. "Play all pages" is optional: it cycles the pages at their
+  // set times, with a countdown, until a page is clicked or it is stopped.
 
   var frame = byId('dash-preview');
   var DRAFT_DELAY_MS = 600;
-  var pv = { mode: 'live', timer: null, seq: 0, busy: false, error: '', pinned: false };
+  var pv = { mode: 'live', timer: null, seq: 0, busy: false, error: '', hint: '', playing: false, ticker: null, target: '' };
 
   function previewWindow() {
     try { return frame.contentWindow && frame.contentWindow.DmsTv ? frame.contentWindow : null; } catch (e) { return null; }
   }
 
+  function selectedPage() { return state.pages[state.selected] || null; }
+  function targetKey() { var p = selectedPage(); return state.selected + ':' + (p ? (p.id || 'new') : ''); }
+  function visiblePageCount() { return state.pages.filter(function (p) { return p.enabled && p.widgets.length; }).length; }
+
   function setPreviewNote() {
     var note = byId('dash-preview-note');
+    var page = selectedPage();
     var warn = false;
     var text;
+    var hidden = page && !page.enabled ? ' This page is hidden, so TVs skip it.' : '';
     if (pv.mode === 'live') {
-      text = 'What the TVs show now: the last saved version.';
-      if (state.dirty) { text += ' Your unsaved changes are not on the TV yet. Switch to "With my changes" to see them.'; warn = true; }
+      if (pv.hint) { text = pv.hint; warn = true; }
+      else if (pv.error) { text = pv.error; warn = true; }
+      else if (pv.playing) { text = 'The saved pages, cycling as the TVs show them.'; }
+      else if (page) { text = 'The saved version of page ' + (state.selected + 1) + ', as the TVs show it.' + hidden; }
+      else { text = 'What the TVs show: the last saved version.'; }
+      if (state.dirty && !pv.hint) { text += ' Your unsaved changes are not on the TV yet. Switch to "With my changes" to see them.'; warn = true; }
     } else if (pv.error) {
       text = 'The preview can’t update yet: ' + pv.error.replace(/[.!?]+$/, '') + '. It is still showing the last version that worked.';
       warn = true;
+    } else if (pv.hint) {
+      text = pv.hint;
+      warn = true;
     } else if (pv.busy) {
       text = 'Updating the preview…';
+    } else if (pv.playing) {
+      text = 'Your unsaved pages, cycling as the TVs would show them. Not on the TV until you save.';
+    } else if (page) {
+      text = 'Your unsaved changes: page ' + (state.selected + 1) + ' on its own. Not on the TV until you save.' + hidden;
+      if (page.enabled && !page.widgets.length) { text += ' This page has no widgets yet.'; }
     } else {
-      var page = pv.pinned ? state.pages[state.selected] : null;
       text = 'Your unsaved changes, as a TV would show them. They are not on the TV until you save.';
-      if (page) {
-        text = 'Your unsaved changes: page ' + (state.selected + 1) + ' on its own. Not on the TV until you save.';
-        if (!page.enabled) { text += ' This page is hidden, so TVs skip it.'; }
-        else if (!page.widgets.length) { text += ' This page has no widgets yet.'; }
-      }
     }
     note.textContent = text;
     note.className = warn ? 'small mt-2 fw-bold dash-note-warn' : 'text-muted small mt-2';
     byId('dash-pv-draft').disabled = !state.dirty;
-    byId('dash-pv-follow-row').classList.toggle('d-none', pv.mode !== 'draft');
     byId('dash-preview-frame').classList.toggle('draft', pv.mode === 'draft');
+    var play = byId('dash-pv-play');
+    byId('dash-pv-play-label').textContent = pv.playing ? 'Stop' : 'Play all pages';
+    byId('dash-pv-play-icon').textContent = pv.playing ? 'stop' : 'play_arrow';
+    play.setAttribute('aria-pressed', pv.playing ? 'true' : 'false');
+    var tooFew = pv.mode === 'draft' && visiblePageCount() < 2;
+    play.disabled = tooFew && !pv.playing;
+    play.title = tooFew ? 'Needs at least two shown pages' : 'See the pages cycle at their set times, as on a TV';
   }
 
-  function setPreviewMode(mode) {
-    pv.mode = mode;
-    pv.error = '';
-    pv.busy = false;
-    clearTimeout(pv.timer);
-    pv.seq += 1;
-    byId('dash-pv-live').checked = mode === 'live';
-    byId('dash-pv-draft').checked = mode === 'draft';
-    if (mode === 'live') { frame.src = previewUrl; } else { runDraft(); }
+  function stopTicker() {
+    clearInterval(pv.ticker);
+    pv.ticker = null;
+    byId('dash-pv-count').textContent = '';
+  }
+
+  /** Page position and the seconds to the next page, read from the preview while it plays. */
+  function tick() {
+    var w = previewWindow();
+    if (!w || !pv.playing) { stopTicker(); return; }
+    var s = w.DmsTv.status();
+    var text = 'Page ' + (s.index + 1) + ' of ' + s.count + (s.title ? ' · ' + s.title : '');
+    if (s.secondsLeft !== null) { text += ' · next in ' + s.secondsLeft + ' s'; }
+    byId('dash-pv-count').textContent = text;
+  }
+
+  function startTicker() {
+    clearInterval(pv.ticker);
+    pv.ticker = setInterval(tick, 500);
+    tick();
+  }
+
+  /** Hands a rendered dashboard to the preview, and starts or stops the countdown. */
+  function deliver(data, label, rotate) {
+    var w = previewWindow();
+    if (!w) { return; }
+    var pages = (data && data.pages) || [];
+    if (rotate && pages.length < 2) {
+      pv.playing = false;
+      pv.hint = 'Only one page is shown, so there is nothing to play.';
+      rotate = false;
+    }
+    w.DmsTv.showFixed(data, label, rotate);
+    if (rotate) { startTicker(); } else { stopTicker(); }
     setPreviewNote();
+  }
+
+  function renderLive() {
+    if (!previewWindow()) { return; }
+    clearTimeout(pv.timer);
+    var seq = pv.seq + 1;
+    pv.seq = seq;
+    pv.error = '';
+    pv.hint = '';
+    var page = selectedPage();
+    var path = '/dashboard/preview';
+    if (!pv.playing && page) {
+      if (!page.id) {
+        pv.hint = 'This page isn’t saved yet. Switch to “With my changes” to see it.';
+        pv.busy = false;
+        stopTicker();
+        setPreviewNote();
+        return;
+      }
+      path = '/dashboard/preview/' + page.id;
+    }
+    pv.busy = true;
+    setPreviewNote();
+    api('GET', path).then(function (json) {
+      if (seq !== pv.seq || pv.mode !== 'live') { return; }
+      pv.busy = false;
+      deliver(json.data, 'Saved version', pv.playing);
+    }).catch(function (e) {
+      if (seq !== pv.seq || pv.mode !== 'live') { return; }
+      pv.busy = false;
+      pv.error = e.message;
+      stopTicker();
+      setPreviewNote();
+    });
   }
 
   /** Asks the service to render the unsaved pages (nothing is stored) and hands the result to the preview. */
   function runDraft() {
+    if (!previewWindow()) { return; }
     clearTimeout(pv.timer);
     var seq = pv.seq + 1;
     pv.seq = seq;
     pv.busy = true;
-    var follow = byId('dash-pv-follow').checked && state.selected >= 0;
-    pv.pinned = follow;
+    pv.hint = '';
+    var pin = !pv.playing && state.selected >= 0 ? state.selected : null;
     setPreviewNote();
-    api('POST', '/dashboard/preview', { pages: state.pages, pin: follow ? state.selected : null }).then(function (json) {
+    api('POST', '/dashboard/preview', { pages: state.pages, pin: pin }).then(function (json) {
       if (seq !== pv.seq || pv.mode !== 'draft') { return; }
       pv.busy = false;
       pv.error = '';
-      var w = previewWindow();
-      if (w) { w.DmsTv.showDraft(json.data); }
-      setPreviewNote();
+      deliver(json.data, 'Unsaved preview', pv.playing);
     }).catch(function (e) {
       if (seq !== pv.seq || pv.mode !== 'draft') { return; }
       pv.busy = false;
@@ -163,12 +241,49 @@
     });
   }
 
+  function showSelected() { if (pv.mode === 'draft') { runDraft(); } else { renderLive(); } }
+
+  function setPreviewMode(mode) {
+    pv.mode = mode;
+    pv.error = '';
+    pv.hint = '';
+    pv.busy = false;
+    pv.playing = false;
+    clearTimeout(pv.timer);
+    pv.seq += 1;
+    stopTicker();
+    byId('dash-pv-live').checked = mode === 'live';
+    byId('dash-pv-draft').checked = mode === 'draft';
+    showSelected();
+    setPreviewNote();
+  }
+
   function scheduleDraft() {
     if (pv.mode !== 'draft') { return; }
     clearTimeout(pv.timer);
     pv.busy = true;
     setPreviewNote();
     pv.timer = setTimeout(runDraft, DRAFT_DELAY_MS);
+  }
+
+  /** After the page list changed: a different selected page ends playback and shows that page. */
+  function previewSoon() {
+    var key = targetKey();
+    if (key !== pv.target) {
+      pv.target = key;
+      if (pv.playing) { pv.playing = false; stopTicker(); }
+      if (pv.mode === 'live') { renderLive(); } else { scheduleDraft(); }
+      return;
+    }
+    scheduleDraft();
+  }
+
+  function togglePlay() {
+    pv.playing = !pv.playing;
+    if (!pv.playing) { stopTicker(); }
+    pv.hint = '';
+    showSelected();
+    setPreviewNote();
   }
 
   // "Save changes" only covers the Pages tab; it stays visible elsewhere while page edits are unsaved.
@@ -221,7 +336,7 @@
       renderPageCard();
       renderWidgets();
     });
-    scheduleDraft();
+    previewSoon();
   }
 
   function renderPageList() {
@@ -751,7 +866,7 @@
     });
   }
 
-  function refreshPreview() { if (pv.mode === 'draft') { runDraft(); } else { frame.src = previewUrl; } }
+  function refreshPreview() { showSelected(); }
 
   function onSeconds(e) {
     var input = e.target;
@@ -767,8 +882,9 @@
   byId('dash-refresh-preview').addEventListener('click', refreshPreview);
   byId('dash-pv-live').addEventListener('change', function () { setPreviewMode('live'); });
   byId('dash-pv-draft').addEventListener('change', function () { setPreviewMode('draft'); });
-  byId('dash-pv-follow').addEventListener('change', function () { if (pv.mode === 'draft') { runDraft(); } });
-  frame.addEventListener('load', function () { if (pv.mode === 'draft') { runDraft(); } });
+  byId('dash-pv-play').addEventListener('click', togglePlay);
+  frame.addEventListener('load', showSelected);
+  window.addEventListener('beforeunload', stopTicker);
   byId('dash-add-news').addEventListener('click', function () { state.news.push({ text: '' }); renderNews(); byId('news-text-' + state.news.length).focus(); });
   byId('dash-add-tv').addEventListener('click', function () { state.tvs.push({ name: '', host: '', port: 8009, enabled: true }); renderTvs(); byId('tv-name-' + state.tvs.length).focus(); });
   byId('dash-page-title').addEventListener('input', function (e) { state.pages[state.selected].title = e.target.value; markDirty(); renderPageList(); });
@@ -785,7 +901,7 @@
   });
   window.addEventListener('beforeunload', function (e) { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
-  loadPages().then(refreshPreview).catch(function (e) { showError(e.message); });
+  loadPages().then(function () { frame.src = previewUrl + '?manual=1'; }).catch(function (e) { showError(e.message); });
   loadNews().catch(function (e) { showError(e.message); });
   loadTvs().catch(function (e) { showError(e.message); });
 })();

@@ -36,6 +36,10 @@
   var qrUrl = null;
   // The editor can hand this page unsaved pages to show; nothing reloads or refreshes until it is reloaded.
   var draft = false;
+  // What the editor asked the frozen view to say, and whether it should rotate pages (its Play button).
+  var fixedLabel = null;
+  var forceRotate = false;
+  var pageDeadline = 0;
   var imageUrls = [];
   var avatarFetches = {};
 
@@ -110,7 +114,7 @@
     } catch (e) {
       time = new Date(ms).toLocaleTimeString();
     }
-    node.textContent = draft ? 'Unsaved preview' : 'Updated ' + time;
+    node.textContent = draft ? (fixedLabel || 'Unsaved preview') : 'Updated ' + time;
   }
 
   // ---- pages ----
@@ -148,11 +152,14 @@
     stage.classList.remove('fade');
     void stage.offsetWidth;
     stage.classList.add('fade');
-    if (pages.length > 1 && !still) {
+    pageDeadline = 0;
+    if (pages.length > 1 && (!still || forceRotate)) {
+      var wait = Math.max(10, page.durationSeconds || 20) * 1000;
+      pageDeadline = Date.now() + wait;
       pageTimer = setTimeout(function () {
         pageIndex = (pageIndex + 1) % pages.length;
         showPage();
-      }, Math.max(10, page.durationSeconds || 20) * 1000);
+      }, wait);
     }
   }
 
@@ -480,12 +487,31 @@
 
   window.DmsTv = {
     render: apply,
-    showDraft: function (data) {
+    /**
+     * Shows what the editor hands over and stops all refreshing: the unsaved pages, or a saved page on its own.
+     * With [rotate] the pages cycle at their set times (the editor's Play button), even for someone who asked for
+     * less motion, because they pressed it.
+     */
+    showFixed: function (data, label, rotate) {
       draft = true;
+      fixedLabel = label || null;
+      forceRotate = !!rotate;
       clearTimeout(retryTimer);
       clearTimeout(changeTimer);
-      apply(data, true);
+      apply(data, !rotate);
+    },
+    showDraft: function (data) { window.DmsTv.showFixed(data, 'Unsaved preview', false); },
+    /** Which page is up, how many there are, and the seconds until the next one (null when not rotating). */
+    status: function () {
+      var page = pages[pageIndex];
+      return {
+        index: pageIndex,
+        count: pages.length,
+        title: page ? (page.title || '') : '',
+        secondsLeft: pageDeadline ? Math.max(0, Math.ceil((pageDeadline - Date.now()) / 1000)) : null
+      };
     }
   };
-  if (mode === 'tv') { keepAwake(); startCast(); } else { load(); }
+  // The editor loads this page with ?manual=1 and sends it the pages itself, so nothing flashes first.
+  if (mode === 'tv') { keepAwake(); startCast(); } else if (!/[?&]manual=1/.test(location.search)) { load(); }
 })();
