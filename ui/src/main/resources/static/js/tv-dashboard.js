@@ -377,6 +377,8 @@
     if (!track || !track.children.length || !track.animate) { return; }
     if (track.scrollHeight <= view.clientHeight + 1) { return; }
     view.classList.add('scrolling');
+    // Two columns: an odd list gets a blank cell, so the repeat starts at the top of a row and the wrap is seamless.
+    if (window.getComputedStyle(track).display === 'grid' && track.children.length % 2) { track.appendChild(el('div', 'tv-member-gap')); }
     var first = track.children.length;
     people.forEach(function (person) { track.appendChild(build(person)); });
     var shift = track.children[first].offsetTop;
