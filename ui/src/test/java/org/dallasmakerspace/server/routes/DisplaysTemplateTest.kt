@@ -25,12 +25,16 @@ class DisplaysTemplateTest {
       dashboard: Boolean = false,
       pages: List<String> = emptyList(),
       enabled: Boolean = true,
+      managed: Boolean = true,
+      state: String? = null,
   ) =
       mapOf<String, Any?>(
           "id" to 1,
           "name" to name,
-          "committeeName" to "Test Shop",
-          "committeeSlug" to "test-shop",
+          "committeeName" to if (managed) "Test Shop" else null,
+          "committeeSlug" to if (managed) "test-shop" else null,
+          "managed" to managed,
+          "state" to (state ?: if (!enabled) "DISABLED" else when (online) { true -> "ONLINE"; false -> "OFFLINE"; null -> "UNSEEN" }),
           "host" to "tv-1.example.internal",
           "deviceName" to "Test_TV",
           "enabled" to enabled,
@@ -54,8 +58,9 @@ class DisplaysTemplateTest {
           setVariable("unavailable", unavailable)
           setVariable("isInfraUser", infra)
           setVariable("total", displays.size)
-          setVariable("online", displays.count { it["online"] == true })
-          setVariable("offline", displays.count { it["online"] == false })
+          setVariable("online", displays.count { it["state"] == "ONLINE" })
+          setVariable("offline", displays.count { it["state"] == "OFFLINE" })
+          setVariable("notSetUp", displays.count { it["managed"] == false })
           setVariable("dashboards", displays.count { it["showingDashboard"] == true })
         }
     return engine.process(template, context)
@@ -66,7 +71,8 @@ class DisplaysTemplateTest {
           tv("Shop floor TV", true, "The committee dashboard", true, listOf("Tool Status", "Classes")),
           tv("Lobby TV", false, "Offline"),
           tv("Classroom TV", null, "Not seen yet"),
-          tv("Spare TV", true, "Showing YouTube", enabled = false))
+          tv("Spare TV", true, "Showing YouTube", enabled = false),
+          tv("Hallway Display", null, "Not set up for a committee", managed = false, state = "ON_NETWORK"))
 
   @Test
   fun `each TV shows its status, what it is showing and its dashboard pages`() {
@@ -82,6 +88,17 @@ class DisplaysTemplateTest {
   }
 
   @Test
+  fun `a TV nobody has set up is listed with a note instead of a committee`() {
+    val html = render(sample)
+
+    assertTrue(html.contains("Hallway Display"))
+    assertTrue(html.contains("On the network"))
+    assertTrue(html.contains("No committee yet"))
+    assertEquals(1, Regex("data-managed=\"false\"").findAll(html).count())
+    assertEquals(4, Regex("data-managed=\"true\"").findAll(html).count())
+  }
+
+  @Test
   fun `the address column is only for infrastructure members`() {
     assertFalse(render(sample, infra = false).contains("tv-1.example.internal"))
     assertTrue(render(sample, infra = true).contains("tv-1.example.internal"))
@@ -91,14 +108,14 @@ class DisplaysTemplateTest {
   fun `rows carry what the filters need`() {
     val html = render(sample)
 
-    assertTrue(html.contains("data-search=\"shop floor tv test shop\""))
+    assertTrue(html.contains("data-search=\"shop floor tv test shop test_tv\""))
     assertEquals(3, Regex("data-problem=\"true\"").findAll(html).count())
-    assertEquals(1, Regex("data-problem=\"false\"").findAll(html).count())
+    assertEquals(2, Regex("data-problem=\"false\"").findAll(html).count())
   }
 
   @Test
   fun `no TVs and an unreachable service are told apart`() {
-    assertTrue(render(emptyList()).contains("No TVs have been set up yet"))
+    assertTrue(render(emptyList()).contains("No TVs have been found yet"))
     val down = render(emptyList(), unavailable = true)
     assertTrue(down.contains("could not be loaded"))
     assertFalse(down.contains("disp-table"))

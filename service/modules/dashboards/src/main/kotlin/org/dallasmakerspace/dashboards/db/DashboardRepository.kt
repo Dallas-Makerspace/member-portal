@@ -10,6 +10,7 @@ import org.dallasmakerspace.dashboards.AnnouncementDto
 import org.dallasmakerspace.dashboards.CastTargetDto
 import org.dallasmakerspace.dashboards.DashboardLayout
 import org.dallasmakerspace.dashboards.DashboardTime
+import org.dallasmakerspace.dashboards.DiscoveredDevice
 import org.dallasmakerspace.dashboards.PageDto
 import org.dallasmakerspace.dashboards.WidgetConfig
 import org.dallasmakerspace.dashboards.WidgetDto
@@ -27,6 +28,9 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.update
 
 /** A TV row including the fields only the service needs. */
+/** A device the agent found on the network; [lastSeenAt] is UTC. */
+data class DiscoveredRow(val deviceId: String, val name: String?, val host: String, val lastSeenAt: LocalDateTime)
+
 data class CastTargetRow(
     val committeeId: Int,
     val tokenGeneration: Int,
@@ -195,6 +199,38 @@ class DashboardRepository @Inject constructor() {
     } > 0
   }
 
+  /** Records the devices a network sweep found: new ones are added, known ones get their name, address and time. */
+  suspend fun recordDiscovered(devices: List<DiscoveredDevice>, seenAt: LocalDateTime) = suspendTransaction {
+    devices.forEach { device ->
+      val id = device.deviceId.take(ID_MAX)
+      val updated =
+          CastDevicesTable.update({ CastDevicesTable.deviceId eq id }) {
+            it[name] = device.name?.take(DEVICE_NAME_MAX)
+            it[host] = device.host.take(HOST_MAX)
+            it[lastSeenAt] = seenAt
+          }
+      if (updated == 0) {
+        CastDevicesTable.insert {
+          it[deviceId] = id
+          it[name] = device.name?.take(DEVICE_NAME_MAX)
+          it[host] = device.host.take(HOST_MAX)
+          it[firstSeenAt] = seenAt
+          it[lastSeenAt] = seenAt
+        }
+      }
+    }
+  }
+
+  suspend fun discovered(): List<DiscoveredRow> = suspendTransaction {
+    CastDevicesTable.selectAll().orderBy(CastDevicesTable.name, SortOrder.ASC).map {
+      DiscoveredRow(
+          deviceId = it[CastDevicesTable.deviceId],
+          name = it[CastDevicesTable.name],
+          host = it[CastDevicesTable.host],
+          lastSeenAt = it[CastDevicesTable.lastSeenAt])
+    }
+  }
+
   /** Records what the TV calls itself and its stable id (reported by the cast agent). */
   suspend fun setIdentity(id: Int, deviceId: String, deviceName: String?) = suspendTransaction {
     CastTargetsTable.update({ CastTargetsTable.id eq id }) {
@@ -268,5 +304,7 @@ class DashboardRepository @Inject constructor() {
     const val STATUS_MAX = 120
     const val ID_MAX = 64
     const val NAME_MAX = 80
+    const val DEVICE_NAME_MAX = 120
+    const val HOST_MAX = 64
   }
 }

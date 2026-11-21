@@ -34,6 +34,8 @@ class ServiceApi(Protocol):
 
     def move(self, target_id: int, host: str) -> None: ...
 
+    def discovered(self, devices: list[dict]) -> None: ...
+
     def events(self) -> Iterator[dict]: ...
 
 
@@ -82,6 +84,10 @@ class HttpService:
 
     def move(self, target_id: int, host: str) -> None:
         self._call("POST", f"/cast-agent/targets/{target_id}/host", json={"host": host})
+
+    def discovered(self, devices: list[dict]) -> None:
+        """Tells the service which Cast devices a network sweep found (set up for a TV or not)."""
+        self._call("POST", "/cast-agent/discovered", json={"devices": devices})
 
     def events(self) -> Iterator[dict]:
         """Streams events until the connection drops (then the generator ends or raises)."""

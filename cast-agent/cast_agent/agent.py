@@ -29,6 +29,8 @@ STREAM_BACKOFF_START = 1.0
 STREAM_BACKOFF_MAX = 60.0
 SWEEP_BACKOFF_START = 60.0  # while a TV stays missing: 1 min, 2, 4 ... capped, so it is never a steady poll
 SWEEP_BACKOFF_MAX = 3600.0
+DISCOVERY_FIRST = 90.0  # the first inventory sweep, once the TVs are connected
+DISCOVERY_BUSY_RETRY = 60.0
 
 Finder = Callable[[Iterable[str]], dict[str, tuple[str, Identity]]]
 
@@ -46,6 +48,7 @@ class Agent:
         lookup: Callable[[str], Identity | None] = fetch_identity,
         finder: Finder = find_devices,
         pool: ThreadPoolExecutor | None = None,
+        discovery_minutes: float = 0.0,
     ) -> None:
         self._service = service
         self._reactor = reactor
@@ -62,6 +65,8 @@ class Agent:
         self._sweeping = False
         self._sweep_timer: Handle | None = None
         self._sweep_delay = SWEEP_BACKOFF_START
+        self._discovery_every = max(0.0, discovery_minutes) * 60.0
+        self._discovery_timer: Handle | None = None
         self._stop = threading.Event()
 
     # ---- reactor thread ----
@@ -185,10 +190,43 @@ class Agent:
             if controller.connected or self._controllers.get(target_id) is not controller:
                 del self._missing[target_id]
 
+    # ---- inventory: every Cast device on the network, for the TVs / Displays page ----
+
+    def _request_discovery(self, delay: float) -> None:
+        if self._stop.is_set() or self._discovery_timer is not None:
+            return
+        self._discovery_timer = self._reactor.call_later(delay, self._start_discovery)
+
+    def _start_discovery(self) -> None:
+        self._discovery_timer = None
+        if self._sweeping:  # a search for a missing TV is using the network; try again shortly
+            self._request_discovery(DISCOVERY_BUSY_RETRY)
+            return
+        future = self._pool.submit(self._discover_and_report)
+        future.add_done_callback(lambda f: self._reactor.post(lambda: self._discovery_done(_value(f))))
+
+    def _discover_and_report(self) -> int:
+        """Sweeps the TV subnets and tells the service what answered (runs off the reactor thread)."""
+        found = self._finder(self._ranges)
+        devices = [
+            {"deviceId": device_id, "name": identity.name, "host": host}
+            for device_id, (host, identity) in found.items()
+        ]
+        if devices:
+            self._service.discovered(devices)
+        return len(devices)
+
+    def _discovery_done(self, count: int | None) -> None:
+        if count is not None:
+            log.info("Inventory sweep: %d Cast device(s) on the network", count)
+        self._request_discovery(self._discovery_every)
+
     # ---- event stream thread ----
 
     def start(self) -> None:
         self._reactor.post(self.reconcile)
+        if self._ranges and self._discovery_every > 0:
+            self._reactor.post(lambda: self._request_discovery(DISCOVERY_FIRST))
         threading.Thread(target=self._stream, name="events", daemon=True).start()
 
     def _stream(self) -> None:

@@ -15,3 +15,5 @@
 
 .disp-pages { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .disp-page { font-size: .75rem; background: #eef1f6; border-radius: 10px; padding: 2px 8px; color: #3a4252; }
+.disp-badge-net { background: #d9e8fb; color: #0b3d7a; }
+.disp-scope { max-width: 220px; }

@@ -255,3 +255,47 @@ def test_a_device_with_the_wrong_name_at_the_guessed_address_is_left_alone(clock
 
     assert device.launches == [] and device.stopped
     assert service.identified == []
+
+
+def test_the_network_is_swept_and_reported_on_an_interval(clock, reactor, service):
+    found = {
+        "aaa": ("192.0.2.10", Identity("aaa", "Lobby TV")),
+        "bbb": ("192.0.2.11", Identity("bbb", None)),
+    }
+    agent, _ = build_agent(clock, reactor, service, finder=lambda ranges: found)
+    agent._discovery_every = 30 * 60
+    agent.start()
+
+    advance(clock, reactor, 120)  # the first sweep comes shortly after start
+    assert service.discovered_batches == [
+        [
+            {"deviceId": "aaa", "name": "Lobby TV", "host": "192.0.2.10"},
+            {"deviceId": "bbb", "name": None, "host": "192.0.2.11"},
+        ]
+    ]
+
+    advance(clock, reactor, 30 * 60)  # then once per interval, not more often
+    assert len(service.discovered_batches) == 2
+
+
+def test_nothing_is_reported_when_no_device_answers(clock, reactor, service):
+    agent, _ = build_agent(clock, reactor, service, finder=lambda ranges: {})
+    agent._discovery_every = 30 * 60
+    agent.start()
+
+    advance(clock, reactor, 120)
+
+    assert service.discovered_batches == []
+
+
+def test_the_inventory_is_off_without_ranges_or_an_interval(clock, reactor, service):
+    found = {"aaa": ("192.0.2.10", Identity("aaa", "Lobby TV"))}
+    no_ranges, _ = build_agent(clock, reactor, service, finder=lambda ranges: found, ranges=())
+    no_ranges._discovery_every = 30 * 60
+    no_ranges.start()
+    no_interval, _ = build_agent(clock, reactor, service, finder=lambda ranges: found)
+    no_interval.start()  # discovery_minutes defaults to 0 = off
+
+    advance(clock, reactor, 3 * 3600)
+
+    assert service.discovered_batches == []

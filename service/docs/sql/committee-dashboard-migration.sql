@@ -63,3 +63,15 @@ CREATE TABLE IF NOT EXISTS `cast_targets` (
 ALTER TABLE `cast_targets`
   ADD COLUMN IF NOT EXISTS `device_id` varchar(64) DEFAULT NULL COMMENT 'The TV''s own stable id (ssdp_udn), learned by the cast agent so it can find the TV if its address changes' AFTER `token_generation`,
   ADD COLUMN IF NOT EXISTS `device_name` varchar(80) DEFAULT NULL COMMENT 'What the TV calls itself on the network (read-only in the editor)' AFTER `device_id`;
+
+-- Cast devices the cast agent's network sweep has found, set up for a committee or not (TVs / Displays page).
+CREATE TABLE IF NOT EXISTS `cast_devices` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `device_id` varchar(64) NOT NULL COMMENT 'The device''s own stable id (ssdp_udn), lower case',
+  `name` varchar(120) DEFAULT NULL COMMENT 'What the device calls itself on the network',
+  `host` varchar(64) NOT NULL COMMENT 'Last address it was seen at',
+  `first_seen_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'UTC',
+  `last_seen_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'UTC; updated by each sweep that finds it',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `cast_devices_device_id_UQ` (`device_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Cast devices found on the network by the cast agent.';

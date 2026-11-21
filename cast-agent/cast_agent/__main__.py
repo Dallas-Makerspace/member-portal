@@ -40,7 +40,11 @@ def main() -> int:
     ranges = [r.strip() for r in os.environ.get("SWEEP_RANGES", "").split(",") if r.strip()]
     if not ranges:
         log.warning("SWEEP_RANGES is not set: a TV whose address changes will not be found again")
-    agent = Agent(service, reactor, make_device, app_id, sweep_ranges=ranges)
+    try:
+        discovery_minutes = float(os.environ.get("DISCOVERY_INTERVAL_MINUTES", "30"))
+    except ValueError:
+        discovery_minutes = 30.0
+    agent = Agent(service, reactor, make_device, app_id, sweep_ranges=ranges, discovery_minutes=discovery_minutes)
 
     def stop(_signum, _frame) -> None:
         reactor.post(agent.shutdown)

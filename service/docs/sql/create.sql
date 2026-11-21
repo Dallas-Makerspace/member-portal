@@ -815,4 +815,19 @@ CREATE TABLE `cast_targets` (
   KEY `cast_targets_committee_IDX` (`committee_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='TVs the cast agent shows a committee dashboard on.';
 
+--
+-- Table structure for table `cast_devices`
+--
+
+CREATE TABLE `cast_devices` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `device_id` varchar(64) NOT NULL COMMENT 'The device''s own stable id (ssdp_udn), lower case',
+  `name` varchar(120) DEFAULT NULL COMMENT 'What the device calls itself on the network',
+  `host` varchar(64) NOT NULL COMMENT 'Last address it was seen at',
+  `first_seen_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'UTC',
+  `last_seen_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'UTC; updated by each sweep that finds it',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `cast_devices_device_id_UQ` (`device_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Cast devices found on the network by the cast agent.';
+
 -- Dump completed on 2025-12-31 21:13:59

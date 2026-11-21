@@ -69,6 +69,7 @@ class FakeService:
         self.fail_tokens = False
         self.identified: list[tuple[int, str, str | None]] = []
         self.moves: list[tuple[int, str]] = []
+        self.discovered_batches: list[list[dict]] = []
 
     def targets(self) -> list[Target]:
         return list(self.target_list)
@@ -88,6 +89,9 @@ class FakeService:
     def move(self, target_id: int, host: str) -> None:
         self.moves.append((target_id, host))
         self.target_list = [replace(t, host=host) if t.id == target_id else t for t in self.target_list]
+
+    def discovered(self, devices: list[dict]) -> None:
+        self.discovered_batches.append(devices)
 
     def events(self):
         return iter(())

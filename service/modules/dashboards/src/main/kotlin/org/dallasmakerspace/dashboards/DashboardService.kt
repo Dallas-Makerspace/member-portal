@@ -132,39 +132,78 @@ constructor(
 
   // ---- TVs / Displays page ----
 
-  /** Every configured TV with what it is doing, for the read-only TVs / Displays page. */
+  /**
+   * Every TV the portal knows of, for the read-only TVs / Displays page: those set up for a committee, then
+   * Cast devices the cast agent's sweep found that nobody has set up.
+   */
   suspend fun displays(): List<DisplayDto> {
     val now = java.time.LocalTime.now(DashboardTime.CHICAGO)
     val pagesByCommittee = mutableMapOf<Int, List<String>>()
-    return repository.allTargets().mapNotNull { row ->
-      val committee = access.committee(row.committeeId) ?: return@mapNotNull null
-      val status = DisplayStatus.summarize(row.dto.lastStatus)
-      val (inHours, schedule) = DisplayStatus.schedule(now, row.dto.displayStart, row.dto.displayEnd)
-      val pages =
-          if (status.dashboard) {
-            pagesByCommittee.getOrPut(committee.id) {
-              pagesToShow(repository.loadPages(committee.id), null).map { it.title.ifBlank { "Untitled page" } }
+    val targets = repository.allTargets()
+    val managed =
+        targets.mapNotNull { row ->
+          val committee = access.committee(row.committeeId) ?: return@mapNotNull null
+          val status = DisplayStatus.summarize(row.dto.lastStatus)
+          val (inHours, schedule) = DisplayStatus.schedule(now, row.dto.displayStart, row.dto.displayEnd)
+          val pages =
+              if (status.dashboard) {
+                pagesByCommittee.getOrPut(committee.id) {
+                  pagesToShow(repository.loadPages(committee.id), null).map { it.title.ifBlank { "Untitled page" } }
+                }
+              } else {
+                emptyList()
+              }
+          DisplayDto(
+              id = row.dto.id!!,
+              name = row.dto.name,
+              committeeName = committee.name,
+              committeeSlug = committee.slug,
+              state = DisplayStatus.state(row.dto.enabled, status.online),
+              host = row.dto.host,
+              deviceName = row.dto.deviceName,
+              enabled = row.dto.enabled,
+              online = status.online,
+              lastSeenAt = row.dto.lastSeenAt,
+              showing = status.showing,
+              showingDashboard = status.dashboard,
+              dashboardPages = pages,
+              schedule = schedule,
+              inHours = inHours,
+              reclaimAfterMinutes = row.dto.reclaimAfterMinutes)
+        }.sortedWith(compareBy({ it.committeeName }, { it.name }))
+    val knownIds = targets.mapNotNull { it.deviceId?.lowercase() }.toSet()
+    val knownNames = targets.mapNotNull { it.dto.deviceName?.trim()?.lowercase() }.toSet()
+    val nowUtc = DashboardTime.nowUtc()
+    val unmanaged =
+        repository.discovered()
+            .filter { it.deviceId.lowercase() !in knownIds && it.name?.trim()?.lowercase() !in knownNames }
+            .map { device ->
+              val state = DisplayStatus.discoveredState(device.lastSeenAt, nowUtc)
+              DisplayDto(
+                  id = 0,
+                  name = device.name?.ifBlank { null } ?: "Unnamed device",
+                  managed = false,
+                  state = state,
+                  host = device.host,
+                  deviceName = device.name,
+                  enabled = true,
+                  lastSeenAt = DashboardTime.utcToChicago(device.lastSeenAt),
+                  showing =
+                      if (state == DisplayState.ON_NETWORK) "Not set up for a committee" else "Not seen recently",
+                  schedule = "Not managed")
             }
-          } else {
-            emptyList()
-          }
-      DisplayDto(
-          id = row.dto.id!!,
-          name = row.dto.name,
-          committeeName = committee.name,
-          committeeSlug = committee.slug,
-          host = row.dto.host,
-          deviceName = row.dto.deviceName,
-          enabled = row.dto.enabled,
-          online = status.online,
-          lastSeenAt = row.dto.lastSeenAt,
-          showing = status.showing,
-          showingDashboard = status.dashboard,
-          dashboardPages = pages,
-          schedule = schedule,
-          inHours = inHours,
-          reclaimAfterMinutes = row.dto.reclaimAfterMinutes)
-    }.sortedWith(compareBy({ it.committeeName }, { it.name }))
+            .sortedBy { it.name.lowercase() }
+    return managed + unmanaged
+  }
+
+  /** The cast agent's sweep results: remembered so the page can list TVs nobody has set up yet. */
+  suspend fun recordDiscovered(batch: DiscoveredBatch) {
+    val valid =
+        batch.devices
+            .map { it.copy(deviceId = it.deviceId.trim().lowercase(), host = it.host.trim()) }
+            .filter { DEVICE_ID.matches(it.deviceId) && HOST_OK.matches(it.host) }
+            .take(MAX_DISCOVERED)
+    if (valid.isNotEmpty()) repository.recordDiscovered(valid, DashboardTime.nowUtc())
   }
 
   // ---- Cast agent ----
@@ -264,5 +303,8 @@ constructor(
 
   private companion object {
     val TARGET_TTL: Duration = Duration.ofMinutes(5)
+    val DEVICE_ID = Regex("^[0-9a-f-]{8,64}$")
+    val HOST_OK = Regex("^[A-Za-z0-9.:-]{1,64}$")
+    const val MAX_DISCOVERED = 500
   }
 }

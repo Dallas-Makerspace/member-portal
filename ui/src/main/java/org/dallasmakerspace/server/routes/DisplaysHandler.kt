@@ -38,9 +38,9 @@ constructor(
             "displays" to rows,
             "unavailable" to (result.statusCode !in OK_RANGE),
             "total" to rows.size,
-            "online" to rows.count { it["online"] == true },
-            "offline" to rows.count { it["online"] == false },
-            "unseen" to rows.count { it["online"] == null },
+            "online" to rows.count { it["state"] == "ONLINE" },
+            "offline" to rows.count { it["state"] == "OFFLINE" },
+            "notSetUp" to rows.count { it["managed"] == false },
             "dashboards" to rows.count { it["showingDashboard"] == true })
     call.respond(ThymeleafContent("displays", model))
   }
@@ -51,6 +51,8 @@ constructor(
           "name" to row["name"],
           "committeeName" to row["committeeName"],
           "committeeSlug" to row["committeeSlug"],
+          "managed" to (row["managed"] != false),
+          "state" to (row["state"] as? String ?: "UNSEEN"),
           "host" to row["host"],
           "deviceName" to row["deviceName"],
           "enabled" to (row["enabled"] != false),

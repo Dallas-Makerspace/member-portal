@@ -54,3 +54,13 @@ object CastTargetsTable : IntIdTable("cast_targets") {
   val lastSeenAt = datetime("last_seen_at").nullable()
   val lastStatus = varchar("last_status", 120).nullable()
 }
+
+/** `cast_devices`: every Cast device the cast agent has found on the network, set up for a committee or not. */
+@Suppress("MagicNumber")
+object CastDevicesTable : IntIdTable("cast_devices") {
+  val deviceId = varchar("device_id", 64).uniqueIndex()
+  val name = varchar("name", 120).nullable()
+  val host = varchar("host", 64)
+  val firstSeenAt = datetime("first_seen_at")
+  val lastSeenAt = datetime("last_seen_at")
+}

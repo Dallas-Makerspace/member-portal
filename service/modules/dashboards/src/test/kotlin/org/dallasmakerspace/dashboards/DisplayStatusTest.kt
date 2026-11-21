@@ -46,4 +46,20 @@ class DisplayStatusTest {
     assertFalse(DisplayStatus.schedule(LocalTime.of(3, 0), "08:00", "09:00").first)
     assertNull(DisplayStatus.summarize(null).online)
   }
+
+  @Test
+  fun `a set up TV has a badge state`() {
+    assertEquals("DISABLED", DisplayStatus.state(false, true))
+    assertEquals("ONLINE", DisplayStatus.state(true, true))
+    assertEquals("OFFLINE", DisplayStatus.state(true, false))
+    assertEquals("UNSEEN", DisplayStatus.state(true, null))
+  }
+
+  @Test
+  fun `a device only the sweep knows is on the network for two hours after it was seen`() {
+    val now = java.time.LocalDateTime.of(2026, 11, 21, 12, 0)
+    assertEquals("ON_NETWORK", DisplayStatus.discoveredState(now.minusMinutes(90), now))
+    assertEquals("ON_NETWORK", DisplayStatus.discoveredState(now.minusHours(2), now))
+    assertEquals("AWAY", DisplayStatus.discoveredState(now.minusHours(2).minusMinutes(1), now))
+  }
 }

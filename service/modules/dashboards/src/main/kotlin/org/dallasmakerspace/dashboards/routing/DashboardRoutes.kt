@@ -31,6 +31,7 @@ import org.dallasmakerspace.dashboards.DashboardEvents
 import org.dallasmakerspace.dashboards.DashboardException
 import org.dallasmakerspace.dashboards.DashboardImageService
 import org.dallasmakerspace.dashboards.DashboardService
+import org.dallasmakerspace.dashboards.DiscoveredBatch
 import org.dallasmakerspace.dashboards.DraftPreviewRequest
 import org.dallasmakerspace.dashboards.GroupPick
 import org.dallasmakerspace.dashboards.TargetHost
@@ -224,6 +225,13 @@ private fun Route.castAgentRoutes(service: DashboardService, events: DashboardEv
     call.guarded {
       service.moveTarget(itemId, moved.host.trim())
       ok("Moved")
+    }
+  }
+  post("/cast-agent/discovered") {
+    val batch = call.receive<DiscoveredBatch>()
+    call.guarded {
+      service.recordDiscovered(batch)
+      ok("Recorded")
     }
   }
   post("/cast-agent/targets/{itemId}/status") {

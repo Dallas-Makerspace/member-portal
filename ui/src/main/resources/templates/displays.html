@@ -26,7 +26,7 @@
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mt-4 mb-3">
                 <div>
                     <h3 class="dms-card-title mb-0">TVs / Displays</h3>
-                    <div class="text-muted">Every TV the portal casts to, and what it is showing. Read only.</div>
+                    <div class="text-muted">Every Cast TV on the network, and what each one is showing. Read only.</div>
                 </div>
                 <a class="btn btn-outline-secondary btn-sm" href="/displays">
                     <span class="material-symbols-outlined align-middle" style="font-size:18px;">refresh</span>
@@ -39,28 +39,34 @@
             </div>
 
             <div class="row g-3 mb-3" th:unless="${unavailable}">
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md">
                     <div class="dms-card shadow-sm disp-tile">
                         <div class="disp-tile-num" th:text="${total}">0</div>
-                        <div class="disp-tile-label">TVs</div>
+                        <div class="disp-tile-label">TVs found</div>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md">
                     <div class="dms-card shadow-sm disp-tile disp-tile-ok">
                         <div class="disp-tile-num" th:text="${online}">0</div>
                         <div class="disp-tile-label">Online</div>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md">
                     <div class="dms-card shadow-sm disp-tile" th:classappend="${offline > 0} ? 'disp-tile-bad'">
                         <div class="disp-tile-num" th:text="${offline}">0</div>
                         <div class="disp-tile-label">Offline</div>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md">
                     <div class="dms-card shadow-sm disp-tile">
                         <div class="disp-tile-num" th:text="${dashboards}">0</div>
                         <div class="disp-tile-label">Showing a dashboard</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md">
+                    <div class="dms-card shadow-sm disp-tile">
+                        <div class="disp-tile-num" th:text="${notSetUp}">0</div>
+                        <div class="disp-tile-label">Not set up yet</div>
                     </div>
                 </div>
             </div>
@@ -68,9 +74,17 @@
             <div class="dms-card shadow-sm" th:unless="${unavailable}">
                 <div class="card-body">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3 mb-3">
-                        <label class="visually-hidden" for="disp-filter">Filter TVs</label>
-                        <input type="search" id="disp-filter" class="form-control disp-filter"
-                               placeholder="Filter by TV or committee" autocomplete="off">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <label class="visually-hidden" for="disp-filter">Filter TVs</label>
+                            <input type="search" id="disp-filter" class="form-control disp-filter"
+                                   placeholder="Filter by TV or committee" autocomplete="off">
+                            <label class="visually-hidden" for="disp-scope">Which TVs</label>
+                            <select id="disp-scope" class="form-select disp-scope">
+                                <option value="all">All TVs</option>
+                                <option value="managed">Set up for a committee</option>
+                                <option value="unmanaged">Not set up yet</option>
+                            </select>
+                        </div>
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" role="switch" id="disp-problems">
                             <label class="form-check-label" for="disp-problems">Only TVs that need attention</label>
@@ -78,7 +92,7 @@
                     </div>
 
                     <div class="text-muted py-3" th:if="${#lists.isEmpty(displays)}">
-                        No TVs have been set up yet. A committee chair adds one on the committee's TV dashboard page.
+                        No TVs have been found yet. A committee chair adds one on the committee's TV dashboard page.
                     </div>
 
                     <div class="table-responsive" th:unless="${#lists.isEmpty(displays)}">
@@ -95,22 +109,25 @@
                             </thead>
                             <tbody>
                             <tr th:each="d : ${displays}"
-                                th:attr="data-search=${#strings.toLowerCase(d.name + ' ' + d.committeeName)},data-problem=${!d.enabled or d.online == false or (d.online == null)}">
+                                th:attr="data-search=${#strings.toLowerCase(d.name + ' ' + #strings.defaultString(d.committeeName, '') + ' ' + #strings.defaultString(d.deviceName, ''))},data-managed=${d.managed},data-problem=${d.state == 'OFFLINE' or d.state == 'UNSEEN' or d.state == 'DISABLED'}">
                                 <td>
                                     <div class="fw-bold" th:text="${d.name}">Shop TV</div>
-                                    <a class="small text-decoration-none" th:href="'/committees/' + ${d.committeeSlug}"
+                                    <a class="small text-decoration-none" th:if="${d.managed}"
+                                       th:href="'/committees/' + ${d.committeeSlug}"
                                        th:text="${d.committeeName}">Committee</a>
-                                    <div class="small text-muted" th:if="${d.deviceName}"
+                                    <div class="small text-muted" th:unless="${d.managed}">
+                                        No committee yet. A chair can add it on their TV dashboard page.
+                                    </div>
+                                    <div class="small text-muted" th:if="${d.managed and d.deviceName}"
                                          th:text="'Cast name: ' + ${d.deviceName}"></div>
                                 </td>
                                 <td>
-                                    <span class="badge disp-badge disp-badge-off" th:if="${!d.enabled}">Disabled</span>
-                                    <span class="badge disp-badge disp-badge-ok"
-                                          th:if="${d.enabled and d.online == true}">Online</span>
-                                    <span class="badge disp-badge disp-badge-bad"
-                                          th:if="${d.enabled and d.online == false}">Offline</span>
-                                    <span class="badge disp-badge disp-badge-off"
-                                          th:if="${d.enabled and d.online == null}">Not seen yet</span>
+                                    <span class="badge disp-badge disp-badge-ok" th:if="${d.state == 'ONLINE'}">Online</span>
+                                    <span class="badge disp-badge disp-badge-bad" th:if="${d.state == 'OFFLINE'}">Offline</span>
+                                    <span class="badge disp-badge disp-badge-off" th:if="${d.state == 'UNSEEN'}">Not seen yet</span>
+                                    <span class="badge disp-badge disp-badge-off" th:if="${d.state == 'DISABLED'}">Disabled</span>
+                                    <span class="badge disp-badge disp-badge-net" th:if="${d.state == 'ON_NETWORK'}">On the network</span>
+                                    <span class="badge disp-badge disp-badge-off" th:if="${d.state == 'AWAY'}">Not seen lately</span>
                                 </td>
                                 <td>
                                     <div th:text="${d.showing}">The committee dashboard</div>
@@ -130,8 +147,9 @@
                         </table>
                     </div>
                     <div class="text-muted small mt-2" role="note">
-                        Status changes when a TV connects, disconnects, or switches what it is showing. It is not a
-                        constant ping, so "Last update" is the last change, not the last check.
+                        TVs set up for a committee report when they connect, disconnect or switch what they show, so
+                        "Last update" is the last change, not the last check. Other TVs come from a sweep of the
+                        network about every 30 minutes; a TV that is asleep may be missing until it wakes.
                     </div>
                     <div class="text-muted small d-none" id="disp-none" role="status">No TVs match.</div>
                 </div>

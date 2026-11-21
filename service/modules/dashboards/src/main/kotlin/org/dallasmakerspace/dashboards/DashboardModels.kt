@@ -159,8 +159,12 @@ data class DashboardPayload(
 data class DisplayDto(
     val id: Int,
     val name: String,
-    val committeeName: String,
-    val committeeSlug: String,
+    /** Null for a device the network sweep found that no committee has set up. */
+    val committeeName: String? = null,
+    val committeeSlug: String? = null,
+    val managed: Boolean = true,
+    /** One of ONLINE, OFFLINE, UNSEEN, DISABLED (set up), or ON_NETWORK, AWAY (found by the sweep only). */
+    val state: String = DisplayState.UNSEEN,
     val host: String,
     val deviceName: String? = null,
     val enabled: Boolean,
@@ -173,6 +177,20 @@ data class DisplayDto(
     val inHours: Boolean = true,
     val reclaimAfterMinutes: Int? = null,
 )
+
+object DisplayState {
+  const val ONLINE = "ONLINE"
+  const val OFFLINE = "OFFLINE"
+  const val UNSEEN = "UNSEEN"
+  const val DISABLED = "DISABLED"
+  const val ON_NETWORK = "ON_NETWORK"
+  const val AWAY = "AWAY"
+}
+
+/** A Cast device the cast agent's network sweep found. */
+@Serializable data class DiscoveredDevice(val deviceId: String, val name: String? = null, val host: String)
+
+@Serializable data class DiscoveredBatch(val devices: List<DiscoveredDevice> = emptyList())
 
 /** What the cast agent needs to run one TV. */
 @Serializable

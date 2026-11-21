@@ -8,6 +8,22 @@ import java.util.Locale
 object DisplayStatus {
   private val CLOCK = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
+  /** A found-but-not-set-up device counts as on the network if a sweep saw it in the last couple of hours. */
+  private val FRESH: java.time.Duration = java.time.Duration.ofHours(2)
+
+  /** The badge state of a TV set up for a committee. */
+  fun state(enabled: Boolean, online: Boolean?): String =
+      when {
+        !enabled -> DisplayState.DISABLED
+        online == true -> DisplayState.ONLINE
+        online == false -> DisplayState.OFFLINE
+        else -> DisplayState.UNSEEN
+      }
+
+  /** The badge state of a device only the network sweep knows ([lastSeen] and [now] are both UTC). */
+  fun discoveredState(lastSeen: java.time.LocalDateTime, now: java.time.LocalDateTime): String =
+      if (java.time.Duration.between(lastSeen, now) <= FRESH) DisplayState.ON_NETWORK else DisplayState.AWAY
+
   data class Summary(val online: Boolean?, val showing: String, val dashboard: Boolean)
 
   /** [raw] is the agent's last report: our app's name, "idle", another app's name, or "offline". */
