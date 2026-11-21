@@ -33,6 +33,10 @@
                         <span th:classappend="${offline > 0} ? 'disp-summary-bad'" th:text="${offline} + ' offline'">1 offline</span>
                         <span aria-hidden="true">·</span>
                         <span th:text="${dashboards} + ' showing a dashboard'">1 showing a dashboard</span>
+                        <th:block th:if="${updated}">
+                            <span aria-hidden="true">·</span>
+                            <span th:text="'updated ' + ${updated}">updated Today, 8:15 AM</span>
+                        </th:block>
                     </div>
                 </div>
                 <a class="btn btn-outline-secondary btn-sm" href="/displays">
@@ -99,6 +103,8 @@
                             </td>
                             <td data-label="Showing now">
                                 <div th:text="${d.showing}">The committee dashboard</div>
+                                <a class="small" th:if="${d.mediaUrl}" th:href="${d.mediaUrl}" target="_blank"
+                                   rel="noopener noreferrer">Media</a>
                                 <div class="disp-pages" th:if="${d.showingDashboard and !#lists.isEmpty(d.dashboardPages)}">
                                     <span class="disp-page" th:each="p : ${d.dashboardPages}" th:text="${p}">Page</span>
                                 </div>

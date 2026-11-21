@@ -826,6 +826,13 @@ CREATE TABLE `cast_devices` (
   `host` varchar(64) NOT NULL COMMENT 'Last address it was seen at',
   `first_seen_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'UTC',
   `last_seen_at` timestamp NOT NULL DEFAULT current_timestamp() COMMENT 'UTC; updated by each sweep that finds it',
+  `app_name` varchar(255) DEFAULT NULL COMMENT 'The app the device was running at the last sweep',
+  `status_text` varchar(255) DEFAULT NULL,
+  `media_state` varchar(24) DEFAULT NULL COMMENT 'PLAYING, PAUSED, ...',
+  `media_title` varchar(255) DEFAULT NULL,
+  `media_artist` varchar(255) DEFAULT NULL,
+  `media_url` varchar(1024) DEFAULT NULL COMMENT 'Web address of what is playing, when the app shares one',
+  `media_type` varchar(80) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cast_devices_device_id_UQ` (`device_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Cast devices found on the network by the cast agent.';

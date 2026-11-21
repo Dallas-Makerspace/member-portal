@@ -31,8 +31,11 @@ constructor(
       return
     }
     val result = dashboard.call(HttpMethod.Get, "displays", username, null, session.sessionId)
-    val rows =
-        (result.data as? List<*>).orEmpty().filterIsInstance<Map<*, *>>().map { toRow(it) }
+    val raw = (result.data as? List<*>).orEmpty().filterIsInstance<Map<*, *>>()
+    val rows = raw.map { toRow(it) }
+    // The newest sweep result: the one label for the whole page, instead of a time on every TV.
+    val sweptAt =
+        raw.filter { it["managed"] == false }.mapNotNull { it["lastSeenAt"] as? String }.maxOrNull()
     val model =
         mapOf(
             "displays" to rows,
@@ -43,7 +46,8 @@ constructor(
             "notSetUp" to rows.count { it["managed"] == false },
             "setUp" to rows.count { it["managed"] == true },
             "attention" to rows.count { it["state"] in ATTENTION },
-            "dashboards" to rows.count { it["showingDashboard"] == true })
+            "dashboards" to rows.count { it["showingDashboard"] == true },
+            "updated" to lastSeenLabel(sweptAt))
     call.respond(ThymeleafContent("displays", model))
   }
 
@@ -61,10 +65,15 @@ constructor(
           "lastSeen" to lastSeenLabel(row["lastSeenAt"] as? String),
           "showing" to row["showing"],
           "showingDashboard" to (row["showingDashboard"] == true),
+          "mediaUrl" to webLink(row["mediaUrl"] as? String),
           "dashboardPages" to ((row["dashboardPages"] as? List<*>).orEmpty().map { it.toString() }),
           "schedule" to row["schedule"],
           "inHours" to (row["inHours"] != false),
           "reclaimAfterMinutes" to (row["reclaimAfterMinutes"] as? Number)?.toInt())
+
+  /** Only a web address can be a link, whatever the service sends. */
+  private fun webLink(url: String?): String? =
+      url?.takeIf { it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true) }
 
   private fun lastSeenLabel(iso: String?): String? {
     val seen = iso?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } ?: return null

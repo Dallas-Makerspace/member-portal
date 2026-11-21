@@ -27,6 +27,7 @@ class DisplaysTemplateTest {
       enabled: Boolean = true,
       managed: Boolean = true,
       state: String? = null,
+      mediaUrl: String? = null,
   ) =
       mapOf<String, Any?>(
           "id" to 1,
@@ -42,6 +43,7 @@ class DisplaysTemplateTest {
           "lastSeen" to if (online == null) null else "Today, 8:15 AM",
           "showing" to showing,
           "showingDashboard" to dashboard,
+          "mediaUrl" to mediaUrl,
           "dashboardPages" to pages,
           "schedule" to "On until 2:00 AM",
           "inHours" to true,
@@ -64,6 +66,7 @@ class DisplaysTemplateTest {
           setVariable("setUp", displays.count { it["managed"] == true })
           setVariable("attention", displays.count { it["state"] in setOf("OFFLINE", "UNSEEN", "DISABLED") })
           setVariable("dashboards", displays.count { it["showingDashboard"] == true })
+          setVariable("updated", if (displays.any { it["managed"] == false }) "Today, 8:15 AM" else null)
         }
     return engine.process(template, context)
   }
@@ -75,7 +78,7 @@ class DisplaysTemplateTest {
           tv("Classroom TV", null, "Not seen yet"),
           tv("Spare TV", true, "Showing YouTube", enabled = false),
           tv("Classroom Display With A Rather Long Name For Wrapping", true, "Showing Google Photos", true, listOf("Tool Status", "Upcoming Classes", "Lathe Room")),
-          tv("Hallway Display", null, "Not set up for a committee", managed = false, state = "ON_NETWORK"))
+          tv("Hallway Display", null, "Backdrop: Shop safety (paused)", managed = false, state = "ON_NETWORK", mediaUrl = "https://media.example.test/safety.mp4"))
 
   @Test
   fun `each TV shows its status, what it is showing and its dashboard pages`() {
@@ -88,6 +91,23 @@ class DisplaysTemplateTest {
     assertEquals(2, Regex("disp-badge-ok").findAll(html).count())
     assertTrue(html.contains("Offline") && html.contains("Not seen yet") && html.contains("Disabled"))
     assertTrue(html.contains("Showing YouTube"))
+  }
+
+  @Test
+  fun `a link called Media is shown only when the TV shares an address`() {
+    val html = render(sample)
+
+    assertEquals(1, Regex(">Media</a>").findAll(html).count())
+    assertTrue(html.contains("href=\"https://media.example.test/safety.mp4\""))
+    assertTrue(html.contains("rel=\"noopener noreferrer\""))
+  }
+
+  @Test
+  fun `one updated label covers the page, not each TV`() {
+    val html = render(sample)
+
+    assertEquals(1, Regex("updated Today, 8:15 AM").findAll(html).count())
+    assertFalse(render(listOf(sample.first())).contains("updated Today"))
   }
 
   @Test

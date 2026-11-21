@@ -29,7 +29,18 @@ import org.jetbrains.exposed.sql.update
 
 /** A TV row including the fields only the service needs. */
 /** A device the agent found on the network; [lastSeenAt] is UTC. */
-data class DiscoveredRow(val deviceId: String, val name: String?, val host: String, val lastSeenAt: LocalDateTime)
+data class DiscoveredRow(
+    val deviceId: String,
+    val name: String?,
+    val host: String,
+    val lastSeenAt: LocalDateTime,
+    val appName: String? = null,
+    val statusText: String? = null,
+    val mediaState: String? = null,
+    val mediaTitle: String? = null,
+    val mediaArtist: String? = null,
+    val mediaUrl: String? = null,
+)
 
 data class CastTargetRow(
     val committeeId: Int,
@@ -208,6 +219,7 @@ class DashboardRepository @Inject constructor() {
             it[name] = device.name?.take(DEVICE_NAME_MAX)
             it[host] = device.host.take(HOST_MAX)
             it[lastSeenAt] = seenAt
+            setActivity(it, device)
           }
       if (updated == 0) {
         CastDevicesTable.insert {
@@ -216,6 +228,7 @@ class DashboardRepository @Inject constructor() {
           it[host] = device.host.take(HOST_MAX)
           it[firstSeenAt] = seenAt
           it[lastSeenAt] = seenAt
+          setActivity(it, device)
         }
       }
     }
@@ -227,8 +240,25 @@ class DashboardRepository @Inject constructor() {
           deviceId = it[CastDevicesTable.deviceId],
           name = it[CastDevicesTable.name],
           host = it[CastDevicesTable.host],
-          lastSeenAt = it[CastDevicesTable.lastSeenAt])
+          lastSeenAt = it[CastDevicesTable.lastSeenAt],
+          appName = it[CastDevicesTable.appName],
+          statusText = it[CastDevicesTable.statusText],
+          mediaState = it[CastDevicesTable.mediaState],
+          mediaTitle = it[CastDevicesTable.mediaTitle],
+          mediaArtist = it[CastDevicesTable.mediaArtist],
+          mediaUrl = it[CastDevicesTable.mediaUrl])
     }
+  }
+
+  /** What the device was running at the last sweep; a sweep that finds nothing running clears it. */
+  private fun setActivity(statement: org.jetbrains.exposed.sql.statements.UpdateBuilder<*>, device: DiscoveredDevice) {
+    statement[CastDevicesTable.appName] = device.appName?.take(STATUS_MAX_TEXT)
+    statement[CastDevicesTable.statusText] = device.statusText?.take(STATUS_MAX_TEXT)
+    statement[CastDevicesTable.mediaState] = device.media?.state?.take(MEDIA_STATE_MAX)
+    statement[CastDevicesTable.mediaTitle] = device.media?.title?.take(STATUS_MAX_TEXT)
+    statement[CastDevicesTable.mediaArtist] = device.media?.artist?.take(STATUS_MAX_TEXT)
+    statement[CastDevicesTable.mediaUrl] = device.media?.url?.take(MEDIA_URL_MAX)
+    statement[CastDevicesTable.mediaType] = device.media?.contentType?.take(MEDIA_TYPE_MAX)
   }
 
   /** Records what the TV calls itself and its stable id (reported by the cast agent). */
@@ -306,5 +336,9 @@ class DashboardRepository @Inject constructor() {
     const val NAME_MAX = 80
     const val DEVICE_NAME_MAX = 120
     const val HOST_MAX = 64
+    const val STATUS_MAX_TEXT = 255
+    const val MEDIA_STATE_MAX = 24
+    const val MEDIA_URL_MAX = 1024
+    const val MEDIA_TYPE_MAX = 80
   }
 }

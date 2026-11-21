@@ -75,3 +75,13 @@ CREATE TABLE IF NOT EXISTS `cast_devices` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `cast_devices_device_id_UQ` (`device_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Cast devices found on the network by the cast agent.';
+
+-- What each device was doing at the last sweep (TVs / Displays page).
+ALTER TABLE `cast_devices`
+  ADD COLUMN IF NOT EXISTS `app_name` varchar(255) DEFAULT NULL COMMENT 'The app the device was running at the last sweep',
+  ADD COLUMN IF NOT EXISTS `status_text` varchar(255) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `media_state` varchar(24) DEFAULT NULL COMMENT 'PLAYING, PAUSED, ...',
+  ADD COLUMN IF NOT EXISTS `media_title` varchar(255) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `media_artist` varchar(255) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `media_url` varchar(1024) DEFAULT NULL COMMENT 'Web address of what is playing, when the app shares one',
+  ADD COLUMN IF NOT EXISTS `media_type` varchar(80) DEFAULT NULL;

@@ -189,7 +189,15 @@ constructor(
                   enabled = true,
                   lastSeenAt = DashboardTime.utcToChicago(device.lastSeenAt),
                   showing =
-                      if (state == DisplayState.ON_NETWORK) "Not set up for a committee" else "Not seen recently",
+                      if (state == DisplayState.ON_NETWORK) {
+                        DisplayStatus.describeDiscovered(
+                            device.appName,
+                            device.statusText,
+                            DiscoveredMedia(state = device.mediaState, title = device.mediaTitle, artist = device.mediaArtist))
+                      } else {
+                        "Not seen recently"
+                      },
+                  mediaUrl = if (state == DisplayState.ON_NETWORK) DisplayStatus.safeLink(device.mediaUrl) else null,
                   schedule = "Not managed")
             }
             .sortedBy { it.name.lowercase() }

@@ -11,6 +11,28 @@ object DisplayStatus {
   /** A found-but-not-set-up device counts as on the network if a sweep saw it in the last couple of hours. */
   private val FRESH: java.time.Duration = java.time.Duration.ofHours(2)
 
+  /**
+   * What a device nobody has set up is doing, in plain words, from the app it runs and what it plays:
+   * "Spotify", "YouTube: Shop safety (paused)", "Idle (ambient screen)", "Nothing running".
+   */
+  fun describeDiscovered(appName: String?, statusText: String?, media: DiscoveredMedia?): String {
+    val app = appName?.trim().orEmpty()
+    if (app.isEmpty()) return "Nothing running"
+    if (app.equals("Backdrop", ignoreCase = true)) return "Idle (ambient screen)"
+    val what =
+        listOfNotNull(media?.title?.trim()?.takeIf { it.isNotEmpty() }, media?.artist?.trim()?.takeIf { it.isNotEmpty() })
+            .joinToString(" · ")
+            .ifEmpty { statusText?.trim()?.takeIf { it.isNotEmpty() && !it.equals(app, ignoreCase = true) } }
+    val paused = if (media?.state.equals("PAUSED", ignoreCase = true)) " (paused)" else ""
+    return (if (what == null) app else "$app: $what") + paused
+  }
+
+  /** A web address worth linking to: http or https only, so a stored value can never be a script link. */
+  fun safeLink(url: String?): String? =
+      url?.trim()?.takeIf { it.length <= LINK_MAX && (it.startsWith("http://", true) || it.startsWith("https://", true)) }
+
+  private const val LINK_MAX = 1024
+
   /** The badge state of a TV set up for a committee. */
   fun state(enabled: Boolean, online: Boolean?): String =
       when {

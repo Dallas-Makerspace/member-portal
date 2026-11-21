@@ -134,6 +134,7 @@ def build_agent(clock, reactor, service, finder, lookup=lambda host: None, range
         lookup=lookup,
         finder=finder,
         pool=InlinePool(),
+        status_reader=lambda host: None,  # never touch the network in tests
     )
     return agent, devices
 
@@ -299,3 +300,33 @@ def test_the_inventory_is_off_without_ranges_or_an_interval(clock, reactor, serv
     advance(clock, reactor, 3 * 3600)
 
     assert service.discovered_batches == []
+
+
+def test_unmanaged_devices_get_their_status_and_managed_ones_are_left_alone(clock, reactor, service):
+    service.target_list = [make_target(host="tv-1.example.internal", device_id="aaa")]
+    found = {
+        "aaa": ("192.0.2.10", Identity("aaa", "Shop TV")),
+        "bbb": ("192.0.2.11", Identity("bbb", "Lobby TV")),
+        "ccc": ("192.0.2.12", Identity("ccc", "Hall TV")),
+    }
+    asked: list[str] = []
+
+    def reader(host):
+        asked.append(host)
+        if host == "192.0.2.12":
+            raise RuntimeError("refused")
+        return {"appName": "Spotify", "statusText": None, "media": None}
+
+    agent, _ = build_agent(clock, reactor, service, finder=lambda ranges: found)
+    agent._status_reader = reader
+    agent._discovery_every = 30 * 60
+    agent.reconcile()
+    agent.start()
+
+    advance(clock, reactor, 120)
+
+    assert sorted(asked) == ["192.0.2.11", "192.0.2.12"]  # the managed TV is not asked
+    by_id = {d["deviceId"]: d for d in service.discovered_batches[0]}
+    assert by_id["bbb"]["appName"] == "Spotify"
+    assert "appName" not in by_id["aaa"]
+    assert "appName" not in by_id["ccc"]  # a device that will not talk is still listed

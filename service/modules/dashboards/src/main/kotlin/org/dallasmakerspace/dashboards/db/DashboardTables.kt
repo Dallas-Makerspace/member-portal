@@ -63,4 +63,11 @@ object CastDevicesTable : IntIdTable("cast_devices") {
   val host = varchar("host", 64)
   val firstSeenAt = datetime("first_seen_at")
   val lastSeenAt = datetime("last_seen_at")
+  val appName = varchar("app_name", 255).nullable()
+  val statusText = varchar("status_text", 255).nullable()
+  val mediaState = varchar("media_state", 24).nullable()
+  val mediaTitle = varchar("media_title", 255).nullable()
+  val mediaArtist = varchar("media_artist", 255).nullable()
+  val mediaUrl = varchar("media_url", 1024).nullable()
+  val mediaType = varchar("media_type", 80).nullable()
 }

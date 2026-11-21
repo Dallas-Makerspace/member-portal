@@ -18,6 +18,7 @@ from .controller import TargetController
 from .device import DeviceFactory
 from .identity import Identity, fetch_identity, find_devices, match_device, normalize_id, normalize_name
 from .models import Target
+from .status import read_status
 from .reactor import Handle, Reactor
 from .service import ServiceApi
 
@@ -33,6 +34,8 @@ DISCOVERY_FIRST = 90.0  # the first inventory sweep, once the TVs are connected
 DISCOVERY_BUSY_RETRY = 60.0
 
 Finder = Callable[[Iterable[str]], dict[str, tuple[str, Identity]]]
+StatusReader = Callable[[str], "dict | None"]
+STATUS_WORKERS = 6
 
 
 class Agent:
@@ -49,6 +52,7 @@ class Agent:
         finder: Finder = find_devices,
         pool: ThreadPoolExecutor | None = None,
         discovery_minutes: float = 0.0,
+        status_reader: StatusReader = read_status,
     ) -> None:
         self._service = service
         self._reactor = reactor
@@ -66,6 +70,7 @@ class Agent:
         self._sweep_timer: Handle | None = None
         self._sweep_delay = SWEEP_BACKOFF_START
         self._discovery_every = max(0.0, discovery_minutes) * 60.0
+        self._status_reader = status_reader
         self._discovery_timer: Handle | None = None
         self._stop = threading.Event()
 
@@ -208,13 +213,33 @@ class Agent:
     def _discover_and_report(self) -> int:
         """Sweeps the TV subnets and tells the service what answered (runs off the reactor thread)."""
         found = self._finder(self._ranges)
+        managed = {normalize_id(c.target.device_id) for c in list(self._controllers.values())}
         devices = [
             {"deviceId": device_id, "name": identity.name, "host": host}
             for device_id, (host, identity) in found.items()
         ]
+        self._add_statuses(devices, skip=managed)
         if devices:
             self._service.discovered(devices)
         return len(devices)
+
+    def _add_statuses(self, devices: list[dict], skip: set) -> None:
+        """Adds what each unmanaged device is running and playing (the managed TVs already report theirs)."""
+        todo = [d for d in devices if normalize_id(d["deviceId"]) not in skip]
+        if not todo:
+            return
+        with ThreadPoolExecutor(max_workers=STATUS_WORKERS, thread_name_prefix="status") as pool:
+            results = list(pool.map(self._safe_status, [d["host"] for d in todo]))
+        for device, status in zip(todo, results):
+            if status:
+                device.update(status)
+
+    def _safe_status(self, host: str) -> dict | None:
+        try:
+            return self._status_reader(host)
+        except Exception:
+            log.debug("Could not read the status of %s", host, exc_info=True)
+            return None
 
     def _discovery_done(self, count: int | None) -> None:
         if count is not None:

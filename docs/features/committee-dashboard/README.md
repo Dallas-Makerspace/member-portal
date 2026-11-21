@@ -90,7 +90,11 @@ dashboard with its page titles, idle, or another app), last update, display hour
 aware) and the take-back time. A TV's address is not shown. It comes from `GET /displays` on
 the service (`DashboardService.displays`) and `DisplayStatus` turns the agent's last report into wording. The status
 is the agent's last report (connect, disconnect or app change), not a ping, so "Last update" is the last change.
-Only TVs configured on a committee's dashboard appear; devices the network scan found but nobody set up do not.
+Devices the cast agent's sweep found but nobody set up are listed too. At each sweep the agent also reads what
+each one is running (app name, status text and, for apps that share it, the media's title, artist, state and web
+address) and stores it in `cast_devices`; the page says it in words ("Spotify", "Idle (ambient screen)", "Nothing
+running") with a "Media" link when there is a web address. Only http(s) addresses become links. One "updated" time
+at the top of the page is the newest sweep. A snapshot, so it can be up to the sweep interval old.
 
 ## Pictures
 

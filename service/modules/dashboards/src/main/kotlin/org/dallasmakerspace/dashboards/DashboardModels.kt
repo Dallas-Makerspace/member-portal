@@ -172,6 +172,8 @@ data class DisplayDto(
     val lastSeenAt: String? = null,
     val showing: String,
     val showingDashboard: Boolean = false,
+    /** A web address for what is playing, when the TV's app shares one. */
+    val mediaUrl: String? = null,
     val dashboardPages: List<String> = emptyList(),
     val schedule: String,
     val inHours: Boolean = true,
@@ -187,8 +189,26 @@ object DisplayState {
   const val AWAY = "AWAY"
 }
 
-/** A Cast device the cast agent's network sweep found. */
-@Serializable data class DiscoveredDevice(val deviceId: String, val name: String? = null, val host: String)
+/** What a Cast device was playing when the sweep looked; [url] is a web address when the app shares one. */
+@Serializable
+data class DiscoveredMedia(
+    val state: String? = null,
+    val title: String? = null,
+    val artist: String? = null,
+    val url: String? = null,
+    val contentType: String? = null,
+)
+
+/** A Cast device the cast agent's network sweep found, with what it was running. */
+@Serializable
+data class DiscoveredDevice(
+    val deviceId: String,
+    val name: String? = null,
+    val host: String,
+    val appName: String? = null,
+    val statusText: String? = null,
+    val media: DiscoveredMedia? = null,
+)
 
 @Serializable data class DiscoveredBatch(val devices: List<DiscoveredDevice> = emptyList())
 
