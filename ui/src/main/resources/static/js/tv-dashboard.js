@@ -31,6 +31,7 @@
   var pageTimer = null;
   var changeTimer = null;
   var newsTimer = null;
+  var newsKey = null;
   var retryTimer = null;
   var retryMs = RETRY_START_MS;
   var qrUrl = null;
@@ -389,6 +390,11 @@
   // ---- bottom row ----
 
   function renderNews(items) {
+    // Redrawing for a page change must not restart the announcements: the same list, rotating or not, stays as it is.
+    var rotating = items.length > 1 && (!still || forceRotate);
+    var key = JSON.stringify(items) + '|' + rotating;
+    if (key === newsKey) { return; }
+    newsKey = key;
     clearInterval(newsTimer);
     var node = byId('tv-news-text');
     var index = 0;
@@ -406,7 +412,7 @@
     }
     node.className = 'tv-news-text';
     show();
-    if (items.length > 1 && !still) { newsTimer = setInterval(show, NEWS_ROTATE_MS); }
+    if (rotating) { newsTimer = setInterval(show, NEWS_ROTATE_MS); }
   }
 
   function renderQr(url) {

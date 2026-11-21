@@ -84,6 +84,11 @@ with `pin`). "On the TV" finds the saved page by its id (`GET .../dashboard/prev
 reordering; a page that is not saved yet has no saved version and says so. The preview is its own copy of the
 dashboard, not a mirror of any TV, so it cannot know which page a TV is showing.
 
+The bottom News row shows one announcement at a time and switches to the next every 9 seconds when more than one
+is active (a dashboard announcement inside its start/end window, or a chair message from the last 14 days). On a TV
+that always happens. In the preview it follows the same rule as the pages: it stays on the first announcement for
+anyone whose system asks for reduced motion, and rotates while **Play all pages** is on.
+
 **Play all pages** is optional: it cycles the pages at their set times, as a TV does, with a readout of the
 page and the seconds until the next one (`DmsTv.status()`). It also plays for people who asked for reduced
 motion, since they pressed it. Selecting a page, switching views or pressing Stop ends it. The editor loads the
