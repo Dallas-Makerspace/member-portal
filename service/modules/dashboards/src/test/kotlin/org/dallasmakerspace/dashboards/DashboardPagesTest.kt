@@ -33,4 +33,15 @@ class DashboardPagesTest {
     assertEquals(listOf("shown", "hidden", "empty"), pagesToShow(pages, null, all = true).map { it.title })
     assertEquals(listOf("shown"), pagesToShow(pages, null).map { it.title })
   }
+
+  @Test
+  fun `an event start comes from the UTC value or else the Central text`() {
+    assertEquals(5L, DashboardTime.eventStartMs(5L, "2026-12-02 18:30:00"))
+    // 18:30 Central on 2 December is 00:30 UTC on 3 December (standard time, UTC-6)
+    assertEquals(1_796_257_800_000L, DashboardTime.eventStartMs(null, "2026-12-02 18:30:00"))
+    assertEquals(1_796_257_800_000L, DashboardTime.eventStartMs(null, "2026-12-02T18:30:00"))
+    assertEquals(null, DashboardTime.eventStartMs(null, ""))
+    assertEquals(null, DashboardTime.eventStartMs(null, "soon"))
+    assertEquals(null, DashboardTime.eventStartMs(null, null))
+  }
 }

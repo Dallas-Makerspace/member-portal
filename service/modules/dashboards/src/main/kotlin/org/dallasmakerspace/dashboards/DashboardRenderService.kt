@@ -194,11 +194,12 @@ constructor(
         }
     val nowMs = System.currentTimeMillis()
     return events
-        .filter { (it.eventStartUtcMs ?: Long.MAX_VALUE) > nowMs }
-        .sortedBy { it.eventStartUtcMs }
-        .distinctBy { it.id }
+        .map { it to DashboardTime.eventStartMs(it.eventStartUtcMs, it.eventStart) }
+        .filter { (_, startMs) -> (startMs ?: Long.MAX_VALUE) > nowMs }
+        .sortedBy { (_, startMs) -> startMs ?: Long.MAX_VALUE }
+        .distinctBy { (event, _) -> event.id }
         .take(config.limit.coerceIn(1, MAX_CLASS_LIMIT))
-        .map { ClassRow(it.name, startLabel(it.eventStartUtcMs), it.eventStartUtcMs) }
+        .map { (event, startMs) -> ClassRow(event.name, startLabel(startMs), startMs) }
   }
 
   private suspend fun ownedGroups(committee: Committee): List<String> =

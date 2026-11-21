@@ -25,6 +25,21 @@ object DashboardTime {
   fun utcToChicago(value: LocalDateTime?): String? =
       value?.atZone(UTC)?.withZoneSameInstant(CHICAGO)?.toLocalDateTime()?.toString()
 
+  /**
+   * The moment an event starts, as epoch milliseconds: the UTC value when the calendar gave one, else its Central
+   * start text (`2026-12-02 18:30:00`, which is all the prerequisite-class query returns). Null if neither reads.
+   */
+  fun eventStartMs(utcMs: Long?, centralText: String?): Long? {
+    if (utcMs != null) return utcMs
+    val text = centralText?.trim().orEmpty().replace(' ', 'T')
+    if (text.isEmpty()) return null
+    return try {
+      LocalDateTime.parse(text).atZone(CHICAGO).toInstant().toEpochMilli()
+    } catch (e: DateTimeParseException) {
+      null
+    }
+  }
+
   fun utcMillis(value: LocalDateTime): Long = value.atZone(UTC).toInstant().toEpochMilli()
 
   fun nowUtc(): LocalDateTime = LocalDateTime.now(UTC)
