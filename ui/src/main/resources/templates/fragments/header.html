@@ -162,6 +162,10 @@
                                            target="_blank">Suggest a report</a></li>
                                 </ul>
                             </li>
+                            <!-- TVs / Displays -->
+                            <li th:if="${displaysEnabled}">
+                                <a class="dropdown-item" href="/displays">TVs / Displays</a>
+                            </li>
                             <!-- Remote Access -->
                             <li th:if="${remoteAccessEnabled}">
                                 <a class="dropdown-item" href="/remote-access">Remote Access</a>

@@ -30,6 +30,7 @@ import org.dallasmakerspace.server.routes.CommitteeDetailHandler
 import org.dallasmakerspace.server.routes.CommitteeDashboardApiHandler
 import org.dallasmakerspace.server.routes.CommitteeDashboardHandler
 import org.dallasmakerspace.server.routes.CommitteeDashboardPreviewHandler
+import org.dallasmakerspace.server.routes.DisplaysHandler
 import org.dallasmakerspace.server.routes.TvDashboardApiHandler
 import org.dallasmakerspace.server.routes.TvAvatarApiHandler
 import org.dallasmakerspace.server.routes.TvImageApiHandler
@@ -714,4 +715,14 @@ class RoutesModule {
   @StringKey("/tv/api/avatars/{username}")
   fun providesTvAvatarApiHandler(dashboard: DashboardServiceClient): IRouteHandler =
       TvAvatarApiHandler(dashboard)
+
+  @IntoMap
+  @Provides
+  @StringKey("/displays")
+  fun providesDisplaysHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      dashboard: DashboardServiceClient,
+      memberServiceClient: MemberServiceClient,
+  ): IRouteHandler = DisplaysHandler(loggerFactory, userInfoProvider, dashboard, memberServiceClient)
 }

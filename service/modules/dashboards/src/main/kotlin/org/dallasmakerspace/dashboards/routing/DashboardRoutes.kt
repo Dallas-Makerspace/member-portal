@@ -57,6 +57,9 @@ fun Route.dashboardRoutes(service: DashboardService, events: DashboardEvents) {
 
 @Suppress("LongMethod", "CyclomaticComplexMethod")
 private fun Route.editorRoutes(service: DashboardService) {
+  get("/displays") {
+    call.guarded { ApiResponse(Status.SUCCESS, "Displays", service.displays()) }
+  }
   get("/committees/{id}/dashboard/access") {
     val (actor, id) = call.actorAndCommittee() ?: return@get
     call.respond(ApiResponse(Status.SUCCESS, "Access", mapOf("canEdit" to service.canEdit(actor, id))))

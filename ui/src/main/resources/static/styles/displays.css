@@ -1,0 +1,17 @@
+/* TVs / Displays (templates/displays.html) */
+.disp-tile { padding: 14px 18px; }
+.disp-tile-num { font-size: 2rem; font-weight: 800; line-height: 1.1; }
+.disp-tile-label { font-size: .85rem; color: #5a6270; }
+.disp-tile-ok { border-top: 3px solid #198754; }
+.disp-tile-bad { border-top: 3px solid #dc3545; background: #fdecea; }
+
+.disp-filter { max-width: 320px; }
+.disp-table th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #5a6270; white-space: nowrap; }
+
+.disp-badge { font-size: .8rem; font-weight: 700; padding: .4em .7em; }
+.disp-badge-ok { background: #d1f0dd; color: #0b5a2b; }
+.disp-badge-bad { background: #f8d7da; color: #842029; }
+.disp-badge-off { background: #e9ecef; color: #495057; }
+
+.disp-pages { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.disp-page { font-size: .75rem; background: #eef1f6; border-radius: 10px; padding: 2px 8px; color: #3a4252; }

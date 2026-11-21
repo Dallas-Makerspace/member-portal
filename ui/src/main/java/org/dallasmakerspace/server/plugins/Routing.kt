@@ -126,6 +126,9 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.COMMITTEE_DASHBOARD.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.DISPLAYS.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.COMMITTEE_DASHBOARD_PREVIEW.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

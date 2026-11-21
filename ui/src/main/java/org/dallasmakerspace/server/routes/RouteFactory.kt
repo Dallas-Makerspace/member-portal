@@ -114,6 +114,7 @@ object RouteFactory {
     COMMITTEE_FOLLOWERS("/committees/{committee_slug}/followers"),
     COMMITTEE_MESSAGE("/committees/{committee_slug}/message"),
     COMMITTEE_DASHBOARD("/committees/{committee_slug}/dashboard"),
+    DISPLAYS("/displays"),
     COMMITTEE_DASHBOARD_PREVIEW("/committees/{committee_slug}/dashboard/preview"),
     COMMITTEE_DASHBOARD_API("/committees/{committee_slug}/dashboard-api/{path...}"),
     BAMBU_PRINTER_STATUS("/committees/3d-fab/printers"),

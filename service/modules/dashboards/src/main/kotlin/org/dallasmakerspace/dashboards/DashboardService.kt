@@ -130,6 +130,43 @@ constructor(
     events.targetsChanged(committee.id)
   }
 
+  // ---- TVs / Displays page ----
+
+  /** Every configured TV with what it is doing, for the read-only TVs / Displays page. */
+  suspend fun displays(): List<DisplayDto> {
+    val now = java.time.LocalTime.now(DashboardTime.CHICAGO)
+    val pagesByCommittee = mutableMapOf<Int, List<String>>()
+    return repository.allTargets().mapNotNull { row ->
+      val committee = access.committee(row.committeeId) ?: return@mapNotNull null
+      val status = DisplayStatus.summarize(row.dto.lastStatus)
+      val (inHours, schedule) = DisplayStatus.schedule(now, row.dto.displayStart, row.dto.displayEnd)
+      val pages =
+          if (status.dashboard) {
+            pagesByCommittee.getOrPut(committee.id) {
+              pagesToShow(repository.loadPages(committee.id), null).map { it.title.ifBlank { "Untitled page" } }
+            }
+          } else {
+            emptyList()
+          }
+      DisplayDto(
+          id = row.dto.id!!,
+          name = row.dto.name,
+          committeeName = committee.name,
+          committeeSlug = committee.slug,
+          host = row.dto.host,
+          deviceName = row.dto.deviceName,
+          enabled = row.dto.enabled,
+          online = status.online,
+          lastSeenAt = row.dto.lastSeenAt,
+          showing = status.showing,
+          showingDashboard = status.dashboard,
+          dashboardPages = pages,
+          schedule = schedule,
+          inHours = inHours,
+          reclaimAfterMinutes = row.dto.reclaimAfterMinutes)
+    }.sortedWith(compareBy({ it.committeeName }, { it.name }))
+  }
+
   // ---- Cast agent ----
 
   suspend fun agentTargets(): List<AgentTarget> =

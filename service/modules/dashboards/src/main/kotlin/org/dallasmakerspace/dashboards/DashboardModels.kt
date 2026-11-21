@@ -154,6 +154,26 @@ data class DashboardPayload(
     val generatedAtMs: Long,
 )
 
+/** One TV on the TVs / Displays page. [online] is null until the agent has ever reported on it. */
+@Serializable
+data class DisplayDto(
+    val id: Int,
+    val name: String,
+    val committeeName: String,
+    val committeeSlug: String,
+    val host: String,
+    val deviceName: String? = null,
+    val enabled: Boolean,
+    val online: Boolean? = null,
+    val lastSeenAt: String? = null,
+    val showing: String,
+    val showingDashboard: Boolean = false,
+    val dashboardPages: List<String> = emptyList(),
+    val schedule: String,
+    val inHours: Boolean = true,
+    val reclaimAfterMinutes: Int? = null,
+)
+
 /** What the cast agent needs to run one TV. */
 @Serializable
 data class AgentTarget(

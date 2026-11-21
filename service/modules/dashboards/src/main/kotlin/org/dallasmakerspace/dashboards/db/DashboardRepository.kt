@@ -19,6 +19,7 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertAndGetId
@@ -131,6 +132,10 @@ class DashboardRepository @Inject constructor() {
     CastTargetsTable.select { CastTargetsTable.committeeId eq committeeId }
         .orderBy(CastTargetsTable.id, SortOrder.ASC)
         .map(::toTarget)
+  }
+
+  suspend fun allTargets(): List<CastTargetRow> = suspendTransaction {
+    CastTargetsTable.selectAll().orderBy(CastTargetsTable.id, SortOrder.ASC).map(::toTarget)
   }
 
   suspend fun allEnabledTargets(): List<CastTargetRow> = suspendTransaction {

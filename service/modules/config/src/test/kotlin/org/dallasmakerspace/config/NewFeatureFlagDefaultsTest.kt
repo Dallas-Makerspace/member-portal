@@ -26,6 +26,15 @@ class NewFeatureFlagDefaultsTest {
   }
 
   @Test
+  fun `the displays page flag starts as a pilot for the early access group, off for everyone else`() {
+    val default = ConfigRegistry.DISPLAYS_PAGE_ENABLED.defaultValue
+
+    assertFalse(default.enabled)
+    assertEquals(setOf("mandarlimaye"), default.enabledUsernames)
+    assertEquals(setOf("IT Early Access"), default.enabledGroupNames)
+  }
+
+  @Test
   fun `the committee dashboard flag starts as a pilot for the early access group, off for everyone else`() {
     val default = ConfigRegistry.COMMITTEE_DASHBOARD_ENABLED.defaultValue
 
