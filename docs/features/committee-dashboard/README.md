@@ -84,7 +84,7 @@ By default the draft view follows the page being edited and shows it alone, even
 
 ## TVs / Displays page
 
-Resources → **TVs / Displays** (`/displays`, flag `displays.enabled`, a pilot until rolled out) is a read-only list of every
+Resources → **TVs / Displays** (`/displays`, open to any signed-in member) is a read-only list of every
 TV set up for a committee: status (online, offline, not seen yet, disabled), what it is showing (the committee
 dashboard with its page titles, idle, or another app), last update, display hours ("On until 2:00 AM", overnight
 aware) and the take-back time. Infrastructure members also see each TV's address. It comes from `GET /displays` on

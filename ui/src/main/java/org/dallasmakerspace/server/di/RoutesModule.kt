@@ -723,6 +723,5 @@ class RoutesModule {
       loggerFactory: LoggerFactory,
       userInfoProvider: UserInfoProvider,
       dashboard: DashboardServiceClient,
-      memberServiceClient: MemberServiceClient,
-  ): IRouteHandler = DisplaysHandler(loggerFactory, userInfoProvider, dashboard, memberServiceClient)
+  ): IRouteHandler = DisplaysHandler(loggerFactory, userInfoProvider, dashboard)
 }

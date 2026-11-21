@@ -265,18 +265,6 @@ object ConfigRegistry {
           type = ConfigValueType.StringType,
       )
 
-  val DISPLAYS_PAGE_ENABLED =
-      ConfigKey(
-          key = "displays.enabled",
-          description = "Shows the TVs / Displays page; can be piloted for specific usernames or AD groups first",
-          category = "Committees",
-          defaultValue = FeatureFlagValue(
-              enabledUsernames = setOf("mandarlimaye"),
-              enabledGroupNames = setOf("IT Early Access"),
-          ),
-          type = ConfigValueType.FeatureFlagType,
-      )
-
   val COMMITTEE_DASHBOARD_ENABLED =
       ConfigKey(
           key = "committees.dashboard-enabled",
@@ -517,7 +505,6 @@ object ConfigRegistry {
           NOTIFICATIONS_SMS_ENABLED,
           COMMITTEE_BROADCAST_ENABLED,
           COMMITTEE_TALK_CATEGORIES,
-          DISPLAYS_PAGE_ENABLED,
           COMMITTEE_DASHBOARD_ENABLED,
           COMMITTEE_DASHBOARD_COMMITTEES,
           COMMITTEE_FOLLOW_ENABLED,

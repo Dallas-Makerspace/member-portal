@@ -13,7 +13,6 @@ import javax.inject.Inject
 import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.DashboardServiceClient
-import org.dallasmakerspace.server.memberservice.MemberServiceClient
 
 /** `/displays`: a read-only list of every TV the portal casts to, and what each is doing. */
 class DisplaysHandler
@@ -22,14 +21,12 @@ constructor(
     loggerFactory: LoggerFactory,
     userInfoProvider: UserInfoProvider,
     private val dashboard: DashboardServiceClient,
-    private val memberService: MemberServiceClient,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
 
   @Suppress("ReturnCount")
   override suspend fun handleAuthenticated(call: ApplicationCall) {
     val username = userInfo["preferred_username"] as? String
-    val enabled = username?.let { memberService.isFeatureEnabled(FLAG, it, session.sessionId) } ?: false
-    if (username == null || !enabled) {
+    if (username == null) {
       call.respond(HttpStatusCode.NotFound)
       return
     }
@@ -78,7 +75,6 @@ constructor(
   }
 
   companion object {
-    const val FLAG = "displays.enabled"
     private val OK_RANGE = 200..299
     private val CHICAGO = ZoneId.of("America/Chicago")
     private val TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.US)

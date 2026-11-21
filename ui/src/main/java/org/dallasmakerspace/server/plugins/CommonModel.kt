@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory
 private const val FLAG_CACHE_TTL_MS = 60_000L
 private const val ACCOUNT_MENU_FLAG = "nav.account-menu.enabled"
 private const val REMOTE_ACCESS_FLAG = "remote-access.enabled"
-private const val DISPLAYS_FLAG = "displays.enabled"
 
 private data class CachedFlag(val value: Boolean, val expiresAt: Long)
 
@@ -62,7 +61,6 @@ fun Application.configureCommonModel(
       val flags =
           listOf(
                   REMOTE_ACCESS_FLAG,
-                  DISPLAYS_FLAG,
                   ACCOUNT_MENU_FLAG,
                   ProfileFollowsHandler.FEATURE_FLAG_KEY,
                   NotificationsInboxHandler.FEATURE_FLAG_KEY,
@@ -96,7 +94,6 @@ fun Application.configureCommonModel(
                 mapOf(
                     "isInfraUser" to isInfraUser,
                     "remoteAccessEnabled" to remoteAccessEnabled,
-                    "displaysEnabled" to flags.getValue(DISPLAYS_FLAG),
                     "itAssistantEnabled" to itAssistantEnabled,
                     "courseAssistantEnabled" to courseAssistantEnabled,
                     "aiAssistantEnabled" to aiAssistantEnabled,
