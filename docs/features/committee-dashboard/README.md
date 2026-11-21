@@ -86,8 +86,9 @@ dashboard, not a mirror of any TV, so it cannot know which page a TV is showing.
 
 The bottom News row shows one announcement at a time and switches to the next every 9 seconds when more than one
 is active (a dashboard announcement inside its start/end window, or a chair message from the last 14 days). On a TV
-that always happens. In the preview it follows the same rule as the pages: it stays on the first announcement for
-anyone whose system asks for reduced motion, and rotates while **Play all pages** is on.
+that always happens, and a long list scrolls without end. The preview does the same, even for people whose system
+asks for reduced motion, because it shows what the TV does. Only the automatic page rotation honors that setting
+(it moves on only while **Play all pages** is on).
 
 **Play all pages** is optional: it cycles the pages at their set times, as a TV does, with a readout of the
 page and the seconds until the next one (`DmsTv.status()`). It also plays for people who asked for reduced

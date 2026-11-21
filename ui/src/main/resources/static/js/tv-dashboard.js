@@ -374,7 +374,7 @@
     var track = view.firstChild;
     var people = view._items || [];
     var build = view._build;
-    if (!track || !track.children.length || still || !track.animate) { return; }
+    if (!track || !track.children.length || !track.animate) { return; }
     if (track.scrollHeight <= view.clientHeight + 1) { return; }
     view.classList.add('scrolling');
     var first = track.children.length;
@@ -391,7 +391,7 @@
 
   function renderNews(items) {
     // Redrawing for a page change must not restart the announcements: the same list, rotating or not, stays as it is.
-    var rotating = items.length > 1 && (!still || forceRotate);
+    var rotating = items.length > 1;
     var key = JSON.stringify(items) + '|' + rotating;
     if (key === newsKey) { return; }
     newsKey = key;
