@@ -102,9 +102,9 @@ class DisplaysTemplateTest {
   }
 
   @Test
-  fun `the address column is only for infrastructure members`() {
+  fun `a TV's address is never shown, even to infrastructure members`() {
     assertFalse(render(sample, infra = false).contains("tv-1.example.internal"))
-    assertTrue(render(sample, infra = true).contains("tv-1.example.internal"))
+    assertFalse(render(sample, infra = true).contains("tv-1.example.internal"))
   }
 
   @Test

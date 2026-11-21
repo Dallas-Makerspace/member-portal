@@ -11,7 +11,6 @@
 .disp-table tbody tr:hover > * { background: #f4f6fa; }
 .disp-table tr[hidden] { display: none !important; }
 .disp-name { font-weight: 700; }
-.disp-host { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; color: #3a4252; white-space: nowrap; }
 
 .disp-badge { font-size: .8rem; font-weight: 700; padding: .4em .7em; white-space: nowrap; }
 .disp-badge-ok { background: #d1f0dd; color: #0b5a2b; }

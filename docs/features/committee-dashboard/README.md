@@ -87,7 +87,7 @@ By default the draft view follows the page being edited and shows it alone, even
 Resources → **TVs / Displays** (`/displays`, open to any signed-in member) is a read-only list of every
 TV set up for a committee: status (online, offline, not seen yet, disabled), what it is showing (the committee
 dashboard with its page titles, idle, or another app), last update, display hours ("On until 2:00 AM", overnight
-aware) and the take-back time. Infrastructure members also see each TV's address. It comes from `GET /displays` on
+aware) and the take-back time. A TV's address is not shown. It comes from `GET /displays` on
 the service (`DashboardService.displays`) and `DisplayStatus` turns the agent's last report into wording. The status
 is the agent's last report (connect, disconnect or app change), not a ping, so "Last update" is the last change.
 Only TVs configured on a committee's dashboard appear; devices the network scan found but nobody set up do not.

@@ -55,7 +55,6 @@ constructor(
           "committeeSlug" to row["committeeSlug"],
           "managed" to (row["managed"] != false),
           "state" to (row["state"] as? String ?: "UNSEEN"),
-          "host" to row["host"],
           "deviceName" to row["deviceName"],
           "enabled" to (row["enabled"] != false),
           "online" to row["online"] as? Boolean,

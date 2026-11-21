@@ -75,7 +75,6 @@
                             <th scope="col">Showing now</th>
                             <th scope="col">Last update</th>
                             <th scope="col">Hours</th>
-                            <th scope="col" th:if="${isInfraUser}">Address</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -110,7 +109,6 @@
                                 <div class="small text-muted" th:if="${d.managed and d.reclaimAfterMinutes}"
                                      th:text="'Takes the TV back after ' + ${d.reclaimAfterMinutes} + ' min'"></div>
                             </td>
-                            <td th:if="${isInfraUser}" data-label="Address"><span class="disp-host" th:text="${d.host}">host</span></td>
                         </tr>
                         </tbody>
                     </table>
