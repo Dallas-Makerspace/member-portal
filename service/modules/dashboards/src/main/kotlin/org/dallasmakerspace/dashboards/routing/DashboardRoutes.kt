@@ -16,8 +16,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.http.CacheControl
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.dallasmakerspace.auth.ApiKeyAuthProvider
 import org.dallasmakerspace.auth.Permission
 import org.dallasmakerspace.auth.authorize
@@ -251,8 +249,8 @@ private fun Route.castAgentRoutes(service: DashboardService, events: DashboardEv
     call.respondTextWriter(contentType = ContentType.Text.EventStream) {
       write(": connected\n\n")
       flush()
-      events.events.collect { event ->
-        write("data: ${Json.encodeToString(event)}\n\n")
+      events.stream().collect { block ->
+        write(block)
         flush()
       }
     }

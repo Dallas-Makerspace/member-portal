@@ -15,6 +15,8 @@ log = logging.getLogger(__name__)
 
 CONNECT_TIMEOUT = 5
 READ_TIMEOUT = 15
+# The service sends a heartbeat every 15 seconds; a stream silent for this long is dead and is replaced.
+STREAM_IDLE_TIMEOUT = 60
 
 
 @dataclass(frozen=True)
@@ -95,7 +97,7 @@ class HttpService:
             f"{self._base}/cast-agent/events",
             stream=True,
             headers={"Accept": "text/event-stream"},
-            timeout=(CONNECT_TIMEOUT, None),
+            timeout=(CONNECT_TIMEOUT, STREAM_IDLE_TIMEOUT),
         ) as response:
             response.raise_for_status()
             yield from parse_sse(response.iter_lines(decode_unicode=True, chunk_size=1))

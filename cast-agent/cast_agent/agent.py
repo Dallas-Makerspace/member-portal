@@ -262,9 +262,11 @@ class Agent:
                 for event in self._service.events():
                     if not connected:
                         connected = True
+                        log.info("Event stream connected")
                         backoff = STREAM_BACKOFF_START
                         self._reactor.post(self.reconcile)  # catch up on edits made while disconnected
                     self._reactor.post(lambda e=event: self.handle(e))
+                log.info("Event stream ended")
             except Exception:
                 log.warning("Event stream dropped; reconnecting in %.0fs", backoff, exc_info=True)
             if self._stop.wait(backoff):

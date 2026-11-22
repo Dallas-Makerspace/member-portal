@@ -95,3 +95,62 @@ def test_shutdown_leaves_the_tvs_showing_the_dashboard(clock, reactor, service):
     agent.shutdown()
 
     assert device.stopped and device.quits == 0
+
+
+def test_a_dead_event_stream_is_replaced_and_the_tv_list_reloaded(clock, reactor, service, monkeypatch):
+    import threading
+
+    from cast_agent import agent as agent_module
+
+    monkeypatch.setattr(agent_module, "STREAM_BACKOFF_START", 0.01)
+    calls = []
+    reloads = []
+    done = threading.Event()
+
+    def events():
+        calls.append(1)
+        if len(calls) == 1:
+            raise ConnectionError("no data for 60 seconds")  # what a silent stream turns into
+        yield {"type": "reload", "committeeId": 9}
+        done.set()
+        threading.Event().wait(0.2)
+
+    service.events = events
+    agent, _ = build_agent(clock, reactor, service)
+    agent.handle = lambda event: reloads.append(event)  # type: ignore[method-assign]
+    stream = threading.Thread(target=agent._stream, daemon=True)
+    stream.start()
+
+    assert done.wait(5), "the agent never reconnected"
+    reactor.run_due()
+    agent.shutdown()
+
+    assert len(calls) >= 2
+    assert reloads == [{"type": "reload", "committeeId": 9}]
+
+
+def test_the_event_stream_gives_up_on_a_silent_connection():
+    from cast_agent.service import CONNECT_TIMEOUT, STREAM_IDLE_TIMEOUT, HttpService
+
+    seen = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_lines(self, **kwargs):
+            return iter(())
+
+    service = HttpService("http://service.example.internal", "key", "cast-agent")
+    service._session.get = lambda url, **kwargs: seen.update(kwargs) or Response()  # type: ignore[method-assign]
+
+    list(service.events())
+
+    assert seen["timeout"] == (CONNECT_TIMEOUT, STREAM_IDLE_TIMEOUT)
+    assert STREAM_IDLE_TIMEOUT is not None
