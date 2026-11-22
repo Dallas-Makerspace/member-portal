@@ -90,6 +90,10 @@ that always happens, and a long list scrolls without end. The preview does the s
 asks for reduced motion, because it shows what the TV does. Only the automatic page rotation honors that setting
 (it moves on only while **Play all pages** is on).
 
+When a dashboard has more than one page, a mustard line along the bottom edge of the screen drains from right to
+left to show the time left on the current page. A single page shows no line, and in the editor preview it runs
+during **Play all pages**.
+
 **Play all pages** is optional: it cycles the pages at their set times, as a TV does, with a readout of the
 page and the seconds until the next one (`DmsTv.status()`). It also plays for people who asked for reduced
 motion, since they pressed it. Selecting a page, switching views or pressing Stop ends it. The editor loads the

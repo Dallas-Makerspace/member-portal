@@ -154,9 +154,16 @@
     void stage.offsetWidth;
     if (!draft || forceRotate) { stage.classList.add('fade'); }
     pageDeadline = 0;
+    var timer = byId('tv-timer');
+    timer.hidden = true;
+    if (timer.animate) { timer.getAnimations().forEach(function (a) { a.cancel(); }); }
     if (pages.length > 1 && (!still || forceRotate)) {
       var wait = Math.max(10, page.durationSeconds || 20) * 1000;
       pageDeadline = Date.now() + wait;
+      if (timer.animate) {
+        timer.hidden = false;
+        timer.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: wait, easing: 'linear', fill: 'forwards' });
+      }
       pageTimer = setTimeout(function () {
         pageIndex = (pageIndex + 1) % pages.length;
         showPage();
