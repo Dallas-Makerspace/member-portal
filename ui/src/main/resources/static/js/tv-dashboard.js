@@ -64,7 +64,8 @@
 
   // ---- loading ----
 
-  function load() {
+  // resume: a refresh the page asked for itself (a timer), which carries on with the page that was showing.
+  function load(resume) {
     clearTimeout(retryTimer);
     var headers = {};
     if (mode === 'tv') {
@@ -82,28 +83,29 @@
         return response.json();
       })
       .then(function (json) {
-        if (json && json.data && !draft) { retryMs = RETRY_START_MS; apply(json.data); }
+        if (json && json.data && !draft) { retryMs = RETRY_START_MS; apply(json.data, resume, resume); }
       })
       .catch(function () {
         if (!pages.length) { waiting('Waiting for the dashboard…'); }
-        retryTimer = setTimeout(load, retryMs);
+        retryTimer = setTimeout(function () { load(resume); }, retryMs);
         retryMs = Math.min(retryMs * 2, RETRY_MAX_MS);
       });
   }
 
-  function apply(data, keepPage) {
+  function apply(data, keepPage, resume) {
     waiting(null);
+    var left = resume && pageDeadline ? pageDeadline - Date.now() : 0;
     byId('tv-committee').textContent = data.committeeName || '';
     renderQr(data.qrUrl);
     renderUpdated(data.generatedAtMs);
     pages = data.pages || [];
     pageIndex = keepPage ? Math.min(pageIndex, Math.max(pages.length - 1, 0)) : 0;
-    showPage();
+    showPage(left);
     renderNews(data.announcements || []);
     clearTimeout(changeTimer);
     if (draft) { return; }
     var wait = (data.nextChangeAtMs || 0) - Date.now();
-    changeTimer = setTimeout(load, Math.min(Math.max(wait, 5000), MAX_TIMER_MS));
+    changeTimer = setTimeout(function () { load(true); }, Math.min(Math.max(wait, 5000), MAX_TIMER_MS));
   }
 
   function renderUpdated(ms) {
@@ -120,7 +122,8 @@
 
   // ---- pages ----
 
-  function showPage() {
+  // resumeMs: time left for this page when the data was only refreshed; it keeps its clock and does not fade in again.
+  function showPage(resumeMs) {
     clearTimeout(pageTimer);
     var stage = byId('tv-stage');
     clear(stage);
@@ -152,17 +155,18 @@
     Array.prototype.forEach.call(stage.querySelectorAll('.tv-members'), scrollMembers);
     stage.classList.remove('fade');
     void stage.offsetWidth;
-    if (!draft || forceRotate) { stage.classList.add('fade'); }
+    if ((!draft || forceRotate) && !resumeMs) { stage.classList.add('fade'); }
     pageDeadline = 0;
     var timer = byId('tv-timer');
     timer.hidden = true;
     if (timer.animate) { timer.getAnimations().forEach(function (a) { a.cancel(); }); }
     if (pages.length > 1 && (!still || forceRotate)) {
-      var wait = Math.max(10, page.durationSeconds || 20) * 1000;
+      var wait = resumeMs > 0 ? resumeMs : Math.max(10, page.durationSeconds || 20) * 1000;
       pageDeadline = Date.now() + wait;
       if (timer.animate) {
         timer.hidden = false;
-        timer.animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: wait, easing: 'linear', fill: 'forwards' });
+        var full = Math.max(10, page.durationSeconds || 20) * 1000;
+        timer.animate([{ transform: 'scaleX(' + Math.min(1, wait / full) + ')' }, { transform: 'scaleX(0)' }], { duration: wait, easing: 'linear', fill: 'forwards' });
       }
       pageTimer = setTimeout(function () {
         pageIndex = (pageIndex + 1) % pages.length;
