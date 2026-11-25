@@ -1,7 +1,8 @@
 /**
  * Falling Effect - Self-contained seasonal falling animation
  * Supports configurable characters, images, colors, and timing
- * Auto-initializes based on date ranges or URL hash overrides
+ * Starts by itself on portal pages, by date or URL hash. The TV dashboard loads it with data-manual
+ * and calls FallingEffect.sync(). Keep the syntax old enough for Chromecast browsers.
  */
 (function() {
     'use strict';
@@ -10,10 +11,87 @@
     // Theme Configurations
     // ============================================================
 
-    // Date ranges are defined in app.js via window.SEASONAL_DATE_RANGES
-    const dateRanges = window.SEASONAL_DATE_RANGES || {};
+    // Dates are Central time. Hash overrides are on each theme below.
+    const MANUAL = !!document.currentScript && document.currentScript.hasAttribute('data-manual');
+
+    function centralToday() {
+        const now = new Date();
+        try {
+            const parts = now.toLocaleDateString('en-US', { timeZone: 'America/Chicago' }).replace(/[^0-9/]/g, '').split('/');
+            return { month: Number(parts[0]), day: Number(parts[1]), year: Number(parts[2]) };
+        } catch (e) {
+            return { month: now.getMonth() + 1, day: now.getDate(), year: now.getFullYear() };
+        }
+    }
+
+    // Thanksgiving is the fourth Thursday of November; the effect also runs the day before.
+    function thanksgivingRange(year) {
+        const day = 22 + (4 - new Date(year, 10, 1).getDay() + 7) % 7;
+        return { startMonth: 11, startDay: day - 1, endMonth: 11, endDay: day };
+    }
+
+    const dateRanges = {
+        halloween: [{ startMonth: 10, startDay: 30, endMonth: 10, endDay: 31 }],
+        thanksgiving: [thanksgivingRange],
+        christmas: [{ startMonth: 12, startDay: 24, endMonth: 12, endDay: 25 }],
+        winter: [
+            { startMonth: 12, startDay: 24, endMonth: 12, endDay: 31 },
+            { startMonth: 1, startDay: 1, endMonth: 1, endDay: 1 }
+        ],
+        valentines: [{ startMonth: 2, startDay: 13, endMonth: 2, endDay: 14 }],
+        independence: [{ startMonth: 7, startDay: 3, endMonth: 7, endDay: 4 }]
+    };
 
     const THEMES = {
+        halloween: {
+            name: 'halloween',
+            characters: ['🎃', '👻', '🦇', '🍬'],
+            hashOverride: '#halloween',
+            elementCount: 6,
+            containerClass: 'falling-effect-container',
+            elementClass: 'falling-element',
+            styles: {
+                color: 'rgba(255, 140, 0, 0.9)',
+                textShadow: '0 0 4px rgba(120, 60, 160, 0.5)',
+                fontSize: { min: 14, max: 26 },
+                animationDuration: { min: 8, max: 14 },
+                animationDelay: { max: 8 }
+            },
+            dateRanges: dateRanges.halloween || []
+        },
+        thanksgiving: {
+            name: 'thanksgiving',
+            characters: ['🦃', '🍗', '🌽', '🍁'],
+            hashOverride: '#thanksgiving',
+            elementCount: 6,
+            containerClass: 'falling-effect-container',
+            elementClass: 'falling-element',
+            styles: {
+                color: 'rgba(205, 105, 30, 0.9)',
+                textShadow: '0 0 4px rgba(160, 82, 45, 0.4)',
+                fontSize: { min: 18, max: 32 },
+                animationDuration: { min: 8, max: 14 },
+                animationDelay: { max: 8 }
+            },
+            dateRanges: dateRanges.thanksgiving || []
+        },
+        // Listed before winter so it wins on the days they share.
+        christmas: {
+            name: 'christmas',
+            characters: ['🎄', '🎁', '🎅', '❄️'],
+            hashOverride: '#christmas',
+            elementCount: 8,
+            containerClass: 'falling-effect-container',
+            elementClass: 'falling-element',
+            styles: {
+                color: 'rgba(255, 255, 255, 0.9)',
+                textShadow: '0 0 4px rgba(200, 220, 255, 0.8)',
+                fontSize: { min: 14, max: 26 },
+                animationDuration: { min: 8, max: 14 },
+                animationDelay: { max: 8 }
+            },
+            dateRanges: dateRanges.christmas || []
+        },
         winter: {
             name: 'winter',
             characters: ['❄', '❅', '❆', '✦', '✧'],
@@ -73,10 +151,11 @@
     // Date/Hash Detection
     // ============================================================
 
-    function isDateInRange(range) {
-        const now = new Date();
-        const month = now.getMonth() + 1;
-        const day = now.getDate();
+    function isDateInRange(rule) {
+        const today = centralToday();
+        const range = typeof rule === 'function' ? rule(today.year) : rule;
+        const month = today.month;
+        const day = today.day;
 
         if (range.startMonth === range.endMonth) {
             return month === range.startMonth && day >= range.startDay && day <= range.endDay;
@@ -119,15 +198,27 @@
     const FallingEffect = {
         config: null,
         container: null,
+        options: {},
 
-        init: function(config) {
+        /** Shows today's theme, or the named one. Call it any time: it only acts when the theme changes. */
+        sync: function(name, options) {
+            const theme = name ? (THEMES[name] || null) : getActiveTheme();
+            if (theme === this.config) return;
+            this.destroy();
+            this.config = null;
+            this.init(theme, options);
+        },
+
+        init: function(config, options) {
             if (!config) return;
             this.config = config;
+            this.options = options || {};
             this.injectStyles();
             this.createElements();
         },
 
         generateCSS: function() {
+            const tv = !!this.options.parent;
             const styles = this.config.styles;
             const containerClass = this.config.containerClass;
             const elementClass = this.config.elementClass;
@@ -138,7 +229,7 @@
 
             return `
         .${containerClass} {
-          position: fixed;
+          position: ${tv ? 'absolute' : 'fixed'};
           top: 0;
           left: 0;
           width: 100%;
@@ -149,9 +240,9 @@
         }
         .${elementClass} {
           position: absolute;
-          top: -50px;
+          top: ${tv ? '-8vh' : '-50px'};
           ${colorCSS}
-          text-shadow: ${styles.textShadow};
+          text-shadow: ${tv ? 'none' : styles.textShadow};
           user-select: none;
           animation: falling-animation linear infinite;
         }
@@ -161,7 +252,7 @@
             opacity: 1;
           }
           100% {
-            transform: translateY(100vh) rotate(360deg);
+            transform: translateY(${tv ? '108vh' : '100vh'}) rotate(360deg);
             opacity: 0.3;
           }
         }
@@ -173,6 +264,16 @@
             style.id = `falling-effect-styles-${this.config.name}`;
             style.textContent = this.generateCSS();
             document.head.appendChild(style);
+        },
+
+        // On the TV sizes are in rem, so they scale with the page (1rem = 16px at 1920 wide).
+        size: function(px) {
+            return this.options.scale ? (px * this.options.scale / 16) + 'rem' : px + 'px';
+        },
+
+        count: function() {
+            const count = this.config.elementCount * (this.options.countScale || 1);
+            return this.options.maxCount ? Math.min(count, this.options.maxCount) : count;
         },
 
         createElements: function() {
@@ -188,7 +289,8 @@
 
             // Seed one of each image to guarantee all images appear, then fill randomly
             const pool = images.map(src => ({ type: 'img', src }));
-            const remaining = Math.max(0, config.elementCount - pool.length);
+            if (this.options.parent) characters.forEach(char => pool.push({ type: 'char', char }));
+            const remaining = Math.max(0, this.count() - pool.length);
             for (let i = 0; i < remaining; i++) {
                 const idx = Math.floor(Math.random() * totalItems);
                 if (idx < characters.length) {
@@ -224,10 +326,10 @@
                 config.styles.fontSize.min;
 
                 if (element.tagName === 'IMG') {
-                    element.style.width = size + 'px';
+                    element.style.width = this.size(size);
                     element.style.height = 'auto';
                 } else {
-                    element.style.fontSize = size + 'px';
+                    element.style.fontSize = this.size(size);
                 }
 
                 const duration = Math.random() *
@@ -245,7 +347,7 @@
                 container.appendChild(element);
             }
 
-            document.body.appendChild(container);
+            (this.options.parent || document.body).appendChild(container);
             this.container = container;
         },
 
@@ -254,7 +356,7 @@
                 this.container.remove();
                 this.container = null;
             }
-            const styleEl = document.getElementById(`falling-effect-styles-${this.config?.name}`);
+            const styleEl = document.getElementById(`falling-effect-styles-${this.config ? this.config.name : ''}`);
             if (styleEl) {
                 styleEl.remove();
             }
@@ -272,7 +374,9 @@
         }
     }
 
-    if (document.readyState === 'loading') {
+    if (MANUAL) {
+        // The page starts it.
+    } else if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();

@@ -102,10 +102,18 @@
     pageIndex = keepPage ? Math.min(pageIndex, Math.max(pages.length - 1, 0)) : 0;
     showPage(left);
     renderNews(data.announcements || []);
+    renderSeasonal();
     clearTimeout(changeTimer);
     if (draft) { return; }
     var wait = (data.nextChangeAtMs || 0) - Date.now();
     changeTimer = setTimeout(function () { load(true); }, Math.min(Math.max(wait, 5000), MAX_TIMER_MS));
+  }
+
+  // Checked on every refresh (at least every 30 minutes), so it needs no timer. ?season=christmas forces one.
+  function renderSeasonal() {
+    if (still || !window.FallingEffect) { return; }
+    var forced = /[?&]season=([a-z]+)/.exec(location.search);
+    window.FallingEffect.sync(forced ? forced[1] : null, { parent: byId('tv-seasonal'), scale: 2, countScale: 2, maxCount: 20 });
   }
 
   function renderUpdated(ms) {

@@ -28,8 +28,10 @@ html, body { margin: 0; height: 100%; background: var(--tv-bg); color: var(--tv-
 .tv-dot { width: 1.3rem; height: 1.3rem; border-radius: 1rem; background: #7a819a; }
 .tv-dot.on { width: 3.2rem; background: #fff; }
 /* Time left on this page: a mustard line along the very bottom edge that drains from right to left. */
-.tv-timer { position: fixed; left: 0; right: 0; bottom: 0; height: .6rem; background: #e1ad01; transform-origin: left center; will-change: transform; pointer-events: none; }
+.tv-timer { position: fixed; left: 0; right: 0; bottom: 0; height: .6rem; background: #e1ad01; opacity: .2; transform-origin: left center; will-change: transform; pointer-events: none; }
 .tv-timer[hidden] { display: none; }
+/* Holiday emojis fall over the pages only: the box stops above the news row and QR code. */
+.tv-seasonal { position: fixed; top: 0; left: 0; right: 0; bottom: 17.7rem; overflow: hidden; pointer-events: none; opacity: .75; z-index: 5; }
 .tv-updated { font-size: 1.5rem; color: var(--tv-muted); }
 
 /* ---- stage: layouts ---- */

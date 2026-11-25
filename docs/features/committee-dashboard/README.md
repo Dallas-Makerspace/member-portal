@@ -87,8 +87,12 @@ dashboard, not a mirror of any TV, so it cannot know which page a TV is showing.
 The bottom News row shows one announcement at a time and switches to the next every 9 seconds when more than one
 is active (a dashboard announcement inside its start/end window, or a chair message from the last 14 days). On a TV
 that always happens, and a long list scrolls without end. The preview does the same, even for people whose system
-asks for reduced motion, because it shows what the TV does. Only the automatic page rotation honors that setting
+asks for reduced motion, because it shows what the TV does. Only the automatic page rotation and the holiday emojis honor that setting
 (it moves on only while **Play all pages** is on).
+
+On holidays (dates and themes in `static/js/falling-effect-v2.js`, shared with the portal, Central time) emojis fall
+over the pages but not over the news row or QR code. The TV rechecks the date at each refresh; `?season=christmas`
+forces a theme. The preview leaves them out when the computer asks for reduced motion.
 
 When a dashboard has more than one page, a mustard line along the bottom edge of the screen drains from right to
 left to show the time left on the current page. A single page shows no line, and in the editor preview it runs

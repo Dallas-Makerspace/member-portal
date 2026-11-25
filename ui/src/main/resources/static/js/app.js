@@ -1,40 +1,3 @@
-// Seasonal effect date ranges (modify dates here)
-// Hash overrides: #snow, #hearts, #fireworks
-window.SEASONAL_DATE_RANGES = {
-    winter: [
-        { startMonth: 12, startDay: 24, endMonth: 12, endDay: 31 },
-        { startMonth: 1, startDay: 1, endMonth: 1, endDay: 1 }
-    ],
-    valentines: [
-        { startMonth: 2, startDay: 13, endMonth: 2, endDay: 14 }
-    ],
-    independence: [
-        { startMonth: 7, startDay: 3, endMonth: 7, endDay: 4 }
-    ]
-};
-
-function shouldLoadSeasonalEffect() {
-    // Check hash overrides
-    if (['#snow', '#hearts', '#fireworks'].includes(window.location.hash)) {
-        return true;
-    }
-    // Check date ranges
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
-    for (const ranges of Object.values(window.SEASONAL_DATE_RANGES)) {
-        for (const r of ranges) {
-            if (r.startMonth === r.endMonth) {
-                if (month === r.startMonth && day >= r.startDay && day <= r.endDay) return true;
-            } else {
-                if ((month === r.startMonth && day >= r.startDay) ||
-                (month === r.endMonth && day <= r.endDay)) return true;
-            }
-        }
-    }
-    return false;
-}
-
 // Helper function to get platform/browser info for PWA tracking
 function getPWAContext() {
     const ua = navigator.userAgent;
@@ -72,9 +35,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
             bootstrap.Toast.getOrCreateInstance(dmsToast).hide();
         }
     }, 20000);
-    if (shouldLoadSeasonalEffect()) {
-        loadScript('/static/js/falling-effect-v2.js');
-    }
+    loadScript('/static/js/falling-effect-v2.js');
     initFeaturedProjectsScroll();
 });
 
