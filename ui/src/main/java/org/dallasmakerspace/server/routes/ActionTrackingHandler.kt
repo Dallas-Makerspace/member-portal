@@ -38,6 +38,7 @@ class ActionTrackingHandler @Inject constructor(loggerFactory: LoggerFactory) : 
 
       val session = call.sessions.get<UserSession>()
       val logEntry = buildMap {
+        putAll(sanitize(payload))
         put("@timestamp", Instant.now().toString())
         put("app", "member-profile-ui")
         put("host", call.request.host())
@@ -45,7 +46,6 @@ class ActionTrackingHandler @Inject constructor(loggerFactory: LoggerFactory) : 
         put("sessionid", session?.sessionId ?: "NO_SESSION")
         put("userid", session?.userId ?: "NO_USER")
         put("userAgent", call.request.userAgent())
-        putAll(payload)
       }
 
       // Respond immediately, then log asynchronously
@@ -65,5 +65,20 @@ class ActionTrackingHandler @Inject constructor(loggerFactory: LoggerFactory) : 
       log.warn("Invalid tracking payload: ${e.message}")
       call.respond(HttpStatusCode.BadRequest)
     }
+  }
+
+  companion object {
+    private const val MAX_KEYS = 20
+    private const val MAX_KEY_LENGTH = 64
+    private const val MAX_VALUE_LENGTH = 1024
+
+    /** Client fields only: scalars, capped in count and length. Server fields are added after. */
+    internal fun sanitize(payload: Map<String, Any?>): Map<String, Any?> =
+        payload.entries
+            .filter { (k, v) -> k.length <= MAX_KEY_LENGTH && isScalar(v) }
+            .take(MAX_KEYS)
+            .associate { (k, v) -> k to if (v is String) v.take(MAX_VALUE_LENGTH) else v }
+
+    private fun isScalar(v: Any?) = v == null || v is String || v is Number || v is Boolean
   }
 }
