@@ -327,22 +327,4 @@
     </script>
 </header>
 </body>
-</html>                            <!-- Admin nested dropdown -->
-                            <li class="dropend">
-                                <a class="dropdown-item dropdown-toggle" href="javascript:void(0)"
-                                   data-bs-toggle="dropdown"
-                                   data-bs-auto-close="outside" aria-expanded="false">Admin
-                                    <span class="badge rounded-pill text-bg-danger d-none"
-                                          data-wf-attention-badge></span></a>
-                                <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="/admin/config">Site Config</a></li>
-                                    <li th:if="${workflowsAdminMenu}">
-                                        <a class="dropdown-item" href="/admin/workflows">Workflows in progress
-                                            <span class="badge rounded-pill text-bg-danger d-none"
-                                                  data-wf-attention-badge></span></a>
-                                    </li>
-                                </ul>
-                            </li>
-                        </ul>
-                    </li>
-
+</html>

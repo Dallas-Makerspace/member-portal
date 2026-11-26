@@ -83,8 +83,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API calls: Network Only (no caching for member data)
-  if (url.pathname.startsWith('/backend-api/')) {
+  // API calls and search data: Network Only (no caching for member data)
+  if (
+    url.pathname.startsWith('/backend-api/') ||
+    url.pathname === '/search-preload' ||
+    url.pathname === '/search'
+  ) {
     event.respondWith(networkOnly(request));
     return;
   }
