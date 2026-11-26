@@ -261,7 +261,7 @@
                           class="question-input"
                           placeholder="What would you like to know about DMS? AI searches talk and source to find answers."
                           required
-                          th:text="${question}"></textarea>
+                          th:text="${question} ?: ${prefillQuestion}"></textarea>
                 <button type="submit" class="btn btn-primary submit-btn" id="submitBtn">
                     Ask Question
                 </button>

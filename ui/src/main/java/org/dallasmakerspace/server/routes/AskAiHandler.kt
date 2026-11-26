@@ -138,6 +138,7 @@ constructor(
     val jsonMap: MutableMap<String, Any> = userInfo.toMutableMap()
     jsonMap["profile_url"] = "./profile/@${jsonMap["preferred_username"]}"
     jsonMap["isDevelopmentMode"] = appConfig.isDevelopmentMode()
+    prefillQuestion(call)?.let { jsonMap["prefillQuestion"] = it }
 
     // Always fetch top questions for the initial page
     try {
@@ -202,6 +203,12 @@ constructor(
 
     call.respond(ThymeleafContent("ask-ai", jsonMap))
   }
+
+  private fun prefillQuestion(call: ApplicationCall): String? =
+      call.request.queryParameters["q"]
+          ?.trim()
+          ?.take(MAX_PREFILL_CHARS)
+          ?.takeIf { it.isNotEmpty() && call.request.httpMethod == HttpMethod.Get }
 
   private suspend fun handleSlugRequest(call: ApplicationCall, slug: String) {
     log.info("Ask AI slug page requested: $slug by ${userInfo["preferred_username"]}")
@@ -268,5 +275,6 @@ constructor(
   companion object {
     private val SLUG_PATTERN = Regex("/ask-ai/q/([^/]+)")
     const val AGENT_CHAT_FLAG = "agent-chat.enabled"
+    private const val MAX_PREFILL_CHARS = 4000
   }
 }

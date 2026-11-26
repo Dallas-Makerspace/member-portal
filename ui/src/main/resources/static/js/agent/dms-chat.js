@@ -100,6 +100,26 @@ class DmsChat extends LitElement {
         this._alwaysPrivate = !!me.alwaysPrivate;
         this._loadHistory();
         this._openFromUrl();
+        this._prefillFromUrl();
+    }
+
+    _prefillFromUrl() {
+        const params = new URLSearchParams(location.search);
+        const q = (params.get('q') || '').trim();
+        if (!params.has('q')) return;
+        params.delete('q');
+        const rest = params.toString();
+        history.replaceState(history.state, '', location.pathname + (rest ? `?${rest}` : ''));
+        if (!q || params.has('c')) return;
+        this._draft = q.slice(0, MAX_CHARS);
+        this.updateComplete.then(() => {
+            const box = this.querySelector('.chat-composer textarea');
+            if (!box) return;
+            box.style.height = 'auto';
+            box.style.height = Math.min(box.scrollHeight, 200) + 'px';
+            box.focus({preventScroll: true});
+            box.setSelectionRange(box.value.length, box.value.length);
+        });
     }
 
     disconnectedCallback() {
