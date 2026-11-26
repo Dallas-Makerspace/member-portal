@@ -1,9 +1,12 @@
-import { preloadSource, searchAll, normalizeQuery } from './search-sources.js';
+import { preloadSource, remoteSource, mergeResults, sortResults, normalizeQuery } from './search-sources.js';
 import { registeredTypes, typeInfo } from './search-types.js';
 import { getRecents, addRecent, clearRecents, isNewTip, markTipsSeen } from './search-recents.js';
 import { isSafeUrl } from './search-model.js';
+import { trackOpen, trackResultClick, trackNoResults, trackAskAi } from './search-track.js';
 
 const DEBOUNCE_MS = 120;
+const REMOTE_DEBOUNCE_MS = 250;
+const NO_RESULTS_DELAY_MS = 1000;
 const SECTION_LIMIT = 5;
 const MAX_ASK_CHARS = 500;
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -20,6 +23,9 @@ const ICONS = {
     external: '<path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42L17.59 5H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/>',
     arrow: '<path d="m10 6-1.41 1.41L13.17 12l-4.58 4.59L10 18l6-6-6-6Z"/>',
     alert: '<path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/>',
+    committee: '<path d="M14.4 6 14 4H5v17h2v-7h5.6l.4 2h7V6h-5.6Z"/>',
+    link: '<path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10Z"/>',
+    calendar: '<path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 16H5V10h14v10ZM7 12h5v5H7v-5Z"/>',
 };
 
 function icon(name, cls = 'ic') {
@@ -32,12 +38,18 @@ function esc(s) {
     }[c]));
 }
 
-function highlight(text, q) {
+// Marks the earliest occurrence of any of the terms.
+function highlight(text, terms) {
     const t = String(text ?? '');
-    if (!q) return esc(t);
-    const i = t.toLowerCase().indexOf(q);
-    if (i < 0) return esc(t);
-    return `${esc(t.slice(0, i))}<mark>${esc(t.slice(i, i + q.length))}</mark>${esc(t.slice(i + q.length))}`;
+    const lower = t.toLowerCase();
+    let at = -1;
+    let len = 0;
+    for (const term of [].concat(terms || []).filter(Boolean)) {
+        const i = lower.indexOf(term);
+        if (i >= 0 && (at < 0 || i < at)) { at = i; len = term.length; }
+    }
+    if (at < 0) return esc(t);
+    return `${esc(t.slice(0, at))}<mark>${esc(t.slice(at, at + len))}</mark>${esc(t.slice(at + len))}`;
 }
 
 const STYLES = `
@@ -52,7 +64,7 @@ dialog[open]::backdrop { animation: fade .14s ease-out; }
 @keyframes pop { from { opacity: 0; transform: translateY(-6px) scale(.985); } }
 @keyframes fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { dialog[open] .panel, dialog[open]::backdrop { animation: none; } }
-.panel { display: flex; flex-direction: column; max-height: min(640px, 78vh); background: #fff;
+.panel { display: flex; flex-direction: column; height: min(560px, 78vh); background: #fff;
   border-radius: var(--s-radius); box-shadow: 0 24px 64px rgba(15, 23, 32, .28), 0 2px 6px rgba(15, 23, 32, .12);
   overflow: hidden; }
 .ic { width: 20px; height: 20px; fill: currentColor; flex: 0 0 auto; }
@@ -100,6 +112,9 @@ mark { background: #fff1b8; color: inherit; border-radius: 2px; padding: 0 1px; 
 .chip { flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: .15rem .5rem; border-radius: 999px;
   background: var(--s-wash); color: var(--s-muted); }
 .chip.new { background: #fff1b8; color: #6b4e00; }
+.chip.related { background: var(--s-tint); color: var(--s-accent-ink); }
+.note { margin: .5rem .6rem 0; padding: .45rem .7rem; border-radius: 8px; background: var(--s-wash);
+  color: var(--s-muted); font-size: 13px; }
 .go { color: #b0b7bf; flex: 0 0 auto; }
 .row[aria-selected="true"] .go { color: var(--s-accent-ink); }
 .more { min-height: 38px; color: var(--s-accent-ink); font-weight: 500; font-size: 14px; }
@@ -160,6 +175,13 @@ class DmsSearchDialog extends HTMLElement {
         this.timer = null;
         this.pushedState = false;
         this.newTips = new Map();
+        this.localResults = [];
+        this.remoteTimer = null;
+        this.remoteCtrl = null;
+        this.remoteLoading = false;
+        this.awaitingRemote = false;
+        this.noResultsTimer = null;
+        this.reportedNoResults = new Set();
     }
 
     get username() {
@@ -244,7 +266,7 @@ class DmsSearchDialog extends HTMLElement {
         preloadSource.load().catch(() => { /* surfaced when searching */ });
     }
 
-    open(initial = '') {
+    open(initial = '', trigger = 'click') {
         if (this.dialog.open) {
             this.input.focus();
             return;
@@ -252,6 +274,8 @@ class DmsSearchDialog extends HTMLElement {
         preloadSource.load()
             .then(() => { if (this.dialog.open && !normalizeQuery(this.query)) this.render(); })
             .catch(() => { /* surfaced when searching */ });
+        trackOpen(trigger);
+        this.reportedNoResults.clear();
         this.newTips = new Map();
         this.expanded.clear();
         this.dialog.showModal();
@@ -271,13 +295,23 @@ class DmsSearchDialog extends HTMLElement {
 
     onClosed() {
         document.documentElement.style.overflow = '';
-        clearTimeout(this.timer);
+        this.cancelPending();
         markTipsSeen([...this.newTips].filter(([, isNew]) => isNew).map(([type]) => type));
         this.newTips = new Map();
         if (this.pushedState) {
             this.pushedState = false;
             history.back();
         }
+    }
+
+    cancelPending() {
+        clearTimeout(this.timer);
+        clearTimeout(this.remoteTimer);
+        clearTimeout(this.noResultsTimer);
+        this.remoteCtrl?.abort();
+        this.remoteCtrl = null;
+        this.awaitingRemote = false;
+        this.setRemoteLoading(false);
     }
 
     setQuery(q) {
@@ -289,9 +323,10 @@ class DmsSearchDialog extends HTMLElement {
         this.query = this.input.value;
         this.clearBtn.hidden = !this.query;
         this.updateAsk();
-        clearTimeout(this.timer);
+        this.cancelPending();
         this.expanded.clear();
         if (!normalizeQuery(this.query)) {
+            this.seq++;
             this.results = null;
             this.error = false;
             this.setLoading(false);
@@ -309,23 +344,73 @@ class DmsSearchDialog extends HTMLElement {
         const seq = ++this.seq;
         const q = this.query;
         this.error = false;
+        let local;
         try {
-            const results = await searchAll(q);
-            if (seq !== this.seq) return;
-            this.results = results;
+            local = await preloadSource.search(q);
         } catch (err) {
             if (seq !== this.seq) return;
             console.error('Search failed', err);
             this.results = null;
             this.error = true;
+            this.setLoading(false);
+            this.render();
+            return;
         }
+        if (seq !== this.seq) return;
+        this.localResults = local;
+        this.results = sortResults([...local]);
+        this.awaitingRemote = remoteSource.eligible(q);
         this.setLoading(false);
         this.render();
+        if (this.awaitingRemote) {
+            this.remoteTimer = setTimeout(() => this.runRemote(seq, q), REMOTE_DEBOUNCE_MS);
+        } else {
+            this.scheduleNoResults(seq, q);
+        }
+    }
+
+    async runRemote(seq, q) {
+        this.remoteCtrl?.abort();
+        const ctrl = new AbortController();
+        this.remoteCtrl = ctrl;
+        this.setRemoteLoading(true);
+        let remote = [];
+        try {
+            remote = await remoteSource.search(q, preloadSource.altTerms(q), ctrl.signal);
+        } catch (err) {
+            if (err.name === 'AbortError') return;
+            console.warn('Class search failed', err);
+        } finally {
+            if (this.remoteCtrl === ctrl) {
+                this.remoteCtrl = null;
+                this.setRemoteLoading(false);
+            }
+        }
+        if (seq !== this.seq) return;
+        this.awaitingRemote = false;
+        this.results = mergeResults(this.localResults || [], remote);
+        this.render(true);
+        this.scheduleNoResults(seq, q);
+    }
+
+    scheduleNoResults(seq, q) {
+        const key = normalizeQuery(q);
+        if (this.results?.length || !key || this.reportedNoResults.has(key)) return;
+        this.noResultsTimer = setTimeout(() => {
+            if (seq !== this.seq || this.results?.length) return;
+            this.reportedNoResults.add(key);
+            trackNoResults(q);
+        }, NO_RESULTS_DELAY_MS);
     }
 
     setLoading(on) {
         this.loading = on;
-        this.spinner.hidden = !on;
+        this.spinner.hidden = !(this.loading || this.remoteLoading);
+    }
+
+    setRemoteLoading(on) {
+        this.remoteLoading = on;
+        this.spinner.hidden = !(this.loading || this.remoteLoading);
     }
 
     updateAsk() {
@@ -334,17 +419,30 @@ class DmsSearchDialog extends HTMLElement {
         this.askSub.textContent = q ? `“${q}”` : 'Get answers about the space, tools and classes';
     }
 
-    render() {
+    optionKey(el) {
+        if (!el) return null;
+        if (!el.dataset.key) return el.id;
+        return `${el.id.startsWith('opt-recent') ? 'r' : 'x'}:${el.dataset.key}`;
+    }
+
+    render(keepActive = false) {
+        const prevKey = keepActive ? this.optionKey(this.options[this.active]) : null;
         const q = normalizeQuery(this.query);
         let html;
         if (!q) html = this.renderIdle();
         else if (this.error) html = this.renderError();
         else if (this.results === null || this.loading) html = this.renderSkeleton();
+        else if (this.results.length === 0 && this.awaitingRemote) html = this.renderSkeleton();
         else if (this.results.length === 0) html = this.renderNoResults();
         else html = this.renderResults(q);
         this.body.innerHTML = html;
         this.options = [...this.body.querySelectorAll('[role="option"]'), this.ask];
-        this.setActive(q && this.results?.length ? 0 : -1, false);
+        let idx = q && this.results?.length ? 0 : -1;
+        if (prevKey) {
+            const i = this.options.findIndex(o => this.optionKey(o) === prevKey);
+            if (i >= 0) idx = i;
+        }
+        this.setActive(idx, false);
     }
 
     renderIdle() {
@@ -402,7 +500,9 @@ class DmsSearchDialog extends HTMLElement {
         }
         const sections = [...byType.entries()].sort(([ta, a], [tb, b]) =>
             (b[0].score || 0) - (a[0].score || 0) || typeInfo(ta).order - typeInfo(tb).order);
-        return sections.map(([type, list]) => {
+        const onlyClose = this.results.every(r => r.matchKind === 'fuzzy');
+        const note = onlyClose ? '<div class="note" role="status">No exact matches. Showing close matches.</div>' : '';
+        return note + sections.map(([type, list]) => {
             const info = typeInfo(type);
             const open = this.expanded.has(type);
             const shown = open ? list : list.slice(0, SECTION_LIMIT);
@@ -424,18 +524,22 @@ class DmsSearchDialog extends HTMLElement {
         const thumb = r.imageUrl
             ? `<span class="thumb${r.type === 'member' ? '' : ' square'}"><img src="${esc(r.imageUrl)}" alt="" loading="lazy" decoding="async"></span>`
             : `<span class="thumb square">${icon(info.icon)}</span>`;
+        const related = r.matchKind === 'related' && !recent
+            ? [`<span class="chip related" title="Related to “${esc(r.relatedTo)}”">Related</span>`] : [];
         const chips = [
             ...(r.badges || []).map(b => `<span class="chip">${esc(b)}</span>`),
+            ...related,
             ...(recent ? [`<span class="chip">${esc(singular(info.label))}</span>`] : []),
         ].join('');
+        const terms = r.hl && r.matchKind !== 'exact' ? r.hl : q;
         const ext = r.external ? ' target="_blank" rel="noopener"' : '';
         return `<a class="row" role="option" id="${id}" aria-selected="false" data-key="${esc(r.type)}:${esc(r.id)}"
             ${safe ? `href="${esc(r.url)}"${ext}` : 'aria-disabled="true"'}>
           ${thumb}
-          <span class="text"><span class="title">${highlight(r.title, q)}</span>
-            ${r.subtitle ? `<span class="sub">${highlight(r.subtitle, q)}</span>` : ''}</span>
+          <span class="text"><span class="title">${highlight(r.title, terms)}</span>
+            ${r.subtitle ? `<span class="sub">${highlight(r.subtitle, terms)}</span>` : ''}</span>
           ${chips}
-          ${icon(r.external ? 'external' : 'arrow', 'ic go')}
+          ${icon(r.external || r.offsite ? 'external' : 'arrow', 'ic go')}
         </a>`;
     }
 
@@ -475,12 +579,28 @@ class DmsSearchDialog extends HTMLElement {
         this.input.focus();
     }
 
+    trackClick(el) {
+        const recent = el.id.startsWith('opt-recent');
+        const section = el.closest('.section');
+        const r = recent ? null : this.findResult(el.dataset.key);
+        trackResultClick({
+            resultType: (el.dataset.key || '').split(':')[0],
+            resultRank: [...this.body.querySelectorAll('a.row')].indexOf(el) + 1,
+            sectionRank: section ? [...section.querySelectorAll('a.row')].indexOf(el) + 1 : 0,
+            queryLength: this.query.trim().length,
+            resultCount: this.results?.length || 0,
+            fromRecents: recent,
+            matchKind: recent ? 'recent' : (r?.matchKind || 'exact'),
+        });
+    }
+
     onResultClick(e, el) {
         const r = this.findResult(el.dataset.key);
         if (!el.hasAttribute('href')) {
             e.preventDefault();
             return;
         }
+        this.trackClick(el);
         if (r) addRecent(this.username, r);
         const newTab = e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1 || el.target === '_blank';
         if (!newTab) {
@@ -489,10 +609,15 @@ class DmsSearchDialog extends HTMLElement {
         }
     }
 
-    onAskClick(e) {
-        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
-        e.preventDefault();
+    askAi(e) {
+        trackAskAi({ queryLength: this.query.trim().length, resultCount: this.results?.length || 0 });
+        if (e?.type === 'click' && (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1)) return;
+        e?.preventDefault();
         this.navigate(this.ask.href);
+    }
+
+    onAskClick(e) {
+        this.askAi(e);
     }
 
     navigate(href) {
@@ -507,12 +632,13 @@ class DmsSearchDialog extends HTMLElement {
     activate(el, e) {
         if (!el) return;
         if (el === this.ask) {
-            this.navigate(this.ask.href);
+            this.askAi();
             return;
         }
         if (el.matches('a.row')) {
             const r = this.findResult(el.dataset.key);
             if (!el.hasAttribute('href')) return;
+            this.trackClick(el);
             if (r) addRecent(this.username, r);
             if (el.target === '_blank' || e?.ctrlKey || e?.metaKey) {
                 window.open(el.href, '_blank', 'noopener');
@@ -534,7 +660,7 @@ class DmsSearchDialog extends HTMLElement {
             this.setActive(this.active > 0 ? this.active - 1 : n - 1, true);
         } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
-            this.navigate(this.ask.href);
+            this.askAi();
         } else if (e.key === 'Enter') {
             e.preventDefault();
             if (e.isComposing) return;
@@ -576,7 +702,7 @@ document.addEventListener('click', e => {
     const trigger = e.target.closest?.('[data-search-open]');
     if (!trigger) return;
     e.preventDefault();
-    dialogEl()?.open();
+    dialogEl()?.open('', trigger.classList.contains('navbar-search-toggle') ? 'mobile' : 'click');
 });
 
 ['pointerenter', 'focusin', 'touchstart'].forEach(type => {
@@ -590,7 +716,7 @@ document.addEventListener('keydown', e => {
     if (!d) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        d.open();
+        d.open('', 'shortcut');
         return;
     }
     if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -598,7 +724,7 @@ document.addEventListener('keydown', e => {
         const typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
         if (!typing) {
             e.preventDefault();
-            d.open();
+            d.open('', 'shortcut');
         }
     }
 });

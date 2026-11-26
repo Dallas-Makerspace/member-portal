@@ -62,6 +62,7 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.SEARCH_PRELOAD.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.SEARCH.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.REPORT.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.SHORT_LINKS.path) { RouteFactory.getHandler(call)?.handleBase(call) }
       get(RouteFactory.Paths.SHORT_LINKS_ADMIN.path) {

@@ -64,6 +64,7 @@ import org.dallasmakerspace.server.routes.ProfileTotalActiveTimeHandler
 import org.dallasmakerspace.server.routes.ReportHandler
 import org.dallasmakerspace.server.routes.ScannerHandler
 import org.dallasmakerspace.server.routes.ScannerStatusApiHandler
+import org.dallasmakerspace.server.routes.SearchHandler
 import org.dallasmakerspace.server.routes.SearchPreloadHandler
 import org.dallasmakerspace.server.routes.SettingsBannerHandler
 import org.dallasmakerspace.server.routes.ShortLinkDetailsHandler
@@ -107,6 +108,15 @@ class RoutesModule {
       memberServiceClient: MemberServiceClient,
   ): IRouteHandler =
       SearchPreloadHandler(loggerFactory, userInfoProvider, memberService, memberServiceClient)
+
+  @IntoMap
+  @Provides
+  @StringKey("/search")
+  fun providesSearchHandler(
+      loggerFactory: LoggerFactory,
+      userInfoProvider: UserInfoProvider,
+      memberService: MemberService,
+  ): IRouteHandler = SearchHandler(loggerFactory, userInfoProvider, memberService)
 
   @IntoMap
   @Provides

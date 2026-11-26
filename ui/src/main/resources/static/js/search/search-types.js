@@ -41,6 +41,33 @@ registerType('group', {
     since: '2024-01-01',
 });
 
+registerType('committee', {
+    label: 'Committees',
+    order: 15,
+    icon: 'committee',
+    tip: 'Committees and who chairs them',
+    example: 'wood',
+    since: '2026-11-27',
+});
+
+registerType('link', {
+    label: 'Links',
+    order: 25,
+    icon: 'link',
+    tip: 'Useful links, like Talk or the calendar',
+    example: 'talk',
+    since: '2026-11-27',
+});
+
+registerType('event', {
+    label: 'Upcoming classes',
+    order: 40,
+    icon: 'calendar',
+    tip: 'Upcoming classes and events',
+    example: 'lathe',
+    since: '2026-11-27',
+});
+
 registerType('course', {
     label: 'Online courses',
     order: 30,

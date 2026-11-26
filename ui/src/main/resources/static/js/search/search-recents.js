@@ -35,6 +35,7 @@ export function addRecent(username, r) {
         imageUrl: r.imageUrl || null,
         url: r.url,
         external: !!r.external,
+        offsite: !!r.offsite,
     };
     const rest = getRecents(username).filter(x => !(x.type === entry.type && x.id === entry.id));
     write(recentsKey(username), [entry, ...rest].slice(0, MAX_RECENTS));

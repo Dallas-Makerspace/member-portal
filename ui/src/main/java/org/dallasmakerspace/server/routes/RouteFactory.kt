@@ -94,6 +94,7 @@ object RouteFactory {
     GROUP_SETTINGS("/groups/{group_slug}/settings"),
     GROUP_SELF_MEMBERSHIP("/groups/{group_slug}/self"),
     SEARCH_PRELOAD("/search-preload"),
+    SEARCH("/search"),
     PROFILE_DEBUG_INFO("/profile/@{preferred_username}/debug-info"),
     PROFILE_KIOSK_WAIVER_PHOTOS("/profile/@{preferred_username}/kiosk-waiver-photos"),
     PROFILE_TOTAL_ACTIVE_TIME("/profile/@{preferred_username}/total-active-time"),

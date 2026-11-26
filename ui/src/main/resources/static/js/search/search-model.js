@@ -26,6 +26,27 @@ export function fromPreload(item) {
                 url: `/groups/${encodeURIComponent(item.username)}`,
                 keys: [item.displayName, item.username, item.description],
             };
+        case 'committee': {
+            const chairs = Array.isArray(item.chairs) ? item.chairs : [];
+            return {
+                type: 'committee',
+                id: item.username,
+                title: item.displayName,
+                subtitle: chairs.length ? `Chair: ${chairs.join(', ')}` : (item.description || ''),
+                url: item.url || `/committees/${encodeURIComponent(item.username)}`,
+                keys: [item.displayName, item.username, ...chairs, ...(item.keywords || []), item.description],
+            };
+        }
+        case 'link':
+            return {
+                type: 'link',
+                id: item.id,
+                title: item.displayName,
+                subtitle: item.site || '',
+                url: item.url,
+                offsite: true,
+                keys: [item.displayName, ...(item.keywords || [])],
+            };
         case 'course':
             return {
                 type: 'course',

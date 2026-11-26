@@ -13,6 +13,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeout
 import org.dallasmakerspace.models.ArchivedGroup
@@ -1168,6 +1169,24 @@ constructor(
     } catch (ex: Exception) {
       log.warn("Failed to get config value for key: $key", ex)
       null
+    }
+  }
+
+  /** Raw short links and namespaces for search; empty lists when the service can't be reached. */
+  suspend fun getShortLinksForSearch(sessionId: String?): Pair<List<Map<String, Any?>>, List<Map<String, Any?>>> {
+    return try {
+      coroutineScope {
+        val apiHeaders = getApiHeaders(sessionId)
+        val links = async { dmsHttpClient.get("$baseUrl/short-links/links", apiHeaders)["data"] }
+        val namespaces = async { dmsHttpClient.get("$baseUrl/short-links/namespaces", apiHeaders)["data"] }
+        @Suppress("UNCHECKED_CAST")
+        Pair(
+            (links.await() as? List<*>)?.filterIsInstance<Map<String, Any?>>().orEmpty(),
+            (namespaces.await() as? List<*>)?.filterIsInstance<Map<String, Any?>>().orEmpty())
+      }
+    } catch (ex: Exception) {
+      log.warn("Failed to get short links for search", ex)
+      Pair(emptyList(), emptyList())
     }
   }
 

@@ -12,10 +12,16 @@ import org.dallasmakerspace.server.auth.UserInfoProvider
 import org.dallasmakerspace.server.common.logging.LoggerFactory
 import org.dallasmakerspace.server.memberservice.MemberService
 import org.dallasmakerspace.server.memberservice.MemberServiceClient
+import org.dallasmakerspace.server.memberservice.MemberServiceException
 import org.dallasmakerspace.server.models.SearchPreloadResponse
 import org.dallasmakerspace.server.moodle.MOODLE_FEATURE_FLAG
 import org.dallasmakerspace.server.moodle.MoodleCourses
 import org.dallasmakerspace.server.models.slug
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import org.dallasmakerspace.models.Committees
+import org.dallasmakerspace.server.models.getSlugFromName
+import org.dallasmakerspace.server.search.SearchRecords
 
 class SearchPreloadHandler
 @Inject
@@ -82,8 +88,10 @@ constructor(
 
       val courseData = moodleCourseRecords(currentTime)
 
-      // Combine members, groups and DMS Learn courses
-      val combinedData = memberData + groupData + courseData
+      val extras = searchExtras(currentTime)
+
+      // Combine members, groups, DMS Learn courses, committees and short links
+      val combinedData = memberData + groupData + courseData + extras.committees + extras.links
 
       log.debug("SearchPreloadHandler members size: ${preloadResponse.members.size}")
       log.debug("SearchPreloadHandler groups size: ${preloadResponse.groups.size}")
@@ -91,6 +99,7 @@ constructor(
 
       jsonMap["status"] = "SUCCESS"
       jsonMap["data"] = combinedData
+      jsonMap["related"] = extras.related
 
       call.respond(jsonMap)
     } catch (e: Exception) {
@@ -98,6 +107,38 @@ constructor(
       jsonMap["error"] = "${e.message}: ${e.stackTraceToString()}"
       call.respond(HttpStatusCode.InternalServerError, jsonMap)
     }
+  }
+
+  private class Extras(
+      val committees: List<Map<String, Any?>>,
+      val links: List<Map<String, Any?>>,
+      val related: List<List<String>>,
+  )
+
+  /** Committees (with chairs), short links and related terms, shared by all users for 5 minutes. */
+  private suspend fun searchExtras(currentTime: Long): Extras {
+    extrasCache.get()?.takeIf { currentTime - it.first < cacheDuration }?.let { return it.second }
+    val committees = Committees.getActiveCommittees()
+    val chairSlugs = committees.mapNotNull { it.chairGroupName }.distinct().map { getSlugFromName(it) }
+    val extras = coroutineScope {
+      val groups = async {
+        try {
+          memberService.getMultipleGroups(chairSlugs, session.sessionId)
+        } catch (e: MemberServiceException) {
+          log.warn("Search: committee chairs unavailable: ${e.message}")
+          emptyList()
+        }
+      }
+      val links = async { memberServiceClient.getShortLinksForSearch(session.sessionId) }
+      val related = async { memberServiceClient.getConfigValue(RELATED_TERMS_KEY, session.sessionId) }
+      val (shortLinks, namespaces) = links.await()
+      Extras(
+          SearchRecords.committees(committees, groups.await().associateBy { getSlugFromName(it.name) }),
+          SearchRecords.links(shortLinks, namespaces),
+          SearchRecords.relatedTerms(related.await()))
+    }
+    extrasCache.set(currentTime to extras)
+    return extras
   }
 
   /** DMS Learn courses as search records, if `moodle.enabled` is on for the requester. */
@@ -136,6 +177,8 @@ constructor(
     private const val MAX_FLAG_CACHE_SIZE = 1_000
     private val cache = ConcurrentHashMap<String, Pair<Long, SearchPreloadResponse>>()
     private val cacheDuration = TimeUnit.MINUTES.toMillis(5)
+    private const val RELATED_TERMS_KEY = "search.related-terms"
+    private val extrasCache = java.util.concurrent.atomic.AtomicReference<Pair<Long, Extras>?>(null)
     private val moodleFlagCache = ConcurrentHashMap<String, Pair<Long, Boolean>>()
     private val moodleCourseCache =
         java.util.concurrent.atomic.AtomicReference<Pair<Long, List<Map<String, Any?>>>?>(null)

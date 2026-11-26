@@ -395,6 +395,31 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val SEARCH_RELATED_TERMS =
+      ConfigKey(
+          key = "search.related-terms",
+          description = "Words that should find each other in search, one comma-separated group per line",
+          category = "Search",
+          defaultValue =
+              listOf(
+                      "3d printer, 3d printing, 3d fab, bambu",
+                      "cnc, router, shapeoko, xcarve",
+                      "welding, welder, metal shop",
+                      "sewing, embroidery, creative arts",
+                      "pottery, kiln, ceramics",
+                      "car, auto, lift, automotive",
+                      "laser, laser cutter, engraver",
+                      "forge, forging, blacksmith",
+                      "lathe, turning",
+                      "soldering, electronics",
+                      "jewelry, lapidary",
+                      "glass, glassworks",
+                      "mill, milling, machine shop",
+                  )
+                  .joinToString("\n"),
+          type = ConfigValueType.StringType,
+      )
+
   val AGENT_MODEL_DEFAULT =
       ConfigKey(
           key = "agent.model.default",
@@ -536,5 +561,6 @@ object ConfigRegistry {
           AGENT_IT_BOT_AD_GROUP,
           AGENT_IT_BOT_REPOS,
           SEARCH_DIALOG_ENABLED,
+          SEARCH_RELATED_TERMS,
       )
 }
