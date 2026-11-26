@@ -132,14 +132,22 @@ mark { background: #fff1b8; color: inherit; border-radius: 2px; padding: 0 1px; 
 .empty button { margin-top: .75rem; border: 1px solid #ced4da; background: #fff; border-radius: 8px;
   padding: .4rem .9rem; font: inherit; cursor: pointer; }
 
-.foot { border-top: 1px solid var(--s-line); padding: .5rem; background: #fbfcfd; }
-.ask { display: flex; align-items: center; gap: .75rem; min-height: 52px; padding: .5rem .75rem; border-radius: 10px;
-  color: inherit; text-decoration: none; background: linear-gradient(90deg, #eef9fd, #f3f1fe); border: 1px solid #d7eef6; }
-.ask .thumb { background: linear-gradient(135deg, #0b9cc9, #6f5bd6); color: #fff; border-radius: 9px; }
-.ask .title { color: var(--s-ink); }
+.foot { display: flex; align-items: center; gap: .75rem; border-top: 1px solid var(--s-line); padding: .4rem .5rem;
+  background: #fbfcfd; }
+#actions { flex: 1 1 auto; min-width: 0; }
+.ask { box-sizing: border-box; display: flex; align-items: center; gap: .5rem; min-height: 38px; padding: .25rem .6rem .25rem .3rem;
+  border-radius: 8px; color: inherit; text-decoration: none; background: linear-gradient(90deg, #eef9fd, #f3f1fe);
+  border: 1px solid #d7eef6; }
+.ask .thumb { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, #0b9cc9, #6f5bd6);
+  color: #fff; }
+.ask .thumb .ic { width: 16px; height: 16px; }
+.ask .text { flex-direction: row; align-items: baseline; gap: .4rem; }
+.ask .title { flex: 0 0 auto; font-size: 14px; color: var(--s-ink); }
+.ask .ask-q { min-width: 0; font-size: 13px; color: var(--s-muted); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
 .ask[aria-selected="true"], .ask:hover { border-color: var(--s-accent); box-shadow: 0 0 0 1px var(--s-accent) inset; }
 .ask .keys { display: inline-flex; gap: .2rem; flex: 0 0 auto; }
-.hints { display: flex; gap: 1rem; justify-content: flex-end; padding: .45rem .5rem 0; font-size: 12px; color: #8a929c; }
+.hints { display: flex; flex: 0 0 auto; gap: .75rem; font-size: 12px; color: #8a929c; }
 .hints span { display: inline-flex; align-items: center; gap: .3rem; }
 
 @media (max-width: 767.98px) {
@@ -155,7 +163,8 @@ mark { background: #fff1b8; color: inherit; border-radius: 2px; padding: 0 1px; 
   .bar input { font-size: 16px; padding: .5rem 0; }
   .body { padding: .25rem .25rem .75rem; }
   .row { min-height: 56px; }
-  .foot { padding: .5rem .5rem max(.5rem, env(safe-area-inset-bottom)); }
+  .foot { padding: .35rem .5rem max(.35rem, env(safe-area-inset-bottom)); }
+  .ask { min-height: 44px; }
   .ask .keys { display: none; }
 }
 `;
@@ -213,13 +222,12 @@ class DmsSearchDialog extends HTMLElement {
       <div id="actions" role="listbox" aria-label="More ways to find answers">
         <a class="ask" id="opt-ask" role="option" aria-selected="false" href="${esc(this.askUrl)}">
           <span class="thumb">${icon('sparkle')}</span>
-          <span class="text"><span class="title">Ask AI Assistant</span>
-            <span class="sub ask-sub">Get answers about the space, tools and classes</span></span>
+          <span class="text"><span class="title">Ask AI Assistant</span><span class="ask-q"></span></span>
           <span class="keys" aria-hidden="true"><kbd>${IS_MAC ? '⌘' : 'Ctrl'}</kbd><kbd>↵</kbd></span>
         </a>
       </div>
       <div class="hints" aria-hidden="true">
-        <span><kbd>↑</kbd><kbd>↓</kbd> to move</span><span><kbd>↵</kbd> to open</span><span><kbd>Esc</kbd> to close</span>
+        <span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span>
       </div>
     </div>
   </div>
@@ -231,7 +239,7 @@ class DmsSearchDialog extends HTMLElement {
         this.spinner = $('.spinner');
         this.clearBtn = $('.clear');
         this.ask = $('#opt-ask');
-        this.askSub = $('.ask-sub');
+        this.askSub = $('.ask-q');
 
         this.input.addEventListener('input', () => this.onInput());
         this.input.addEventListener('keydown', e => this.onKeydown(e));
@@ -416,7 +424,7 @@ class DmsSearchDialog extends HTMLElement {
     updateAsk() {
         const q = this.query.trim().slice(0, MAX_ASK_CHARS);
         this.ask.href = q ? `${this.askUrl}?q=${encodeURIComponent(q)}` : this.askUrl;
-        this.askSub.textContent = q ? `“${q}”` : 'Get answers about the space, tools and classes';
+        this.askSub.textContent = q ? `“${q}”` : '';
     }
 
     optionKey(el) {
