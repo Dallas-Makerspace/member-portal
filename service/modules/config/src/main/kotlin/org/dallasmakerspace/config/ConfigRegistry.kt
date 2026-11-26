@@ -379,10 +379,7 @@ object ConfigRegistry {
               "Replaces Ask AI with the new chat assistant that can follow up on questions; can " +
                   "be piloted for specific usernames or AD groups before a full rollout",
           category = "AI Assistant",
-          defaultValue = FeatureFlagValue(
-              enabledUsernames = setOf("mandarlimaye"),
-              enabledGroupNames = setOf("IT Early Access"),
-          ),
+          defaultValue = FeatureFlagValue(enabled = true),
           type = ConfigValueType.FeatureFlagType,
       )
 

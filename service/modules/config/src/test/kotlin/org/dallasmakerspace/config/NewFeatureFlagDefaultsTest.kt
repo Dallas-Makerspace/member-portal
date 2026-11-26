@@ -2,6 +2,7 @@ package org.dallasmakerspace.config
 
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import org.junit.Test
 
 /** Guards the rollout convention for flags that are new and not yet on for everyone. */
@@ -44,12 +45,8 @@ class NewFeatureFlagDefaultsTest {
   }
 
   @Test
-  fun `the agent chat flag starts as a pilot for the early access group, off for everyone else`() {
-    val default = ConfigRegistry.AGENT_CHAT_ENABLED.defaultValue
-
-    assertFalse(default.enabled)
-    assertEquals(setOf("mandarlimaye"), default.enabledUsernames)
-    assertEquals(setOf("IT Early Access"), default.enabledGroupNames)
+  fun `the AI Assistant chat is on for everyone`() {
+    assertTrue(ConfigRegistry.AGENT_CHAT_ENABLED.defaultValue.enabled)
   }
 
   @Test
