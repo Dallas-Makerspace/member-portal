@@ -386,6 +386,18 @@ object ConfigRegistry {
           type = ConfigValueType.FeatureFlagType,
       )
 
+  val SEARCH_DIALOG_ENABLED =
+      ConfigKey(
+          key = "search.dialog.enabled",
+          description = "Use the new search dialog",
+          category = "Search",
+          defaultValue = FeatureFlagValue(
+              enabledUsernames = setOf("mandarlimaye"),
+              enabledGroupNames = setOf("IT Early Access"),
+          ),
+          type = ConfigValueType.FeatureFlagType,
+      )
+
   val AGENT_MODEL_DEFAULT =
       ConfigKey(
           key = "agent.model.default",
@@ -526,5 +538,6 @@ object ConfigRegistry {
           AGENT_ACTIVITY_TOOLS_AD_GROUPS,
           AGENT_IT_BOT_AD_GROUP,
           AGENT_IT_BOT_REPOS,
+          SEARCH_DIALOG_ENABLED,
       )
 }

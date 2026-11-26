@@ -78,4 +78,13 @@ class NewFeatureFlagDefaultsTest {
     assertEquals(setOf("mandarlimaye"), default.enabledUsernames)
     assertEquals(setOf("IT Early Access"), default.enabledGroupNames)
   }
+
+  @Test
+  fun `the search dialog flag starts as a pilot for the early access group, off for everyone else`() {
+    val default = ConfigRegistry.SEARCH_DIALOG_ENABLED.defaultValue
+
+    assertFalse(default.enabled)
+    assertEquals(setOf("mandarlimaye"), default.enabledUsernames)
+    assertEquals(setOf("IT Early Access"), default.enabledGroupNames)
+  }
 }

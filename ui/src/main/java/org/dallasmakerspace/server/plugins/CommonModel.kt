@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory
 private const val FLAG_CACHE_TTL_MS = 60_000L
 private const val ACCOUNT_MENU_FLAG = "nav.account-menu.enabled"
 private const val REMOTE_ACCESS_FLAG = "remote-access.enabled"
+private const val SEARCH_DIALOG_FLAG = "search.dialog.enabled"
 
 private data class CachedFlag(val value: Boolean, val expiresAt: Long)
 
@@ -64,7 +65,8 @@ fun Application.configureCommonModel(
                   ACCOUNT_MENU_FLAG,
                   ProfileFollowsHandler.FEATURE_FLAG_KEY,
                   NotificationsInboxHandler.FEATURE_FLAG_KEY,
-                  WORKFLOWS_FEATURE_FLAG)
+                  WORKFLOWS_FEATURE_FLAG,
+                  SEARCH_DIALOG_FLAG)
               .distinct()
               .associateWith { key ->
                 async { getCachedFeatureFlag(memberServiceClient, key, userId, sessionId) }
@@ -105,6 +107,7 @@ fun Application.configureCommonModel(
                     "notificationsMenuEnabled" to notificationsMenuEnabled,
                     "workflowsEnabled" to workflowsEnabled,
                     "workflowsAdminMenu" to (workflowsEnabled && isInfraUser),
+                    "searchDialogEnabled" to flags.getValue(SEARCH_DIALOG_FLAG),
                 ),
             body.etag,
             body.contentType,

@@ -13,7 +13,13 @@
             <a class="navbar-brand" href="/">DMS Member Portal</a>
 
             <!-- Mobile search icon -->
-            <button class="btn navbar-search-toggle d-lg-none ms-auto me-2" type="button"
+            <button th:if="${searchDialogEnabled}" class="btn navbar-search-toggle d-lg-none ms-auto me-2"
+                    type="button" data-search-open aria-label="Search" aria-haspopup="dialog">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                </svg>
+            </button>
+            <button th:unless="${searchDialogEnabled}" class="btn navbar-search-toggle d-lg-none ms-auto me-2" type="button"
                     onclick="toggleMobileSearch()">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 16 16">
                     <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
@@ -237,7 +243,16 @@
 
                 <!-- Desktop search (centered) -->
                 <div class="navbar-search d-none d-lg-flex flex-grow-1 justify-content-center mx-3">
-                    <dms-search max-results="7"></dms-search>
+                    <button th:if="${searchDialogEnabled}" type="button" class="search-trigger"
+                            data-search-open aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K /">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor"
+                             viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                        </svg>
+                        <span class="search-trigger-text">Search</span>
+                        <kbd class="search-trigger-kbd" data-search-kbd>Ctrl K</kbd>
+                    </button>
+                    <dms-search th:unless="${searchDialogEnabled}" max-results="7"></dms-search>
                 </div>
 
                 <ul class="navbar-nav" th:unless="${accountMenuEnabled}">
@@ -251,6 +266,16 @@
         </div>
     </nav>
 
+    <th:block th:if="${searchDialogEnabled}">
+        <dms-search-dialog th:attr="username=${current_username}"></dms-search-dialog>
+        <script type="module" src="/static/js/search/dms-search-dialog.js"></script>
+        <script>
+            if (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) {
+                document.querySelectorAll('[data-search-kbd]').forEach(function (k) { k.textContent = '⌘ K'; });
+            }
+        </script>
+    </th:block>
+    <th:block th:unless="${searchDialogEnabled}">
     <!-- Mobile search overlay -->
     <div class="navbar-search-mobile d-none d-lg-none">
         <div class="container py-2">
@@ -260,6 +285,7 @@
 
     <!-- Search component script -->
     <script type="module" src="/static/js/dms-search-v6.js"></script>
+    </th:block>
     <!-- Attention dot for the account menu -->
     <script th:if="${accountMenuEnabled}" src="/static/js/dms-attention.js" defer></script>
     <!-- Count of workflow runs needing attention, shown on the About > Admin entries (one fetch per page load) -->
@@ -300,7 +326,7 @@
                 .catch(function() { /* silent: banner is non-critical */ });
         })();
     </script>
-    <script>
+    <script th:unless="${searchDialogEnabled}">
         function toggleMobileSearch() {
             const overlay = document.querySelector('.navbar-search-mobile');
             overlay.classList.toggle('d-none');

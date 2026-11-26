@@ -171,6 +171,50 @@ div.error-details > p { color: #c1c1c1; }
     width: 100%;
 }
 
+/* Navbar Search - opens the search dialog */
+.search-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    max-width: 220px;
+    height: 32px;
+    padding: 0 0.35rem 0 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #59616d;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(32, 33, 36, 0.2);
+    transition: background-color 0.15s, box-shadow 0.15s;
+}
+.search-trigger:hover {
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(32, 33, 36, 0.25);
+}
+.search-trigger:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+.search-trigger-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.search-trigger-kbd {
+    flex: 0 0 auto;
+    padding: 0.1rem 0.35rem;
+    border: 1px solid #d0d5db;
+    border-radius: 5px;
+    background: #f6f8fa;
+    color: #59616d;
+    font: 500 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 /* Navbar Search - Mobile Icon */
 .navbar-search-toggle {
     background: transparent;
