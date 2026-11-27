@@ -129,7 +129,8 @@
             if (!opensElsewhere(e.target)) startUnlessCancelled(e);
         });
 
-        window.addEventListener('popstate', start);
+        // Not popstate: it only fires for same-page history entries (dialogs, ?c= chat links),
+        // which never load a page. Back/forward to another page fires beforeunload.
         window.addEventListener('beforeunload', start);
 
         // Any return to a visible, loaded page means no navigation is in flight.
