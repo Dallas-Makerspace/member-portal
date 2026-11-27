@@ -3,440 +3,105 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="initial-scale=1, width=device-width"/>
-
-    <!-- PWA Meta Tags -->
-    <th:block th:replace="~{fragments/pwa-meta :: pwa-meta}"></th:block>
-
-    <link rel="stylesheet" href="/static/styles/global.css"/>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
-          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0"/>
-    <title>Bambu 3D Printer Status - DMS Member Portal</title>
-    <style>
-        .printer-card { transition: all 0.2s ease; }
-        /* Excludes offline cards - an unreachable printer isn't something a member can act on right
-           now, so it shouldn't "pop" on hover the way an actually-usable printer's card does. */
-        .printer-card:not(.printer-card-offline):hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.15) !important; }
-        /* object-fit:contain (not the default fill) - min-height forces a box taller than a narrow
-           phone's width-constrained aspect ratio would naturally give the image, and without
-           object-fit a plain <img> stretches to fill that box rather than letterboxing it. */
-        .camera-modal-img { max-width: 100%; min-height: 320px; max-height: 70vh; background: #000; display: block; object-fit: contain; }
-        /* Sits on top of the (already-visible) placeholder/stale frame while a fresh one loads -
-           same dark-circle treatment as .camera-overlay-btn on the card thumbnails, just bigger and
-           centered, so it doesn't read as a blank/broken screen. */
-        .camera-modal-loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background: rgba(0,0,0,.55);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .printer-thumb { height: 140px; object-fit: cover; background: #000; display: block; }
-        .printer-thumb-wrap { line-height: 0; }
-        .camera-overlay-btn {
-            position: absolute;
-            bottom: 8px;
-            right: 8px;
-            width: 36px;
-            height: 36px;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0,0,0,.55);
-            border: none;
-        }
-        .camera-overlay-btn:hover { background: rgba(0,0,0,.75); }
-        .camera-overlay-btn .material-symbols-outlined { font-size: 18px; color: #fff; }
-        .model-icon { width: 28px; height: 28px; object-fit: contain; }
-
-        /* Visual-hierarchy pass: the printer name is the card's one dominant focal point (matches
-           .dms-card-title elsewhere - heavy Outfit - so it reads at a glance across a full grid),
-           the badge sits opposite it so name+status is always the first thing scanned together. */
-        .printer-name { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.05rem; }
-
-        /* Groups "what's happening right now" (job, who queued it, progress) into one visually
-           distinct block instead of a plain run of same-weight text lines - the specific complaint
-           that prompted this pass ("doesn't guide the eye", "jumbled"). */
-        .printer-info-panel {
-            background: #f8f9fa;
-            border: 1px solid rgba(0,0,0,.06);
-            border-radius: 6px;
-            padding: .6rem .75rem;
-        }
-
-        /* A failed print needs to be the first thing a person scanning a large grid catches - a
-           colored edge reads faster than any text label at a glance. */
-        .printer-card-attention { border-left: 4px solid var(--bs-danger); }
-
-        /* An unreachable printer is the least actionable card on the page - visually recede it so
-           it doesn't compete with printers a member could actually walk up to and use. */
-        .printer-card-offline { opacity: .65; }
-    </style>
+    <th:block th:replace="~{fragments/bambu-printers-shared :: prHead}"></th:block>
+    <title>3D Printers - DMS Member Portal</title>
 </head>
-<body>
+<body class="pr-page">
 <header class="top-nav" th:replace="~{fragments/header :: header}"></header>
 
-<div class="container py-4">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-        <div class="d-flex align-items-center gap-3">
-            <a href="/committees/3d-fab" class="text-muted text-decoration-none">
-                <span class="material-symbols-outlined align-middle">arrow_back</span>
-            </a>
-            <h4 class="mb-0">Bambu 3D Printer Status</h4>
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
-            <span class="material-symbols-outlined align-middle" style="font-size:16px;">refresh</span>
-            Refresh
-        </button>
-    </div>
+<main class="pr-main container">
+    <div th:replace="~{fragments/bambu-printers-shared :: pageTitle(${#lists.size(printers)} + ' Bambu printers')}"></div>
+    <div th:replace="~{fragments/bambu-printers-shared :: empty}"></div>
 
-    <!-- Committee offline alerts: the shared subscribe button for bambu.committee-alerts. Only
-         rendered when notifications are enabled for the viewer and the status call succeeded. -->
-    <div th:if="${committeeSubscription != null}" class="card mb-3">
-        <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-2 py-2">
+    <th:block th:unless="${printers == null or printers.empty}">
+        <!-- Your print -->
+        <article class="sp-hero" th:each="p : ${myPrinters}">
+            <button th:replace="~{fragments/bambu-printers-shared :: camera(${p})}"></button>
+            <div class="sp-hero-body">
+                <div class="sp-hero-head">
+                    <h2>Your print on <span th:text="${p.name}"></span>
+                        <small><span th:text="${p.currentJobName} ?: ${p.nextJobName}"></span><th:block th:if="${p.model}"> · <span th:text="${p.model}"></span></th:block></small>
+                    </h2>
+                    <span th:replace="~{fragments/bambu-printers-shared :: chip(${p})}"></span>
+                </div>
+                <th:block th:if="${p.isPrinting}">
+                    <div class="sp-stats">
+                        <div th:if="${p.progress != null}"><b th:text="${p.progress} + '%'"></b><span>printed</span></div>
+                        <div th:if="${p.etaDisplay != ''}"><b th:text="${p.etaDisplay}"></b><span th:text="'done · ' + ${p.remainingTimeDisplay} + ' left'"></span></div>
+                    </div>
+                    <div th:replace="~{fragments/bambu-printers-shared :: progress(${p})}"></div>
+                    <div class="sp-meta pr-num" th:if="${p.layerDisplay != ''}">Layer <span th:text="${p.layerDisplay}"></span></div>
+                </th:block>
+                <p class="sp-note" th:if="${p.isFinished}">Done. Pick up your part.</p>
+                <p class="sp-note text-danger" th:if="${p.needsAttention}">Print failed. Check the printer.</p>
+                <p class="sp-note" th:if="${p.isIdle and p.isOwnNextJob}">Queued next on this printer.</p>
+                <div class="sp-actions"><th:block th:replace="~{fragments/bambu-printers-shared :: watch(${p})}"></th:block></div>
+            </div>
+        </article>
+
+        <!-- No print of yours: lead with what is free -->
+        <section class="sp-none" th:if="${myPrinters.empty}">
             <div>
-                <div class="fw-semibold">3D printer offline alerts</div>
+                <h2 th:text="${counts['available'] != null} ? 'Free now' : 'No printer free right now'"></h2>
+                <p th:if="${counts['available'] == null}">Done printers free up once the part is removed. The list shows the next ones to finish.</p>
+                <p th:if="${counts['available'] != null}">You have no print running.</p>
             </div>
-            <th:block th:replace="~{fragments/subscribe-button :: button(${committeeSubscription})}"></th:block>
-        </div>
-    </div>
-
-    <div th:if="${printers == null or printers.empty}" class="text-center text-muted py-5">
-        No printers reported by Bambuddy right now.
-    </div>
-
-    <div th:unless="${printers == null or printers.empty}">
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <div class="input-group" style="max-width: 280px;">
-                <span class="input-group-text bg-white">
-                    <span class="material-symbols-outlined" style="font-size:16px;">search</span>
-                </span>
-                <input type="text" id="printerSearch" class="form-control"
-                       placeholder="Search name, model, job...">
+            <div class="sp-free" th:if="${counts['available'] != null}">
+                <span th:each="p : ${printersByFreeTime}" th:if="${p.isIdle}" th:text="${p.name}"></span>
             </div>
-            <div class="btn-group ms-auto" role="group" aria-label="Filter printers by status">
-                <input type="radio" class="btn-check" name="statusFilter" id="filter-all" value="all" checked>
-                <label class="btn btn-outline-secondary btn-sm" for="filter-all">All</label>
+        </section>
 
-                <input type="radio" class="btn-check" name="statusFilter" id="filter-printing" value="printing">
-                <label class="btn btn-outline-secondary btn-sm" for="filter-printing">Printing</label>
-
-                <input type="radio" class="btn-check" name="statusFilter" id="filter-available" value="available">
-                <label class="btn btn-outline-secondary btn-sm" for="filter-available">Available</label>
-
-                <input type="radio" class="btn-check" name="statusFilter" id="filter-finished" value="finished">
-                <label class="btn btn-outline-secondary btn-sm" for="filter-finished">Finished</label>
-
-                <input type="radio" class="btn-check" name="statusFilter" id="filter-attention" value="attention">
-                <label class="btn btn-outline-secondary btn-sm" for="filter-attention">Attention</label>
-
-                <input type="radio" class="btn-check" name="statusFilter" id="filter-offline" value="offline">
-                <label class="btn btn-outline-secondary btn-sm" for="filter-offline">Offline</label>
-            </div>
+        <div class="sp-list-head">
+            <h2>All printers</h2>
+            <p>By when each frees up</p>
         </div>
-
-        <div id="printerEmptyState" class="text-center text-muted py-5" style="display:none;">
-            No printers match your search/filter.
-        </div>
-
-        <div class="row g-3" id="printerGrid">
-            <div class="col-12 col-md-6 col-lg-4 printer-col" th:each="p : ${printers}"
-                 th:attr="data-filter-category=${p.filterCategory},data-search=${p.searchText}">
-                <div class="card printer-card h-100"
-                     th:classappend="${p.needsAttention} ? 'printer-card-attention' : (${p.isOffline} ? 'printer-card-offline' : '')">
-                    <!-- Zone 1: the one thing every card must communicate at a glance - which
-                         printer, and its status - kept identical in position/weight across every
-                         state so a grid of many cards stays scannable. -->
-                    <div class="card-header d-flex align-items-center justify-content-between gap-2 py-2">
-                        <span class="printer-name" th:text="${p.name}"></span>
-                        <span class="badge rounded-pill px-3 py-1" th:classappend="${p.badgeClass}" th:text="${p.stateLabel}"></span>
+        <ul class="sp-cards">
+            <li class="sp-card" th:each="p : ${printersByFreeTime}" th:unless="${p.isMine}"
+                th:classappend="${p.isOffline} ? 'sp-card-off'">
+                <th:block th:unless="${p.isOffline}">
+                    <button th:replace="~{fragments/bambu-printers-shared :: camera(${p})}"></button>
+                </th:block>
+                <div th:if="${p.isOffline}" class="sp-cam-off" aria-hidden="true">
+                    <span class="material-symbols-outlined">wifi_off</span>
+                </div>
+                <div class="sp-card-body">
+                    <div class="sp-card-head">
+                        <h3 class="pr-name"><span th:text="${p.name}"></span> <small th:text="${p.model}"></small></h3>
+                        <span th:replace="~{fragments/bambu-printers-shared :: chip(${p})}"></span>
                     </div>
-                    <!-- One-shot preview loaded at page render (not polled) - reuses the same
-                         snapshot proxy the camera-icon overlay's modal polls live. Hides itself
-                         (wrapper and all) on error so an unreachable/no-camera printer just shows
-                         no image rather than a broken-image icon. -->
-                    <div th:unless="${p.isOffline}" class="printer-thumb-wrap position-relative">
-                        <img th:attr="src='/bambu-api/printers/' + ${p.id} + '/camera'"
-                             class="printer-thumb w-100" alt=""
-                             onerror="this.closest('.printer-thumb-wrap').style.display='none'">
-                        <button type="button" class="btn rounded-circle camera-overlay-btn camera-btn"
-                                th:attr="data-printer-id=${p.id},data-printer-name=${p.name}"
-                                aria-label="View camera">
-                            <span class="material-symbols-outlined">photo_camera</span>
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <!-- Zone 2 (secondary): model identity - small and muted on purpose, it's
-                             context for the card, not something to compete with the name/badge or
-                             the live photo above for attention. -->
-                        <div th:if="${p.model}" class="d-flex align-items-center gap-2 text-muted small mb-2">
-                            <img th:if="${p.modelIconUrl}" th:attr="src=${p.modelIconUrl}"
-                                 class="model-icon" alt="" onerror="this.style.display='none'">
-                            <span th:text="${p.model}"></span>
-                        </div>
 
-                        <!-- Zone 3: everything about "what's happening right now" lives in one
-                             visually grouped block (tinted background) - job name, who's running it,
-                             and progress/ETA/layer as a single glanceable cluster, separated from the
-                             model line above by real visual boundary rather than just line breaks. -->
-                        <div th:if="${p.isPrinting}" class="printer-info-panel">
-                            <div th:if="${p.currentJobName}" class="text-truncate small fw-semibold mb-2" th:text="${p.currentJobName}"></div>
-                            <div th:if="${p.printedByUsername}" class="d-flex align-items-center gap-1 mb-2">
-                                <span class="text-muted small">Current print by:</span>
-                                <dms-member-card th:attr="username=${p.printedByUsername}" state="mini"></dms-member-card>
-                            </div>
-                            <div class="progress" style="height: 8px;" th:if="${p.progress != null}">
-                                <div class="progress-bar" role="progressbar"
-                                     th:style="'width:' + ${p.progress} + '%'"
-                                     th:attr="aria-valuenow=${p.progress}" aria-valuemin="0" aria-valuemax="100"></div>
-                            </div>
-                            <div class="d-flex justify-content-between text-muted small mt-1">
-                                <span th:if="${p.progress != null}" th:text="${p.progress} + '%'"></span>
-                                <span th:if="${p.remainingTimeDisplay != ''}">
-                                    <span th:text="${p.remainingTimeDisplay} + ' left'"></span>
-                                    <span th:if="${p.etaDisplay != ''}" th:text="'(ETA ' + ${p.etaDisplay} + ')'"></span>
-                                </span>
-                            </div>
-                            <div th:if="${p.layerDisplay != ''}" class="text-muted small mt-1">
-                                Layer <span th:text="${p.layerDisplay}"></span>
-                            </div>
-                            <!-- One-shot watches (bambu-notifications): your own print gets
-                                 its notify button here; anyone else's print gets the
-                                 printer-available button instead. Never both. -->
-                            <div th:if="${p.isOwnCurrentJob}" class="mt-2">
-                                <button type="button" class="btn btn-sm bambu-watch-btn"
-                                        th:classappend="${p.currentJobWatchId != null} ? 'btn-outline-primary' : 'btn-primary'"
-                                        th:attr="data-scope='OWN_JOB',data-printer-id=${p.id},data-queue-id=${p.currentQueueId},data-watch-id=${p.currentJobWatchId}">
-                                    <span class="material-symbols-outlined align-middle" style="font-size:16px;"
-                                          th:text="${p.currentJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
-                                    <span class="bambu-watch-label"
-                                          th:text="${p.currentJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this print finishes'"></span>
-                                </button>
-                            </div>
-                            <div th:if="${p.notificationsEnabled and !p.isOwnCurrentJob}" class="mt-2">
-                                <button type="button" class="btn btn-sm bambu-watch-btn"
-                                        th:classappend="${p.availableWatchId != null} ? 'btn-outline-primary' : 'btn-outline-secondary'"
-                                        th:attr="data-scope='PRINTER_AVAILABLE',data-printer-id=${p.id},data-watch-id=${p.availableWatchId}">
-                                    <span class="material-symbols-outlined align-middle" style="font-size:16px;"
-                                          th:text="${p.availableWatchId != null} ? 'notifications_active' : 'notifications'"></span>
-                                    <span class="bambu-watch-label"
-                                          th:text="${p.availableWatchId != null} ? 'Watching · Cancel' : 'Notify me when free'"></span>
-                                </button>
-                            </div>
+                    <th:block th:if="${p.isPrinting}">
+                        <p class="sp-job" th:if="${p.currentJobName}" th:text="${p.currentJobName}" th:title="${p.currentJobName}"></p>
+                        <div th:replace="~{fragments/bambu-printers-shared :: progress(${p})}"></div>
+                        <div class="sp-stat-line">
+                            <span th:if="${p.progress != null}" th:text="${p.progress} + '%'"></span>
+                            <span th:if="${p.etaDisplay != ''}">Done <b th:text="${p.etaDisplay}"></b> · <th:block th:text="${p.remainingTimeDisplay} + ' left'"></th:block></span>
                         </div>
+                    </th:block>
+                    <th:block th:if="${p.isFinished}">
+                        <p class="sp-state">Free after pickup</p>
+                        <p class="sp-owner" th:if="${p.previousPrintedByUsername != null}"><span class="visually-hidden">Printed by</span><dms-member-card th:attr="username=${p.previousPrintedByUsername}" state="compact"></dms-member-card><span>’s part</span></p>
+                    </th:block>
+                    <p class="sp-state sp-state-free" th:if="${p.isIdle}"
+                       th:text="${p.nextJobName != null} ? 'Next up: ' + ${p.nextJobName} : 'Free now'"></p>
+                    <p class="sp-state sp-state-bad" th:if="${p.needsAttention}">Print failed. Needs a check.</p>
+                    <p class="sp-state" th:if="${p.isOffline}">Unreachable right now</p>
 
-                        <div th:if="${p.isIdle}" class="d-flex align-items-center gap-2 small text-success-emphasis">
-                            <span class="material-symbols-outlined" style="font-size:18px;">check_circle</span>
-                            <span th:if="${p.nextJobName}">Next up: <span th:text="${p.nextJobName}"></span></span>
-                            <span th:unless="${p.nextJobName}">Ready for a print.</span>
-                        </div>
-
-                        <div th:if="${p.isOwnNextJob}" class="mt-2">
-                            <button type="button" class="btn btn-sm bambu-watch-btn"
-                                    th:classappend="${p.nextJobWatchId != null} ? 'btn-outline-primary' : 'btn-primary'"
-                                    th:attr="data-scope='OWN_JOB',data-printer-id=${p.id},data-queue-id=${p.nextQueueId},data-watch-id=${p.nextJobWatchId}">
-                                <span class="material-symbols-outlined align-middle" style="font-size:16px;"
-                                      th:text="${p.nextJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
-                                <span class="bambu-watch-label"
-                                      th:text="${p.nextJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this print finishes'"></span>
-                            </button>
-                        </div>
-
-                        <div th:if="${p.state == 'FINISH'}" class="printer-info-panel">
-                            <div class="small fw-semibold mb-1">Print finished - awaiting pickup.</div>
-                            <div th:if="${p.previousPrintedByUsername}" class="d-flex align-items-center gap-1 text-muted small">
-                                <span>Previous print by:</span>
-                                <dms-member-card th:attr="username=${p.previousPrintedByUsername}" state="mini"></dms-member-card>
-                            </div>
-                        </div>
-
-                        <div th:if="${p.state == 'FAILED'}" class="alert alert-danger py-2 px-3 small mb-0">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="material-symbols-outlined" style="font-size:18px;">error</span>
-                                <span>Print failed - needs attention.</span>
-                            </div>
-                            <div th:if="${p.printedByUsername}" class="d-flex align-items-center gap-1 mt-2">
-                                <span>Current print by:</span>
-                                <dms-member-card th:attr="username=${p.printedByUsername}" state="mini"></dms-member-card>
-                            </div>
-                        </div>
-
-                        <div th:if="${p.isOffline}" class="small text-muted">
-                            Printer is unreachable right now.
-                        </div>
+                    <div class="sp-card-foot"
+                         th:if="${(p.isPrinting or p.needsAttention) and (p.printedByUsername != null or p.notificationsEnabled)}">
+                        <th:block th:replace="~{fragments/bambu-printers-shared :: watch(${p})}"></th:block>
+                        <div th:replace="~{fragments/bambu-printers-shared :: who(${p})}"></div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
+            </li>
+        </ul>
+    </th:block>
 
-<!-- Shared camera snapshot modal - one instance, repointed per printer on open -->
-<div class="modal fade" id="bambuCameraModal" tabindex="-1" aria-labelledby="bambuCameraModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="bambuCameraModalLabel">Camera</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body text-center p-0 position-relative">
-                <img id="bambuCameraModalImg" class="camera-modal-img" src="" alt="Printer camera snapshot" style="display:none;">
-                <!-- Plain CSS flex, not Bootstrap's d-flex: d-flex is !important, which would
-                     silently defeat the plain (non-!important) style.display='none' this element
-                     is toggled with in JS below - see .camera-modal-loading. Overlaid on top of the
-                     image above (rather than replacing it) so opening the modal shows the card's
-                     already-loaded snapshot immediately instead of a blank screen while the live
-                     frame loads. -->
-                <div id="bambuCameraModalLoading" class="camera-modal-loading" style="display:none;">
-                    <div class="spinner-border spinner-border-sm text-light" role="status">
-                        <span class="visually-hidden">Loading camera snapshot...</span>
-                    </div>
-                </div>
-                <p id="bambuCameraModalError" class="text-muted small my-3" style="display:none;">
-                    Camera snapshot unavailable.
-                </p>
-            </div>
-        </div>
-    </div>
-</div>
+    <section th:replace="~{fragments/bambu-printers-shared :: alerts}"></section>
+</main>
 
-<th:block th:replace="~{fragments/toast :: toast}"></th:block>
-
-<!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-        crossorigin="anonymous"></script>
-<!-- App JS -->
-<script src="/static/js/app.js"></script>
-<!-- Page Loader (REQUIRED for all pages) -->
-<script src="/static/js/dms-page-loader.js" defer></script>
-<script type="module" src="/static/js/dms-member-card.js"></script>
-<script src="/static/js/dms-subscribe-button.js" th:if="${committeeSubscription != null}"></script>
-<script src="/static/js/bambu-notifications.js" th:if="${notificationsEnabled}"></script>
-
-<script>
-(function () {
-    // --- Search + quick-filter over the already-rendered card grid ---
-    const grid = document.getElementById('printerGrid');
-    const emptyState = document.getElementById('printerEmptyState');
-    const searchInput = document.getElementById('printerSearch');
-    const cols = grid ? Array.from(grid.querySelectorAll('.printer-col')) : [];
-
-    function applyFilters() {
-        const query = searchInput.value.trim().toLowerCase();
-        const category = (document.querySelector('input[name="statusFilter"]:checked') || {}).value || 'all';
-        let visibleCount = 0;
-        cols.forEach(function (col) {
-            const matchesCategory = category === 'all' || col.dataset.filterCategory === category;
-            const matchesSearch = !query || col.dataset.search.includes(query);
-            const visible = matchesCategory && matchesSearch;
-            col.style.display = visible ? '' : 'none';
-            if (visible) visibleCount++;
-        });
-        emptyState.style.display = visibleCount === 0 ? '' : 'none';
-        grid.style.display = visibleCount === 0 ? 'none' : '';
-    }
-
-    if (grid) {
-        searchInput.addEventListener('input', applyFilters);
-        document.querySelectorAll('input[name="statusFilter"]').forEach(function (radio) {
-            radio.addEventListener('change', applyFilters);
-        });
-    }
-
-    // --- Camera snapshot modal ---
-    const modalEl = document.getElementById('bambuCameraModal');
-    const modalLoading = document.getElementById('bambuCameraModalLoading');
-    const modalError = document.getElementById('bambuCameraModalError');
-    const modalLabel = document.getElementById('bambuCameraModalLabel');
-    const modal = new bootstrap.Modal(modalEl);
-    let pollTimer = null;
-    let currentPrinterId = null;
-    // The visible <img> is swapped out (never .src-reassigned in place) on every refresh - see
-    // refreshSnapshot() - so this reference is kept current rather than captured once.
-    let imgEl = document.getElementById('bambuCameraModalImg');
-
-    function showLoading() {
-        // Leaves whatever's already in imgEl on screen (the card's placeholder, or the last good
-        // live frame) - the spinner overlays it rather than blanking it out.
-        modalLoading.style.display = '';
-        modalError.style.display = 'none';
-    }
-
-    function refreshSnapshot() {
-        if (!currentPrinterId) return;
-        // Pinned to whichever printer this call was actually issued for - closing the modal (or
-        // switching to another printer) before this request lands must not let it clobber whatever
-        // is on screen by then. Without this, a slow request for printer A that's still in flight
-        // when the user opens printer B's modal would land late and swap B's frame back to A's.
-        const requestPrinterId = currentPrinterId;
-        // A fresh <img> element per request rather than reusing imgEl.src in place: reassigning
-        // .src on the same element leaves the previous frame (or a stale error/loading state) on
-        // screen until the new one decodes - exactly the "shows unavailable for a few seconds"
-        // flash this replaces. Swapping in a new element only touches the DOM once the new image
-        // has actually loaded or actually failed.
-        const next = new Image();
-        next.id = 'bambuCameraModalImg';
-        next.className = imgEl.className;
-        next.alt = imgEl.alt;
-        next.style.display = 'none';
-        next.addEventListener('load', function () {
-            if (requestPrinterId !== currentPrinterId) return; // stale - discard
-            modalLoading.style.display = 'none';
-            modalError.style.display = 'none';
-            next.style.display = '';
-            imgEl.replaceWith(next);
-            imgEl = next;
-        });
-        next.addEventListener('error', function () {
-            if (requestPrinterId !== currentPrinterId) return; // stale - discard
-            modalLoading.style.display = 'none';
-            modalError.style.display = '';
-            imgEl.replaceWith(next);
-            imgEl = next;
-        });
-        next.src = `/bambu-api/printers/${encodeURIComponent(requestPrinterId)}/camera?t=${Date.now()}`;
-    }
-
-    document.querySelectorAll('.camera-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            currentPrinterId = btn.dataset.printerId;
-            modalLabel.textContent = btn.dataset.printerName + ' - Camera';
-            // Seed the modal with the card's own (already-loaded) thumbnail so there's something
-            // to look at while the first live frame loads, instead of a blank screen.
-            const thumb = btn.closest('.printer-thumb-wrap').querySelector('.printer-thumb');
-            imgEl.onerror = function () { imgEl.style.display = 'none'; };
-            imgEl.src = thumb ? thumb.src : '';
-            imgEl.style.display = thumb ? '' : 'none';
-            showLoading();
-            refreshSnapshot();
-            modal.show();
-        });
-    });
-
-    // Poll only while the modal is actually open, mirroring the ref-counted poller pattern used
-    // by dms-timelapse-view.js for the Cameras page.
-    modalEl.addEventListener('shown.bs.modal', function () {
-        pollTimer = setInterval(refreshSnapshot, 5000);
-    });
-    modalEl.addEventListener('hidden.bs.modal', function () {
-        clearInterval(pollTimer);
-        pollTimer = null;
-        currentPrinterId = null;
-        imgEl.onerror = null;
-        imgEl.src = '';
-        imgEl.style.display = 'none';
-        modalLoading.style.display = 'none';
-    });
-})();
-</script>
+<th:block th:replace="~{fragments/bambu-printers-shared :: cameraModal}"></th:block>
+<th:block th:replace="~{fragments/bambu-printers-shared :: scripts}"></th:block>
+<!-- Required page scripts live in the shared fragment: bootstrap.bundle.min.js, /static/js/app.js, /static/js/dms-page-loader.js -->
 </body>
 </html>

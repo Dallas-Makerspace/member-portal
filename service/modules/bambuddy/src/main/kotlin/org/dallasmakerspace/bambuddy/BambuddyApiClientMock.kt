@@ -1,5 +1,6 @@
 package org.dallasmakerspace.bambuddy
 
+import io.ktor.utils.io.ByteReadChannel
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.dallasmakerspace.core.LoggerFactory
@@ -124,11 +125,27 @@ class BambuddyApiClientMock @Inject constructor(loggerFactory: LoggerFactory) :
     )
   }
 
+  override suspend fun getActiveQueue(): List<BambuQueueItem> =
+      getQueue().filter { it.status == "printing" || it.status == "pending" }
+
+  override suspend fun getLatestFinished(printerId: Int, status: String): BambuQueueItem? =
+      getQueue()
+          .filter { it.printerId == printerId && it.status == status && it.completedAt != null }
+          .maxByOrNull { it.completedAt!! }
+
   override suspend fun getCameraSnapshot(printerId: Int): Pair<ByteArray, String>? {
     log.info("Mock: getCameraSnapshot printerId=$printerId")
     // No real JPEG bytes in mock mode - the UI falls back to a placeholder image on a null/empty
     // response, same as any camera being unreachable would show.
     return null
+  }
+
+  override suspend fun streamCamera(
+      printerId: Int,
+      onOpen: suspend (contentType: String, body: ByteReadChannel) -> Unit,
+  ): Boolean {
+    log.info("Mock: streamCamera printerId=$printerId")
+    return false
   }
 
   override suspend fun getPrinterModelIcon(model: String): Pair<ByteArray, String>? {

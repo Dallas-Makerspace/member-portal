@@ -88,6 +88,18 @@ private fun resolveStateLabel(state: String): String =
       else -> "Unknown"
     }
 
+// Free now, then free after pickup, then by time left; problems last.
+private val FREE_RANK_ORDER = listOf("available", "finished", "printing", "attention")
+
+/** Printers ordered by when each frees up: free, done, printing by time left, failed, offline. */
+fun sortByFreeTime(printers: List<Map<String, Any?>>): List<Map<String, Any?>> =
+    printers.sortedWith(
+        compareBy<Map<String, Any?>>(
+            { it["freeRank"] as? Int ?: Int.MAX_VALUE },
+            { it["remainingMinutes"] as? Int ?: Int.MAX_VALUE },
+            { (it["name"] as? String).orEmpty().lowercase() },
+        ))
+
 /**
  * Reshapes one raw printer map (as returned by the backend's /bambu/printers) into the view model
  * `bambu-printer-status.html` renders - resolving a display-friendly state label/badge color and a
@@ -154,6 +166,13 @@ fun buildPrinterViewModel(
   // search filter has one plain lowercase field to substring-match against.
   val searchText =
       listOfNotNull(name, model, currentJobName, nextJobName).joinToString(" ").lowercase()
+  val isMine =
+      viewerUsername != null &&
+          (((isPrinting || needsAttention) && printedByUsername == viewerUsername) ||
+              (isFinished && previousPrintedByUsername == viewerUsername) ||
+              nextPrintedByUsername == viewerUsername)
+  val remainingMinutes = (printer["remainingTimeMinutes"] as? Number)?.toInt()?.takeIf { it > 0 }
+  val freeRank = FREE_RANK_ORDER.indexOf(filterCategory).takeIf { it >= 0 } ?: FREE_RANK_ORDER.size
   // Pre-built, already-encoded so the template never has to string-concatenate a URL itself
   // (model names like "A1 Mini" contain a space, which needs %20 - a plain path segment, not a
   // query string, so URLEncoder's "+" is converted).
@@ -177,6 +196,9 @@ fun buildPrinterViewModel(
       "isFinished" to isFinished,
       "filterCategory" to filterCategory,
       "searchText" to searchText,
+      "isMine" to isMine,
+      "remainingMinutes" to remainingMinutes,
+      "freeRank" to freeRank,
       "progress" to progress,
       "remainingTimeDisplay" to formatRemainingTime(printer["remainingTimeMinutes"] as? Number),
       "etaDisplay" to formatEta(printer["remainingTimeMinutes"] as? Number),

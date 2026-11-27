@@ -55,3 +55,7 @@ data class BambuQueueItem(
     // per printer (position isn't meaningful across completed items, only within pending/printing).
     @SerialName("completed_at") val completedAt: String? = null,
 )
+
+/** One page of Bambuddy's /queue/history, newest first. */
+@Serializable
+data class BambuQueueHistoryPage(val items: List<BambuQueueItem> = emptyList())

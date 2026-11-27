@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import org.dallasmakerspace.core.LoggerFactory
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import org.slf4j.Logger
@@ -24,6 +25,19 @@ class BambuddyStatusServiceTest {
   }
 
   private fun printer(id: Int) = BambuPrinter(id = id, name = "Printer $id")
+
+  // Serves the narrow queue calls from one list, the way Bambuddy's filtered endpoints would.
+  private suspend fun stubQueue(items: List<BambuQueueItem>) {
+    whenever(bambuddyApiClient.getActiveQueue())
+        .thenReturn(items.filter { it.status == "printing" || it.status == "pending" })
+    whenever(bambuddyApiClient.getLatestFinished(any(), any())).thenAnswer { call ->
+      val printerId = call.getArgument<Int>(0)
+      val status = call.getArgument<String>(1)
+      items
+          .filter { it.printerId == printerId && it.status == status && it.completedAt != null }
+          .maxByOrNull { it.completedAt!! }
+    }
+  }
 
   private suspend fun stubStatus(
       id: Int,
@@ -47,7 +61,7 @@ class BambuddyStatusServiceTest {
     stubStatus(4, "IDLE", connected = false) // unreachable, despite a stale "IDLE" state
     stubStatus(5, "FAILED")
     stubStatus(6, "FINISH")
-    whenever(bambuddyApiClient.getQueue()).thenReturn(emptyList())
+    stubQueue(emptyList())
 
     val summary = service.getSummary()
 
@@ -66,7 +80,7 @@ class BambuddyStatusServiceTest {
     // the "needs attention" count the way an actual failure does.
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "FINISH")
-    whenever(bambuddyApiClient.getQueue()).thenReturn(emptyList())
+    stubQueue(emptyList())
 
     val summary = service.getSummary()
 
@@ -78,7 +92,7 @@ class BambuddyStatusServiceTest {
   fun `a printer whose status call fails entirely counts as offline, not available`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     whenever(bambuddyApiClient.getPrinterStatus(1)).thenReturn(null)
-    whenever(bambuddyApiClient.getQueue()).thenReturn(emptyList())
+    stubQueue(emptyList())
 
     val summary = service.getSummary()
 
@@ -90,7 +104,7 @@ class BambuddyStatusServiceTest {
   fun `an unrecognized firmware state fails toward offline rather than available`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "SOME_NEW_FIRMWARE_STATE")
-    whenever(bambuddyApiClient.getQueue()).thenReturn(emptyList())
+    stubQueue(emptyList())
 
     val summary = service.getSummary()
 
@@ -103,8 +117,7 @@ class BambuddyStatusServiceTest {
       runBlocking {
         whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
         stubStatus(1, "RUNNING", currentPrint = "Current.3mf")
-        whenever(bambuddyApiClient.getQueue())
-            .thenReturn(
+        stubQueue(
                 listOf(
                     BambuQueueItem(
                         id = 1,
@@ -133,8 +146,7 @@ class BambuddyStatusServiceTest {
   fun `getPrinterDetails surfaces who queued the currently-printing job`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "RUNNING", currentPrint = "Current.3mf")
-    whenever(bambuddyApiClient.getQueue())
-        .thenReturn(
+    stubQueue(
             listOf(
                 BambuQueueItem(
                     id = 1,
@@ -154,8 +166,7 @@ class BambuddyStatusServiceTest {
   fun `getPrinterDetails surfaces who queued the job when it just FAILED`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "FAILED")
-    whenever(bambuddyApiClient.getQueue())
-        .thenReturn(
+    stubQueue(
             listOf(
                 BambuQueueItem(
                     id = 1,
@@ -179,8 +190,7 @@ class BambuddyStatusServiceTest {
     // printer on every single page load (reported by the member being wrongly credited).
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "RUNNING", currentPrint = "Current.3mf")
-    whenever(bambuddyApiClient.getQueue())
-        .thenReturn(
+    stubQueue(
             listOf(
                 BambuQueueItem(
                     id = 1,
@@ -210,8 +220,7 @@ class BambuddyStatusServiceTest {
   fun `a FAILED printer credits its most recent failure, not its oldest`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "FAILED")
-    whenever(bambuddyApiClient.getQueue())
-        .thenReturn(
+    stubQueue(
             listOf(
                 BambuQueueItem(
                     id = 1,
@@ -242,8 +251,7 @@ class BambuddyStatusServiceTest {
   fun `a FAILED printer credits a newer stopped print over an older failure`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "FAILED")
-    whenever(bambuddyApiClient.getQueue())
-        .thenReturn(
+    stubQueue(
             listOf(
                 BambuQueueItem(
                     id = 1,
@@ -274,8 +282,7 @@ class BambuddyStatusServiceTest {
   fun `an idle printer with past failures credits nobody as its current print`() = runBlocking {
     whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
     stubStatus(1, "IDLE")
-    whenever(bambuddyApiClient.getQueue())
-        .thenReturn(
+    stubQueue(
             listOf(
                 BambuQueueItem(
                     id = 1,
@@ -297,8 +304,7 @@ class BambuddyStatusServiceTest {
       runBlocking {
         whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
         stubStatus(1, "FINISH")
-        whenever(bambuddyApiClient.getQueue())
-            .thenReturn(
+        stubQueue(
                 listOf(
                     BambuQueueItem(
                         id = 1,
@@ -328,8 +334,7 @@ class BambuddyStatusServiceTest {
       runBlocking {
         whenever(bambuddyApiClient.getPrinters()).thenReturn(listOf(printer(1)))
         stubStatus(1, "IDLE")
-        whenever(bambuddyApiClient.getQueue())
-            .thenReturn(
+        stubQueue(
                 listOf(
                     BambuQueueItem(id = 2, printerId = 1, status = "pending", archiveName = "Second.3mf", position = 2),
                     BambuQueueItem(id = 1, printerId = 1, status = "pending", archiveName = "First.3mf", position = 1),

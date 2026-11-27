@@ -1,5 +1,6 @@
 package org.dallasmakerspace.bambuddy
 
+import io.ktor.utils.io.ByteReadChannel
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,6 +25,7 @@ private val PRINTING_STATES = BAMBU_PRINTING_STATES
 private val NEEDS_ATTENTION_STATES = setOf("FAILED")
 private val FINISHED_STATES = setOf("FINISH")
 private val FAILED_QUEUE_STATUSES = setOf("failed", "cancelled")
+private val ACTIVE_QUEUE_STATUSES = setOf("printing", "pending")
 
 @Serializable
 data class BambuStatusSummaryDTO(
@@ -121,22 +123,40 @@ constructor(
                   }
             }
           }
-      val queueDeferred = async {
+      // Narrow queries instead of the whole queue: its history grows with every print and the full
+      // list had become a multi-megabyte, multi-second download.
+      val activeDeferred = async {
         try {
-          bambuddyApiClient.getQueue()
+          bambuddyApiClient.getActiveQueue()
         } catch (e: Exception) {
-          log.warn("Failed to fetch Bambuddy queue; using last known snapshot", e)
-          cached?.queue ?: emptyList()
+          log.warn("Failed to fetch Bambuddy active queue; using last known snapshot", e)
+          cached?.queue?.filter { it.status in ACTIVE_QUEUE_STATUSES } ?: emptyList()
         }
       }
+      val completedDeferred = printers.map { printer -> async { latestFinished(printer.id, "completed") } }
       val statusByPrinterId =
           statusDeferred.awaitAll().mapNotNull { (id, status) -> status?.let { id to it } }.toMap()
-      val fresh =
-          Snapshot(printers, statusByPrinterId, queueDeferred.await(), System.currentTimeMillis())
+      // Failed/cancelled runs only matter for printers that are currently FAILED.
+      val failedDeferred =
+          printers
+              .filter { effectiveState(statusByPrinterId[it.id]) == "FAILED" }
+              .flatMap { printer -> FAILED_QUEUE_STATUSES.map { async { latestFinished(printer.id, it) } } }
+      val queue =
+          (activeDeferred.await() + (completedDeferred + failedDeferred).awaitAll().filterNotNull())
+              .distinctBy { it.id }
+      val fresh = Snapshot(printers, statusByPrinterId, queue, System.currentTimeMillis())
       cache.set(fresh)
       fresh
     }
   }
+
+  private suspend fun latestFinished(printerId: Int, status: String): BambuQueueItem? =
+      try {
+        bambuddyApiClient.getLatestFinished(printerId, status)
+      } catch (e: Exception) {
+        log.warn("Failed to fetch Bambuddy $status history for printer $printerId", e)
+        null
+      }
 
   suspend fun getSummary(): BambuStatusSummaryDTO {
     val snapshot = getSnapshot()
@@ -211,6 +231,11 @@ constructor(
 
   suspend fun getCameraSnapshot(printerId: Int): Pair<ByteArray, String>? =
       bambuddyApiClient.getCameraSnapshot(printerId)
+
+  suspend fun streamCamera(
+      printerId: Int,
+      onOpen: suspend (contentType: String, body: ByteReadChannel) -> Unit,
+  ): Boolean = bambuddyApiClient.streamCamera(printerId, onOpen)
 
   suspend fun getPrinterModelIcon(model: String): Pair<ByteArray, String>? =
       bambuddyApiClient.getPrinterModelIcon(model)

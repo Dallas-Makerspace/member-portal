@@ -16,6 +16,7 @@ constructor(
     userInfoProvider: UserInfoProvider,
     private val bambuCameraProxyClient: BambuCameraProxyClient,
     private val memberServiceClient: MemberServiceClient,
+    private val live: Boolean = false,
 ) : AuthenticatedHandler(loggerFactory, userInfoProvider) {
 
   override suspend fun handleAuthenticated(call: ApplicationCall) {
@@ -36,6 +37,10 @@ constructor(
       call.respond(HttpStatusCode.NotFound)
       return
     }
-    bambuCameraProxyClient.proxyCameraSnapshot(printerId, call)
+    if (live) {
+      bambuCameraProxyClient.proxyCameraStream(printerId, call)
+    } else {
+      bambuCameraProxyClient.proxyCameraSnapshot(printerId, call)
+    }
   }
 }

@@ -267,4 +267,35 @@ class BambuStatusViewModelTest {
     assertEquals(false, vm["isOwnCurrentJob"])
     assertEquals(false, vm["isOwnNextJob"])
   }
+
+  @Test
+  fun `isMine covers the viewer's running print and their finished one, even with notifications off`() {
+    val running = printer(state = "RUNNING") + ("printedByUsername" to "jdoe")
+    val finished = printer(state = "FINISH") + ("previousPrintedByUsername" to "jdoe")
+    val someoneElse = printer(state = "RUNNING") + ("printedByUsername" to "asmith")
+
+    assertEquals(true, buildPrinterViewModel(running, viewerUsername = "jdoe")["isMine"])
+    assertEquals(true, buildPrinterViewModel(finished, viewerUsername = "jdoe")["isMine"])
+    assertEquals(false, buildPrinterViewModel(someoneElse, viewerUsername = "jdoe")["isMine"])
+    assertEquals(false, buildPrinterViewModel(running)["isMine"])
+  }
+
+  @Test
+  fun `sortByFreeTime puts free printers first, then done, then printing by time left`() {
+    fun named(name: String, state: String, minutes: Int? = null) =
+        buildPrinterViewModel(printer(state = state, remainingTimeMinutes = minutes) + ("name" to name))
+
+    val sorted =
+        sortByFreeTime(
+            listOf(
+                named("off", "OFFLINE"),
+                named("long", "RUNNING", 300),
+                named("done", "FINISH"),
+                named("failed", "FAILED"),
+                named("short", "RUNNING", 20),
+                named("free", "IDLE"),
+            ))
+
+    assertEquals(listOf("free", "done", "short", "long", "failed", "off"), sorted.map { it["name"] })
+  }
 }

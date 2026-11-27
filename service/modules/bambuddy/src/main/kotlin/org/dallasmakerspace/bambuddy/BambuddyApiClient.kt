@@ -7,7 +7,9 @@ import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.ByteReadChannel
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.builtins.ListSerializer
@@ -21,6 +23,9 @@ import org.dallasmakerspace.core.LoggerFactory
 // Bambuddy's own token is documented as valid 60 minutes; refresh a bit early so a request never
 // races an about-to-expire token.
 private const val STREAM_TOKEN_TTL_MS = 55 * 60 * 1000L
+
+// A live stream has no overall deadline; a camera that stops sending frames for this long is dropped.
+private const val STREAM_IDLE_TIMEOUT_MS = 30_000L
 
 @Singleton
 class BambuddyApiClient
@@ -129,6 +134,36 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IB
     }
   }
 
+  override suspend fun getActiveQueue(): List<BambuQueueItem> =
+      json.decodeFromString(
+          ListSerializer(BambuQueueItem.serializer()),
+          getText("$baseUrl/api/v1/queue/?status=printing,pending", "active queue"))
+
+  override suspend fun getLatestFinished(printerId: Int, status: String): BambuQueueItem? =
+      json
+          .decodeFromString(
+              BambuQueueHistoryPage.serializer(),
+              getText(
+                  "$baseUrl/api/v1/queue/history?printer_id=$printerId&status=$status&limit=1",
+                  "$status history for printer $printerId"))
+          .items
+          .firstOrNull()
+
+  private suspend fun getText(url: String, description: String): String {
+    try {
+      val response = newClient().use { client -> client.get(url) { header("X-API-Key", apiKey) } }
+      if (response.status != HttpStatusCode.OK) {
+        throw BambuddyApiException(
+            "Failed to fetch Bambuddy $description: ${response.status} - ${response.bodyAsText()}")
+      }
+      return response.bodyAsText()
+    } catch (e: BambuddyApiException) {
+      throw e
+    } catch (e: Exception) {
+      throw BambuddyApiException("Failed to fetch Bambuddy $description", e)
+    }
+  }
+
   override suspend fun getCameraSnapshot(printerId: Int): Pair<ByteArray, String>? {
     return try {
       val token = getStreamToken()
@@ -146,6 +181,40 @@ constructor(private val appConfig: AppConfig, loggerFactory: LoggerFactory) : IB
       null
     }
   }
+
+  override suspend fun streamCamera(
+      printerId: Int,
+      onOpen: suspend (contentType: String, body: ByteReadChannel) -> Unit,
+  ): Boolean =
+      try {
+        val token = getStreamToken()
+        newStreamClient().use { client ->
+          client.prepareGet("$baseUrl/api/v1/printers/$printerId/camera/stream?token=$token").execute {
+              response ->
+            if (response.status != HttpStatusCode.OK) {
+              log.warn("Bambuddy camera stream for $printerId returned ${response.status}")
+              false
+            } else {
+              onOpen(response.contentType()?.toString() ?: "multipart/x-mixed-replace", response.bodyAsChannel())
+              true
+            }
+          }
+        }
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        log.warn("Bambuddy camera stream for $printerId ended: ${e.message}")
+        false
+      }
+
+  private fun newStreamClient() =
+      HttpClient(DmsHttpEngine) {
+        install(HttpTimeout) {
+          requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+          connectTimeoutMillis = 5_000
+          socketTimeoutMillis = STREAM_IDLE_TIMEOUT_MS
+        }
+      }
 
   override suspend fun getPrinterModelIcon(model: String): Pair<ByteArray, String>? {
     // Bambuddy's own icon filenames are the model name lowercased with spaces/punctuation

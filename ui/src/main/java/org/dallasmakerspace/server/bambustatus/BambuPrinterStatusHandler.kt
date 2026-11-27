@@ -56,9 +56,13 @@ constructor(
         memberServiceClient.getBambuPrinters(session.sessionId).map {
           buildPrinterViewModel(it, currentUsername, watches, notificationsEnabled)
         }
+    val byFreeTime = sortByFreeTime(printers)
     val model = mutableMapOf<String, Any>(
         "printers" to printers,
         "notificationsEnabled" to notificationsEnabled,
+        "printersByFreeTime" to byFreeTime,
+        "myPrinters" to byFreeTime.filter { it["isMine"] == true },
+        "counts" to printers.groupingBy { it["filterCategory"] as String }.eachCount(),
     )
     committeeSubscription?.let { model["committeeSubscription"] = it }
     call.respond(ThymeleafContent("bambu-printer-status", model))

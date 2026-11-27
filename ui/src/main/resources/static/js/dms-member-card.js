@@ -29,7 +29,7 @@ function getSharedObserver() {
  *
  * @element dms-member-card
  * @prop {String} username - The member's username (required)
- * @prop {String} state - Display state: 'inline' | 'mini' (default: 'inline')
+ * @prop {String} state - Display state: 'inline' | 'mini' | 'compact' (default: 'inline')
  * @prop {Boolean} openInNewWindow - Open profile link in new tab (default: false)
  *
  * Member data (displayName, avatarUrl, active status) is fetched automatically
@@ -139,6 +139,53 @@ class DmsMemberCard extends LitElement {
 
         .mini-card--loading {
             pointer-events: none;
+        }
+
+        :host([state="compact"]) {
+            display: inline-block;
+            width: auto;
+            min-width: 0;
+        }
+
+        /* Compact state: small avatar + display name on one line, inherits font and color */
+        .compact-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            max-width: 100%;
+            color: inherit;
+            text-decoration: none;
+            font: inherit;
+            vertical-align: middle;
+        }
+
+        .compact-card:hover .compact-name {
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .compact-card .avatar {
+            width: 22px;
+            height: 22px;
+            font-size: 11px;
+            border: 0;
+            flex-shrink: 0;
+        }
+
+        .compact-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .compact-name--inactive {
+            color: #999;
+        }
+
+        .compact-card .shimmer-displayname {
+            width: 90px;
+            height: 11px;
         }
 
         /* Avatar */
@@ -388,6 +435,30 @@ class DmsMemberCard extends LitElement {
         `;
     }
 
+    _renderCompact() {
+        const inactive = !this._isActive();
+        const displayName = this._getDisplayName();
+        return html`
+            <a href="${this._getProfileUrl()}"
+               class="compact-card"
+               target="${this._getLinkTarget()}"
+               rel="${this._getLinkRel()}"
+               title="${inactive ? `Inactive member — @${this.username}` : `@${this.username}`}">
+                <span class="avatar${inactive ? ' avatar--inactive' : ''}">${this._renderAvatar()}</span>
+                <span class="compact-name${inactive ? ' compact-name--inactive' : ''}">${displayName}</span>
+            </a>
+        `;
+    }
+
+    _renderCompactLoading() {
+        return html`
+            <span class="compact-card">
+                <span class="avatar avatar--placeholder"></span>
+                <span class="shimmer shimmer-displayname"></span>
+            </span>
+        `;
+    }
+
     _renderMini() {
         const inactive = !this._isActive();
         const displayName = this._getDisplayName();
@@ -420,12 +491,14 @@ class DmsMemberCard extends LitElement {
         }
 
         if (this._loading) {
+            if (this.state === 'compact') return this._renderCompactLoading();
             return this.state === 'mini' ? this._renderMiniLoading() : this._renderInlineLoading();
         }
 
         switch (this.state) {
             case 'inline': return this._renderInline();
             case 'mini':   return this._renderMini();
+            case 'compact': return this._renderCompact();
             default:
                 console.warn(`Unknown state "${this.state}" for dms-member-card, defaulting to inline`);
                 return this._renderInline();

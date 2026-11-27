@@ -53,6 +53,18 @@ abstract class BambuStatusModule {
 
     @IntoMap
     @Provides
+    @StringKey("/bambu-api/printers/{id}/camera/stream")
+    fun providesBambuCameraStreamApiHandler(
+        loggerFactory: LoggerFactory,
+        userInfoProvider: UserInfoProvider,
+        bambuCameraProxyClient: BambuCameraProxyClient,
+        memberServiceClient: MemberServiceClient,
+    ): IRouteHandler =
+        BambuCameraApiHandler(
+            loggerFactory, userInfoProvider, bambuCameraProxyClient, memberServiceClient, live = true)
+
+    @IntoMap
+    @Provides
     @StringKey("/bambu-api/watches")
     fun providesBambuWatchApiHandler(
         loggerFactory: LoggerFactory,

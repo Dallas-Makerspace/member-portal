@@ -120,6 +120,7 @@ object RouteFactory {
     COMMITTEE_DASHBOARD_API("/committees/{committee_slug}/dashboard-api/{path...}"),
     BAMBU_PRINTER_STATUS("/committees/3d-fab/printers"),
     BAMBU_CAMERA_API("/bambu-api/printers/{id}/camera"),
+    BAMBU_CAMERA_STREAM_API("/bambu-api/printers/{id}/camera/stream"),
     BAMBU_MODEL_ICON_API("/bambu-api/models/{model}/icon"),
     BAMBU_WATCHES_API("/bambu-api/watches"),
     BAMBU_WATCH_API("/bambu-api/watches/{id}"),

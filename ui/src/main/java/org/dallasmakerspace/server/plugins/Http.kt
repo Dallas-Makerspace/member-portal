@@ -26,6 +26,7 @@ fun Application.configureHttp() {
   val httpClient = getHttpClient()
 
   install(Compression) {
+    excludeContentType(ContentType.MultiPart.Any)
     gzip {
       condition { request.headers[HttpHeaders.Accept]?.contains("text/event-stream") != true }
     }

@@ -2,6 +2,8 @@ package org.dallasmakerspace.server.bambustatus
 
 import io.ktor.client.*
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpTimeoutConfig
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -9,6 +11,7 @@ import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.utils.io.*
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import javax.inject.Singleton
 import org.dallasmakerspace.server.common.AppConfig
 import org.dallasmakerspace.server.common.DmsHttpEngine
@@ -21,6 +24,9 @@ import org.dallasmakerspace.server.common.logging.LoggerFactory
  * speaks JSON. Goes through the service module (not straight to Bambuddy) so the Bambuddy API key
  * never has to live in the UI module.
  */
+// A camera that stops sending frames for this long is dropped.
+private const val STREAM_IDLE_TIMEOUT_MS = 30_000L
+
 @Suppress("TooGenericExceptionCaught")
 @Singleton
 class BambuCameraProxyClient
@@ -47,6 +53,46 @@ constructor(
 
   suspend fun proxyCameraSnapshot(printerId: String, call: ApplicationCall) =
       proxyBinary("$baseUrl/bambu/printers/$printerId/camera", call, "camera snapshot for $printerId")
+
+  /** Live MJPEG passthrough: no overall deadline, flushed per chunk so frames aren't held back. */
+  suspend fun proxyCameraStream(printerId: String, call: ApplicationCall) {
+    try {
+      http
+          .prepareGet("$baseUrl/bambu/printers/$printerId/camera/stream") {
+            authHeaders.forEach { (k, v) -> header(k, v) }
+            timeout {
+              requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+              socketTimeoutMillis = STREAM_IDLE_TIMEOUT_MS
+            }
+          }
+          .execute { response ->
+            if (!response.status.isSuccess()) {
+              call.respond(HttpStatusCode.NotFound)
+              return@execute
+            }
+            val contentType = response.contentType() ?: ContentType("multipart", "x-mixed-replace")
+            call.response.header(HttpHeaders.CacheControl, "no-cache, no-store")
+            call.response.header("X-Accel-Buffering", "no")
+            val channel = response.bodyAsChannel()
+            call.respondBytesWriter(contentType = contentType) {
+              val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+              while (true) {
+                val read = channel.readAvailable(buffer)
+                if (read < 0) break
+                if (read > 0) {
+                  writeFully(buffer, 0, read)
+                  flush()
+                }
+              }
+            }
+          }
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      log.info("Bambu camera stream for $printerId ended: ${e.message}")
+      if (!call.response.isCommitted) call.respond(HttpStatusCode.BadGateway)
+    }
+  }
 
   suspend fun proxyModelIcon(model: String, call: ApplicationCall) =
       proxyBinary("$baseUrl/bambu/models/${encodePathSegment(model)}/icon", call, "model icon for $model")

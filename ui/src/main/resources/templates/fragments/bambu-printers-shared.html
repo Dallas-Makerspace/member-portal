@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head><title>3D printers page parts</title></head>
+<body>
+
+<th:block th:fragment="prHead">
+    <th:block th:replace="~{fragments/pwa-meta :: pwa-meta}"></th:block>
+    <link rel="stylesheet" href="/static/styles/global.css"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800;900&display=swap">
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0"/>
+    <link rel="stylesheet" href="/static/styles/bambu-printers.css?v=14"/>
+</th:block>
+
+
+<div th:fragment="pageTitle(subtitle)" class="pr-title">
+    <a href="/committees/3d-fab" class="pr-back" aria-label="Back to 3D Fab">
+        <span class="material-symbols-outlined">arrow_back</span>
+    </a>
+    <div>
+        <h1>3D printers</h1>
+        <p class="pr-sub" th:text="${subtitle}"></p>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary pr-refresh" onclick="location.reload()">
+        <span class="material-symbols-outlined">refresh</span>Refresh
+    </button>
+</div>
+
+<span th:fragment="chip(p)" class="pr-chip"
+      th:classappend="'pr-chip-' + (${p.state == 'PAUSE'} ? 'paused' : ${p.filterCategory})"
+      th:text="${p.stateLabel}"></span>
+
+<div th:fragment="progress(p)" class="pr-progress" role="progressbar"
+     th:if="${p.progress != null}"
+     th:attr="aria-valuenow=${p.progress},aria-label=${p.name} + ' progress'" aria-valuemin="0" aria-valuemax="100">
+    <i th:style="'--pct:' + ${p.progress} + '%'"></i>
+</div>
+
+<!-- Camera snapshot: one-shot at page load; the button opens the live modal. -->
+<button th:fragment="camera(p)" type="button" class="pr-cam camera-btn"
+        th:attr="data-printer-id=${p.id},data-printer-name=${p.name},aria-label='Open camera for ' + ${p.name}">
+    <img th:attr="src='/bambu-api/printers/' + ${p.id} + '/camera',data-printer-id=${p.id}" alt=""
+         class="printer-thumb"
+         onload="this.closest('.pr-cam').classList.add('pr-cam-loaded')"
+         onerror="this.closest('.pr-cam').classList.add('pr-cam-missing')">
+    <span class="pr-cam-fallback">
+        <span class="material-symbols-outlined">videocam_off</span>No snapshot
+    </span>
+    <span class="pr-cam-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z"/></svg>
+    </span>
+</button>
+
+<!-- Watch buttons (bambu-notifications.js): own print gets "notify when finished",
+     anyone else's busy printer gets "notify when free". Never both. -->
+<th:block th:fragment="watch(p)">
+    <button th:if="${p.isOwnCurrentJob}" type="button" class="btn btn-sm bambu-watch-btn"
+            th:classappend="${p.currentJobWatchId != null} ? 'btn-outline-primary' : 'btn-primary'"
+            th:attr="data-scope='OWN_JOB',data-printer-id=${p.id},data-queue-id=${p.currentQueueId},data-watch-id=${p.currentJobWatchId}">
+        <span class="material-symbols-outlined"
+              th:text="${p.currentJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
+        <span class="bambu-watch-label"
+              th:text="${p.currentJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this print finishes'"></span>
+    </button>
+    <button th:if="${p.isPrinting and p.notificationsEnabled and !p.isOwnCurrentJob}" type="button"
+            class="btn btn-sm bambu-watch-btn"
+            th:classappend="${p.availableWatchId != null} ? 'btn-outline-primary' : 'btn-outline-secondary'"
+            th:attr="data-scope='PRINTER_AVAILABLE',data-printer-id=${p.id},data-watch-id=${p.availableWatchId},data-idle-label='Notify me',title='Get notified when ' + ${p.name} + ' is free'">
+        <span class="material-symbols-outlined"
+              th:text="${p.availableWatchId != null} ? 'notifications_active' : 'notifications'"></span>
+        <span class="bambu-watch-label"
+              th:text="${p.availableWatchId != null} ? 'Watching · Cancel' : 'Notify me'"></span>
+    </button>
+    <button th:if="${p.isOwnNextJob}" type="button" class="btn btn-sm bambu-watch-btn"
+            th:classappend="${p.nextJobWatchId != null} ? 'btn-outline-primary' : 'btn-primary'"
+            th:attr="data-scope='OWN_JOB',data-printer-id=${p.id},data-queue-id=${p.nextQueueId},data-watch-id=${p.nextJobWatchId}">
+        <span class="material-symbols-outlined"
+              th:text="${p.nextJobWatchId != null} ? 'notifications_active' : 'notifications'"></span>
+        <span class="bambu-watch-label"
+              th:text="${p.nextJobWatchId != null} ? 'Watching · Cancel' : 'Notify me when this print finishes'"></span>
+    </button>
+</th:block>
+
+<!-- Who ran it: current job for active/failed printers, previous job for finished ones. -->
+<th:block th:fragment="who(p)"
+          th:with="who=${p.isFinished} ? ${p.previousPrintedByUsername} : ${p.printedByUsername}">
+    <div class="pr-who" th:if="${who != null and (p.isPrinting or p.isFinished or p.needsAttention)}">
+        <span class="visually-hidden">Printed by</span>
+        <dms-member-card th:attr="username=${who}" state="compact"></dms-member-card>
+    </div>
+</th:block>
+
+<section th:fragment="alerts" th:if="${committeeSubscription != null}" class="pr-alerts">
+    <div>
+        <h2>Offline alerts</h2>
+    </div>
+    <th:block th:replace="~{fragments/subscribe-button :: button(${committeeSubscription})}"></th:block>
+</section>
+
+<div th:fragment="empty" class="pr-empty" th:if="${printers == null or printers.empty}">
+    <span class="material-symbols-outlined">print_disabled</span>
+    <p>No printers reported right now. Try again in a few minutes.</p>
+</div>
+
+<th:block th:fragment="cameraModal">
+    <div class="modal fade" id="bambuCameraModal" tabindex="-1" aria-labelledby="bambuCameraModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="bambuCameraModalLabel">Camera</h2>
+                    <span id="bambuCameraLiveBadge" class="pr-live-badge" hidden>Live</span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0 pr-live-stage">
+                    <img id="bambuCameraPlaceholder" class="pr-live-img" alt="">
+                    <img id="bambuCameraLive" class="pr-live-img pr-live-stream" alt="Live printer camera">
+                    <div id="bambuCameraModalLoading" class="camera-modal-loading" hidden>
+                        <div class="spinner-border spinner-border-sm text-light" role="status">
+                            <span class="visually-hidden">Connecting to the camera...</span>
+                        </div>
+                    </div>
+                    <div id="bambuCameraNotice" class="pr-live-notice" hidden>
+                        <span id="bambuCameraNoticeText"></span>
+                        <button type="button" id="bambuCameraResume" class="btn btn-sm btn-light" hidden>Resume live video</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <th:block th:replace="~{fragments/toast :: toast}"></th:block>
+</th:block>
+</th:block>
+
+<th:block th:fragment="scripts">
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+            crossorigin="anonymous"></script>
+    <!-- App JS -->
+    <script src="/static/js/app.js"></script>
+    <!-- Page Loader (REQUIRED for all pages) -->
+    <script src="/static/js/dms-page-loader.js" defer></script>
+    <script type="module" src="/static/js/dms-member-card.js"></script>
+    <script src="/static/js/dms-subscribe-button.js" th:if="${committeeSubscription != null}"></script>
+    <script src="/static/js/bambu-notifications.js" th:if="${notificationsEnabled}"></script>
+    <script src="/static/js/bambu-printers.js?v=3"></script>
+</th:block>
+
+</body>
+</html>

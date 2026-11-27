@@ -151,6 +151,9 @@ fun Application.configureRouting() {
       get(RouteFactory.Paths.BAMBU_CAMERA_API.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }
+      get(RouteFactory.Paths.BAMBU_CAMERA_STREAM_API.path) {
+        RouteFactory.getHandler(call)?.handleBase(call)
+      }
       get(RouteFactory.Paths.BAMBU_MODEL_ICON_API.path) {
         RouteFactory.getHandler(call)?.handleBase(call)
       }

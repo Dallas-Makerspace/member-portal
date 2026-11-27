@@ -18,6 +18,7 @@ fun Application.configureHTTP() {
   @Suppress("MagicNumber")
   install(Compression) {
     excludeContentType(ContentType.Text.EventStream)
+    excludeContentType(ContentType.MultiPart.Any)
     gzip { priority = 1.0 }
     deflate {
       priority = 10.0
