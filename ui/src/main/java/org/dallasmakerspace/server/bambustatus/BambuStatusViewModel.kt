@@ -18,6 +18,11 @@ private val ACTIVE_JOB_STATES = setOf("RUNNING", "PREPARE", "SLICING", "PAUSE")
 // a live instance (true even for actively-RUNNING printers).
 private val NEEDS_ATTENTION_STATES = setOf("FAILED")
 
+// Camera snapshot size per model, so the placeholder matches before the image loads (no reflow).
+private val CAMERA_ASPECT_BY_MODEL =
+    mapOf("x1c" to "1168 / 720", "a1 mini" to "1680 / 1080", "h2d" to "1680 / 1080", "p2s" to "1920 / 1080")
+private const val DEFAULT_CAMERA_ASPECT = "16 / 9"
+
 private val CHICAGO_ZONE = ZoneId.of("America/Chicago")
 private val ETA_SAME_DAY_FORMATTER = DateTimeFormatter.ofPattern("h:mm a")
 private val ETA_OTHER_DAY_FORMATTER = DateTimeFormatter.ofPattern("EEE h:mm a")
@@ -186,6 +191,7 @@ fun buildPrinterViewModel(
       "name" to name,
       "model" to model,
       "modelIconUrl" to modelIconUrl,
+      "cameraAspect" to (model?.lowercase()?.let { CAMERA_ASPECT_BY_MODEL[it] } ?: DEFAULT_CAMERA_ASPECT),
       "state" to state,
       "stateLabel" to stateLabel,
       "badgeClass" to badgeClass,
