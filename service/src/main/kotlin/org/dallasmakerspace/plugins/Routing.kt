@@ -549,6 +549,11 @@ fun Application.configureRouting() {
           call.respond(ApiResponse(Status.SUCCESS, "All groups: ${groupsList.size}", groupsList))
         }
 
+        get<Groups.Names> { request ->
+          val names = groupsService.getGroupNamesByPrefixes(request.prefix)
+          call.respond(ApiResponse(Status.SUCCESS, "Group names: ${names.size}", names))
+        }
+
         post<Groups.Batch> { batchRequest ->
           val groupSlugs = call.receive<List<String>>()
           val groups = memberService.getMultipleGroups(groupSlugs)

@@ -197,6 +197,9 @@ constructor(private val activeDirectoryClient: IActiveDirectoryClient) : IActive
   }
 
   /** {@inheritDoc} */
+  override fun getGroupNamesByPrefixes(prefixes: List<String>): List<String> =
+      activeDirectoryClient.getGroupNamesByPrefixes(prefixes)
+
   override fun getAllGroups(): List<ADGroup> {
     val adResults = activeDirectoryClient.getAllGroups()
     return adResults.map { (groupName, groupData) -> parseGroup(groupData) }

@@ -149,6 +149,9 @@ constructor(
     memberServiceClient.updateGroupSettings(groupSlug, actorUsername, updates, sessionId)
   }
 
+  suspend fun getGroupNamesByPrefixes(prefixes: List<String>, sessionId: String?): List<String> =
+      memberServiceClient.getGroupNamesByPrefixes(prefixes, sessionId)
+
   suspend fun getAllGroups(sessionId: String?): List<DMSGroup> {
     return memberServiceClient.getAllGroups(sessionId)
   }

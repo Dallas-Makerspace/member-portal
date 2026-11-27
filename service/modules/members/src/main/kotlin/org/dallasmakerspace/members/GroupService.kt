@@ -34,6 +34,9 @@ constructor(
     }
   }
 
+  suspend fun getGroupNamesByPrefixes(prefixes: List<String>): List<String> =
+      withContext(Dispatchers.IO) { activeDirectoryService.getGroupNamesByPrefixes(prefixes) }
+
   suspend fun getGroup(groupslug: String): DMSGroup {
     val groupname = Groups.getNameFromSlug(groupslug)
     val adGroup = withContext(Dispatchers.IO) { activeDirectoryService.getGroup(groupname) }

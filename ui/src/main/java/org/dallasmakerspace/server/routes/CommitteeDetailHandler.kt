@@ -6,6 +6,7 @@ import io.ktor.server.response.*
 import io.ktor.server.thymeleaf.*
 import javax.inject.Inject
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.dallasmakerspace.models.Committee
 import org.dallasmakerspace.models.Committees
@@ -60,14 +61,19 @@ constructor(
     val sectionsDeferred = async {
       sectionProviders
           .filter { it.appliesTo(committee) }
-          .mapNotNull { provider ->
-            try {
-              provider.renderSection(committee, session.sessionId, currentUsername)
-            } catch (e: Exception) {
-              log.warn("Committee page section provider failed: {}", e.message)
-              null
+          .sortedBy { it.order }
+          .map { provider ->
+            async {
+              try {
+                provider.renderSection(committee, session.sessionId, currentUsername)
+              } catch (e: Exception) {
+                log.warn("Committee page section provider failed: {}", e.message)
+                null
+              }
             }
           }
+          .awaitAll()
+          .filterNotNull()
     }
 
     // Only committees with group prefixes can be followed (a class is tied to a committee through
@@ -132,11 +138,12 @@ constructor(
       }
     }
 
-    val allGroupsDeferred = async {
+    // Names only: the full group list reads every member of every AD group (seconds) just to filter.
+    val committeeGroupNamesDeferred = async {
       try {
-        memberService.getAllGroups(session.sessionId)
+        memberService.getGroupNamesByPrefixes(committee.groupPrefixes, session.sessionId).sorted()
       } catch (e: Exception) {
-        log.warn("Failed to fetch all groups: {}", e.message)
+        log.warn("Failed to fetch committee groups: {}", e.message)
         emptyList()
       }
     }
@@ -148,9 +155,55 @@ constructor(
           onFailure = { log.warn("Failed to fetch archived groups: {}", it) })
     }
 
+    // Classes and their organizers depend only on the group names, not on the chair/teacher lookups.
+    val eventsDeferred = async {
+      val names = committeeGroupNamesDeferred.await()
+      val events =
+          if (names.isEmpty()) {
+            emptyList()
+          } else {
+            try {
+              memberService.getUpcomingPrerequisiteEvents(names, session.sessionId)
+            } catch (e: Exception) {
+              log.warn("Failed to fetch upcoming events: {}", e.message)
+              emptyList()
+            }
+          }
+      val organizers =
+          events
+              .mapNotNull { it.organizerUsername }
+              .distinct()
+              .map { username ->
+                async {
+                  try {
+                    username to memberService.getMember(username, session.sessionId)
+                  } catch (e: Exception) {
+                    log.warn("Failed to fetch organizer member: $username", e)
+                    null
+                  }
+                }
+              }
+              .awaitAll()
+              .filterNotNull()
+              .toMap()
+      events to organizers
+    }
+
+    // Admins can message any committee, so their eligibility check needn't wait for the chair list.
+    val isAdmin = currentUsername != null && authz.can(Permission.MANAGE_CONFIG.name)
+    val adminEligibilityDeferred =
+        if (isAdmin) {
+          async {
+            memberService.getCommitteeMessageEligibility(
+                committee.id, currentUsername!!, session.sessionId)
+          }
+        } else {
+          null
+        }
+
     val chairGroups = chairGroupsDeferred.await()
     val teacherGroups = teacherGroupsDeferred.await()
-    val allGroups = allGroupsDeferred.await()
+    val committeeGroupNames = committeeGroupNamesDeferred.await()
 
     // Build committee data
     val chairGroupsMap = chairGroups.associateBy { getSlugFromName(it.name) }
@@ -159,15 +212,16 @@ constructor(
     // Only a chair (or Infrastructure) is offered the message form. This just avoids a service call
     // for everyone else; the service re-checks who may send and the feature flag on every request.
     val isChairOrAdmin =
-        currentUsername != null &&
-            (authz.can(Permission.MANAGE_CONFIG.name) ||
+        isAdmin ||
+            (currentUsername != null &&
                 chairpersons.any { (it["username"] as? String).equals(currentUsername, true) })
     val messageEligibility =
-        if (currentUsername != null && isChairOrAdmin) {
-          memberService.getCommitteeMessageEligibility(
-              committee.id, currentUsername, session.sessionId)
-        } else {
-          null
+        when {
+          adminEligibilityDeferred != null -> adminEligibilityDeferred.await()
+          currentUsername != null && isChairOrAdmin ->
+              memberService.getCommitteeMessageEligibility(
+                  committee.id, currentUsername, session.sessionId)
+          else -> null
         }
 
     // Build teacher group data with members
@@ -186,76 +240,9 @@ constructor(
 
     // Filter committee groups by committee prefixes
     val committeeGroups =
-        if (committee.groupPrefixes.isNotEmpty()) {
-          allGroups
-              .filter { group ->
-                committee.groupPrefixes.any { prefix ->
-                  group.name.startsWith(prefix, ignoreCase = true)
-                }
-              }
-              .sortedBy { it.name }
-              .map { group -> mapOf("name" to group.name, "slug" to getSlugFromName(group.name)) }
-        } else {
-          emptyList()
-        }
+        committeeGroupNames.map { name -> mapOf("name" to name, "slug" to getSlugFromName(name)) }
 
-    // Collect all related group names for event fetching
-    val relatedGroupNames =
-        if (committee.groupPrefixes.isNotEmpty()) {
-          allGroups
-              .filter { group ->
-                committee.groupPrefixes.any { prefix ->
-                  group.name.startsWith(prefix, ignoreCase = true)
-                }
-              }
-              .map { it.name }
-        } else {
-          emptyList()
-        }
-
-    // Fetch upcoming prerequisite events
-    val upcomingEventsRaw =
-        async {
-              if (relatedGroupNames.isNotEmpty()) {
-                try {
-                  memberService.getUpcomingPrerequisiteEvents(relatedGroupNames, session.sessionId)
-                } catch (e: Exception) {
-                  log.warn("Failed to fetch upcoming events: {}", e.message)
-                  emptyList()
-                }
-              } else {
-                emptyList()
-              }
-            }
-            .await()
-
-    // Collect unique organizer usernames
-    val organizerUsernames = upcomingEventsRaw.mapNotNull { it.organizerUsername }.distinct()
-
-    // Fetch organizer member details
-    val organizerMembers =
-        async {
-              if (organizerUsernames.isNotEmpty()) {
-                try {
-                  organizerUsernames
-                      .mapNotNull { username ->
-                        try {
-                          username to memberService.getMember(username, session.sessionId)
-                        } catch (e: Exception) {
-                          log.warn("Failed to fetch organizer member: $username", e)
-                          null
-                        }
-                      }
-                      .toMap()
-                } catch (e: Exception) {
-                  log.warn("Failed to fetch organizer members: {}", e.message)
-                  emptyMap()
-                }
-              } else {
-                emptyMap()
-              }
-            }
-            .await()
+    val (upcomingEventsRaw, organizerMembers) = eventsDeferred.await()
 
     // Enrich events with organizer details
     val upcomingEvents =

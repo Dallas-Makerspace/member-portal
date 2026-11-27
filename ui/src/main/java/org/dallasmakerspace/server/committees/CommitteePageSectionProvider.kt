@@ -14,6 +14,10 @@ interface CommitteePageSectionProvider {
   /** Whether this provider has content to show on [committee]'s page. */
   fun appliesTo(committee: Committee): Boolean
 
+  /** Position on the page; lower renders first. */
+  val order: Int
+    get() = 100
+
   /**
    * Builds the section to render, or null to contribute nothing this time (e.g. the underlying
    * feature is behind a flag that's off for the current member). Called only when [appliesTo]

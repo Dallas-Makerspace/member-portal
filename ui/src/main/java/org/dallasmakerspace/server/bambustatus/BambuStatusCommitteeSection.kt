@@ -20,6 +20,9 @@ constructor(private val memberServiceClient: MemberServiceClient) : CommitteePag
 
   override fun appliesTo(committee: Committee): Boolean = committee.slug == THREE_D_FAB_SLUG
 
+  // Live printer status sits above the generic course listing.
+  override val order: Int = 10
+
   override suspend fun renderSection(
       committee: Committee,
       sessionId: String?,

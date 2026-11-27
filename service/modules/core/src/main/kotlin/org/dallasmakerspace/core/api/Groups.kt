@@ -8,6 +8,10 @@ class Groups {
 
   @Resource("batch") class Batch(val parent: Groups = Groups())
 
+  /** Group names starting with any `prefix` query value - names only, for committee pages. */
+  @Resource("names")
+  class Names(val parent: Groups = Groups(), val prefix: List<String> = emptyList())
+
   @Resource("{groupslug}")
   class DMSGroup(
       val parent: Groups = Groups(),

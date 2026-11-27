@@ -16,6 +16,10 @@ interface IActiveDirectoryClient {
 
   fun getAllGroups(): Map<String, Map<String, Any?>>
 
+  /** Names of groups whose cn starts with any of [prefixes]. Reads only cn, so it stays cheap. */
+  fun getGroupNamesByPrefixes(prefixes: List<String>): List<String> =
+      getAllGroups().keys.filter { name -> prefixes.any { name.startsWith(it, ignoreCase = true) } }
+
   /**
    * Gets the user objects for the given list of distinguished names.
    *

@@ -194,6 +194,15 @@ constructor(
     return dmsGroupFromMap(data)
   }
 
+  suspend fun getGroupNamesByPrefixes(prefixes: List<String>, sessionId: String?): List<String> {
+    if (prefixes.isEmpty()) return emptyList()
+    val query = prefixes.joinToString("&") { "prefix=${java.net.URLEncoder.encode(it, "UTF-8")}" }
+    val result = dmsHttpClient.get("$baseUrl/groups/names?$query", getApiHeaders(sessionId))
+    val data =
+        result["data"] as? List<*> ?: throw MemberServiceException("data attribute missing required")
+    return data.filterIsInstance<String>()
+  }
+
   suspend fun getAllGroups(sessionId: String?): List<DMSGroup> {
     return try {
       val apiHeaders = getApiHeaders(sessionId)

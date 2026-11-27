@@ -887,6 +887,20 @@ constructor(appConfig: AppConfig, loggerFactory: LoggerFactory) : IActiveDirecto
   }
 
   /** {@inheritDoc} */
+  override fun getGroupNamesByPrefixes(prefixes: List<String>): List<String> {
+    if (prefixes.isEmpty()) return emptyList()
+    val filter =
+        Filter.createANDFilter(
+            Filter.createEqualityFilter("objectCategory", "group"),
+            Filter.createORFilter(
+                prefixes.map { Filter.createSubstringFilter("cn", it, null, null) }))
+    return firstWinsByCn(
+            DirectoryOus.GROUP_OUS.map { base ->
+              ldapPool.search(base, SearchScope.SUB, filter, "cn").searchEntries
+            })
+        .mapNotNull { it.getAttributeValue("cn") }
+  }
+
   override fun getAllGroups(): Map<String, Map<String, Any?>> {
     val slowThresholdMs = 1_000L
     val methodStart = System.nanoTime()

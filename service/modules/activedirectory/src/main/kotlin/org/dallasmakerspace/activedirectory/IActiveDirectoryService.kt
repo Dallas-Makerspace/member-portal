@@ -90,6 +90,10 @@ interface IActiveDirectoryService {
   /** Gets all ADGroup objects from Active Directory. */
   fun getAllGroups(): List<ADGroup>
 
+  /** Names of groups whose name starts with any of [prefixes] - no members or other attributes. */
+  fun getGroupNamesByPrefixes(prefixes: List<String>): List<String> =
+      getAllGroups().map { it.cn }.filter { name -> prefixes.any { name.startsWith(it, ignoreCase = true) } }
+
   /**
    * Gets the ADUser objects for the given list of distinguished names.
    *
