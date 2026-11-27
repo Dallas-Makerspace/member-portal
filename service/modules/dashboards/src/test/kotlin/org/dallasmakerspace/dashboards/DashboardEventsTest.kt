@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
@@ -23,7 +23,7 @@ class DashboardEventsTest {
   fun `an event arrives as a data block between heartbeats`() = runBlocking {
     val events = DashboardEvents()
     val seen = async { withTimeout(TIMEOUT_MS) { events.stream(Duration.ofSeconds(30)).take(1).toList() } }
-    delay(SUBSCRIBE_MS)
+    withTimeout(TIMEOUT_MS) { events.subscriptionCount.first { it > 0 } }
 
     events.reload(13)
 
@@ -35,6 +35,5 @@ class DashboardEventsTest {
 
   private companion object {
     const val TIMEOUT_MS = 5_000L
-    const val SUBSCRIBE_MS = 200L
   }
 }

@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -32,6 +33,8 @@ class DashboardEvents @Inject constructor() {
           extraBufferCapacity = BUFFER, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
   val events: SharedFlow<DashboardEvent> = shared.asSharedFlow()
+
+  internal val subscriptionCount: StateFlow<Int> = shared.subscriptionCount
 
   fun reload(committeeId: Int) {
     shared.tryEmit(DashboardEvent(DashboardEvent.RELOAD, committeeId))
