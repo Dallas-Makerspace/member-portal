@@ -43,7 +43,7 @@ registerType('group', {
 
 registerType('committee', {
     label: 'Committees',
-    order: 15,
+    order: 5,
     icon: 'committee',
     tip: 'Committees and who chairs them',
     example: 'wood',

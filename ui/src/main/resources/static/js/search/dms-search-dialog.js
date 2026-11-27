@@ -507,7 +507,7 @@ class DmsSearchDialog extends HTMLElement {
             if (!byType.has(r.type)) byType.set(r.type, []);
             byType.get(r.type).push(r);
         }
-        // Fixed type order (members first), except sections with an exact name match lead.
+        // Fixed type order (committees, then members), except sections with an exact name match lead.
         const exact = list => (list[0].score || 0) >= EXACT_SCORE ? 0 : 1;
         const sections = [...byType.entries()].sort(([ta, a], [tb, b]) =>
             exact(a) - exact(b) || typeInfo(ta).order - typeInfo(tb).order);
