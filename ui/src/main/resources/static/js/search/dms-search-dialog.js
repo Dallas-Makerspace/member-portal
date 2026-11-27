@@ -8,6 +8,7 @@ const DEBOUNCE_MS = 120;
 const REMOTE_DEBOUNCE_MS = 250;
 const NO_RESULTS_DELAY_MS = 1000;
 const SECTION_LIMIT = 5;
+const EXACT_SCORE = 85;
 const MAX_ASK_CHARS = 500;
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
@@ -506,8 +507,10 @@ class DmsSearchDialog extends HTMLElement {
             if (!byType.has(r.type)) byType.set(r.type, []);
             byType.get(r.type).push(r);
         }
+        // Fixed type order (members first), except sections with an exact name match lead.
+        const exact = list => (list[0].score || 0) >= EXACT_SCORE ? 0 : 1;
         const sections = [...byType.entries()].sort(([ta, a], [tb, b]) =>
-            (b[0].score || 0) - (a[0].score || 0) || typeInfo(ta).order - typeInfo(tb).order);
+            exact(a) - exact(b) || typeInfo(ta).order - typeInfo(tb).order);
         const onlyClose = this.results.every(r => r.matchKind === 'fuzzy');
         const note = onlyClose ? '<div class="note" role="status">No exact matches. Showing close matches.</div>' : '';
         return note + sections.map(([type, list]) => {
