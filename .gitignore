@@ -26,3 +26,6 @@ Thumbs.db
 logs/
 /.claude/settings.local.json
 .opencode/
+
+# Playwright MCP browser-tool output
+.playwright-mcp/
