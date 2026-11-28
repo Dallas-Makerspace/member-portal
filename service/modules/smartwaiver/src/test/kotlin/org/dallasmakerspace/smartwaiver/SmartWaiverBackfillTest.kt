@@ -540,8 +540,10 @@ class SmartWaiverBackfillTest {
 
   @Test
   fun `starting reports a running snapshot at once, with the trial limit if one was given`() {
+    // A trial skips discovery, so hold it at the first waiver copy; otherwise it can finish first.
+    thinRows()
     val hold = CompletableDeferred<Unit>()
-    val b = backfill(twoMonthsHeld(hold))
+    val b = backfill(FakeClient(threeWaivers(), holdWaiver = hold))
 
     b.start(limit = 5)
     val right = b.status()
